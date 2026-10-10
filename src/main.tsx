@@ -1,13 +1,22 @@
+import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import {GlobalErrorBoundary} from './components/GlobalErrorBoundary.tsx';
 import './index.css';
-import { applyAccentTheme, getSavedAccentTheme } from './lib/themeEngine';
-import { registerSW } from 'virtual:pwa-register';
 
-// Register PWA service worker quietly behind the scenes (zero UI impact)
-registerSW({ immediate: true });
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <GlobalErrorBoundary>
+      <App />
+    </GlobalErrorBoundary>
+  </StrictMode>,
+);
 
-// Initialize accent theme on app startup
-applyAccentTheme(getSavedAccentTheme());
-
-createRoot(document.getElementById('root')!).render(<App />);
+// Register optimized PWA service worker
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+      console.warn('[SW] ServiceWorker registration notice:', err);
+    });
+  });
+}

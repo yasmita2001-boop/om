@@ -1,19 +1,18 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  NavModule, AppState, Task, Goal, Routine, Habit, HabitLog,
-  FinanceAccount, FinanceTransaction, Note, JournalEntry,
-  HealthMeasurement, SleepRecord, WaterRecord, FocusSession,
-  Loan, Investment, SavingsPlan
+  NavModule, AppState, Task, Goal, Milestone, Strategy, KPI, Mission,
+  Routine, Habit, HabitLog, FinanceAccount, FinanceTransaction, Loan,
+  LoanPayment, Investment, SavingsPlan, Asset, Liability, FinancialGoal,
+  Note, JournalEntry, FocusSession, SleepRecord, WaterRecord, NutritionRecord,
+  HealthMeasurement, HealthAppointment, HealthNote, WorkProject, LearningItem,
+  Meeting, Person, Interaction, ValueItem, SpiritualPractice, Commitment,
+  ThingItem, DocumentItem, WarrantyItem, ReceiptItem, CertificateItem,
+  ImportantRecordItem, ReminderItem, NotificationItem, AchievementItem,
+  CalcHistoryItem, Skill, Course, WorkResponsibility
 } from './types';
-import { alarmService, TriggeredAlarmData } from './lib/audioSynthesizer';
-import { applyAccentTheme, getSavedAccentTheme } from './lib/themeEngine';
-import { recalculateGoalProgress } from './lib/goalTaskSync';
-import { Loader2 } from 'lucide-react';
+import {
+  storage, seedInitialDataIfEmpty
+} from './lib/storage';
 
 // Components
 import { Header } from './components/Header';
@@ -22,12 +21,13 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { QuickCaptureModal } from './components/QuickCaptureModal';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { BsDateModal } from './components/BsDateModal';
-import { AlarmRingingModal } from './components/AlarmRingingModal';
-import { GoogleDriveSyncModal } from './components/GoogleDriveSyncModal';
-import { GoogleAuthGate } from './components/GoogleAuthGate';
-import { initAuth, subscribeAuth, googleSignOut } from './lib/googleDriveService';
-import { storage, seedInitialDataIfEmpty, syncGoogleUserProfile, purgePrimaryWorkspace, generateUUID } from './lib/storage';
-import { User } from 'firebase/auth';
+import { MultiUserModal } from './components/MultiUserModal';
+import { AlarmTriggerModal } from './components/AlarmTriggerModal';
+import { VoiceStudioWidget } from './components/VoiceStudioWidget';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { AppLockScreen } from './components/AppLockScreen';
+import { alarmService, TriggeredAlarmData } from './lib/alarmService';
+import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress } from './lib/goalTaskSync';
 
 // Views
 import { DashboardView } from './views/DashboardView';
@@ -37,9 +37,13 @@ import { GoalsView } from './views/GoalsView';
 import { FocusView } from './views/FocusView';
 import { NotesView } from './views/NotesView';
 import { JournalView } from './views/JournalView';
+import { CalculatorView } from './views/CalculatorView';
 import { FinanceView } from './views/FinanceView';
 import { HealthView } from './views/HealthView';
-import { CalculatorView } from './views/CalculatorView';
+import { WorkView } from './views/WorkView';
+import { PeopleView } from './views/PeopleView';
+import { SpiritualView } from './views/SpiritualView';
+import { ThingsView } from './views/ThingsView';
 import { SettingsView } from './views/SettingsView';
 
 export default function App() {
@@ -53,29 +57,74 @@ export default function App() {
   const [quickCaptureType, setQuickCaptureType] = useState<string>('task');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBsModalOpen, setIsBsModalOpen] = useState(false);
-  const [isDriveSyncModalOpen, setIsDriveSyncModalOpen] = useState(false);
-  const [activeAlarm, setActiveAlarm] = useState<TriggeredAlarmData | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [isMultiUserOpen, setIsMultiUserOpen] = useState(false);
+  const [activeTriggeredAlarm, setActiveTriggeredAlarm] = useState<TriggeredAlarmData | null>(null);
 
   // Entities state
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
+  const [unlockedProfileId, setUnlockedProfileId] = useState<string | null>(null);
+  const unlockedProfileIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    unlockedProfileIdRef.current = unlockedProfileId;
+  }, [unlockedProfileId]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [kpis, setKpis] = useState<KPI[]>([]);
+  const [missions, setMissions] = useState<Mission[]>([]);
+
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>([]);
+
   const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([]);
   const [financeTransactions, setFinanceTransactions] = useState<FinanceTransaction[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [savingsPlans, setSavingsPlans] = useState<SavingsPlan[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [liabilities, setLiabilities] = useState<Liability[]>([]);
+  const [financialGoals, setFinancialGoals] = useState<FinancialGoal[]>([]);
+
   const [notes, setNotes] = useState<Note[]>([]);
   const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [focusSessions, setFocusSessions] = useState<FocusSession[]>([]);
+
   const [healthMeasurements, setHealthMeasurements] = useState<HealthMeasurement[]>([]);
   const [sleepRecords, setSleepRecords] = useState<SleepRecord[]>([]);
   const [waterRecords, setWaterRecords] = useState<WaterRecord[]>([]);
+  const [nutritionRecords, setNutritionRecords] = useState<NutritionRecord[]>([]);
+  const [appointments, setAppointments] = useState<HealthAppointment[]>([]);
+  const [healthNotes, setHealthNotes] = useState<HealthNote[]>([]);
+
+  const [workProjects, setWorkProjects] = useState<WorkProject[]>([]);
+  const [workResponsibilities, setWorkResponsibilities] = useState<WorkResponsibility[]>([]);
+  const [learningItems, setLearningItems] = useState<LearningItem[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+
+  const [people, setPeople] = useState<Person[]>([]);
+  const [interactions, setInteractions] = useState<Interaction[]>([]);
+
+  const [values, setValues] = useState<ValueItem[]>([]);
+  const [practices, setPractices] = useState<SpiritualPractice[]>([]);
+  const [commitments, setCommitments] = useState<Commitment[]>([]);
+
+  const [things, setThings] = useState<ThingItem[]>([]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [warranties, setWarranties] = useState<WarrantyItem[]>([]);
+  const [receipts, setReceipts] = useState<ReceiptItem[]>([]);
+  const [certificates, setCertificates] = useState<CertificateItem[]>([]);
+  const [importantRecords, setImportantRecords] = useState<ImportantRecordItem[]>([]);
+
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [achievements, setAchievements] = useState<AchievementItem[]>([]);
+  const [calcHistory, setCalcHistory] = useState<CalcHistoryItem[]>([]);
+  const [recycleBinCount, setRecycleBinCount] = useState<number>(0);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -84,139 +133,233 @@ export default function App() {
     }, 2500);
   }, []);
 
-  const loadAllData = useCallback(async () => {
+  const loadAllData = useCallback(async (overrideProfileId?: string) => {
     try {
+      const settingsData = await storage.getSingleton<AppState>('appSettings');
+      const activeId = overrideProfileId || unlockedProfileIdRef.current || settingsData?.profileId;
+      if (!activeId) return;
+      if (settingsData) {
+        setAppSettings(settingsData);
+        if (settingsData.themeMode) setTheme(settingsData.themeMode);
+      }
+      storage.setActiveProfile(activeId);
+      await storage.ensureProfileOwnership(activeId);
       const [
-        settingsData,
         tasksData,
         goalsData,
+        milestonesData,
+        strategiesData,
+        kpisData,
+        missionsData,
         routinesData,
         habitsData,
-        logsData,
+        habitLogsData,
         acctsData,
         txData,
         loansData,
-        invData,
+        loanPaymentsData,
+        investmentsData,
         savingsData,
+        assetsData,
+        liabilitiesData,
+        fgData,
         notesData,
         journalData,
         focusData,
-        healthData,
+        measData,
         sleepData,
-        waterData
+        waterData,
+        nutriData,
+        apptsData,
+        hNotesData,
+        projData,
+        respData,
+        learnData,
+        skillsData,
+        coursesData,
+        meetData,
+        peopleData,
+        interData,
+        valData,
+        pracData,
+        commData,
+        thingData,
+        docData,
+        warData,
+        recData,
+        certData,
+        irData,
+        remData,
+        notifData,
+        achData,
+        calcData
       ] = await Promise.all([
-        storage.getSingleton<AppState>('appSettings'),
         storage.getAll<Task>('tasks'),
         storage.getAll<Goal>('goals'),
+        storage.getAll<Milestone>('milestones'),
+        storage.getAll<Strategy>('strategies'),
+        storage.getAll<KPI>('kpis'),
+        storage.getAll<Mission>('missions'),
         storage.getAll<Routine>('routines'),
         storage.getAll<Habit>('habits'),
         storage.getAll<HabitLog>('habitLogs'),
         storage.getAll<FinanceAccount>('financeAccounts'),
         storage.getAll<FinanceTransaction>('finance'),
         storage.getAll<Loan>('loans'),
+        storage.getAll<LoanPayment>('loanPayments'),
         storage.getAll<Investment>('investments'),
         storage.getAll<SavingsPlan>('savingsPlans'),
+        storage.getAll<Asset>('assets'),
+        storage.getAll<Liability>('liabilities'),
+        storage.getAll<FinancialGoal>('financialGoals'),
         storage.getAll<Note>('notes'),
         storage.getAll<JournalEntry>('journal'),
         storage.getAll<FocusSession>('focus'),
         storage.getAll<HealthMeasurement>('healthMeasurements'),
         storage.getAll<SleepRecord>('sleepRecords'),
-        storage.getAll<WaterRecord>('waterRecords')
+        storage.getAll<WaterRecord>('waterRecords'),
+        storage.getAll<NutritionRecord>('nutritionRecords'),
+        storage.getAll<HealthAppointment>('healthAppointments'),
+        storage.getAll<HealthNote>('healthNotes'),
+        storage.getAll<WorkProject>('workProjects'),
+        storage.getAll<WorkResponsibility>('workResponsibilities'),
+        storage.getAll<LearningItem>('learningItems'),
+        storage.getAll<Skill>('skills'),
+        storage.getAll<Course>('courses'),
+        storage.getAll<Meeting>('meetings'),
+        storage.getAll<Person>('people'),
+        storage.getAll<Interaction>('interactions'),
+        storage.getAll<ValueItem>('values'),
+        storage.getAll<SpiritualPractice>('spiritualPractices'),
+        storage.getAll<Commitment>('commitments'),
+        storage.getAll<ThingItem>('things'),
+        storage.getAll<DocumentItem>('documents'),
+        storage.getAll<WarrantyItem>('warranties'),
+        storage.getAll<ReceiptItem>('receipts'),
+        storage.getAll<CertificateItem>('certificates'),
+        storage.getAll<ImportantRecordItem>('importantRecords'),
+        storage.getAll<ReminderItem>('reminders'),
+        storage.getAll<NotificationItem>('notifications'),
+        storage.getAll<AchievementItem>('achievements'),
+        storage.getAll<CalcHistoryItem>('calcHistory')
       ]);
 
       if (settingsData) {
         setAppSettings(settingsData);
-        if (settingsData.themeMode) setTheme(settingsData.themeMode);
+        if (settingsData.themeMode) {
+          setTheme(settingsData.themeMode);
+        }
       }
-      setTasks(tasksData);
-      setGoals(goalsData);
-      setRoutines(routinesData);
-      setHabits(habitsData);
-      setHabitLogs(logsData);
-      setFinanceAccounts(acctsData);
-      setFinanceTransactions(txData);
-      setLoans(loansData);
-      setInvestments(invData);
-      setSavingsPlans(savingsData);
-      setNotes(notesData);
-      setJournal(journalData);
-      setFocusSessions(focusData);
-      setHealthMeasurements(healthData);
-      setSleepRecords(sleepData);
-      setWaterRecords(waterData);
+
+      setTasks([...tasksData]);
+      setGoals([...goalsData]);
+      setMilestones([...milestonesData]);
+      setStrategies([...strategiesData]);
+      setKpis([...kpisData]);
+      setMissions([...missionsData]);
+      setRoutines([...routinesData]);
+      setHabits([...habitsData]);
+      setHabitLogs([...habitLogsData]);
+      setFinanceAccounts([...acctsData]);
+      setFinanceTransactions([...txData]);
+      setLoans([...loansData]);
+      setLoanPayments([...loanPaymentsData]);
+      setInvestments([...investmentsData]);
+      setSavingsPlans([...savingsData]);
+      setAssets([...assetsData]);
+      setLiabilities([...liabilitiesData]);
+      setFinancialGoals([...fgData]);
+      setNotes([...notesData]);
+      setJournal([...journalData]);
+      setFocusSessions([...focusData]);
+      setHealthMeasurements([...measData]);
+      setSleepRecords([...sleepData]);
+      setWaterRecords([...waterData]);
+      setNutritionRecords([...nutriData]);
+      setAppointments([...apptsData]);
+      setHealthNotes([...hNotesData]);
+      setWorkProjects([...projData]);
+      setWorkResponsibilities([...respData]);
+      setLearningItems([...learnData]);
+      setSkills([...skillsData]);
+      setCourses([...coursesData]);
+      setMeetings([...meetData]);
+      setPeople([...peopleData]);
+      setInteractions([...interData]);
+      setValues([...valData]);
+      setPractices([...pracData]);
+      setCommitments([...commData]);
+      setThings([...thingData]);
+      setDocuments([...docData]);
+      setWarranties([...warData]);
+      setReceipts([...recData]);
+      setCertificates([...certData]);
+      setImportantRecords([...irData]);
+      setReminders([...remData]);
+      setNotifications([...notifData]);
+      setAchievements([...achData]);
+      setCalcHistory([...calcData]);
+      const binData = await storage.getRecycleBinItems(activeId);
+      setRecycleBinCount(binData.length);
     } catch (err) {
       console.error('Failed to load initial data', err);
     }
   }, []);
 
-  // Initialize and seed on mount
+  // First turn initialization: run ONCE on mount
   useEffect(() => {
-    purgePrimaryWorkspace().catch(() => {});
-    seedInitialDataIfEmpty().then(() => {
-      loadAllData();
-    }).catch(err => console.error('Initialization error', err));
+    let active = true;
+    seedInitialDataIfEmpty().then(async () => {
+      const settingsData = await storage.getSingleton<AppState>('appSettings');
+      if (!active) return;
+      if (settingsData) {
+        setAppSettings(settingsData);
+        if (settingsData.themeMode) setTheme(settingsData.themeMode);
 
-    // Listen to alarms
-    alarmService.onTrigger((alarmData) => {
-      setActiveAlarm(alarmData);
-    });
-
-    // Subscribe to storage changes
-    const unsub = storage.subscribe(() => {
-      loadAllData();
-    });
-
-    // Subscribe to Google Auth changes
-    const unsubAuth = subscribeAuth(async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        await syncGoogleUserProfile(user);
-        await loadAllData();
+        const targetId = settingsData.profileId;
+        if (targetId) {
+          // App must always require lock screen on open/launch
+          storage.setActiveProfile(null);
+          setUnlockedProfileId(null);
+          try {
+            sessionStorage.removeItem('om_session_unlocked');
+            localStorage.removeItem('om_unlocked_profile');
+          } catch {}
+        }
       }
-      setIsAuthChecking(false);
-    });
+    }).catch(err => console.error('Failed to initialize Om-LifeOS', err));
 
-    initAuth(
-      async (user) => {
-        setCurrentUser(user);
-        await syncGoogleUserProfile(user);
-        await loadAllData();
-        setIsAuthChecking(false);
-      },
-      () => {
-        // Not authenticated
-        setIsAuthChecking(false);
-      }
-    );
+    // Subscribe to scheduled alarms & reminder triggers
+    const unsub = alarmService.onAlarmTrigger((alarmData) => {
+      setActiveTriggeredAlarm(alarmData);
+    });
 
     return () => {
-      unsub();
-      unsubAuth();
+      active = false;
     };
-  }, [loadAllData]);
+  }, []);
 
-  const handleSignOut = async () => {
-    try {
-      await googleSignOut();
-      setCurrentUser(null);
-      showToast('Signed out of Google account');
-    } catch {
-      showToast('Error signing out');
+  // Load all data whenever unlockedProfileId updates
+  useEffect(() => {
+    if (unlockedProfileId) {
+      loadAllData(unlockedProfileId);
     }
-  };
+  }, [unlockedProfileId, loadAllData]);
 
-  // Sync theme with HTML root class & custom accent color
+  // Sync theme with HTML root class and accent color
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-lifeos-mode', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.setAttribute('data-lifeos-mode', 'light');
     }
-    const brandColor = appSettings?.accentColor || getSavedAccentTheme();
-    applyAccentTheme(brandColor);
+    const brandColor = appSettings?.accentColor || '#6366f1';
+    document.documentElement.style.setProperty('--color-brand', brandColor);
   }, [theme, appSettings?.accentColor]);
 
-  // Keyboard shortcut: Cmd+K / Ctrl+K
+  // Keyboard Shortcuts (⌘K for search)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -228,23 +371,107 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const toggleTheme = async () => {
-    const newTheme: 'light' | 'dark' = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    if (appSettings) {
-      const updated: AppState = { ...appSettings, themeMode: newTheme };
-      setAppSettings(updated);
-      await storage.setSingleton('appSettings', updated);
-    }
-  };
+  // Multi-tab cross-device broadcast listener & storage event listener
+  useEffect(() => {
+    const channel = storage.getChannel();
+    const unsub = storage.onStorageChange((store, action) => {
+      if (action === 'purgeDefaultData' && unlockedProfileIdRef.current) {
+        loadAllData();
+      }
+    });
 
-  const handleSwitchWorkspace = async (id: string) => {
-    if (!appSettings) return;
-    const updated = { ...appSettings, profileId: id };
-    setAppSettings(updated);
-    await storage.setSingleton('appSettings', updated);
-    const profName = appSettings.profiles.find(p => p.id === id)?.name || 'Workspace';
-    showToast(`Switched to workspace: ${profName}`);
+    if (!channel) return unsub;
+
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.sourceDevice !== storage.deviceId && unlockedProfileId) {
+        loadAllData();
+      }
+    };
+    channel.addEventListener('message', handleMessage);
+    return () => {
+      unsub();
+      channel.removeEventListener('message', handleMessage);
+    };
+  }, [loadAllData, unlockedProfileId]);
+
+
+  const handleProfileUnlocked = useCallback(async (profileId: string) => {
+    try {
+      sessionStorage.setItem('om_session_unlocked', profileId);
+    } catch {}
+    const settings = (await storage.getSingleton<AppState>('appSettings')) || ({} as AppState);
+    const profile = settings.profiles?.find(p => p.id === profileId);
+    if (!profile) return;
+    settings.profileId = profileId;
+    settings.profiles = (settings.profiles || []).map(p => ({ ...p, isCurrent: p.id === profileId }));
+    settings.currentUser = { name: profile.name, email: profile.email, provider: 'local' };
+    await storage.setSingleton('appSettings', settings);
+    storage.setActiveProfile(profileId);
+    await storage.ensureProfileOwnership(profileId);
+    try {
+      await recalculateAllGoalsProgress();
+    } catch (err) {
+      console.error('Failed to recalculate goals progress', err);
+    }
+    setUnlockedProfileId(profileId);
+    setAppSettings(settings);
+    await loadAllData(profileId);
+  }, [loadAllData]);
+
+  const handleSwitchWorkspace = useCallback(async (id: string) => {
+    try {
+      const s = (await storage.getSingleton<AppState>('appSettings')) || ({} as AppState);
+      const targetProfile = (s.profiles || []).find(p => p.id === id);
+      if (!targetProfile) return;
+
+      s.profileId = id;
+      s.profiles = (s.profiles || []).map(p => ({ ...p, isCurrent: p.id === id }));
+      s.currentUser = {
+        name: targetProfile.name,
+        email: targetProfile.email,
+        provider: targetProfile.authType || 'local'
+      };
+      await storage.setSingleton('appSettings', s);
+      storage.setActiveProfile(id);
+      await storage.ensureProfileOwnership(id);
+
+      try {
+        sessionStorage.setItem('om_session_unlocked', id);
+      } catch {}
+
+      setUnlockedProfileId(id);
+      setAppSettings(s);
+      await loadAllData(id);
+      showToast(`✓ Switched to workspace: ${targetProfile.name}`);
+    } catch (err: any) {
+      showToast(`⚠️ Failed to switch workspace: ${err?.message || err}`);
+    }
+  }, [loadAllData, showToast]);
+
+  const handleLockApp = useCallback(() => {
+    try {
+      sessionStorage.removeItem('om_session_unlocked');
+      localStorage.removeItem('om_unlocked_profile');
+    } catch {}
+    storage.setActiveProfile(null);
+    setUnlockedProfileId(null);
+    showToast('Workspace Locked 🔒');
+  }, [showToast]);
+
+  const toggleTheme = async () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    const settingsObj = (await storage.getSingleton<AppState>('appSettings')) || {
+      profileId: 'default',
+      profiles: [],
+      themeMode: newTheme,
+      accentColor: '#5d57c9',
+      notificationsEnabled: true,
+      noteCategories: ['General'],
+      calcFavorites: []
+    };
+    settingsObj.themeMode = newTheme;
+    await storage.setSingleton('appSettings', settingsObj);
   };
 
   const handleToggleTask = async (id: string) => {
@@ -255,120 +482,63 @@ export default function App() {
       ...t,
       done: nextDone,
       status: nextDone ? 'done' : 'open',
-      completedAt: nextDone ? new Date().toISOString() : null,
       updatedAt: Date.now()
     };
     await storage.put('tasks', updated);
     if (t.goalId) {
-      await recalculateGoalProgress(t.goalId);
+      await syncGoalProgressFromTasks(t.goalId, t.id, nextDone);
     }
-    showToast(nextDone ? 'Task completed' : 'Task reopened');
     loadAllData();
   };
 
   const handleLogHabit = async (habitId: string, occurrence = 0) => {
     const today = new Date().toISOString().slice(0, 10);
     const key = `${habitId}|${today}|${occurrence}`;
-    const existing = habitLogs.find(l => l.key === key || (l.habitId === habitId && l.date === today && (l.occurrence || 0) === occurrence));
+    const existing = habitLogs.find(l => l.key === key);
+
     if (existing) {
       await storage.delete('habitLogs', existing.id);
-      showToast('Habit check removed');
     } else {
       const newLog: HabitLog = {
-        id: generateUUID(),
+        id: (await import('./lib/storage')).generateUUID(),
         key,
         habitId,
         date: today,
         occurrence,
-        status: 'done',
         createdAt: Date.now()
       };
       await storage.put('habitLogs', newLog);
-      showToast('Habit logged for today');
     }
-
-    const allLogs = await storage.getAll<HabitLog>('habitLogs');
-    const habit = habits.find(h => h.id === habitId);
-    if (habit) {
-      const dates = new Set(allLogs.filter(l => l.habitId === habitId).map(l => l.date));
-      let streak = 0;
-      const d = new Date();
-      for (let i = 0; i < 365; i++) {
-        const iso = d.toISOString().slice(0, 10);
-        if (dates.has(iso)) {
-          streak++;
-        } else if (i > 0) {
-          break;
-        }
-        d.setDate(d.getDate() - 1);
-      }
-      await storage.put('habits', { ...habit, streak, updatedAt: Date.now() });
+    const targetHabit = habits.find(h => h.id === habitId);
+    if (targetHabit?.goalId) {
+      await syncGoalProgressFromHabits(targetHabit.goalId, targetHabit.id);
     }
     loadAllData();
   };
 
-  const handleUpdatePlannerProgress = async (prog: number) => {
-    if (!appSettings) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const current = appSettings.dailyPlanner || {
-      date: today,
-      target: 'Core Target',
-      progress: 0,
-      points: [],
-      wins: [],
-      reflection: []
-    };
-    const updatedPlanner = { ...current, progress: prog };
-    const updatedSettings = { ...appSettings, dailyPlanner: updatedPlanner };
-    setAppSettings(updatedSettings);
-    await storage.setSingleton('appSettings', updatedSettings);
-  };
-
-  const handleTogglePlannerPoint = async (pointId: string) => {
-    if (!appSettings || !appSettings.dailyPlanner) return;
-    const pts = (appSettings.dailyPlanner.points || []).map(p =>
-      p.id === pointId ? { ...p, done: !p.done } : p
-    );
-    const updatedPlanner = { ...appSettings.dailyPlanner, points: pts };
-    const updatedSettings = { ...appSettings, dailyPlanner: updatedPlanner };
-    setAppSettings(updatedSettings);
-    await storage.setSingleton('appSettings', updatedSettings);
-  };
-
   const openTasksCount = tasks.filter(t => !t.done).length;
+  const categoriesList = appSettings?.noteCategories || ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'];
 
-  // 1. Initial auth check splash screen
-  if (isAuthChecking) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#0B0F19] transition-colors">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 font-serif font-extrabold text-white text-2xl shadow-xl shadow-indigo-600/30 animate-pulse">
-          ॐ
-        </div>
-        <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-          <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
-          <span>Verifying Google account session...</span>
-        </div>
-      </div>
-    );
+  if (!appSettings) {
+    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">Loading Om-LifeOS…</div>;
   }
 
-  // 2. Mandatory Google Authentication Gate (No local mock profile)
-  if (!currentUser) {
+  if (!unlockedProfileId || unlockedProfileId !== appSettings.profileId) {
     return (
-      <GoogleAuthGate
-        onSignInSuccess={async (user) => {
-          setCurrentUser(user);
-          await syncGoogleUserProfile(user);
-          await loadAllData();
-          showToast(`Welcome, ${user.displayName || user.email}!`);
-        }}
+      <AppLockScreen
+        settings={appSettings}
+        onUnlocked={handleProfileUnlocked}
+        onSettingsReloaded={nextSettings => setAppSettings(nextSettings)}
       />
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white dark:text-slate-100 bg-[#F8FAFC] dark:bg-[#0B0F19]">
-      {/* Top Header */}
+    <div
+      data-app-root="true"
+      className="flex min-h-screen flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white dark:text-slate-100 bg-[#F8FAFC] dark:bg-[#0B0F19]"
+    >
+      {/* Top Bar */}
       <Header
         activeModule={activeModule}
         onNavigate={setActiveModule}
@@ -378,32 +548,33 @@ export default function App() {
         }}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenBsModal={() => setIsBsModalOpen(true)}
-        onOpenDriveSyncModal={() => setIsDriveSyncModalOpen(true)}
-        currentUser={currentUser}
-        onSignOut={handleSignOut}
+        onOpenMultiUser={() => setIsMultiUserOpen(true)}
         theme={theme}
         onToggleTheme={toggleTheme}
-        profiles={appSettings?.profiles || []}
-        currentProfileId={appSettings?.profileId || currentUser.uid}
+        profiles={appSettings?.profiles || [{ id: 'default', name: 'Primary Workspace', createdAt: Date.now() }]}
+        currentProfileId={appSettings?.profileId || 'default'}
         onSelectProfile={handleSwitchWorkspace}
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+        onLockApp={handleLockApp}
+        onShowToast={showToast}
       />
 
       <div className="flex flex-1">
-        {/* Navigation Sidebar */}
+        {/* Sidebar */}
         <Sidebar
           activeModule={activeModule}
           onNavigate={setActiveModule}
           isOpenMobile={isMobileMenuOpen}
           onCloseMobile={() => setIsMobileMenuOpen(false)}
           openTasksCount={openTasksCount}
-          onOpenDriveSync={() => setIsDriveSyncModalOpen(true)}
-          currentUser={currentUser}
+          remindersCount={reminders.filter(r => r.status !== 'done').length}
+          recycleBinCount={recycleBinCount}
+          onLockApp={handleLockApp}
         />
 
-        {/* Main Workspace Canvas */}
-        <main className="flex-1 min-w-0 overflow-y-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 pb-24 lg:pb-10 transition-colors w-full">
-          <div className="w-full max-w-7xl mx-auto space-y-6">
+        {/* Main Content Viewport - Responsive across Mobile, Tablet, Laptop, and Desktop */}
+        <main className="flex-1 min-w-0 overflow-y-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-24 md:pb-10 transition-colors w-full">
+          <div className="w-full space-y-6">
             {activeModule === 'dashboard' && (
               <DashboardView
                 tasks={tasks}
@@ -416,6 +587,9 @@ export default function App() {
                 notes={notes}
                 journal={journal}
                 dailyPlanner={appSettings?.dailyPlanner}
+                reminders={reminders}
+                achievements={achievements}
+                currentProfileName={appSettings?.profiles?.find(p => p.id === appSettings?.profileId)?.name || 'Primary Workspace'}
                 onNavigate={setActiveModule}
                 onToggleTask={handleToggleTask}
                 onLogHabit={handleLogHabit}
@@ -423,10 +597,6 @@ export default function App() {
                   setQuickCaptureType(type || 'task');
                   setIsQuickCaptureOpen(true);
                 }}
-                onUpdatePlannerProgress={handleUpdatePlannerProgress}
-                onTogglePlannerPoint={handleTogglePlannerPoint}
-                currentUser={currentUser}
-                onOpenDriveSync={() => setIsDriveSyncModalOpen(true)}
               />
             )}
 
@@ -435,6 +605,13 @@ export default function App() {
                 tasks={tasks}
                 goals={goals}
                 dailyPlanner={appSettings?.dailyPlanner}
+                workProjects={workProjects}
+                learningItems={learningItems}
+                skills={skills}
+                routines={routines}
+                habits={habits}
+                habitLogs={habitLogs}
+                reminders={reminders}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -446,6 +623,8 @@ export default function App() {
                 habits={habits}
                 habitLogs={habitLogs}
                 goals={goals}
+                tasks={tasks}
+                reminders={reminders}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -454,8 +633,28 @@ export default function App() {
             {activeModule === 'goals' && (
               <GoalsView
                 goals={goals}
-                tasks={tasks}
+                milestones={milestones}
+                strategies={strategies}
+                kpis={kpis}
+                missions={missions}
+                mentor={appSettings?.mentor}
                 accounts={financeAccounts}
+                transactions={financeTransactions}
+                loans={loans}
+                investments={investments}
+                savingsPlans={savingsPlans}
+                liabilities={liabilities}
+                assets={assets}
+                tasks={tasks}
+                habits={habits}
+                habitLogs={habitLogs}
+                routines={routines}
+                workProjects={workProjects}
+                learningItems={learningItems}
+                skills={skills}
+                notes={notes}
+                journal={journal}
+                reminders={reminders}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -466,6 +665,7 @@ export default function App() {
                 sessions={focusSessions}
                 tasks={tasks}
                 goals={goals}
+                routines={routines}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -474,6 +674,7 @@ export default function App() {
             {activeModule === 'notes' && (
               <NotesView
                 notes={notes}
+                categories={categoriesList}
                 goals={goals}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
@@ -489,14 +690,29 @@ export default function App() {
               />
             )}
 
+            {activeModule === 'calculator' && (
+              <CalculatorView
+                history={calcHistory}
+                favorites={appSettings?.calcFavorites || []}
+                onRefresh={loadAllData}
+                onSuccess={showToast}
+              />
+            )}
+
             {activeModule === 'finance' && (
               <FinanceView
                 accounts={financeAccounts}
                 transactions={financeTransactions}
                 loans={loans}
+                loanPayments={loanPayments}
                 investments={investments}
                 savingsPlans={savingsPlans}
+                assets={assets}
+                liabilities={liabilities}
+                financialGoals={financialGoals}
+                receipts={receipts}
                 goals={goals}
+                onNavigate={setActiveModule}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -504,49 +720,87 @@ export default function App() {
 
             {activeModule === 'health' && (
               <HealthView
+                profile={undefined}
                 measurements={healthMeasurements}
                 sleepRecords={sleepRecords}
                 waterRecords={waterRecords}
+                nutritionRecords={nutritionRecords}
+                appointments={appointments}
+                healthNotes={healthNotes}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
             )}
 
-            {activeModule === 'calculator' && (
-              <CalculatorView />
+            {activeModule === 'work' && (
+              <WorkView
+                projects={workProjects}
+                responsibilities={workResponsibilities}
+                learningItems={learningItems}
+                skills={skills}
+                courses={courses}
+                meetings={meetings}
+                goals={goals}
+                tasks={tasks}
+                reminders={reminders}
+                onRefresh={loadAllData}
+                onSuccess={showToast}
+              />
             )}
 
-            {activeModule === 'settings' && (
+            {activeModule === 'people' && (
+              <PeopleView
+                people={people}
+                interactions={interactions}
+                onRefresh={loadAllData}
+                onSuccess={showToast}
+              />
+            )}
+
+            {activeModule === 'spiritual' && (
+              <SpiritualView
+                values={values}
+                practices={practices}
+                commitments={commitments}
+                onNavigate={setActiveModule}
+                onRefresh={loadAllData}
+                onSuccess={showToast}
+              />
+            )}
+
+            {activeModule === 'things' && (
+              <ThingsView
+                things={things}
+                documents={documents}
+                warranties={warranties}
+                receipts={receipts}
+                financeAccounts={financeAccounts}
+                financeTransactions={financeTransactions}
+                onNavigate={setActiveModule}
+                certificates={certificates}
+                importantRecords={importantRecords}
+                onRefresh={loadAllData}
+                onSuccess={showToast}
+              />
+            )}
+
+            {((activeModule as string) === 'settings' || (activeModule as string) === 'recycle_bin') && (
               <SettingsView
                 settings={appSettings}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
+                onError={msg => showToast(`⚠️ ${msg}`)}
                 theme={theme}
                 onToggleTheme={toggleTheme}
                 onSelectProfile={handleSwitchWorkspace}
-                currentUser={currentUser}
-                onSignOut={handleSignOut}
-                onOpenDriveSyncModal={() => setIsDriveSyncModalOpen(true)}
               />
             )}
           </div>
         </main>
       </div>
 
-      {/* Mobile Bottom Thumb Bar */}
-      <MobileBottomNav
-        activeModule={activeModule}
-        onNavigate={setActiveModule}
-      />
-
-      {/* Google Drive Sovereign Cloud Sync Dialog */}
-      <GoogleDriveSyncModal
-        isOpen={isDriveSyncModalOpen}
-        onClose={() => setIsDriveSyncModalOpen(false)}
-        currentUser={currentUser}
-        onDataRestored={loadAllData}
-        onToast={showToast}
-      />
+      {/* Mobile Bottom Thumb Navigation */}
+      <MobileBottomNav activeModule={activeModule} onNavigate={setActiveModule} onLockApp={handleLockApp} />
 
       {/* Quick Capture Dialog */}
       <QuickCaptureModal
@@ -554,10 +808,10 @@ export default function App() {
         onClose={() => setIsQuickCaptureOpen(false)}
         initialType={quickCaptureType}
         onSuccess={showToast}
-        onRefresh={loadAllData}
+        reloadAll={loadAllData}
       />
 
-      {/* Global Search Dialog (Cmd+K) */}
+      {/* Global Search Dialog */}
       <GlobalSearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
@@ -570,25 +824,46 @@ export default function App() {
         onClose={() => setIsBsModalOpen(false)}
       />
 
-      {/* Full-Screen Ringing Alarm Dialog */}
-      <AlarmRingingModal
-        alarm={activeAlarm}
+      <MultiUserModal
+        isOpen={isMultiUserOpen}
+        onClose={() => setIsMultiUserOpen(false)}
+        appSettings={appSettings}
+        onRefresh={loadAllData}
+        onSuccess={showToast}
+        onError={msg => showToast(`⚠️ ${msg}`)}
+        onSelectProfile={handleSwitchWorkspace}
+      />
+
+      {/* Real-time Global Alarm Trigger Modal */}
+      <AlarmTriggerModal
+        alarm={activeTriggeredAlarm}
         onDismiss={async () => {
-          await alarmService.dismiss();
-          setActiveAlarm(null);
+          await alarmService.dismissAlarm();
+          setActiveTriggeredAlarm(null);
           loadAllData();
         }}
         onSnooze={async (mins = 5) => {
-          await alarmService.snooze(mins);
-          setActiveAlarm(null);
-          showToast(`Alarm snoozed for ${mins} minutes`);
+          await alarmService.snoozeAlarm(mins);
+          setActiveTriggeredAlarm(null);
+          showToast(`⏰ Alarm snoozed for ${mins} minutes`);
           loadAllData();
         }}
       />
 
-      {/* Toast Banner */}
+      {/* Global High-Accuracy Voice-to-Text & Text Reading Studio (Hindi & English) */}
+      <VoiceStudioWidget
+        onSuccess={showToast}
+        onRefreshNotes={loadAllData}
+        onRefreshJournal={loadAllData}
+        onRefreshTasks={loadAllData}
+      />
+
+      {/* Offline Connectivity Indicator */}
+      <OfflineIndicator />
+
+      {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-18 lg:bottom-6 right-4 lg:right-6 z-50 flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white shadow-2xl dark:bg-white dark:text-slate-900 animate-in fade-in slide-in-from-bottom-2">
+        <div className="fixed bottom-16 right-4 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white shadow-2xl dark:bg-white dark:text-slate-900 animate-in fade-in slide-in-from-bottom-2 sm:bottom-6 sm:right-6">
           <span>{toastMessage}</span>
         </div>
       )}

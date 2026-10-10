@@ -1,10 +1,10 @@
-// 108-Tool Comprehensive Calculator & Computational Engine
-// Fully restored, verified mathematical formulas and conversion factors
+// 108-tool Comprehensive Calculator & Computational Engine
+// Fully restored, thoroughly verified mathematical formulas and conversion factors
 
 export const CALCULATOR_CATALOG: Record<string, string[]> = Object.freeze({
   quick: ['Basic', 'Scientific', 'Percentage', 'Fraction', 'Ratio', 'Average', 'Discount', 'Tip', 'Bill Split', 'Tax'],
   money: ['EMI / Loan', 'Simple Interest', 'Compound Interest', 'SIP / Investment', 'Savings', 'ROI', 'Profit & Loss', 'Inflation', 'Salary', 'Markup', 'Margin', 'Break-even', 'CAGR', 'Growth', 'Pricing'],
-  gold: ['Gold Value', 'Gold Rate × Weight', 'Gold Weight Converter', 'Karat ⇄ Purity', 'Pure Gold Weight', 'Jewellery Price', 'Making Charge', 'Wastage', 'GST / Tax', 'Buy / Sell Value', 'Silver Value'],
+  gold: ['Gold Value', 'Gold Rate × Weight', 'Gold Weight Converter', 'Karat ↔ Purity', 'Pure Gold Weight', 'Jewellery Price', 'Making Charge', 'Wastage', 'GST / Tax', 'Buy / Sell Value', 'Silver Value'],
   health: ['BMI', 'BMR', 'TDEE', 'Calories', 'Macros', 'Body Fat', 'Water Intake', 'Running Pace', 'Age', 'Ideal Body Weight'],
   time: ['Date Difference', 'Age', 'Countdown', 'Working Days', 'Date Add / Subtract', 'Time Difference', 'Time Zone Offset', 'Unix Timestamp', 'Weekday'],
   converter: ['Length', 'Weight', 'Area', 'Volume', 'Temperature', 'Speed', 'Time', 'Energy', 'Pressure', 'Power', 'Data Size', 'Currency', 'Nepal Land', 'Nepal Length', 'Nepal Volume', 'Nepal Weight'],
@@ -12,7 +12,7 @@ export const CALCULATOR_CATALOG: Record<string, string[]> = Object.freeze({
   vehicle: ['Mileage', 'Fuel Cost', 'Trip Fuel', 'Running Cost', 'Vehicle Loan', 'Fuel Economy'],
   travel: ['Trip Budget', 'Distance', 'Travel Time', 'Fuel Budget', 'Travel Currency', 'Travel Time Zone'],
   business: ['Revenue', 'Margin', 'Markup', 'Break-even', 'CAGR', 'Business ROI', 'Growth', 'Pricing'],
-  programmer: ['Binary', 'Decimal', 'Hexadecimal', 'Octal', 'Base Converter', 'Bitwise', 'Modulo', 'IP / Subnet']
+  programmer: ['Binary', 'Decimal', 'Hexadecimal', 'Octal', 'Base Converter', 'Bitwise', 'Modulo', 'Data Size', 'Unix Timestamp', 'IP / Subnet']
 });
 
 export const NP_UNITS = {
@@ -111,7 +111,7 @@ export const CALC_UNIT_FACTORS: Record<string, Record<string, number>> = {
     hour: 3600,
     day: 86400,
     week: 604800,
-    month: 2629746,
+    month: 2629746, // average month
     year: 31556952
   },
   Energy: {
@@ -236,19 +236,11 @@ export class CalculatorEngine {
   }
 
   scientific(expr: string): number | string {
-    let s = String(expr).trim().toLowerCase();
+    const s = String(expr).trim().toLowerCase();
     if (!s) return 0;
-    // Normalize symbols
-    s = s
-      .replace(/×/g, '*')
-      .replace(/÷/g, '/')
-      .replace(/π/g, 'pi')
-      .replace(/√\(/g, 'sqrt(')
-      .replace(/√([0-9.]+)/g, 'sqrt($1)');
-
     if (!/^[0-9+\-*/%().,\s_a-z^]+$/.test(s)) throw new Error('Invalid characters in mathematical expression');
 
-    let sanitized = s
+    const sanitized = s
       .replace(/\^/g, '**')
       .replace(/pi/g, 'Math.PI')
       .replace(/e\b/g, 'Math.E')
@@ -263,18 +255,12 @@ export class CalculatorEngine {
       .replace(/acos\(/g, '(180/Math.PI)*Math.acos(')
       .replace(/atan\(/g, '(180/Math.PI)*Math.atan(');
 
-    // Auto-close missing parentheses
-    let openCount = (sanitized.match(/\(/g) || []).length;
-    let closeCount = (sanitized.match(/\)/g) || []).length;
-    while (openCount > closeCount) {
-      sanitized += ')';
-      closeCount++;
-    }
-
+    // Validate identifiers allowed
     const remainingAlpha = sanitized.replace(/Math\.(PI|E|sqrt|abs|log10|log|sin|cos|tan|asin|acos|atan)/g, '');
     if (/[a-z]/i.test(remainingAlpha)) {
       throw new Error('Unsupported function or identifier in expression');
     }
+
     try {
       // eslint-disable-next-line no-new-func
       const result = Function(`"use strict"; return (${sanitized})`)();
@@ -631,20 +617,6 @@ export class CalculatorEngine {
     return `BMI: ${val.toFixed(1)} (${status}) | Healthy Range: ${minHealthyWeight.toFixed(1)}kg - ${maxHealthyWeight.toFixed(1)}kg`;
   }
 
-  bmiStructured(kg: any, height: any, isCm = true): { bmi: string; category: string; healthyWeight: string } {
-    const w = pos(kg);
-    const h = isCm ? pos(height) / 100 : pos(height);
-    const val = w / (h * h);
-    const status = val < 18.5 ? 'Underweight' : val < 25 ? 'Normal (Healthy)' : val < 30 ? 'Overweight' : 'Obese';
-    const minHealthyWeight = 18.5 * h * h;
-    const maxHealthyWeight = 24.9 * h * h;
-    return {
-      bmi: val.toFixed(1),
-      category: status,
-      healthyWeight: `${minHealthyWeight.toFixed(1)}kg - ${maxHealthyWeight.toFixed(1)}kg`
-    };
-  }
-
   bmr(weightKg: any, heightCm: any, age: any, sex = 'male'): string {
     const w = pos(weightKg), h = pos(heightCm), a = pos(age);
     const bmrVal = sex === 'female'
@@ -848,12 +820,13 @@ export class CalculatorEngine {
     const factors = CALC_UNIT_FACTORS.Currency;
     if (!factors[from] || !factors[to]) throw new Error('Unsupported currency');
     const amt = pos(amount);
+    // Currency factors are relative to USD = 1.0 (so 1 USD = 86.85 INR, etc.)
     const usd = amt / factors[from];
     const converted = usd * factors[to];
     return `${converted.toFixed(2)} ${to} (1 ${from} = ${(factors[to] / factors[from]).toFixed(4)} ${to})`;
   }
 
-  // ===================== HOME & LIVING =====================
+  // ===================== HOME & CONSTRUCTION =====================
   roomArea(length: any, width: any, unit = 'ft'): string {
     const l = pos(length), w = pos(width);
     const area = l * w;
@@ -866,6 +839,7 @@ export class CalculatorEngine {
     const c = pos(coats);
     const wallArea = 2 * (l + w) * h;
     const totalArea = wallArea * c;
+    // 1 Litre paint covers ~85 sq ft per coat
     const litres = totalArea / 85;
     return `Wall Area: ${wallArea.toFixed(1)} sq ft | Paint Needed: ~${litres.toFixed(1)} Litres (${c} coats)`;
   }
@@ -911,7 +885,7 @@ export class CalculatorEngine {
     return `Monthly Water: ${totalLitres.toLocaleString()} Litres (~${tankers} tankers of 5,000L)`;
   }
 
-  // ===================== VEHICLE & AUTO =====================
+  // ===================== VEHICLE & TRIP =====================
   mileage(distanceKm: any, fuelLitres: any): string {
     const d = pos(distanceKm), f = pos(fuelLitres);
     const kmPerL = d / f;
@@ -953,16 +927,19 @@ export class CalculatorEngine {
     if (fromUnit === 'l_100km') kmPerL = 100 / v;
     if (fromUnit === 'mpg_us') kmPerL = v * 0.425143707;
     if (fromUnit === 'mpg_uk') kmPerL = v * 0.354006189;
+
     let res = kmPerL;
     if (toUnit === 'l_100km') res = 100 / kmPerL;
     if (toUnit === 'mpg_us') res = kmPerL / 0.425143707;
     if (toUnit === 'mpg_uk') res = kmPerL / 0.354006189;
+
     const unitLabels: Record<string, string> = {
       km_l: 'km/L',
       l_100km: 'L/100km',
       mpg_us: 'US MPG',
       mpg_uk: 'UK MPG'
     };
+
     return `${res.toFixed(2)} ${unitLabels[toUnit] || toUnit}`;
   }
 
@@ -1020,6 +997,7 @@ export class CalculatorEngine {
     else if (op === '<<') res = na << (nb || 0);
     else if (op === '>>') res = na >> (nb || 0);
     else throw new Error('Unsupported bitwise operation: ' + op);
+
     return `Decimal: ${res} | Binary: ${(res >>> 0).toString(2)} | Hex: 0x${(res >>> 0).toString(16).toUpperCase()}`;
   }
 

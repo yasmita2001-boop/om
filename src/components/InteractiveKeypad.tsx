@@ -43,7 +43,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
   };
 
   const handleOperator = (op: string) => {
-    setExpression(prev => (prev ? `${prev}${display} ${op} ` : `${display} ${op} `));
+    setExpression(display + ' ' + op + ' ');
     setDisplay('0');
   };
 
@@ -74,7 +74,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900/90">
+    <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
       {/* Display Screen */}
       <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 text-right font-mono dark:border-slate-800 dark:bg-slate-950/80">
         <div className="min-h-5 text-xs text-slate-400 overflow-x-auto truncate">
@@ -84,16 +84,10 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
           <button
             type="button"
             onClick={handleCopy}
-            className="text-[10px] font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
+            className="text-[10px] font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
             title="Copy Display"
           >
-            {copied ? (
-              <span className="text-emerald-500 font-bold flex items-center gap-0.5">
-                <Check className="h-3 w-3" /> Copied
-              </span>
-            ) : (
-              'Copy'
-            )}
+            {copied ? <span className="text-emerald-500 font-bold flex items-center gap-0.5"><Check className="h-3 w-3" /> Copied</span> : 'Copy'}
           </button>
           <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white overflow-x-auto">
             {display}
@@ -109,7 +103,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
             const val = parseFloat(display);
             if (!Number.isNaN(val)) setMemory(val);
           }}
-          className="rounded-lg bg-slate-100 py-1.5 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+          className="rounded-lg bg-slate-100 py-1.5 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
         >
           M+
         </button>
@@ -119,7 +113,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
             if (memory !== null) setDisplay(String(memory));
           }}
           disabled={memory === null}
-          className="rounded-lg bg-slate-100 py-1.5 text-slate-600 hover:bg-slate-200 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+          className="rounded-lg bg-slate-100 py-1.5 text-slate-600 hover:bg-slate-200 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
         >
           MR
         </button>
@@ -127,14 +121,14 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
           type="button"
           onClick={() => setMemory(null)}
           disabled={memory === null}
-          className="rounded-lg bg-slate-100 py-1.5 text-slate-600 hover:bg-slate-200 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+          className="rounded-lg bg-slate-100 py-1.5 text-slate-600 hover:bg-slate-200 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
         >
           MC
         </button>
         <button
           type="button"
           onClick={handleClear}
-          className="rounded-lg bg-red-50 text-red-600 font-bold py-1.5 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 cursor-pointer"
+          className="rounded-lg bg-red-50 text-red-600 font-bold py-1.5 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400"
         >
           AC
         </button>
@@ -146,70 +140,70 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
           <button
             type="button"
             onClick={() => handleScientificFunction('sin')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             sin
           </button>
           <button
             type="button"
             onClick={() => handleScientificFunction('cos')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             cos
           </button>
           <button
             type="button"
             onClick={() => handleScientificFunction('tan')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             tan
           </button>
           <button
             type="button"
             onClick={() => handleScientificFunction('sqrt')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             √
           </button>
           <button
             type="button"
             onClick={() => handleDigit('^')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             xʸ
           </button>
           <button
             type="button"
             onClick={() => handleScientificFunction('log')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             log
           </button>
           <button
             type="button"
             onClick={() => handleScientificFunction('ln')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             ln
           </button>
           <button
             type="button"
             onClick={() => handleDigit('pi')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             π
           </button>
           <button
             type="button"
             onClick={() => handleDigit('(')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             (
           </button>
           <button
             type="button"
             onClick={() => handleDigit(')')}
-            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer"
+            className="rounded-lg bg-indigo-50 py-1.5 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300"
           >
             )
           </button>
@@ -221,28 +215,28 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
         <button
           type="button"
           onClick={() => handleDigit('(')}
-          className="rounded-xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+          className="rounded-xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
         >
           (
         </button>
         <button
           type="button"
           onClick={() => handleDigit(')')}
-          className="rounded-xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+          className="rounded-xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
         >
           )
         </button>
         <button
           type="button"
           onClick={() => handleOperator('%')}
-          className="rounded-xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+          className="rounded-xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
         >
           %
         </button>
         <button
           type="button"
           onClick={() => handleOperator('÷')}
-          className="rounded-xl bg-amber-500/10 py-3 text-sm font-bold text-amber-600 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:text-amber-400 cursor-pointer"
+          className="rounded-xl bg-amber-500/10 py-3 text-sm font-bold text-amber-600 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:text-amber-400"
         >
           ÷
         </button>
@@ -250,28 +244,28 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
         <button
           type="button"
           onClick={() => handleDigit('7')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           7
         </button>
         <button
           type="button"
           onClick={() => handleDigit('8')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           8
         </button>
         <button
           type="button"
           onClick={() => handleDigit('9')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           9
         </button>
         <button
           type="button"
           onClick={() => handleOperator('×')}
-          className="rounded-xl bg-amber-500/10 py-3 text-sm font-bold text-amber-600 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:text-amber-400 cursor-pointer"
+          className="rounded-xl bg-amber-500/10 py-3 text-sm font-bold text-amber-600 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:text-amber-400"
         >
           ×
         </button>
@@ -279,28 +273,28 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
         <button
           type="button"
           onClick={() => handleDigit('4')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           4
         </button>
         <button
           type="button"
           onClick={() => handleDigit('5')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           5
         </button>
         <button
           type="button"
           onClick={() => handleDigit('6')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           6
         </button>
         <button
           type="button"
           onClick={() => handleOperator('-')}
-          className="rounded-xl bg-amber-500/10 py-3 text-sm font-bold text-amber-600 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:text-amber-400 cursor-pointer"
+          className="rounded-xl bg-amber-500/10 py-3 text-sm font-bold text-amber-600 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:text-amber-400"
         >
           -
         </button>
@@ -308,28 +302,28 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
         <button
           type="button"
           onClick={() => handleDigit('1')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           1
         </button>
         <button
           type="button"
           onClick={() => handleDigit('2')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           2
         </button>
         <button
           type="button"
           onClick={() => handleDigit('3')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           3
         </button>
         <button
           type="button"
           onClick={() => handleOperator('+')}
-          className="rounded-xl bg-amber-500/10 py-3 text-sm font-bold text-amber-600 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:text-amber-400 cursor-pointer"
+          className="rounded-xl bg-amber-500/10 py-3 text-sm font-bold text-amber-600 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:text-amber-400"
         >
           +
         </button>
@@ -337,7 +331,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
         <button
           type="button"
           onClick={handleBackspace}
-          className="rounded-xl bg-slate-100 py-3 text-slate-600 hover:bg-slate-200 flex items-center justify-center dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+          className="rounded-xl bg-slate-100 py-3 text-slate-600 hover:bg-slate-200 flex items-center justify-center dark:bg-slate-800 dark:text-slate-300"
           title="Backspace"
         >
           <Delete className="h-4 w-4" />
@@ -345,21 +339,21 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
         <button
           type="button"
           onClick={() => handleDigit('0')}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           0
         </button>
         <button
           type="button"
           onClick={handleDecimal}
-          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+          className="rounded-xl bg-white border border-slate-200 py-3 text-base font-semibold text-slate-900 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         >
           .
         </button>
         <button
           type="button"
           onClick={handleEquals}
-          className="rounded-xl bg-indigo-600 py-3 text-base font-bold text-white shadow-sm hover:bg-indigo-500 active:scale-98 cursor-pointer"
+          className="rounded-xl bg-indigo-600 py-3 text-base font-bold text-white shadow-sm hover:bg-indigo-500 active:scale-98"
         >
           =
         </button>

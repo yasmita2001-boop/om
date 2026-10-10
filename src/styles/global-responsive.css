@@ -1,0 +1,78 @@
+/**
+ * Om-LifeOS Global Responsive & Deeply Nested Hierarchy Container Styling
+ * Solves Issue 5: Global & Nested Component Mobile View Overflow Fix
+ * 
+ * Deeply nested hierarchy cards (Goal -> Sub Goal -> Micro Goal -> Nano Goal -> Atomic Goal)
+ * and form controls suffer from horizontal squishing, severe padding compression,
+ * and truncated text on mobile screens.
+ */
+
+/* Universal word breaking & overflow containment for deeply nested trees */
+.nested-card-container,
+[data-nested-card],
+.tree-node-card,
+.overflow-break-anywhere {
+  overflow-wrap: break-word !important;
+  word-break: normal !important;
+  min-width: 0 !important;
+}
+
+/* Guarantee tabular numbers and percentage metrics never split across lines */
+.tabular-nums,
+[data-tabular="true"] {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+}
+
+/* Dynamic flex wrapping for action button bars and metadata containers */
+.nested-actions-row,
+.tree-header-actions,
+.atomic-goal-actions,
+.mobile-wrap-header {
+  flex-wrap: wrap !important;
+}
+
+/* Universal anti-overlap and truncation safety for hierarchy tree items */
+.tree-node-title,
+[data-tree-title] {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.tree-branch-container,
+[data-tree-container] {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+/* Mobile responsive constraints (max-width: 640px) */
+@media (max-width: 640px) {
+  /* Dynamic padding reduction and minimal indentation margin across nested hierarchy */
+  .nested-card-container,
+  [data-nested-card],
+  .tree-branch-indent {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    margin-left: 0.25rem !important;
+    border-left-width: 2px !important;
+  }
+
+  /* Wrap button groups and avoid single-line squish */
+  .nested-button-group {
+    flex-wrap: wrap !important;
+    gap: 0.25rem !important;
+  }
+
+  /* Vertical flex stacking for tight controls */
+  .mobile-stack-controls {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.375rem !important;
+  }
+
+  .mobile-tight-text {
+    font-size: 0.75rem !important;
+    line-height: 1.15rem !important;
+  }
+}

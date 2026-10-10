@@ -1,14 +1,8 @@
-// Bikram Sambat (BS) <-> Gregorian (AD) Authoritative Calendar Engine
-// Powered by verified Nepali astronomical calendar tables from nepali-date-converter
-
-import NepaliDate from 'nepali-date-converter';
-
-// Resolve default import across ESM/CJS bundlers
-const NepaliDateClass: typeof NepaliDate = (NepaliDate as any).default || NepaliDate;
+// Bikram Sambat ↔ Gregorian AD date engine (1978 BS – 2099 BS)
 
 export const OM_BS_MONTHS_NE = [
-  'वैशाख', 'जेठ', 'असार', 'श्रावण', 'भाद्र', 'आश्विन',
-  'कार्तिक', 'मंसिर', 'पौष', 'माघ', 'फाल्गुन', 'चैत्र'
+  'बैशाख', 'जेठ', 'असार', 'श्रावण', 'भदौ', 'असोज',
+  'कार्तिक', 'मंसिर', 'पौष', 'माघ', 'फागुन', 'चैत'
 ];
 
 export const OM_BS_MONTHS_EN = [
@@ -16,39 +10,159 @@ export const OM_BS_MONTHS_EN = [
   'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'
 ];
 
-export const OM_BS_DAYS_NE = [
-  'आइतबार', 'सोमबार', 'मंगलबार', 'बुधबार', 'बिहीबार', 'शुक्रबार', 'शनिबार'
-];
+export const OM_BS_DATA: Record<number, number[]> = {
+  1978: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  1979: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  1980: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  1981: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 30, 30],
+  1982: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  1983: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  1984: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  1985: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 30, 30],
+  1986: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  1987: [31, 32, 31, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  1988: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  1989: [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30],
+  1990: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  1991: [31, 32, 31, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  1992: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  1993: [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30],
+  1994: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  1995: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 30],
+  1996: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  1997: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  1998: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  1999: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2000: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2001: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2002: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2003: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2004: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2005: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2006: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2007: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2008: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 29, 31],
+  2009: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2010: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2011: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2012: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 30, 30],
+  2013: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2014: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2015: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2016: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 30, 30],
+  2017: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2018: [31, 32, 31, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2019: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2020: [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30],
+  2021: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2022: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 30],
+  2023: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2024: [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30],
+  2025: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2026: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2027: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2028: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2029: [31, 31, 32, 31, 32, 30, 30, 29, 30, 29, 30, 30],
+  2030: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2031: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2032: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2033: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2034: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2035: [30, 32, 31, 32, 31, 31, 29, 30, 30, 29, 29, 31],
+  2036: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2037: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2038: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2039: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 30, 30],
+  2040: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2041: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2042: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2043: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 30, 30],
+  2044: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2045: [31, 32, 31, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2046: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2047: [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30],
+  2048: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2049: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 30],
+  2050: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2051: [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30],
+  2052: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2053: [31, 32, 31, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2054: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2055: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2056: [31, 31, 32, 31, 32, 30, 30, 29, 30, 29, 30, 30],
+  2057: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2058: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2059: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2060: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2061: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2062: [30, 32, 31, 32, 31, 31, 29, 30, 29, 30, 29, 31],
+  2063: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2064: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2065: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2066: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 29, 31],
+  2067: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2068: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2069: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2070: [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 30, 30],
+  2071: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2072: [31, 32, 31, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2073: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
+  2074: [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30],
+  2075: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2076: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 30],
+  2077: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2078: [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30],
+  2079: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2080: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 30],
+  2081: [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
+  2082: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2083: [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
+  2084: [31, 31, 32, 31, 31, 30, 30, 30, 29, 30, 30, 30],
+  2085: [31, 32, 31, 32, 30, 31, 30, 30, 29, 30, 30, 30],
+  2086: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 30, 30],
+  2087: [31, 31, 32, 31, 31, 31, 30, 30, 29, 30, 30, 30],
+  2088: [30, 31, 32, 32, 30, 31, 30, 30, 29, 30, 30, 30],
+  2089: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 30, 30],
+  2090: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 30, 30],
+  2091: [31, 31, 32, 31, 31, 31, 30, 30, 29, 30, 30, 30],
+  2092: [30, 31, 32, 32, 31, 30, 30, 30, 29, 30, 30, 30],
+  2093: [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 30, 30],
+  2094: [31, 31, 32, 31, 31, 30, 30, 30, 29, 30, 30, 30],
+  2095: [31, 31, 32, 31, 31, 31, 30, 29, 30, 30, 30, 30],
+  2096: [30, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
+  2097: [31, 32, 31, 32, 31, 30, 30, 29, 30, 30, 30, 30],
+  2098: [31, 31, 32, 31, 31, 31, 29, 30, 29, 30, 29, 31],
+  2099: [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31]
+};
 
-export const OM_BS_DAYS_EN = [
-  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
-];
-
+export const OM_BS_START_AD = '1921-04-13';
+export const OM_BS_MIN_YEAR = 1978;
+export const OM_BS_MAX_YEAR = 2099;
 export const OM_BS_DIGITS = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
-
-export function omNepaliDigits(v: string | number): string {
-  return String(v).replace(/\d/g, d => OM_BS_DIGITS[Number(d)] ?? d);
-}
 
 export function omPad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-export function getTodayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${omPad(d.getMonth() + 1)}-${omPad(d.getDate())}`;
+export function omNepaliDigits(v: string | number): string {
+  return String(v).replace(/\d/g, d => OM_BS_DIGITS[Number(d)] ?? d);
+}
+
+export function omIsoDate(y: number, m: number, d: number): string {
+  return `${y}-${omPad(m)}-${omPad(d)}`;
+}
+
+export function omDaysInAdDate(y: number, m: number, d: number): number {
+  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
 }
 
 export interface BsDateResult {
   year: number;
-  month: number; // 1 - 12
-  day: number; // 1 - 32
-  dayOfWeek: number; // 0 - 6 (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-  dayNameNe: string;
-  dayNameEn: string;
-  iso: string; // YYYY-MM-DD
+  month: number;
+  day: number;
   monthNameNe: string;
   monthNameEn: string;
+  iso: string;
   formattedNe: string;
   formattedEn: string;
 }
@@ -57,145 +171,79 @@ export interface AdDateResult {
   year: number;
   month: number;
   day: number;
-  dayOfWeek: number;
-  dayNameEn: string;
   iso: string;
   formatted: string;
 }
 
-/**
- * Accurately convert any Gregorian (AD) date string or Date object to Bikram Sambat (BS).
- * Guarantees exact BS year, month, date, and weekday.
- */
-export function adToBs(adIsoOrDate?: string | Date): BsDateResult {
-  let jsDate: Date;
-
-  if (!adIsoOrDate) {
-    jsDate = new Date();
-  } else if (adIsoOrDate instanceof Date) {
-    jsDate = adIsoOrDate;
-  } else {
-    // Parse YYYY-MM-DD
-    const parts = adIsoOrDate.split(/[-/]/).map(Number);
-    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-      // Use midday (12:00:00) to avoid any UTC midnight boundary or daylight savings shifts
-      jsDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-    } else {
-      jsDate = new Date(adIsoOrDate);
-    }
-  }
-
-  const nepDate = new NepaliDateClass(jsDate);
-  const year = nepDate.getYear();
-  const month = nepDate.getMonth() + 1; // 1-12
-  const day = nepDate.getDate(); // 1-32
-  const dayOfWeek = nepDate.getDay(); // 0 (Sunday) to 6 (Saturday)
-
-  const monthIdx = month - 1;
-  const monthNameNe = OM_BS_MONTHS_NE[monthIdx] || 'वैशाख';
-  const monthNameEn = OM_BS_MONTHS_EN[monthIdx] || 'Baisakh';
-  const dayNameNe = OM_BS_DAYS_NE[dayOfWeek] || 'आइतबार';
-  const dayNameEn = OM_BS_DAYS_EN[dayOfWeek] || 'Sunday';
-
-  const iso = `${year}-${omPad(month)}-${omPad(day)}`;
-
-  return {
-    year,
-    month,
-    day,
-    dayOfWeek,
-    dayNameNe,
-    dayNameEn,
-    iso,
-    monthNameNe,
-    monthNameEn,
-    formattedNe: `${dayNameNe}, ${omNepaliDigits(day)} ${monthNameNe} ${omNepaliDigits(year)}`,
-    formattedEn: `${dayNameEn}, ${day} ${monthNameEn} ${year}`
-  };
-}
-
-/**
- * Accurately convert any Bikram Sambat (BS) date string (YYYY-MM-DD) to Gregorian (AD).
- * Guarantees exact AD year, month, date, and weekday.
- */
-export function bsToAd(bsIso: string): AdDateResult {
-  const parts = bsIso.split(/[-/]/).map(Number);
-  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
-    throw new Error('Invalid BS Date format. Please use YYYY-MM-DD.');
-  }
-
-  const targetYear = parts[0];
-  const targetMonth = parts[1]; // 1-12
-  const targetDay = parts[2]; // 1-32
-
-  const nepDate = new NepaliDateClass(targetYear, targetMonth - 1, targetDay);
-  const jsDate = nepDate.toJsDate();
-
-  const year = jsDate.getFullYear();
-  const month = jsDate.getMonth() + 1;
-  const day = jsDate.getDate();
-  const dayOfWeek = jsDate.getDay();
-  const dayNameEn = OM_BS_DAYS_EN[dayOfWeek] || 'Sunday';
-  const iso = `${year}-${omPad(month)}-${omPad(day)}`;
-
-  return {
-    year,
-    month,
-    day,
-    dayOfWeek,
-    dayNameEn,
-    iso,
-    formatted: jsDate.toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  };
-}
-
-/**
- * Returns the exact number of days in any given BS month (29 - 32 days).
- */
-export function getDaysInBsMonth(year: number, month: number): number {
-  for (let testDay = 32; testDay >= 29; testDay--) {
-    try {
-      const nd = new NepaliDateClass(year, month - 1, testDay);
-      if (nd.getMonth() === month - 1 && nd.getDate() === testDay) {
-        return testDay;
+export function adToBs(iso: string): BsDateResult {
+  const m = String(iso || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) throw new Error('AD date must be in YYYY-MM-DD format');
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  const diff = omDaysInAdDate(y, mo, d) - omDaysInAdDate(1921, 4, 13);
+  if (diff < 0) throw new Error('AD date is before the supported 1978 BS calendar range.');
+  let rem = diff;
+  for (let by = OM_BS_MIN_YEAR; by <= OM_BS_MAX_YEAR; by++) {
+    const months = OM_BS_DATA[by];
+    if (!months) continue;
+    const yearDays = months.reduce((a, b) => a + b, 0);
+    if (rem < yearDays) {
+      for (let bm = 1; bm <= 12; bm++) {
+        const md = months[bm - 1];
+        if (rem < md) {
+          const day = rem + 1;
+          const monthIdx = bm - 1;
+          return {
+            year: by,
+            month: bm,
+            day,
+            monthNameNe: OM_BS_MONTHS_NE[monthIdx],
+            monthNameEn: OM_BS_MONTHS_EN[monthIdx],
+            iso: omIsoDate(by, bm, day),
+            formattedNe: `${omNepaliDigits(by)} ${OM_BS_MONTHS_NE[monthIdx]} ${omNepaliDigits(day)}`,
+            formattedEn: `${by} ${OM_BS_MONTHS_EN[monthIdx]} ${day}`
+          };
+        }
+        rem -= md;
       }
-    } catch {}
+    }
+    rem -= yearDays;
   }
-  return 30;
+  throw new Error('AD date is outside the supported BS calendar range.');
 }
 
-/**
- * Returns the weekday index (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
- * on which the 1st day of the given BS month starts.
- */
-export function getBsMonthStartDayOfWeek(year: number, month: number): number {
-  try {
-    const nd = new NepaliDateClass(year, month - 1, 1);
-    return nd.getDay();
-  } catch {
-    return 0;
+export function bsToAd(iso: string): AdDateResult {
+  const normalized = String(iso || '').replace(/[०-९]/g, d => String(OM_BS_DIGITS.indexOf(d)));
+  const m = normalized.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (!m) throw new Error('BS date must be YYYY-MM-DD');
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  const months = OM_BS_DATA[y];
+  if (!months || mo < 1 || mo > 12 || d < 1 || d > months[mo - 1]) {
+    throw new Error('Invalid BS date.');
   }
+  let diff = d - 1;
+  for (let by = OM_BS_MIN_YEAR; by < y; by++) {
+    const arr = OM_BS_DATA[by];
+    if (arr) diff += arr.reduce((a, b) => a + b, 0);
+  }
+  for (let bm = 1; bm < mo; bm++) {
+    diff += months[bm - 1];
+  }
+  const utc = omDaysInAdDate(1921, 4, 13) + diff;
+  const dt = new Date(utc * 86400000);
+  const year = dt.getUTCFullYear();
+  const month = dt.getUTCMonth() + 1;
+  const day = dt.getUTCDate();
+  const resIso = omIsoDate(year, month, day);
+  return {
+    year,
+    month,
+    day,
+    iso: resIso,
+    formatted: dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short', timeZone: 'UTC' })
+  };
 }
 
-/**
- * Returns today's exact BS date information.
- */
-export function getTodayBs(): BsDateResult {
-  return adToBs(new Date());
+export function getTodayIso(): string {
+  const d = new Date();
+  return omIsoDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
-
-/**
- * Backward compatibility calendar days map proxy.
- */
-export const OM_BS_DATA: Record<number, number[]> = new Proxy({}, {
-  get: (_, prop) => {
-    const yr = Number(prop);
-    if (!yr || isNaN(yr)) return undefined;
-    return Array.from({ length: 12 }, (_, m) => getDaysInBsMonth(yr, m + 1));
-  }
-});

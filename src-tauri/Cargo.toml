@@ -1,0 +1,18 @@
+[package]
+name = "om-lifeos"
+version = "4.8.4"
+description = "Om-LifeOS Personal Operating System"
+authors = ["Om-LifeOS Team"]
+edition = "2021"
+
+[lib]
+name = "om_lifeos_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

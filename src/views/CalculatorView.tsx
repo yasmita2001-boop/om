@@ -1,10 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Calculator, Star, History, Copy, Check, Search,
-  ArrowRightLeft, Trash2, Sparkles, Info, Sliders
+  Calculator,
+  Star,
+  History,
+  Copy,
+  Check,
+  Search,
+  ArrowRightLeft,
+  Trash2,
+  Sparkles,
+  Info,
+  Sliders
 } from 'lucide-react';
 import {
-  CALCULATOR_CATALOG, CALC_UNIT_FACTORS, NP_UNITS
+  CALCULATOR_CATALOG,
+  CALC_UNIT_FACTORS,
+  NP_UNITS
 } from '../lib/calculatorEngine';
 import { getToolConfig } from '../lib/calculatorConfig';
 import { InteractiveKeypad } from '../components/InteractiveKeypad';
@@ -12,7 +23,19 @@ import { SlideTabs } from '../components/SlideTabs';
 import { CalcHistoryItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 
-export const CalculatorView: React.FC = () => {
+interface CalculatorViewProps {
+  history: CalcHistoryItem[];
+  favorites: string[];
+  onRefresh: () => void;
+  onSuccess: (msg: string) => void;
+}
+
+export const CalculatorView: React.FC<CalculatorViewProps> = ({
+  history,
+  favorites,
+  onRefresh,
+  onSuccess
+}) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('quick');
   const [selectedTool, setSelectedTool] = useState<string>('Basic');
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,31 +45,12 @@ export const CalculatorView: React.FC = () => {
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [unitFrom, setUnitFrom] = useState<string>('');
   const [unitTo, setUnitTo] = useState<string>('');
-  const [result, setResult] = useState<string>('');
+  const [result, setResult] = useState<string>('—');
   const [copied, setCopied] = useState(false);
-
-  // History & Favorites
-  const [history, setHistory] = useState<CalcHistoryItem[]>([]);
-  const [favorites, setFavorites] = useState<string[]>([]);
 
   const currentConfig = useMemo(() => getToolConfig(selectedTool), [selectedTool]);
 
-  const loadHistoryAndFavorites = async () => {
-    try {
-      const hist = await storage.getAll<CalcHistoryItem>('calcHistory');
-      setHistory(hist.sort((a, b) => b.createdAt - a.createdAt));
-      const appSettings = await storage.getSingleton<any>('appSettings');
-      if (appSettings?.calcFavorites) {
-        setFavorites(appSettings.calcFavorites);
-      }
-    } catch {}
-  };
-
-  useEffect(() => {
-    loadHistoryAndFavorites();
-  }, []);
-
-  // Update fields when tool changes
+  // Set default units and inputs when tool changes
   useEffect(() => {
     const config = getToolConfig(selectedTool);
     const newInputs: Record<string, string> = {};
@@ -55,6 +59,7 @@ export const CalculatorView: React.FC = () => {
     });
     setInputs(newInputs);
 
+    // Default units for converters
     if (config.isConverter) {
       setUnitFrom(config.defaultUnitFrom || 'm');
       setUnitTo(config.defaultUnitTo || 'ft');
@@ -62,9 +67,11 @@ export const CalculatorView: React.FC = () => {
       setUnitFrom('');
       setUnitTo('');
     }
-    setResult('');
+
+    setResult('—');
   }, [selectedTool]);
 
+  // Auto-run calculation when inputs change or tool is selected
   const handleCalculate = async () => {
     try {
       const config = getToolConfig(selectedTool);
@@ -72,10 +79,12 @@ export const CalculatorView: React.FC = () => {
       const f2 = inputs.f2 ?? config.fields[1]?.default ?? '';
       const f3 = inputs.f3 ?? config.fields[2]?.default ?? '';
       const f4 = inputs.f4 ?? config.fields[3]?.default ?? '';
+
       const output = config.calculate(f1, f2, f3, f4, unitFrom, unitTo);
       const resString = String(output);
       setResult(resString);
 
+      // Save to calculation history
       const historyItem: CalcHistoryItem = {
         id: generateUUID(),
         tool: selectedTool,
@@ -84,7 +93,7 @@ export const CalculatorView: React.FC = () => {
         createdAt: Date.now()
       };
       await storage.put('calcHistory', historyItem);
-      setHistory(prev => [historyItem, ...prev].slice(0, 20));
+      onRefresh();
     } catch (err: any) {
       setResult(`Error: ${err.message || 'Calculation failed'}`);
     }
@@ -100,7 +109,7 @@ export const CalculatorView: React.FC = () => {
       createdAt: Date.now()
     };
     await storage.put('calcHistory', historyItem);
-    setHistory(prev => [historyItem, ...prev].slice(0, 20));
+    onRefresh();
   };
 
   const handleToggleFavorite = async () => {
@@ -108,42 +117,27 @@ export const CalculatorView: React.FC = () => {
     const favs: string[] = appSettings.calcFavorites || [];
     const isFav = favs.includes(selectedTool);
     const updated = isFav ? favs.filter(f => f !== selectedTool) : [...favs, selectedTool];
+
     appSettings.calcFavorites = updated;
     await storage.setSingleton('appSettings', appSettings);
-    setFavorites(updated);
+    onSuccess(isFav ? `Removed ${selectedTool} from favorites` : `★ Added ${selectedTool} to favorites`);
+    onRefresh();
   };
 
   const handleClearHistory = async () => {
-    for (const h of history) {
+    const all = await storage.getAll<CalcHistoryItem>('calcHistory');
+    for (const h of all) {
       await storage.delete('calcHistory', h.id);
     }
-    setHistory([]);
-  };
-
-  const handleDeleteHistoryItem = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    await storage.delete('calcHistory', id);
-    setHistory(prev => prev.filter(item => item.id !== id));
-  };
-
-  const handleLoadHistoryItem = (h: CalcHistoryItem) => {
-    setSelectedTool(h.tool);
-    setTimeout(() => {
-      if (h.args && h.args.length > 0) {
-        const nextInputs: Record<string, string> = {};
-        h.args.forEach((v, i) => {
-          nextInputs[`f${i + 1}`] = String(v);
-        });
-        setInputs(prev => ({ ...prev, ...nextInputs }));
-      }
-      setResult(h.result);
-    }, 10);
+    onSuccess('Calculation history cleared');
+    onRefresh();
   };
 
   const handleCopyResult = () => {
     navigator.clipboard.writeText(result);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+    onSuccess('Result copied to clipboard');
   };
 
   const handleSwapUnits = () => {
@@ -154,6 +148,7 @@ export const CalculatorView: React.FC = () => {
 
   const isFavorite = favorites.includes(selectedTool);
 
+  // Filter tools by search query across all categories or current category
   const filteredTools = useMemo(() => {
     if (!searchQuery.trim()) {
       return CALCULATOR_CATALOG[selectedCategory] || [];
@@ -170,9 +165,11 @@ export const CalculatorView: React.FC = () => {
     return matches;
   }, [searchQuery, selectedCategory]);
 
+  // Unit options generator for converter tools
   const renderUnitOptions = () => {
     const cfg = currentConfig;
     if (!cfg.isConverter) return null;
+
     if (cfg.unitType === 'nepal_land') {
       return Object.keys(NP_UNITS.land).map(u => (
         <option key={u} value={u}>
@@ -236,15 +233,12 @@ export const CalculatorView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header and Search Bar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl flex items-center gap-2">
             <Calculator className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-            <span>108-Tool Computational Engine</span>
+            Computational & Multi-Domain Calculator
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Finance (EMI, SIP, CAGR), Gold & Jewellery, Nepal Land & Units, Health, Programming, and Physics.
-          </p>
         </div>
 
         {/* Search Input */}
@@ -261,15 +255,15 @@ export const CalculatorView: React.FC = () => {
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2 text-xs text-slate-400 hover:text-slate-600"
+              className="absolute right-2.5 top-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
             >
-              ✕
+              ×
             </button>
           )}
         </div>
       </div>
 
-      {/* Category Tabs */}
+      {/* Category Tabs (Full Width Responsive Slide Tab) */}
       <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
         <SlideTabs
           activeId={selectedCategory}
@@ -291,22 +285,23 @@ export const CalculatorView: React.FC = () => {
         {/* Tool Selector + Calculator Engine (8 cols) */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           {/* Tool Pills */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between mb-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between mb-3.5">
               <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
                 {searchQuery ? `Search Results (${filteredTools.length})` : `${selectedCategory} Tools (${filteredTools.length})`}
               </span>
               <button
                 type="button"
                 onClick={handleToggleFavorite}
-                className={`flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                  isFavorite ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600'
+                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                  isFavorite ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                 }`}
               >
                 <Star className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
                 <span>{isFavorite ? 'Favorited' : 'Favorite'}</span>
               </button>
             </div>
+
             <SlideTabs
               activeId={selectedTool}
               onChange={tool => setSelectedTool(tool)}
@@ -336,10 +331,10 @@ export const CalculatorView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setUseKeypad(!useKeypad)}
-                  className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400 cursor-pointer"
+                  className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
                 >
                   <Sliders className="h-3 w-3" />
-                  <span>{useKeypad ? 'Switch to Form' : 'Switch to Keypad'}</span>
+                  <span>{useKeypad ? 'Switch to Form Fields' : 'Switch to Interactive Keypad'}</span>
                 </button>
               )}
             </div>
@@ -356,22 +351,26 @@ export const CalculatorView: React.FC = () => {
             )}
 
             <div className="mt-5 space-y-4">
+              {/* If Basic or Scientific and user wants on-screen Keypad */}
               {(selectedTool === 'Basic' || selectedTool === 'Scientific') && useKeypad ? (
                 <InteractiveKeypad
                   onComputeResult={handleKeypadResult}
                   isScientific={selectedTool === 'Scientific'}
                 />
               ) : (
+                /* Dynamic Input Forms for All Tools */
                 <div className="space-y-4">
                   <div className={`grid gap-3 ${currentConfig.fields.length >= 3 ? 'grid-cols-1 sm:grid-cols-3' : currentConfig.fields.length === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                     {currentConfig.fields.map((field, idx) => {
                       const fieldKey = `f${idx + 1}`;
                       const val = inputs[fieldKey] ?? field.default;
+
                       return (
                         <div key={fieldKey}>
                           <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                             {field.label}
                           </label>
+
                           {field.type === 'select' && field.options ? (
                             <select
                               value={val}
@@ -399,6 +398,7 @@ export const CalculatorView: React.FC = () => {
                     })}
                   </div>
 
+                  {/* Converter Unit Selector */}
                   {currentConfig.isConverter && (
                     <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center rounded-xl bg-slate-50 p-3 border border-slate-200 dark:bg-slate-800/40 dark:border-slate-800">
                       <div className="sm:col-span-2">
@@ -413,16 +413,18 @@ export const CalculatorView: React.FC = () => {
                           {renderUnitOptions()}
                         </select>
                       </div>
+
                       <div className="flex justify-center pt-3 sm:pt-4">
                         <button
                           type="button"
                           onClick={handleSwapUnits}
-                          className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                          className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700"
                           title="Swap Units"
                         >
                           <ArrowRightLeft className="h-4 w-4" />
                         </button>
                       </div>
+
                       <div className="sm:col-span-2">
                         <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                           Convert To
@@ -438,10 +440,11 @@ export const CalculatorView: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Calculate Action Button */}
                   <button
                     type="button"
                     onClick={handleCalculate}
-                    className="w-full rounded-xl bg-indigo-600 py-3 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full rounded-xl bg-indigo-600 py-3 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 active:scale-98 transition-all flex items-center justify-center gap-1.5"
                   >
                     <Sparkles className="h-4 w-4" />
                     <span>Calculate {selectedTool}</span>
@@ -458,8 +461,8 @@ export const CalculatorView: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleCopyResult}
-                    disabled={!result}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-indigo-600 disabled:opacity-30 dark:text-slate-300 dark:hover:text-indigo-400 cursor-pointer"
+                    disabled={result === '—'}
+                    className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-indigo-600 disabled:opacity-30 dark:text-slate-300 dark:hover:text-indigo-400"
                   >
                     {copied ? (
                       <>
@@ -475,16 +478,16 @@ export const CalculatorView: React.FC = () => {
                   </button>
                 </div>
                 <div className="mt-2 font-mono text-base font-bold text-slate-900 dark:text-white break-words">
-                  {result || 'Enter parameters and click Calculate'}
+                  {result}
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Calculation History (4 cols) */}
+        {/* Calculation History & Favorites (4 cols) */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <History className="h-4 w-4 text-slate-500" />
@@ -496,7 +499,8 @@ export const CalculatorView: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleClearHistory}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700 cursor-pointer"
+                  className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-400"
+                  title="Clear history"
                 >
                   <Trash2 className="h-3 w-3" />
                   <span>Clear</span>
@@ -510,33 +514,30 @@ export const CalculatorView: React.FC = () => {
                   No calculations recorded yet.
                 </div>
               ) : (
-                history.map(h => (
-                  <div
-                    key={h.id}
-                    onClick={() => handleLoadHistoryItem(h)}
-                    className="cursor-pointer rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 dark:border-slate-800 dark:bg-slate-800/40"
-                  >
-                    <div className="flex items-center justify-between font-semibold text-slate-800 dark:text-slate-200">
-                      <span>{h.tool}</span>
-                      <div className="flex items-center gap-1.5">
+                history
+                  .slice()
+                  .reverse()
+                  .slice(0, 15)
+                  .map(h => (
+                    <div
+                      key={h.id}
+                      onClick={() => {
+                        setSelectedTool(h.tool);
+                        setResult(h.result);
+                      }}
+                      className="cursor-pointer rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-indigo-800"
+                    >
+                      <div className="flex items-center justify-between font-semibold text-slate-800 dark:text-slate-200">
+                        <span>{h.tool}</span>
                         <span className="text-[10px] text-slate-400">
                           {new Date(h.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteHistoryItem(h.id, e)}
-                          className="p-0.5 text-slate-400 hover:text-rose-500 rounded cursor-pointer"
-                          title="Delete entry"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                      </div>
+                      <div className="mt-1 font-mono text-[11px] text-indigo-600 dark:text-indigo-400 break-words font-medium">
+                        {h.result}
                       </div>
                     </div>
-                    <div className="mt-1 font-mono text-[11px] text-indigo-600 dark:text-indigo-400 break-words font-medium">
-                      {h.result}
-                    </div>
-                  </div>
-                ))
+                  ))
               )}
             </div>
           </div>

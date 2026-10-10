@@ -179,7 +179,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     name: 'EMI / Loan',
     category: 'money',
     description: 'Equal Monthly Installment (EMI) for home, personal, or car loans',
-    formula: 'E = P × r × (1+r)^n / ((1+r)^n - 1)',
+    formula: 'E = P × r × (1+r)ⁿ / ((1+r)ⁿ - 1)',
     fields: [
       { label: 'Loan Principal (₹)', type: 'number', default: '500000' },
       { label: 'Annual Interest Rate (%)', type: 'number', default: '9.5', step: '0.1' },
@@ -405,8 +405,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     fields: [{ label: 'Gold Weight', type: 'number', default: '1' }],
     calculate: (f1, _f2, _f3, _f4, uFrom = 'tola', uTo = 'g') => calculatorEngine.goldWeightConverter(f1, uFrom, uTo)
   },
-  'Karat ⇄ Purity': {
-    name: 'Karat ⇄ Purity',
+  'Karat ↔ Purity': {
+    name: 'Karat ↔ Purity',
     category: 'gold',
     description: 'Convert between Karats (24K, 22K, 18K) and Gold Purity Percentage',
     fields: [
@@ -508,7 +508,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     calculate: (f1, f2, f3) => calculatorEngine.silverValue(f1, f2, f3 === 'g')
   },
 
-  // ===================== HEALTH & WELLNESS =====================
+  // ==========================================
+  // HEALTH & WELLNESS
+  // ==========================================
   'BMI': {
     name: 'BMI',
     category: 'health',
@@ -661,7 +663,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     calculate: (f1, f2) => calculatorEngine.idealBodyWeight(f1, f2 || 'male')
   },
 
-  // ===================== TIME & DATE =====================
+  // ==========================================
+  // TIME & DATE
+  // ==========================================
   'Date Difference': {
     name: 'Date Difference',
     category: 'time',
@@ -751,7 +755,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     calculate: (f1) => calculatorEngine.weekday(f1)
   },
 
-  // ===================== CONVERTERS =====================
+  // ==========================================
+  // CONVERTERS
+  // ==========================================
   'Length': {
     name: 'Length',
     category: 'converter',
@@ -955,7 +961,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
       calculatorEngine.unit(f1, uFrom, uTo, NP_UNITS.weight)
   },
 
-  // ===================== HOME & LIVING =====================
+  // ==========================================
+  // HOME & LIVING
+  // ==========================================
   'Room Area': {
     name: 'Room Area',
     category: 'home',
@@ -1033,7 +1041,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     calculate: (f1, f2) => calculatorEngine.waterUsage(f1, Number(f2) || 135, 30)
   },
 
-  // ===================== VEHICLE & AUTO =====================
+  // ==========================================
+  // VEHICLE & AUTO
+  // ==========================================
   'Mileage': {
     name: 'Mileage',
     category: 'vehicle',
@@ -1105,7 +1115,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
       calculatorEngine.fuelEconomy(f1, uFrom, uTo)
   },
 
-  // ===================== TRAVEL =====================
+  // ==========================================
+  // TRAVEL
+  // ==========================================
   'Trip Budget': {
     name: 'Trip Budget',
     category: 'travel',
@@ -1199,7 +1211,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     }
   },
 
-  // ===================== BUSINESS =====================
+  // ==========================================
+  // BUSINESS
+  // ==========================================
   'Revenue': {
     name: 'Revenue',
     category: 'business',
@@ -1222,7 +1236,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     calculate: (f1, f2, f3) => calculatorEngine.businessRoi(f1, f2, Number(f3) || 0)
   },
 
-  // ===================== PROGRAMMER =====================
+  // ==========================================
+  // PROGRAMMER
+  // ==========================================
   'Binary': {
     name: 'Binary',
     category: 'programmer',
@@ -1319,10 +1335,13 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
   }
 };
 
+export const TOOL_CONFIGS = ALL_TOOL_CONFIGS;
+
 export const getToolConfig = (toolName: string): ToolConfig => {
   if (ALL_TOOL_CONFIGS[toolName]) {
     return ALL_TOOL_CONFIGS[toolName];
   }
+  // Safe generic fallback
   return {
     name: toolName,
     category: 'quick',

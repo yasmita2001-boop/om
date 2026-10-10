@@ -4,39 +4,43 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const host = process.env.TAURI_DEV_HOST;
+
 export default defineConfig(() => {
   return {
+    base: './',
     plugins: [
       react(),
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['apple-touch-icon.png', 'icon.svg'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'Om-LifeOS - Executive Life Operating System',
+          name: 'Om-LifeOS — Executive Operating System',
           short_name: 'Om-LifeOS',
-          description: 'A unified sovereign personal operating system for daily execution, project timelines, and personal finance.',
-          theme_color: '#4f46e5',
+          description: 'Unified personal operating system for project timelines, task genesis, routines, habit architecture, financial mastery, and life strategy.',
+          theme_color: '#4F46E5',
           background_color: '#0B0F19',
           display: 'standalone',
-          start_url: '/',
-          scope: '/',
+          orientation: 'any',
+          start_url: './',
+          scope: './',
           icons: [
             {
-              src: '/pwa-192x192.png',
+              src: './pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-512x512.png',
+              src: './pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-maskable-512x512.png',
+              src: './pwa-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
@@ -44,7 +48,8 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html}', 'manifest.webmanifest', '*.{ico,svg}'],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -77,8 +82,7 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
       }),
     ],
@@ -87,12 +91,68 @@ export default defineConfig(() => {
         '@': path.resolve('.'),
       },
     },
+    build: {
+      target: 'esnext',
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: false,
+          drop_debugger: true,
+          passes: 2,
+        },
+        format: {
+          comments: false,
+        },
+      },
+      cssCodeSplit: true,
+      sourcemap: false,
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          chunkFileNames: 'assets/[name]-[hash].js',
+          entryFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash].[ext]',
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom')) {
+                return 'vendor-react';
+              }
+              if (id.includes('lucide-react')) {
+                return 'vendor-icons';
+              }
+              if (id.includes('motion')) {
+                return 'vendor-motion';
+              }
+              if (id.includes('jszip')) {
+                return 'vendor-jszip';
+              }
+              return 'vendor-misc';
+            }
+            if (id.includes('calculatorConfig') || id.includes('CalculatorView')) {
+              return 'feature-calculator';
+            }
+            if (id.includes('nepaliDate')) {
+              return 'feature-date';
+            }
+            if (id.includes('exportHtml') || id.includes('exportManager')) {
+              return 'feature-export';
+            }
+          },
+        },
+      },
+    },
+    clearScreen: false,
     server: {
+      port: 3000,
+      strictPort: true,
+      host: host || '0.0.0.0',
+      allowedHosts: true as const,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
+    envPrefix: ['VITE_', 'TAURI_ENV_*'],
   };
 });

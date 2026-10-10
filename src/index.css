@@ -1,0 +1,295 @@
+@import "tailwindcss";
+@import "./styles/global-responsive.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: 'Cabinet Grotesk', 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --color-slate-850: #151f32;
+  --color-brand: var(--color-brand, #6366f1);
+  --color-indigo-600: var(--color-brand, #6366f1);
+  --color-indigo-500: color-mix(in srgb, var(--color-brand, #6366f1) 85%, white);
+  --color-indigo-700: color-mix(in srgb, var(--color-brand, #6366f1) 85%, black);
+  --color-indigo-400: color-mix(in srgb, var(--color-brand, #6366f1) 70%, white);
+  --color-indigo-50: color-mix(in srgb, var(--color-brand, #6366f1) 12%, white);
+  --color-indigo-100: color-mix(in srgb, var(--color-brand, #6366f1) 22%, white);
+  --color-indigo-950: color-mix(in srgb, var(--color-brand, #6366f1) 15%, black);
+}
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --color-brand: #6366f1;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .dark select,
+  .dark textarea {
+    color: #f8fafc;
+  }
+
+  .dark select option {
+    background-color: #1e293b;
+    color: #f8fafc;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    letter-spacing: -0.011em;
+  }
+
+  /* Universal typography baseline */
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  .font-mono, [data-tabular="true"], .tabular-nums {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Hide scrollbars while allowing touch/wheel scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom sleek scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
+
+/* Prevent accidental horizontal overflow across all mobile screens */
+* {
+  box-sizing: border-box;
+}
+
+/* Mobile safe area padding helper */
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
+}
+
+/* Smooth badge and card transitions */
+.card-hover {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+}
+
+/* Ultra-premium interactive button press */
+.btn-press, button:not([disabled]) {
+  transition: transform 0.12s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-press:active, button:not([disabled]):active {
+  transform: scale(0.98);
+}
+
+/* Accessible and polished focus rings */
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+  outline: 2px solid var(--color-brand, #6366f1) !important;
+  outline-offset: 2px !important;
+}
+
+/* Subtle elevation system */
+.surface-card {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+}
+.surface-elevated {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+}
+
+/* Prevent action buttons, switches, and file triggers inside flex rows from shrinking into vertical text columns */
+button[role="switch"] {
+  flex-shrink: 0;
+}
+.flex.justify-between > button:not(.w-full):not(.flex-col):not(.text-left),
+.flex.justify-between > label:not(.w-full):not(.flex-col):not(.text-left) {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   OM PREMIUM RICH TEXT TYPOGRAPHY (Lists, Bullets, Tables, Highlights, Quotes)
+   Guarantees bullet lists, tables, and highlights render luxuriously everywhere
+   ========================================================================== */
+.om-rich-rendered ul,
+[contenteditable].om-rich-rendered ul,
+.rich-text-content ul {
+  list-style-type: disc !important;
+  padding-left: 1.4rem !important;
+  margin-top: 0.45rem !important;
+  margin-bottom: 0.45rem !important;
+}
+
+.om-rich-rendered ol,
+[contenteditable].om-rich-rendered ol,
+.rich-text-content ol {
+  list-style-type: decimal !important;
+  padding-left: 1.4rem !important;
+  margin-top: 0.45rem !important;
+  margin-bottom: 0.45rem !important;
+}
+
+.om-rich-rendered li,
+[contenteditable].om-rich-rendered li,
+.rich-text-content li {
+  display: list-item !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+  line-height: 1.6 !important;
+}
+
+.om-rich-rendered table,
+[contenteditable].om-rich-rendered table,
+.rich-text-content table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  margin: 14px 0 !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+}
+
+.om-rich-rendered th,
+[contenteditable].om-rich-rendered th,
+.rich-text-content th {
+  background: rgba(241, 245, 249, 0.95) !important;
+  font-weight: 700 !important;
+  text-align: left !important;
+  padding: 8px 12px !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35) !important;
+  border-right: 1px solid rgba(148, 163, 184, 0.2) !important;
+  font-size: 0.78rem !important;
+  color: #1e293b !important;
+}
+
+.dark .om-rich-rendered th,
+.dark [contenteditable].om-rich-rendered th,
+.dark .rich-text-content th {
+  background: rgba(30, 41, 59, 0.95) !important;
+  color: #f8fafc !important;
+  border-color: rgba(71, 85, 105, 0.6) !important;
+}
+
+.om-rich-rendered td,
+[contenteditable].om-rich-rendered td,
+.rich-text-content td {
+  padding: 8px 12px !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-right: 1px solid rgba(148, 163, 184, 0.2) !important;
+  font-size: 0.78rem !important;
+  min-width: 55px !important;
+}
+
+.dark .om-rich-rendered td,
+.dark [contenteditable].om-rich-rendered td,
+.dark .rich-text-content td {
+  border-color: rgba(71, 85, 105, 0.4) !important;
+}
+
+.om-rich-rendered tr:last-child td,
+[contenteditable].om-rich-rendered tr:last-child td,
+.rich-text-content tr:last-child td {
+  border-bottom: none !important;
+}
+
+.om-rich-rendered tr td:last-child,
+.om-rich-rendered tr th:last-child,
+[contenteditable].om-rich-rendered tr td:last-child,
+[contenteditable].om-rich-rendered tr th:last-child,
+.rich-text-content tr td:last-child,
+.rich-text-content tr th:last-child {
+  border-right: none !important;
+}
+
+.om-rich-rendered tr:nth-child(even) td,
+[contenteditable].om-rich-rendered tr:nth-child(even) td,
+.rich-text-content tr:nth-child(even) td {
+  background-color: rgba(248, 250, 252, 0.6) !important;
+}
+
+.dark .om-rich-rendered tr:nth-child(even) td,
+.dark [contenteditable].om-rich-rendered tr:nth-child(even) td,
+.dark .rich-text-content tr:nth-child(even) td {
+  background-color: rgba(30, 41, 59, 0.35) !important;
+}
+
+.om-rich-rendered mark,
+[contenteditable].om-rich-rendered mark,
+.rich-text-content mark {
+  padding: 1.5px 5px !important;
+  border-radius: 4px !important;
+  box-decoration-break: clone !important;
+  -webkit-box-decoration-break: clone !important;
+  color: inherit !important;
+  font-weight: 500 !important;
+}
+
+.om-rich-rendered blockquote,
+[contenteditable].om-rich-rendered blockquote,
+.rich-text-content blockquote {
+  border-left: 3.5px solid #6366f1 !important;
+  padding: 8px 14px !important;
+  margin: 10px 0 !important;
+  font-style: italic !important;
+  background: rgba(99, 102, 241, 0.05) !important;
+  border-radius: 0 8px 8px 0 !important;
+}
+
+.dark .om-rich-rendered blockquote,
+.dark [contenteditable].om-rich-rendered blockquote,
+.dark .rich-text-content blockquote {
+  background: rgba(99, 102, 241, 0.12) !important;
+}
+
+.om-rich-rendered pre,
+[contenteditable].om-rich-rendered pre,
+.rich-text-content pre {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  padding: 12px 14px !important;
+  border-radius: 10px !important;
+  font-family: var(--font-mono) !important;
+  font-size: 0.75rem !important;
+  margin: 10px 0 !important;
+  overflow-x: auto !important;
+}
+

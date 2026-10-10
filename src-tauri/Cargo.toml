@@ -1,6 +1,6 @@
 [package]
 name = "om-lifeos"
-version = "4.8.4"
+version = "4.8.5"
 description = "Om-LifeOS Personal Operating System"
 authors = ["Om-LifeOS Team"]
 edition = "2021"

@@ -12,6 +12,7 @@ import {
 import { AppState, UserProfile } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { UniversalDataManagerCard } from '../components/UniversalDataManagerCard';
+import { GoogleDriveSyncCard } from '../components/GoogleDriveSyncCard';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { SlideTabs } from '../components/SlideTabs';
 import { RecycleBinView } from './RecycleBinView';
@@ -586,7 +587,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Tab: Workspaces */}
       {activeTab === 'workspaces' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 min-w-0">
-          {/* Left Column: Active Workspaces */}
+          {/* Left Column: Google Drive Sync */}
+          <div className="lg:col-span-6 space-y-6 min-w-0">
+            <GoogleDriveSyncCard
+              onSuccess={onSuccess}
+              onError={onError}
+              onRefresh={onRefresh}
+            />
+          </div>
+
+          {/* Right Column: Create New Workspace Form */}
           <div className="lg:col-span-6 space-y-6 min-w-0">
             {/* Active Workspace Selector */}
             <div className="rounded-3xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 min-w-0">
@@ -663,10 +673,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 })}
               </div>
             </div>
-          </div>
 
-          {/* Right Column: Create New Workspace Form */}
-          <div className="lg:col-span-6 space-y-6 min-w-0">
+
             <div className="rounded-3xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 min-w-0">
               <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3.5 dark:border-slate-800">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">

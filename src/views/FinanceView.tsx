@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   DollarSign, Plus, ArrowUpRight, ArrowUpDown,
   ShieldCheck, Trash2, TrendingUp, Landmark,
   Download, Upload, Paperclip, Receipt, ExternalLink,
-  FileText, X, Eye, Link2, Target, ChevronRight, ChevronDown
+  FileText, X, Eye, Link2, Target, ChevronRight, ChevronDown,
+  RefreshCw, AlertCircle, Check
 } from 'lucide-react';
 import {
   FinanceAccount, FinanceTransaction, Loan, LoanPayment,
@@ -31,6 +32,36 @@ interface FinanceViewProps {
   onNavigate?: (module: NavModule) => void;
 }
 
+const STANDARD_EXPENSE_CATEGORIES = [
+  'Food & Dining',
+  'Groceries',
+  'Rent & Housing',
+  'Bills & Utilities',
+  'Shopping',
+  'Travel & Commute',
+  'Entertainment',
+  'Healthcare & Medical',
+  'Education',
+  'Personal Care',
+  'EMI & Loans',
+  'Subscriptions',
+  'Home Maintenance',
+  'Gifts & Donations',
+  'General Expense'
+];
+
+const STANDARD_INCOME_CATEGORIES = [
+  'Salary',
+  'Freelance / Client Work',
+  'Business Income',
+  'Investment & Dividends',
+  'Rental Income',
+  'Interest & Cashback',
+  'Gifts & Grants',
+  'Bonus / Incentive',
+  'Other Income'
+];
+
 export const FinanceView: React.FC<FinanceViewProps> = ({
   accounts,
   transactions,
@@ -51,13 +82,41 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'accounts' | 'loans' | 'investments' | 'savings' | 'balanceSheet'>('overview');
 
   // New Transaction Form state
-  const [txType, setTxType] = useState<'expense' | 'income' | 'transfer' | 'investment' | 'loan'>('expense');
+  const [txType, setTxType] = useState<'expense' | 'income' | 'transfer' | 'investment' | 'loan' | 'repayment'>('expense');
   const [txAmount, setTxAmount] = useState('');
   const [txCategory, setTxCategory] = useState('');
   const [txAccount, setTxAccount] = useState(accounts[0]?.id || '');
   const [txToAccount, setTxToAccount] = useState(accounts[1]?.id || accounts[0]?.id || '');
+  const [txRepayLoanId, setTxRepayLoanId] = useState(loans[0]?.id || '');
   const [txNote, setTxNote] = useState('');
   const [txDate, setTxDate] = useState(today);
+
+  // Category Combobox State
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+    if (isCategoryDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isCategoryDropdownOpen]);
+
+  const categoryList = useMemo(() => {
+    return txType === 'income' ? STANDARD_INCOME_CATEGORIES : STANDARD_EXPENSE_CATEGORIES;
+  }, [txType]);
+
+  const filteredCategories = useMemo(() => {
+    const query = txCategory.trim().toLowerCase();
+    return categoryList.filter(cat => !query || cat.toLowerCase().includes(query));
+  }, [categoryList, txCategory]);
 
   // Goal Linking State for all forms
   const [txInputMode, setTxInputMode] = useState<'manual' | 'link'>('manual');
@@ -169,12 +228,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [invName, setInvName] = useState('');
   const [invAmount, setInvAmount] = useState('');
   const [invCurrentVal, setInvCurrentVal] = useState('');
+  const [invAccountId, setInvAccountId] = useState(accounts[0]?.id || '');
+
+  // New Loan Form Disbursal Account
+  const [loanDepositAccountId, setLoanDepositAccountId] = useState(accounts[0]?.id || '');
 
   // New Savings Form
   const [saveName, setSaveName] = useState('');
   const [saveCurrent, setSaveCurrent] = useState('');
   const [saveTarget, setSaveTarget] = useState('');
   const [saveMonths, setSaveMonths] = useState('12');
+  const [saveAccountId, setSaveAccountId] = useState(accounts[0]?.id || '');
+
+  // Savings Deposit / Contribution Modal State
+  const [depositTargetPlan, setDepositTargetPlan] = useState<SavingsPlan | null>(null);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositAccountId, setDepositAccountId] = useState(accounts[0]?.id || '');
+  const [depositNote, setDepositNote] = useState('');
 
   // Asset Form
   const [assetName, setAssetName] = useState('');
@@ -182,8 +252,29 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   // Transactions Filter
   const [txSearch, setTxSearch] = useState('');
-  const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'expense' | 'income' | 'transfer' | 'repayment' | 'investment'>('all');
+  const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'expense' | 'income' | 'loan' | 'transfer' | 'repayment' | 'investment' | 'savings'>('all');
   const [txSortOrder, setTxSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [dateFilterMode, setDateFilterMode] = useState<'all' | 'this_month' | 'last_30_days' | 'custom'>('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const currentYearMonth = new Date().toISOString().slice(0, 7);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setIsFilterDropdownOpen(false);
+      }
+    }
+    if (isFilterDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isFilterDropdownOpen]);
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<{ store: string; id: string; name: string } | null>(null);
@@ -200,8 +291,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       if (!payAcctId || !accounts.some(a => a.id === payAcctId)) {
         setPayAcctId(accounts[0].id);
       }
+      if (!invAccountId || !accounts.some(a => a.id === invAccountId)) {
+        setInvAccountId(accounts[0].id);
+      }
+      if (!loanDepositAccountId || !accounts.some(a => a.id === loanDepositAccountId)) {
+        setLoanDepositAccountId(accounts[0].id);
+      }
+      if (!saveAccountId || !accounts.some(a => a.id === saveAccountId)) {
+        setSaveAccountId(accounts[0].id);
+      }
+      if (!depositAccountId || !accounts.some(a => a.id === depositAccountId)) {
+        setDepositAccountId(accounts[0].id);
+      }
     }
-  }, [accounts, txAccount, txToAccount, payAcctId]);
+  }, [accounts, txAccount, txToAccount, payAcctId, invAccountId, loanDepositAccountId, saveAccountId, depositAccountId]);
 
   useEffect(() => {
     if (loans.length > 0) {
@@ -215,6 +318,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   let income = 0;
   let expense = 0;
   let investmentFlow = 0;
+  let savingsFlow = 0;
   let loanReceived = 0;
   let repaymentFlow = 0;
 
@@ -223,6 +327,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (t.type === 'income') income += amt;
     else if (t.type === 'expense') expense += amt;
     else if (t.type === 'investment') investmentFlow += amt;
+    else if (t.type === 'savings') savingsFlow += amt;
     else if (t.type === 'loan') loanReceived += amt;
     else if (t.type === 'repayment') repaymentFlow += amt;
   });
@@ -230,12 +335,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const operatingCashFlow = income - expense;
   const investingCashFlow = -investmentFlow;
   const financingCashFlow = loanReceived - repaymentFlow;
-  const netCashFlow = operatingCashFlow + investingCashFlow + financingCashFlow;
+  const netCashFlow = operatingCashFlow + investingCashFlow - savingsFlow + financingCashFlow;
 
   const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   const investmentValue = investments.reduce((sum, i) => sum + (Number(i.currentValue) || Number(i.amount) || 0), 0);
+  const totalSavings = savingsPlans.reduce((sum, s) => sum + (Number(s.currentAmount) || 0), 0);
   const manualAssetsVal = assets.reduce((sum, a) => sum + (Number(a.value) || 0), 0);
-  const totalAssets = liquidCash + investmentValue + manualAssetsVal;
+  const totalAssets = liquidCash + investmentValue + totalSavings + manualAssetsVal;
 
   const totalLoanLiabilities = loans.reduce((sum, l) => sum + (Number(l.outstanding) || 0), 0);
   const manualLiabilitiesVal = liabilities.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
@@ -248,6 +354,61 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const m = r / 1200;
     if (!m) return p / n;
     return (p * m * Math.pow(1 + m, n)) / (Math.pow(1 + m, n) - 1);
+  };
+
+  // Account Ledger Balance Reconciliation
+  const getAccountReconciliation = (acct: FinanceAccount) => {
+    let opening = acct.openingBalance !== undefined ? (Number(acct.openingBalance) || 0) : 0;
+    let credits = 0;
+    let debits = 0;
+
+    transactions.forEach(t => {
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'income' || t.type === 'loan') {
+        if (t.accountId === acct.id) {
+          credits += amt;
+        }
+      } else if (t.type === 'expense' || t.type === 'investment' || t.type === 'repayment' || t.type === 'savings') {
+        if (t.accountId === acct.id) {
+          debits += amt;
+        }
+      } else if (t.type === 'transfer') {
+        if (t.toAccountId === acct.id) credits += amt;
+        if (t.fromAccountId === acct.id) debits += amt;
+      }
+    });
+
+    if (acct.openingBalance === undefined && credits === 0 && debits === 0) {
+      opening = Number(acct.balance) || 0;
+    }
+
+    const calculatedBalance = opening + credits - debits;
+    const currentBalance = Number(acct.balance) || 0;
+    const isMismatch = Math.abs(currentBalance - calculatedBalance) > 0.01;
+    return {
+      opening,
+      credits,
+      debits,
+      calculatedBalance,
+      currentBalance,
+      isMismatch,
+      difference: calculatedBalance - currentBalance
+    };
+  };
+
+  const hasAnyAccountMismatch = accounts.some(a => getAccountReconciliation(a).isMismatch);
+
+  const handleReconcileAccounts = async () => {
+    for (const a of accounts) {
+      const recon = getAccountReconciliation(a);
+      await storage.put('financeAccounts', {
+        ...a,
+        balance: recon.calculatedBalance,
+        openingBalance: a.openingBalance !== undefined ? a.openingBalance : recon.opening
+      });
+    }
+    onSuccess(`✓ Reconciled ${accounts.length} accounts! All balances are now 100% synchronized with ledger.`);
+    onRefresh();
   };
 
   // Helper to retrieve goal details
@@ -424,6 +585,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     const netCashFlow = goalIncome - goalExpense;
     const totalDebt = goalLoansTotal + goalLiabilitiesTotal;
+    const totalGoalAssets = goalSavingsCurrent + goalInvestmentsTotal + goalAssetsTotal;
+    const goalNetWorth = totalGoalAssets - totalDebt;
     const hasAnyLink = goalTxs.length > 0 || goalInvestments.length > 0 || goalLoans.length > 0 || goalLiabilities.length > 0 || goalSavings.length > 0 || goalAssets.length > 0;
 
     return {
@@ -445,6 +608,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       savingsTarget: goalSavingsTarget,
       assets: goalAssets,
       assetsTotal: goalAssetsTotal,
+      totalGoalAssets,
+      goalNetWorth,
       hasAnyLink
     };
   };
@@ -514,6 +679,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     let nextFromAccount: FinanceAccount | undefined;
     let nextToAccount: FinanceAccount | undefined;
+    let acct: FinanceAccount | undefined;
     if (txType === 'transfer') {
       const fromAcct = accounts.find(a => a.id === selectedAccount);
       const toAcct = accounts.find(a => a.id === selectedToAccount);
@@ -525,7 +691,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       operations.push({ storeName: 'financeAccounts', item: nextFromAccount });
       operations.push({ storeName: 'financeAccounts', item: nextToAccount });
     } else {
-      let acct = accounts.find(a => a.id === selectedAccount);
+      acct = accounts.find(a => a.id === selectedAccount);
       // If user has no existing accounts, seed an initial account so balance is never lost
       if (!acct && accounts.length === 0) {
         const fallbackAcct: FinanceAccount = {
@@ -543,7 +709,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       if (acct) {
         const currentBal = Number(acct.balance) || 0;
         let nextBalance = currentBal;
-        if (txType === 'expense' || txType === 'investment') nextBalance = currentBal - amt;
+        if (txType === 'expense' || txType === 'investment' || txType === 'repayment') nextBalance = currentBal - amt;
         if (txType === 'income' || txType === 'loan') nextBalance = currentBal + amt;
         operations.push({ storeName: 'financeAccounts', item: { ...acct, balance: nextBalance } });
       }
@@ -571,7 +737,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           id: txId,
           type: txType,
           amount: amt,
-          category: txCategory.trim() || (txType === 'income' ? 'Income' : 'General Expense'),
+          category: txCategory.trim() || (txType === 'income' ? 'Income' : txType === 'loan' ? 'Loan Disbursement' : txType === 'repayment' ? 'Loan Repayment' : txType === 'investment' ? 'Investment' : 'General Expense'),
           date: txDate,
           note: txNote.trim() || undefined,
           accountId: selectedAccount || null,
@@ -583,6 +749,81 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           fileType: finalFileType,
           createdAt: now
         };
+
+    // If loan is recorded from main form, also register in loans liability & amortization schedule
+    if (txType === 'loan') {
+      const loanId = generateUUID();
+      const newLoan: Loan = {
+        id: loanId,
+        name: txNote.trim() || txCategory.trim() || 'Borrowed Loan',
+        principal: amt,
+        rate: 0,
+        tenure: 12,
+        dueDay: 5,
+        outstanding: amt,
+        goalId: txInputMode === 'link' && txGoalId ? txGoalId : null,
+        createdAt: now
+      };
+      operations.push({ storeName: 'loans', item: newLoan });
+      tx.linkedLoanId = loanId;
+    }
+
+    // If repayment is recorded from main form, auto-reduce loan outstanding and create payment receipt
+    if (txType === 'repayment') {
+      const targetLoan = loans.find(l => l.id === txRepayLoanId) || loans[0];
+      if (targetLoan) {
+        const outstanding = Number(targetLoan.outstanding) || 0;
+        const paid = Math.min(amt, outstanding);
+        const monthlyRate = (Number(targetLoan.rate) || 0) / 1200;
+        const interest = Math.min(paid, outstanding * monthlyRate);
+        const principal = Math.max(0, paid - interest);
+        operations.push({
+          storeName: 'loans',
+          item: {
+            ...targetLoan,
+            outstanding: Math.max(0, outstanding - principal)
+          }
+        });
+        const paymentId = generateUUID();
+        operations.push({
+          storeName: 'loanPayments',
+          item: {
+            id: paymentId,
+            loanId: targetLoan.id,
+            loanName: targetLoan.name,
+            amount: paid,
+            principal,
+            interest,
+            date: txDate,
+            accountId: selectedAccount || null,
+            createdAt: now
+          } as LoanPayment
+        });
+        tx.linkedLoanId = targetLoan.id;
+        tx.linkedLoanPaymentId = paymentId;
+        tx.principal = principal;
+        tx.interest = interest;
+      }
+    }
+
+    // If investment is recorded from main transaction form, also auto-register in investments portfolio for 2-way sync
+    if (txType === 'investment') {
+      const invId = generateUUID();
+      const newInv: Investment = {
+        id: invId,
+        name: txCategory.trim() || txNote.trim() || 'Investment Holding',
+        amount: amt,
+        currentValue: amt,
+        date: txDate,
+        accountId: selectedAccount || null,
+        goalId: txInputMode === 'link' && txGoalId ? txGoalId : null,
+        createdAt: now,
+        updatedAt: now
+      };
+      operations.push({ storeName: 'investments', item: newInv });
+      tx.linkedInvestmentId = invId;
+    }
+
     operations.push({ storeName: 'finance', item: tx });
 
     try {
@@ -593,6 +834,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         onSuccess(`✓ Income of ₹${amt.toLocaleString('en-IN')} added to account${tx.goalId ? ' & linked to Goal' : ''}`);
       } else if (txType === 'expense') {
         onSuccess(`✓ Expense of ₹${amt.toLocaleString('en-IN')} recorded & deducted${tx.goalId ? ' & linked to Goal' : ''}`);
+      } else if (txType === 'loan') {
+        onSuccess(`✓ Loan (+₹${amt.toLocaleString('en-IN')}) deposited into ${acct?.name || 'account'} & recorded in ledger!`);
+      } else if (txType === 'repayment') {
+        onSuccess(`✓ Loan payment of ₹${amt.toLocaleString('en-IN')} deducted & outstanding reduced!`);
+      } else if (txType === 'investment') {
+        onSuccess(`✓ Investment of ₹${amt.toLocaleString('en-IN')} logged in ledger & portfolio!`);
       } else if (createdOrLinkedReceiptId) {
         onSuccess('✓ Transaction recorded & linked with Things Purchase Receipt Vault!');
       } else {
@@ -638,8 +885,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const p = Number(loanPrincipal);
     if (!loanName.trim() || p <= 0) return;
 
+    const loanId = generateUUID();
+    const now = Date.now();
     const newLoan: Loan = {
-      id: generateUUID(),
+      id: loanId,
       name: loanName.trim(),
       principal: p,
       rate: Number(loanRate) || 0,
@@ -647,15 +896,88 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       dueDay: 5,
       outstanding: p,
       goalId: loanInputMode === 'link' && loanGoalId ? loanGoalId : null,
-      createdAt: Date.now()
+      createdAt: now
     };
-    await storage.put('loans', newLoan);
+
+    const operations: Array<{ storeName: string; item: any }> = [
+      { storeName: 'loans', item: newLoan }
+    ];
+
+    if (loanDepositAccountId) {
+      const acct = accounts.find(a => a.id === loanDepositAccountId);
+      if (acct) {
+        operations.push({
+          storeName: 'financeAccounts',
+          item: {
+            ...acct,
+            balance: (Number(acct.balance) || 0) + p
+          }
+        });
+        const tx: FinanceTransaction = {
+          id: generateUUID(),
+          type: 'loan',
+          amount: p,
+          category: 'Loan Disbursement',
+          date: today,
+          note: `${newLoan.name} borrowed principal`,
+          accountId: loanDepositAccountId,
+          goalId: newLoan.goalId || null,
+          linkedLoanId: loanId,
+          createdAt: now
+        };
+        operations.push({ storeName: 'finance', item: tx });
+      }
+    }
+
+    await storage.atomicPutMany(operations);
     setPayLoanId(newLoan.id);
-    onSuccess(`Loan liability registered${newLoan.goalId ? ' & linked to Goal' : ''}`);
+    onSuccess(`Loan liability registered${loanDepositAccountId ? ' & funds deposited to account' : ''}`);
     setLoanName('');
     setLoanPrincipal('');
     setLoanGoalId('');
     setLoanInputMode('manual');
+    onRefresh();
+  };
+
+  // Deposit funds for an existing loan into a chosen bank account & log ledger transaction
+  const handleDepositExistingLoan = async (loan: Loan, targetAcctId?: string) => {
+    const acctId = targetAcctId || loanDepositAccountId || accounts[0]?.id;
+    if (!acctId) {
+      onSuccess('Please create a bank account first.');
+      return;
+    }
+    const acct = accounts.find(a => a.id === acctId);
+    if (!acct) return;
+
+    const now = Date.now();
+    const p = Number(loan.principal) || 0;
+    const operations: Array<{ storeName: string; item: any }> = [
+      {
+        storeName: 'financeAccounts',
+        item: {
+          ...acct,
+          balance: (Number(acct.balance) || 0) + p
+        }
+      },
+      {
+        storeName: 'finance',
+        item: {
+          id: generateUUID(),
+          type: 'loan',
+          amount: p,
+          category: 'Loan Disbursement',
+          date: today,
+          note: `${loan.name} borrowed principal credited`,
+          accountId: acctId,
+          goalId: loan.goalId || null,
+          linkedLoanId: loan.id,
+          createdAt: now
+        } as FinanceTransaction
+      }
+    ];
+
+    await storage.atomicPutMany(operations);
+    onSuccess(`✓ ₹${p.toLocaleString('en-IN')} deposited into "${acct.name}" & recorded in Ledger!`);
     onRefresh();
   };
 
@@ -666,11 +988,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const loan = loans.find(l => l.id === targetLoanId);
     
     if (!loan) {
-      alert('Please select a valid loan from the dropdown.');
+      onSuccess('Please select a valid loan from the dropdown.');
       return;
     }
     if (amt <= 0) {
-      alert('Please enter a payment amount greater than zero.');
+      onSuccess('Please enter a payment amount greater than zero.');
       return;
     }
 
@@ -679,18 +1001,30 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const monthlyRate = (Number(loan.rate) || 0) / 1200;
     const interest = Math.min(paid, outstanding * monthlyRate);
     const principal = Math.max(0, paid - interest);
+    const now = Date.now();
+    const operations: Array<{ storeName: string; item: any }> = [];
 
     const sourceAccountId = payAcctId || accounts[0]?.id;
     if (sourceAccountId) {
       const acct = accounts.find(a => a.id === sourceAccountId);
       if (acct) {
-        acct.balance -= paid;
-        await storage.put('financeAccounts', acct);
+        operations.push({
+          storeName: 'financeAccounts',
+          item: {
+            ...acct,
+            balance: (Number(acct.balance) || 0) - paid
+          }
+        });
       }
     }
 
-    loan.outstanding = Math.max(0, outstanding - principal);
-    await storage.put('loans', loan);
+    operations.push({
+      storeName: 'loans',
+      item: {
+        ...loan,
+        outstanding: Math.max(0, outstanding - principal)
+      }
+    });
 
     const paymentId = generateUUID();
     const payment: LoanPayment = {
@@ -702,9 +1036,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       interest,
       date: today,
       accountId: sourceAccountId || null,
-      createdAt: Date.now()
+      createdAt: now
     };
-    await storage.put('loanPayments', payment);
+    operations.push({ storeName: 'loanPayments', item: payment });
 
     const tx: FinanceTransaction = {
       id: generateUUID(),
@@ -719,11 +1053,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       goalId: loan.goalId || null,
       linkedLoanId: loan.id,
       linkedLoanPaymentId: paymentId,
-      createdAt: Date.now()
+      createdAt: now
     };
-    await storage.put('finance', tx);
+    operations.push({ storeName: 'finance', item: tx });
 
-    onSuccess(`Loan payment logged: Principal ₹${principal.toFixed(0)}, Interest ₹${interest.toFixed(0)}`);
+    await storage.atomicPutMany(operations);
+    onSuccess(`✓ Loan payment logged: Principal ₹${principal.toFixed(0)}, Interest ₹${interest.toFixed(0)}`);
     setPayAmount('');
     onRefresh();
   };
@@ -755,18 +1090,54 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const amt = Number(invAmount);
     if (!invName.trim() || amt <= 0) return;
 
+    const invId = generateUUID();
     const inv: Investment = {
-      id: generateUUID(),
+      id: invId,
       name: invName.trim(),
       amount: amt,
       currentValue: Number(invCurrentVal) || amt,
       date: today,
+      accountId: invAccountId || null,
       goalId: invInputMode === 'link' && invGoalId ? invGoalId : null,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
-    await storage.put('investments', inv);
-    onSuccess(`Investment added to portfolio${inv.goalId ? ' & linked to Goal' : ''}`);
+
+    const operations: Array<{ storeName: string; item: any }> = [
+      { storeName: 'investments', item: inv }
+    ];
+
+    if (invAccountId) {
+      const acct = accounts.find(a => a.id === invAccountId);
+      if (acct) {
+        operations.push({
+          storeName: 'financeAccounts',
+          item: {
+            ...acct,
+            balance: (Number(acct.balance) || 0) - amt
+          }
+        });
+      }
+    }
+
+    // Always create a linked ledger transaction of type 'investment' so Sub-tab and Ledger are 100% in sync
+    const txId = generateUUID();
+    const tx: FinanceTransaction = {
+      id: txId,
+      type: 'investment',
+      amount: amt,
+      category: 'Investment Portfolio',
+      date: today,
+      note: `${invName.trim()} investment`,
+      accountId: invAccountId || null,
+      goalId: inv.goalId || null,
+      linkedInvestmentId: invId,
+      createdAt: Date.now()
+    };
+    operations.push({ storeName: 'finance', item: tx });
+
+    await storage.atomicPutMany(operations);
+    onSuccess(`✓ Investment added to portfolio & logged in ledger${invAccountId ? ' (debited from account)' : ''}`);
     setInvName('');
     setInvAmount('');
     setInvCurrentVal('');
@@ -775,26 +1146,155 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     onRefresh();
   };
 
+  // Sync an existing investment asset that has no ledger transaction
+  const handleSyncExistingInvestment = async (inv: Investment, targetAcctId?: string) => {
+    const acctId = targetAcctId || inv.accountId || accounts[0]?.id;
+    const amt = Number(inv.amount) || 0;
+    const now = Date.now();
+    const operations: Array<{ storeName: string; item: any }> = [];
+
+    if (acctId) {
+      const acct = accounts.find(a => a.id === acctId);
+      if (acct) {
+        operations.push({
+          storeName: 'financeAccounts',
+          item: {
+            ...acct,
+            balance: (Number(acct.balance) || 0) - amt
+          }
+        });
+      }
+    }
+
+    const tx: FinanceTransaction = {
+      id: generateUUID(),
+      type: 'investment',
+      amount: amt,
+      category: 'Investment Portfolio',
+      date: inv.date || today,
+      note: `${inv.name} investment recorded in ledger`,
+      accountId: acctId || null,
+      goalId: inv.goalId || null,
+      linkedInvestmentId: inv.id,
+      createdAt: now
+    };
+    operations.push({ storeName: 'finance', item: tx });
+
+    await storage.atomicPutMany(operations);
+    onSuccess(`✓ ₹${amt.toLocaleString('en-IN')} logged in ledger for "${inv.name}"!`);
+    onRefresh();
+  };
+
   const handleCreateSavings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!saveName.trim()) return;
 
+    const spId = generateUUID();
+    const now = Date.now();
+    const initialAmt = Number(saveCurrent) || 0;
+    const targetAmt = Number(saveTarget) || 0;
+
     const sp: SavingsPlan = {
-      id: generateUUID(),
+      id: spId,
       name: saveName.trim(),
-      currentAmount: Number(saveCurrent) || 0,
-      targetAmount: Number(saveTarget) || 0,
+      currentAmount: initialAmt,
+      targetAmount: targetAmt,
       durationMonths: Number(saveMonths) || 12,
       goalId: saveInputMode === 'link' && saveGoalId ? saveGoalId : null,
-      createdAt: Date.now()
+      createdAt: now,
+      updatedAt: now
     };
-    await storage.put('savingsPlans', sp);
-    onSuccess(`Savings goal registered${sp.goalId ? ' & linked to Goal' : ''}`);
+
+    const operations: Array<{ storeName: string; item: any }> = [
+      { storeName: 'savingsPlans', item: sp }
+    ];
+
+    if (saveAccountId && initialAmt > 0) {
+      const acct = accounts.find(a => a.id === saveAccountId);
+      if (acct) {
+        operations.push({
+          storeName: 'financeAccounts',
+          item: {
+            ...acct,
+            balance: (Number(acct.balance) || 0) - initialAmt
+          }
+        });
+        const tx: FinanceTransaction = {
+          id: generateUUID(),
+          type: 'savings',
+          amount: initialAmt,
+          category: 'Savings Reserve',
+          date: today,
+          note: `Seed deposit for ${sp.name}`,
+          accountId: saveAccountId,
+          goalId: sp.goalId || null,
+          linkedSavingsPlanId: spId,
+          createdAt: now
+        };
+        operations.push({ storeName: 'finance', item: tx });
+      }
+    }
+
+    await storage.atomicPutMany(operations);
+    onSuccess(`Savings goal registered${saveAccountId && initialAmt > 0 ? ' & initial capital allocated' : ''}`);
     setSaveName('');
     setSaveCurrent('');
     setSaveTarget('');
     setSaveGoalId('');
     setSaveInputMode('manual');
+    onRefresh();
+  };
+
+  // Contribute / Deposit Funds to an Existing Savings Plan
+  const handleDepositToSavings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!depositTargetPlan) return;
+    const amt = Number(depositAmount);
+    if (!amt || amt <= 0) return;
+
+    const now = Date.now();
+    const updatedPlan: SavingsPlan = {
+      ...depositTargetPlan,
+      currentAmount: (Number(depositTargetPlan.currentAmount) || 0) + amt,
+      updatedAt: now
+    };
+
+    const operations: Array<{ storeName: string; item: any }> = [
+      { storeName: 'savingsPlans', item: updatedPlan }
+    ];
+
+    if (depositAccountId) {
+      const acct = accounts.find(a => a.id === depositAccountId);
+      if (acct) {
+        operations.push({
+          storeName: 'financeAccounts',
+          item: {
+            ...acct,
+            balance: (Number(acct.balance) || 0) - amt
+          }
+        });
+      }
+    }
+
+    const tx: FinanceTransaction = {
+      id: generateUUID(),
+      type: 'savings',
+      amount: amt,
+      category: 'Savings Contribution',
+      date: today,
+      note: depositNote.trim() || `Contributed to ${depositTargetPlan.name}`,
+      accountId: depositAccountId || null,
+      goalId: depositTargetPlan.goalId || null,
+      linkedSavingsPlanId: depositTargetPlan.id,
+      createdAt: now
+    };
+    operations.push({ storeName: 'finance', item: tx });
+
+    await storage.atomicPutMany(operations);
+    onSuccess(`✓ ₹${amt.toLocaleString('en-IN')} deposited into "${depositTargetPlan.name}" from account`);
+    setDepositTargetPlan(null);
+    setDepositAmount('');
+    setDepositNote('');
     onRefresh();
   };
 
@@ -822,12 +1322,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       const tx = transactions.find(t => t.id === deleteTarget.id);
       await storage.deleteFinanceTransactionWithLink(deleteTarget.id);
       if (tx?.type === 'expense' || tx?.type === 'investment') {
-        onSuccess(`✓ Removed "${deleteTarget.name}" & refunded ₹${Number(tx.amount).toLocaleString('en-IN')}`);
-      } else if (tx?.type === 'income' || tx?.type === 'loan') {
+        onSuccess(`✓ Removed "${deleteTarget.name}" & refunded account`);
+      } else if (tx?.type === 'repayment') {
+        onSuccess(`✓ Removed loan payment, refunded account & restored loan principal`);
+      } else if (tx?.type === 'transfer') {
+        onSuccess(`✓ Removed transfer & reversed both account balances`);
+      } else if (tx?.type === 'loan') {
+        onSuccess(`✓ Removed loan transaction & adjusted account balance`);
+      } else if (tx?.type === 'income') {
         onSuccess(`✓ Removed "${deleteTarget.name}" & adjusted account balance`);
       } else {
         onSuccess(`✓ Removed "${deleteTarget.name}"`);
       }
+    } else if (deleteTarget.store === 'investments') {
+      const linkedTx = transactions.find(t => t.linkedInvestmentId === deleteTarget.id);
+      if (linkedTx) {
+        await storage.deleteFinanceTransactionWithLink(linkedTx.id);
+      }
+      await storage.delete('investments', deleteTarget.id);
+      onSuccess(`✓ Removed investment asset "${deleteTarget.name}" & synced ledger`);
     } else {
       await storage.delete(deleteTarget.store, deleteTarget.id);
       onSuccess(`✓ Removed "${deleteTarget.name}"`);
@@ -836,31 +1349,150 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     onRefresh();
   };
 
-  // Export Transactions as CSV
+  // Export Comprehensive Multi-Section Financial Statement as CSV
   const handleExportCSV = () => {
-    if (transactions.length === 0) {
-      alert('No transactions to export');
+    if (filteredTransactions.length === 0 && investments.length === 0 && savingsPlans.length === 0 && loans.length === 0) {
+      alert('No financial data available to export');
       return;
     }
-    const headers = ['ID', 'Date', 'Type', 'Category', 'Amount', 'Note', 'AccountId'];
-    const rows = transactions.map(t => [
-      t.id,
-      t.date,
-      t.type,
-      `"${(t.category || '').replace(/"/g, '""')}"`,
-      t.amount,
-      `"${(t.note || '').replace(/"/g, '""')}"`,
-      t.accountId || ''
-    ]);
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+
+    const periodLabel = dateFilterMode === 'all'
+      ? 'All Time'
+      : dateFilterMode === 'this_month'
+      ? `This Month (${currentYearMonth})`
+      : dateFilterMode === 'last_30_days'
+      ? 'Last 30 Days'
+      : `Custom Range (${customStartDate || 'start'} to ${customEndDate || 'end'})`;
+
+    const lines: string[] = [];
+
+    // SECTION 1: HEADER & PERIOD CASH FLOW SUMMARY
+    lines.push(`"PROJECT OM — FINANCIAL EXECUTIVE STATEMENT"`);
+    lines.push(`"Generated On: ${new Date().toLocaleString('en-IN')}"`);
+    lines.push(`"Active Period Scope: ${periodLabel}"`);
+    lines.push('');
+    lines.push('"=== PERIOD CASH FLOW STATEMENT ==="');
+    lines.push('"Activity","Direction","Amount (INR)"');
+    lines.push(`"Gross Income Received","Inflow",${periodIncome}`);
+    lines.push(`"Operating Expenses Paid","Outflow",-${periodExpense}`);
+    lines.push(`"Net Operating Cash Flow","Net",${periodOperatingFlow}`);
+    lines.push(`"Investments Capital Deployed","Outflow",-${periodInvestmentFlow}`);
+    lines.push(`"Dedicated Savings Capital Allocated","Outflow",-${periodSavingsFlow}`);
+    lines.push(`"Loans Borrowed / Funds Received","Inflow",${periodLoanReceived}`);
+    lines.push(`"Loan Principal & EMI Repayments","Outflow",-${periodRepaymentFlow}`);
+    lines.push(`"Net Financing Cash Flow","Net",${periodFinancingFlow}`);
+    lines.push(`"Net Period Cash Flow (Ledger Delta)","Total",${periodNetCashFlow}`);
+    lines.push('');
+
+    // SECTION 2: TRANSACTIONS LEDGER
+    lines.push('"=== TRANSACTIONS LEDGER (FILTERED PERIOD) ==="');
+    lines.push('"ID","Date","Type","Category","Amount (INR)","Note","AccountId"');
+    filteredTransactions.forEach(t => {
+      lines.push([
+        t.id,
+        t.date,
+        t.type,
+        `"${(t.category || '').replace(/"/g, '""')}"`,
+        t.amount,
+        `"${(t.note || '').replace(/"/g, '""')}"`,
+        t.accountId || ''
+      ].join(','));
+    });
+    lines.push('');
+
+    // SECTION 3: INVESTMENT PORTFOLIO
+    lines.push('"=== INVESTMENT PORTFOLIO ==="');
+    lines.push('"ID","Asset Name","Invested Cost (INR)","Current Valuation (INR)","P&L / Gain (INR)","ROI %","Date"');
+    investments.forEach(i => {
+      const cost = Number(i.amount) || 0;
+      const current = Number(i.currentValue || i.amount) || 0;
+      const gain = current - cost;
+      const roi = cost > 0 ? ((gain / cost) * 100).toFixed(2) : '0';
+      lines.push([
+        i.id,
+        `"${(i.name || '').replace(/"/g, '""')}"`,
+        cost,
+        current,
+        gain,
+        `${roi}%`,
+        i.date || ''
+      ].join(','));
+    });
+    lines.push('');
+
+    // SECTION 4: SAVINGS PLANS & TARGETS
+    lines.push('"=== SAVINGS PLANS & FINANCIAL TARGETS ==="');
+    lines.push('"ID","Plan Name","Current Saved (INR)","Target Amount (INR)","Progress %","Duration Months"');
+    savingsPlans.forEach(s => {
+      const cur = Number(s.currentAmount) || 0;
+      const tgt = Number(s.targetAmount) || 1;
+      const pct = Math.min(100, (cur / tgt) * 100).toFixed(1);
+      lines.push([
+        s.id,
+        `"${(s.name || '').replace(/"/g, '""')}"`,
+        cur,
+        tgt,
+        `${pct}%`,
+        s.durationMonths || 12
+      ].join(','));
+    });
+    lines.push('');
+
+    // SECTION 5: LOANS & LIABILITIES
+    lines.push('"=== ACTIVE LOANS & LIABILITIES ==="');
+    lines.push('"ID","Liability Name","Original Principal (INR)","Outstanding Balance (INR)","Interest Rate %","Tenure Months"');
+    loans.forEach(l => {
+      lines.push([
+        l.id,
+        `"${(l.name || '').replace(/"/g, '""')}"`,
+        Number(l.principal) || 0,
+        Number(l.outstanding) || 0,
+        Number(l.rate) || 0,
+        Number(l.tenure) || 12
+      ].join(','));
+    });
+    liabilities.forEach(l => {
+      lines.push([
+        l.id,
+        `"${(l.name || '').replace(/"/g, '""')}" (Manual Liability)`,
+        Number(l.amount) || 0,
+        Number(l.amount) || 0,
+        0,
+        0
+      ].join(','));
+    });
+    lines.push('');
+
+    // SECTION 6: SOVEREIGN BALANCE SHEET & NET WORTH
+    lines.push('"=== SOVEREIGN BALANCE SHEET & NET WORTH ==="');
+    lines.push('"Asset / Liability Component","Sub-Category","Amount (INR)"');
+    lines.push(`"Liquid Checking & Cash","Assets",${liquidCash}`);
+    lines.push(`"Investment Portfolio Market Value","Assets",${investmentValue}`);
+    lines.push(`"Dedicated Savings Reserves","Assets",${totalSavings}`);
+    lines.push(`"Physical & Other Assets","Assets",${manualAssetsVal}`);
+    lines.push(`"TOTAL SOVEREIGN ASSETS","Total Assets",${totalAssets}`);
+    lines.push(`"Active Loans Debt","Liabilities",${totalLoanLiabilities}`);
+    lines.push(`"Other Manual Liabilities","Liabilities",${manualLiabilitiesVal}`);
+    lines.push(`"TOTAL LIABILITIES","Total Liabilities",${totalLiabilities}`);
+    lines.push(`"SOVEREIGN NET WORTH","Net Worth (Assets - Debt)",${netWorth}`);
+
+    const csvContent = lines.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `finance-ledger-${today}.csv`;
+    let fileSuffix = today;
+    if (dateFilterMode === 'this_month') {
+      fileSuffix = `this-month-${currentYearMonth}`;
+    } else if (dateFilterMode === 'last_30_days') {
+      fileSuffix = `last-30-days-${today}`;
+    } else if (dateFilterMode === 'custom' && (customStartDate || customEndDate)) {
+      fileSuffix = `${customStartDate || 'start'}-to-${customEndDate || 'end'}`;
+    }
+    link.download = `finance-statement-${fileSuffix}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    onSuccess('Ledger exported as CSV');
+    onSuccess(`Comprehensive statement (${filteredTransactions.length} txs, full balance sheet & portfolio) exported as CSV`);
   };
 
   const sortedTransactions = [...transactions].sort((a, b) => {
@@ -870,12 +1502,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     return txSortOrder === 'desc' ? timeComp : -timeComp;
   });
 
-  const filteredTransactions = sortedTransactions.filter(t => {
-    if (txTypeFilter !== 'all' && t.type !== txTypeFilter) return false;
+  // Filter transactions by date range and search/goal (used for dynamic pill counts)
+  const dateAndSearchFilteredTxs = sortedTransactions.filter(t => {
     if (txGoalFilter !== 'all') {
       if (txGoalFilter === 'linked' && !t.goalId) return false;
       if (txGoalFilter === 'unlinked' && t.goalId) return false;
       if (txGoalFilter !== 'linked' && txGoalFilter !== 'unlinked' && t.goalId !== txGoalFilter) return false;
+    }
+    // Date Range Filtering
+    if (dateFilterMode === 'this_month') {
+      if (!t.date || !t.date.startsWith(currentYearMonth)) return false;
+    } else if (dateFilterMode === 'last_30_days') {
+      if (!t.date || t.date < thirtyDaysAgo) return false;
+    } else if (dateFilterMode === 'custom') {
+      if (customStartDate && t.date < customStartDate) return false;
+      if (customEndDate && t.date > customEndDate) return false;
     }
     if (txSearch) {
       const q = txSearch.toLowerCase();
@@ -885,6 +1526,35 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
     return true;
   });
+
+  // Final filtered list including type filter
+  const filteredTransactions = dateAndSearchFilteredTxs.filter(t => {
+    if (txTypeFilter !== 'all' && t.type !== txTypeFilter) return false;
+    return true;
+  });
+
+  // Calculate Scoped Period Cash Flow (matching the active Date Range & search filters)
+  let periodIncome = 0;
+  let periodExpense = 0;
+  let periodInvestmentFlow = 0;
+  let periodSavingsFlow = 0;
+  let periodLoanReceived = 0;
+  let periodRepaymentFlow = 0;
+
+  dateAndSearchFilteredTxs.forEach(t => {
+    const amt = Number(t.amount) || 0;
+    if (t.type === 'income') periodIncome += amt;
+    else if (t.type === 'expense') periodExpense += amt;
+    else if (t.type === 'investment') periodInvestmentFlow += amt;
+    else if (t.type === 'savings') periodSavingsFlow += amt;
+    else if (t.type === 'loan') periodLoanReceived += amt;
+    else if (t.type === 'repayment') periodRepaymentFlow += amt;
+  });
+
+  const periodOperatingFlow = periodIncome - periodExpense;
+  const periodInvestingFlow = -periodInvestmentFlow;
+  const periodFinancingFlow = periodLoanReceived - periodRepaymentFlow;
+  const periodNetCashFlow = periodOperatingFlow + periodInvestingFlow - periodSavingsFlow + periodFinancingFlow;
 
   return (
     <div className="space-y-6">
@@ -978,8 +1648,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* Tab: Overview & Accounts */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Record Transaction Form (5 cols) */}
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {/* Top Left: Record Transaction Form (6 cols) */}
+          <div className="lg:col-span-6 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -998,7 +1668,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setTxType('expense')}
-                  className={`flex h-9 sm:h-10 items-center justify-center rounded-xl font-semibold transition-all cursor-pointer ${
+                  className={`flex h-9 sm:h-9.5 items-center justify-center rounded-xl font-semibold transition-all cursor-pointer ${
                     txType === 'expense'
                       ? 'bg-white text-rose-600 shadow-xs dark:bg-slate-700 dark:text-rose-400'
                       : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -1009,7 +1679,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setTxType('income')}
-                  className={`flex h-9 sm:h-10 items-center justify-center rounded-xl font-semibold transition-all cursor-pointer ${
+                  className={`flex h-9 sm:h-9.5 items-center justify-center rounded-xl font-semibold transition-all cursor-pointer ${
                     txType === 'income'
                       ? 'bg-white text-emerald-600 shadow-xs dark:bg-slate-700 dark:text-emerald-400'
                       : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -1020,7 +1690,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setTxType('transfer')}
-                  className={`flex h-9 sm:h-10 items-center justify-center rounded-xl font-semibold transition-all cursor-pointer ${
+                  className={`flex h-9 sm:h-9.5 items-center justify-center rounded-xl font-semibold transition-all cursor-pointer ${
                     txType === 'transfer'
                       ? 'bg-white text-indigo-600 shadow-xs dark:bg-slate-700 dark:text-indigo-400'
                       : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -1076,43 +1746,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
               </div>
 
-              {/* Category & Account */}
-              {txType !== 'transfer' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                      Category {txType === 'income' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-rose-500">*</span>}
-                    </label>
-                    <input
-                      type="text"
-                      value={txCategory}
-                      onChange={e => setTxCategory(e.target.value)}
-                      placeholder={txType === 'income' ? 'e.g. Salary, Client Pay (Default: Income)' : 'e.g. Groceries, Tech, Food'}
-                      className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                      {txType === 'income' ? 'Deposit Into Account' : 'Payment Account'}
-                    </label>
-                    <select
-                      value={txAccount || accounts[0]?.id || ''}
-                      onChange={e => setTxAccount(e.target.value)}
-                      className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
-                    >
-                      {accounts.length === 0 ? (
-                        <option value="">Default Account (will be auto-created)</option>
-                      ) : (
-                        accounts.map(a => (
-                          <option key={a.id} value={a.id}>
-                            {a.name} (₹{Number(a.balance).toLocaleString('en-IN')})
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
-                </div>
-              ) : (
+              {/* Category & Account Fields */}
+              {txType === 'transfer' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
@@ -1143,6 +1778,135 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </select>
                   </div>
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div ref={categoryDropdownRef} className="relative space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                        Category {txType === 'income' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-rose-500">*</span>}
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-normal">Dropdown / Type</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={txCategory}
+                        onChange={e => {
+                          setTxCategory(e.target.value);
+                          setIsCategoryDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsCategoryDropdownOpen(true)}
+                        placeholder={
+                          txType === 'income'
+                            ? 'Select or type (Default: Income)'
+                            : 'Select or type (e.g. Food, Groceries)'
+                        }
+                        className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 pl-3 pr-16 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-1.5 gap-0.5">
+                        {txCategory && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTxCategory('');
+                            }}
+                            className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                            title="Clear"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setIsCategoryDropdownOpen(prev => !prev)}
+                          className={`p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-transform cursor-pointer ${
+                            isCategoryDropdownOpen ? 'rotate-180 text-indigo-600 dark:text-indigo-400' : ''
+                          }`}
+                          title="Show categories"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Combobox Dropdown Popover */}
+                    {isCategoryDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 max-h-56 overflow-y-auto rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800 z-50 animate-in fade-in slide-in-from-top-1">
+                        {/* Custom Typing Chip/Action if input doesn't match standard */}
+                        {txCategory.trim() &&
+                          !categoryList.some(b => b.toLowerCase() === txCategory.trim().toLowerCase()) && (
+                            <div className="px-2.5 py-1.5 mb-1.5 bg-indigo-50/80 dark:bg-indigo-950/50 rounded-xl flex items-center justify-between text-xs text-indigo-700 dark:text-indigo-300">
+                              <span className="truncate">Use custom: <strong>"{txCategory.trim()}"</strong></span>
+                              <button
+                                type="button"
+                                onClick={() => setIsCategoryDropdownOpen(false)}
+                                className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0 ml-2 cursor-pointer"
+                              >
+                                Keep
+                              </button>
+                            </div>
+                        )}
+
+                        {/* Standard Categories */}
+                        {filteredCategories.length > 0 && (
+                          <div className="space-y-0.5">
+                            <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                              {txType === 'income' ? 'Income Categories' : 'Preset Categories'}
+                            </div>
+                            {filteredCategories.map(cat => {
+                              const isSelected = txCategory.trim().toLowerCase() === cat.toLowerCase();
+                              return (
+                                <button
+                                  key={cat}
+                                  type="button"
+                                  onClick={() => {
+                                    setTxCategory(cat);
+                                    setIsCategoryDropdownOpen(false);
+                                  }}
+                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-xl text-left transition-colors cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-indigo-50 font-semibold text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400'
+                                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                                  }`}
+                                >
+                                  <span>{cat}</span>
+                                  {isSelected && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {filteredCategories.length === 0 && (
+                          <div className="px-3 py-3 text-center text-xs text-slate-400">
+                            No preset matching "{txCategory}". You can type any custom category!
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      {txType === 'income' ? 'Deposit Into Account (+ Inflow)' : 'Payment / Funding Account (- Outflow)'}
+                    </label>
+                    <select
+                      value={txAccount || accounts[0]?.id || ''}
+                      onChange={e => setTxAccount(e.target.value)}
+                      className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
+                    >
+                      {accounts.length === 0 ? (
+                        <option value="">Default Account (will be auto-created)</option>
+                      ) : (
+                        accounts.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.name} (₹{Number(a.balance).toLocaleString('en-IN')})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
               )}
 
               {/* Note / Memo */}
@@ -1159,12 +1923,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 />
               </div>
 
-              {/* Bill / Purchase Receipt File Upload Zone */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Attach Bill / Purchase Receipt
-                </label>
-                <div className="mt-1">
+              {/* Compact Document Attach & Vault Sync: Side-by-Side (2 Columns) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                {/* Left: Compact Bill / Receipt Attachment */}
+                <div className="h-10 sm:h-10.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 px-2.5 sm:px-3 flex items-center justify-between gap-2 transition-all hover:border-slate-300 dark:hover:border-slate-600">
                   <input
                     type="file"
                     className="hidden"
@@ -1172,130 +1934,257 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     accept=".pdf,.png,.jpg,.jpeg,.webp"
                     onChange={handleAttachTxFile}
                   />
-                  <div className="flex items-center gap-2">
-                    <label
-                      htmlFor="tx-form-file"
-                      className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer transition-colors"
-                    >
-                      <Paperclip className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                      <span className="truncate">{txAttachedFile ? txAttachedFile.name : 'Choose File'}</span>
-                    </label>
-                    {txAttachedFile && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setPreviewFile({ name: txAttachedFile.name, data: txAttachedFile.data, type: txAttachedFile.type })}
-                          className="flex h-9 items-center gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 px-2.5 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                          title="Preview attached file"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          <span>View</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTxAttachedFile(null)}
-                          className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                          title="Remove file"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Sync with Things & Document Vault (Custom Switch Panel) */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3.5 space-y-3 transition-colors">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 shrink-0">
-                      <Receipt className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                        Sync with Things & Document Vault
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Accessible Toggle Switch */}
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={txLinkToReceipt}
-                    onClick={() => { setTxLinkToReceipt(!txLinkToReceipt); if (!txLinkToReceipt) setTxReceiptMode('link_existing'); }}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      txLinkToReceipt ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
-                    }`}
+                  <label
+                    htmlFor="tx-form-file"
+                    className="flex flex-1 items-center gap-2 cursor-pointer min-w-0 text-xs sm:text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    title={txAttachedFile ? txAttachedFile.name : 'Attach Bill'}
                   >
-                    <span
-                      aria-hidden="true"
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                        txLinkToReceipt ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+                    <Paperclip className="h-4 w-4 text-indigo-500 shrink-0" />
+                    <span className="truncate">
+                      {txAttachedFile ? txAttachedFile.name : 'Attach Bill'}
+                    </span>
+                  </label>
+                  {txAttachedFile && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFile({ name: txAttachedFile.name, data: txAttachedFile.data, type: txAttachedFile.type })}
+                        className="p-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                        title="View file"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTxAttachedFile(null)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        title="Remove file"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Optional link to an existing Receipt; Finance never creates a Receipt automatically. */}
-                {txLinkToReceipt && (
-                  <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/80 space-y-3 animate-in fade-in duration-150">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                        Select Existing Purchase Receipt from Vault
-                      </label>
+                {/* Right: Compact Vault Receipt Link */}
+                <div className={`rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 px-2.5 sm:px-3 transition-all ${
+                  txLinkToReceipt ? 'py-2' : 'h-10 sm:h-10.5 flex items-center'
+                }`}>
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setTxLinkToReceipt(!txLinkToReceipt); if (!txLinkToReceipt) setTxReceiptMode('link_existing'); }}
+                      className="flex items-center gap-2 text-xs sm:text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer select-none transition-colors"
+                    >
+                      <Receipt className="h-4 w-4 text-purple-500 shrink-0" />
+                      <span>Link Vault Receipt</span>
+                    </button>
+
+                    {/* Accessible Toggle Switch */}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={txLinkToReceipt}
+                      onClick={() => { setTxLinkToReceipt(!txLinkToReceipt); if (!txLinkToReceipt) setTxReceiptMode('link_existing'); }}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        txLinkToReceipt ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                          txLinkToReceipt ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {txLinkToReceipt && (
+                    <div className="mt-2 pt-2 border-t border-slate-200/70 dark:border-slate-700/70">
                       <select
                         value={txSelectedReceiptId}
                         onChange={e => setTxSelectedReceiptId(e.target.value)}
-                        className="h-9.5 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer"
+                        className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer"
                       >
-                        <option value="">-- Choose Receipt --</option>
+                        <option value="">-- Choose Vault Receipt --</option>
                         {receipts?.map(r => (
                           <option key={r.id} value={r.id}>
-                            {r.title} {r.amount ? `(₹${r.amount})` : ''} {r.fileName ? '📎' : ''} - {r.date || 'No date'}
+                            {r.title} {r.amount ? `(₹${r.amount})` : ''} {r.fileName ? '📎' : ''}
                           </option>
                         ))}
                       </select>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               {/* Submit Button */}
               <button
                 type="submit"
-                className="flex h-11 sm:h-12 w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 active:scale-[0.99] transition-all cursor-pointer"
+                className={`flex h-11 sm:h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-xs sm:text-sm font-semibold text-white shadow-xs active:scale-[0.99] transition-all cursor-pointer ${
+                  txType === 'loan'
+                    ? 'bg-teal-600 hover:bg-teal-500'
+                    : txType === 'repayment'
+                    ? 'bg-purple-600 hover:bg-purple-500'
+                    : txType === 'investment'
+                    ? 'bg-blue-600 hover:bg-blue-500'
+                    : 'bg-indigo-600 hover:bg-indigo-500'
+                }`}
               >
                 <Plus className="h-4 w-4" />
-                <span>Commit Transaction to Ledger</span>
+                <span>
+                  {txType === 'loan'
+                    ? '+ Deposit Loan to Account & Ledger'
+                    : txType === 'repayment'
+                    ? '- Record Loan Repayment'
+                    : txType === 'investment'
+                    ? '+ Deploy Investment to Ledger'
+                    : 'Commit Transaction to Ledger'}
+                </span>
               </button>
             </form>
           </div>
 
-          {/* Accounts & Cash Flow Statement (7 cols) */}
-          <div className="lg:col-span-7 flex flex-col gap-6">
-            {/* Liquid Accounts Manager */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-                <div className="flex items-center gap-2">
-                  <Landmark className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Accounts & Wallets ({accounts.length})
-                  </h2>
+          {/* Top Right: Operating & Cash Flow Summary (6 cols) */}
+          <div className="lg:col-span-6 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
+                <span>Cash Flow Statement</span>
+                <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md">
+                  {dateFilterMode === 'all' ? 'All-Time' : dateFilterMode === 'this_month' ? 'This Month' : dateFilterMode === 'last_30_days' ? 'Last 30 Days' : 'Custom Range'}
+                </span>
+              </h2>
+              <div className="mt-4 space-y-2 text-xs">
+                {/* 1. Operating Activities */}
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-1">
+                  Operating Activities
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
+                  <span className="text-slate-500">Gross Income Received:</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+₹{periodIncome.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
+                  <span className="text-slate-500">Operating Expenses Paid:</span>
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-₹{periodExpense.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
+                  <span className="text-slate-700 dark:text-slate-300">Net Operating Flow:</span>
+                  <span className={`font-mono font-bold ${periodOperatingFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    ₹{periodOperatingFlow.toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* 2. Investing Activities */}
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-2">
+                  Investing Activities
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
+                  <span className="text-slate-500">Investments Capital Deployed:</span>
+                  <span className="font-mono font-bold text-blue-600">-₹{periodInvestmentFlow.toLocaleString('en-IN')}</span>
+                </div>
+
+                {/* 3. Savings Capital Allocation */}
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-2">
+                  Savings Capital Allocation
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
+                  <span className="text-slate-500">Dedicated Savings Reserves:</span>
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400">-₹{periodSavingsFlow.toLocaleString('en-IN')}</span>
+                </div>
+
+                {/* 4. Financing Activities */}
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-2">
+                  Financing Activities
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
+                  <span className="text-slate-500">Loans Borrowed / Received:</span>
+                  <span className="font-mono font-bold text-teal-600 dark:text-teal-400">+₹{periodLoanReceived.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
+                  <span className="text-slate-500">Loan Repayments / EMI Paid:</span>
+                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">-₹{periodRepaymentFlow.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
+                  <span className="text-slate-700 dark:text-slate-300">Net Financing Flow:</span>
+                  <span className={`font-mono font-bold ${periodFinancingFlow >= 0 ? 'text-teal-600' : 'text-purple-600'}`}>
+                    ₹{periodFinancingFlow.toLocaleString('en-IN')}
+                  </span>
                 </div>
               </div>
+            </div>
 
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {accounts.map(a => (
-                  <div key={a.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center group">
+            {/* Total Scoped Cash Flow */}
+            <div className="mt-4 pt-3 flex justify-between py-1 font-bold text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700">
+              <span>Net Ledger Delta ({dateFilterMode === 'all' ? 'All-Time' : 'Selected Period'}):</span>
+              <span className={`font-mono text-sm ${periodNetCashFlow >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                ₹{periodNetCashFlow.toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+
+          {/* Bottom Full-Width (Single Column): Liquid Accounts Manager (12 cols) */}
+          <div className="lg:col-span-12 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Accounts & Wallets ({accounts.length})
+                </h2>
+              </div>
+              {accounts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleReconcileAccounts}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-xl border transition-colors cursor-pointer ${
+                    hasAnyAccountMismatch
+                      ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-600/50 dark:bg-amber-950/40 dark:text-amber-300'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                  }`}
+                  title="Synchronize and calculate each account balance directly from your ledger transactions history"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  <span>{hasAnyAccountMismatch ? 'Fix Calculations / Reconcile' : 'Reconcile Balances'}</span>
+                </button>
+              )}
+            </div>
+
+            {hasAnyAccountMismatch && (
+              <div className="mt-3 rounded-xl bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between">
+                <span>Discrepancy detected: Click to synchronize account balances with ledger records.</span>
+                <button
+                  type="button"
+                  onClick={handleReconcileAccounts}
+                  className="font-bold underline ml-2 cursor-pointer"
+                >
+                  Auto-Fix Now
+                </button>
+              </div>
+            )}
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {accounts.map(a => {
+                const recon = getAccountReconciliation(a);
+                return (
+                  <div key={a.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center group bg-slate-50/40 dark:bg-slate-800/30 hover:border-indigo-100 dark:hover:border-indigo-900/50 transition-colors">
                     <div>
                       <div className="font-bold text-slate-900 dark:text-white">{a.name}</div>
                       <div className="text-[10px] text-slate-400 capitalize mt-0.5">{a.type} account</div>
+                      {recon.isMismatch && (
+                        <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
+                          Ledger expects: ₹{recon.calculatedBalance.toLocaleString('en-IN')}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="font-mono text-sm font-extrabold text-slate-900 dark:text-white tabular-nums">
-                        ₹{Number(a.balance).toLocaleString('en-IN')}
+                      <div className="text-right">
+                        <div className="font-mono text-sm font-extrabold text-slate-900 dark:text-white tabular-nums">
+                          ₹{Number(a.balance).toLocaleString('en-IN')}
+                        </div>
+                        {recon.isMismatch && (
+                          <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                            Mismatch
+                          </span>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -1307,76 +2196,43 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-
-              {/* Add Account Inline Form */}
-              <form onSubmit={handleCreateAccount} className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-2 items-center">
-                <input
-                  type="text"
-                  required
-                  placeholder="New Account Name (e.g. HDFC, Cash Vault)"
-                  value={acctName}
-                  onChange={e => setAcctName(e.target.value)}
-                  className="flex-1 min-w-[150px] h-8 rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-                <select
-                  value={acctType}
-                  onChange={e => setAcctType(e.target.value as any)}
-                  className="h-8 rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                >
-                  <option value="bank">Bank</option>
-                  <option value="cash">Cash</option>
-                  <option value="wallet">Wallet</option>
-                </select>
-                <input
-                  type="number"
-                  placeholder="Opening ₹"
-                  value={acctBalance}
-                  onChange={e => setAcctBalance(e.target.value)}
-                  className="w-24 h-8 rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-                <button
-                  type="submit"
-                  className="h-8 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer"
-                >
-                  + Add Account
-                </button>
-              </form>
+                );
+              })}
             </div>
 
-            {/* Operating & Cash Flow Summary */}
-            <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-                Cash Flow Statement
-              </h2>
-              <div className="mt-4 space-y-2 text-xs">
-                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
-                  <span className="text-slate-500">Gross Income Received:</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">₹{income.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
-                  <span className="text-slate-500">Operating Expenses Paid:</span>
-                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-₹{expense.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
-                  <span className="text-slate-700 dark:text-slate-300">Net Operating Cash Flow:</span>
-                  <span className={`font-mono font-bold ${operatingCashFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    ₹{operatingCashFlow.toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
-                  <span className="text-slate-500">Investments Capital Deployed:</span>
-                  <span className="font-mono font-bold text-blue-600">-₹{investmentFlow.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between py-1 pt-2 font-bold text-slate-900 dark:text-white">
-                  <span>Net Ledger Delta:</span>
-                  <span className={`font-mono ${netCashFlow >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                    ₹{netCashFlow.toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-            </div>
+            {/* Add Account Inline Form */}
+            <form onSubmit={handleCreateAccount} className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                required
+                placeholder="New Account Name (e.g. HDFC, Cash Vault)"
+                value={acctName}
+                onChange={e => setAcctName(e.target.value)}
+                className="flex-1 min-w-[200px] h-9 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-indigo-500"
+              />
+              <select
+                value={acctType}
+                onChange={e => setAcctType(e.target.value as any)}
+                className="h-9 rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+              >
+                <option value="bank">Bank</option>
+                <option value="cash">Cash</option>
+                <option value="wallet">Wallet</option>
+              </select>
+              <input
+                type="number"
+                placeholder="Opening ₹"
+                value={acctBalance}
+                onChange={e => setAcctBalance(e.target.value)}
+                className="w-28 h-9 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+              <button
+                type="submit"
+                className="h-9 rounded-xl bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer shadow-xs active:scale-98 transition-all"
+              >
+                + Add Account
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -1509,6 +2365,27 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     />
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Deposit Loan Disbursal into Bank / Cash Account (Optional / Recommended)
+                  </label>
+                  <select
+                    value={loanDepositAccountId}
+                    onChange={e => setLoanDepositAccountId(e.target.value)}
+                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="">-- No Account Deposit (External / Direct-to-Vendor Loan) --</option>
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Depositing into your account adds the borrowed principal into your bank balance and prevents ledger calculation drift when paying EMIs.
+                  </p>
+                </div>
                 <button
                   type="submit"
                   className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
@@ -1603,6 +2480,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 ) : (
                   loans.map(l => {
                     const emi = loanEmi(l.principal, l.rate, l.tenure);
+                    const linkedDisbursementTx = transactions.find(t => t.linkedLoanId === l.id && t.type === 'loan');
+                    const hasLinkedDisbursement = !!linkedDisbursementTx;
+                    const depositedAccount = linkedDisbursementTx?.accountId ? accounts.find(a => a.id === linkedDisbursementTx.accountId) : null;
                     return (
                       <div key={l.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 transition-all hover:border-slate-200 dark:hover:border-slate-700">
                         <div className="flex justify-between items-start">
@@ -1628,13 +2508,59 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             <button
                               type="button"
                               onClick={() => setDeleteTarget({ store: 'loans', id: l.id, name: l.name })}
-                              className="text-slate-300 hover:text-rose-500 transition-colors p-1"
+                              className="text-slate-300 hover:text-rose-500 transition-colors p-1 cursor-pointer"
                               title="Delete loan"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </div>
+
+                        {/* Principal Disbursement Status & Action Banner */}
+                        {!hasLinkedDisbursement ? (
+                          <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-3 text-xs dark:border-amber-900/60 dark:bg-amber-950/30">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div>
+                                <div className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                                  <span>Principal Not Yet Deposited in Account</span>
+                                </div>
+                                <p className="text-[11px] text-amber-700 dark:text-amber-300/90 mt-0.5">
+                                  ₹{Number(l.principal).toLocaleString('en-IN')} is not added to your bank balance or recorded as inflow (+₹{Number(l.principal).toLocaleString('en-IN')}) in Cash Flow.
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <select
+                                  id={`loan-deposit-${l.id}`}
+                                  defaultValue={accounts[0]?.id || ''}
+                                  className="h-8.5 rounded-xl border border-amber-300 bg-white px-2.5 text-xs text-slate-800 dark:border-amber-800 dark:bg-slate-900 dark:text-white outline-none cursor-pointer"
+                                >
+                                  {accounts.map(a => (
+                                    <option key={a.id} value={a.id}>
+                                      {a.name} (₹{Number(a.balance).toLocaleString('en-IN')})
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const sel = (document.getElementById(`loan-deposit-${l.id}`) as HTMLSelectElement)?.value || accounts[0]?.id;
+                                    handleDepositExistingLoan(l, sel);
+                                  }}
+                                  className="h-8.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-500 font-semibold text-white text-xs transition-colors cursor-pointer shadow-xs flex items-center gap-1 shrink-0"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  <span>Deposit to Account</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2.5 py-1 rounded-lg border border-teal-200 dark:border-teal-900/50 w-fit">
+                            <Check className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                            <span>Principal (+₹{Number(l.principal).toLocaleString('en-IN')}) deposited into {depositedAccount?.name || 'Bank Account'} & recorded in ledger</span>
+                          </div>
+                        )}
 
                         <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/60 text-[11px]">
                           <span className="text-slate-500">Calculated Monthly EMI:</span>
@@ -1773,6 +2699,27 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  Fund From Bank / Cash Account (Optional)
+                </label>
+                <select
+                  value={invAccountId}
+                  onChange={e => setInvAccountId(e.target.value)}
+                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="">-- No Account Deduction (External / Existing Asset) --</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Selecting an account will automatically deduct the invested capital and record a linked transaction in your ledger.
+                </p>
+              </div>
               <button
                 type="submit"
                 className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
@@ -1801,35 +2748,59 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   const current = Number(i.currentValue || i.amount) || 0;
                   const gain = current - invested;
                   const roiPct = invested ? (gain / invested) * 100 : 0;
+                  const linkedTx = transactions.find(t => t.linkedInvestmentId === i.id && t.type === 'investment');
+                  const hasLinkedTx = !!linkedTx;
                   return (
-                    <div key={i.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 flex justify-between items-center group">
-                      <div>
-                        <div className="font-bold text-slate-900 dark:text-white text-sm flex flex-wrap items-center gap-2">
-                          <span>{i.name}</span>
-                          {renderGoalBadge(i.goalId)}
-                        </div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                          Invested: ₹{invested.toLocaleString('en-IN')} · Date: {i.date}
-                        </div>
-                      </div>
-                      <div className="text-right flex items-center gap-3">
+                    <div key={i.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 transition-all hover:border-slate-200 dark:hover:border-slate-700">
+                      <div className="flex justify-between items-start">
                         <div>
-                          <div className="font-mono text-sm font-bold text-slate-900 dark:text-white tabular-nums">
-                            ₹{current.toLocaleString('en-IN')}
+                          <div className="font-bold text-slate-900 dark:text-white text-sm flex flex-wrap items-center gap-2">
+                            <span>{i.name}</span>
+                            {renderGoalBadge(i.goalId)}
                           </div>
-                          <div className={`font-mono text-[11px] font-bold ${gain >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                            {gain >= 0 ? '+' : ''}₹{gain.toLocaleString('en-IN')} ({roiPct.toFixed(1)}%)
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            Invested: ₹{invested.toLocaleString('en-IN')} · Date: {i.date}
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget({ store: 'investments', id: i.id, name: i.name })}
-                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
-                          title="Delete investment"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="text-right flex items-start gap-3">
+                          <div>
+                            <div className="font-mono text-sm font-bold text-slate-900 dark:text-white tabular-nums">
+                              ₹{current.toLocaleString('en-IN')}
+                            </div>
+                            <div className={`font-mono text-[11px] font-bold ${gain >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                              {gain >= 0 ? '+' : ''}₹{gain.toLocaleString('en-IN')} ({roiPct.toFixed(1)}%)
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget({ store: 'investments', id: i.id, name: i.name })}
+                            className="text-slate-300 hover:text-rose-500 transition-colors p-1 cursor-pointer"
+                            title="Delete investment"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
+
+                      {!hasLinkedTx ? (
+                        <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-[11px]">
+                          <span className="text-blue-800 dark:text-blue-300">
+                            Asset not recorded in Ledger Transactions (Sub-filter currently shows 0)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleSyncExistingInvestment(i)}
+                            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold cursor-pointer text-xs shrink-0 self-start sm:self-auto shadow-xs"
+                          >
+                            + Sync to Ledger
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-900/50 w-fit">
+                          <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>Logged in ledger transactions & cash flow</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -1891,6 +2862,27 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  Fund Opening Savings from Bank / Cash Account (Optional)
+                </label>
+                <select
+                  value={saveAccountId}
+                  onChange={e => setSaveAccountId(e.target.value)}
+                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="">-- No Account Deduction (Pre-existing Cash / External Reserve) --</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  If selected and current amount &gt; 0, capital is transferred from your bank balance into this savings reserve.
+                </p>
+              </div>
               <button
                 type="submit"
                 className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
@@ -1923,6 +2915,19 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
                             ₹{current.toLocaleString('en-IN')} / ₹{target.toLocaleString('en-IN')} ({pct.toFixed(0)}%)
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDepositTargetPlan(sp);
+                              setDepositAmount('');
+                              setDepositNote('');
+                            }}
+                            className="rounded-lg bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-1"
+                            title="Contribute / Deposit to this savings target"
+                          >
+                            <Plus className="h-3 w-3" />
+                            <span>Deposit</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => setDeleteTarget({ store: 'savingsPlans', id: sp.id, name: sp.name })}
@@ -2021,6 +3026,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <span>Investment Portfolio ({investments.length} holdings):</span>
                     <span className="font-mono font-bold text-slate-900 dark:text-white">₹{investmentValue.toLocaleString('en-IN')}</span>
                   </div>
+                  <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
+                    <span>Dedicated Savings Reserves ({savingsPlans.length} plans):</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">₹{totalSavings.toLocaleString('en-IN')}</span>
+                  </div>
                   {assets.map(a => (
                     <div key={a.id} className="flex justify-between py-1 text-slate-600 dark:text-slate-400 group">
                       <span className="flex items-center gap-1.5 flex-wrap">
@@ -2074,17 +3083,167 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 placeholder="Search ledger..."
                 value={txSearch}
                 onChange={e => setTxSearch(e.target.value)}
-                className="h-8 w-44 rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="h-8 w-full sm:w-44 rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
-              <button
-                type="button"
-                onClick={() => setTxSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-                className="flex items-center gap-1.5 h-8 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
-                title={txSortOrder === 'desc' ? 'Current: Newest First. Click for Oldest First.' : 'Current: Oldest First. Click for Newest First.'}
-              >
-                <ArrowUpDown className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
-                <span>{txSortOrder === 'desc' ? 'Newest First' : 'Oldest First'}</span>
-              </button>
+              {/* Filter & Sort Dropdown Menu (Option A) */}
+              <div className="relative" ref={filterDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsFilterDropdownOpen(prev => !prev)}
+                  className={`flex items-center gap-1.5 h-8 rounded-xl border px-3 text-xs font-semibold cursor-pointer transition-colors ${
+                    isFilterDropdownOpen || dateFilterMode !== 'all'
+                      ? 'border-indigo-300 bg-indigo-50/80 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                  }`}
+                  title="Filter by date and change sort order"
+                >
+                  <ArrowUpDown className="h-3 w-3 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span>{txSortOrder === 'desc' ? 'Newest First' : 'Oldest First'}</span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                    {dateFilterMode === 'all'
+                      ? 'All Time'
+                      : dateFilterMode === 'this_month'
+                      ? 'This Month'
+                      : dateFilterMode === 'last_30_days'
+                      ? 'Last 30 Days'
+                      : 'Custom Range'}
+                  </span>
+                  <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isFilterDropdownOpen && (
+                  <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-64 max-w-[calc(100vw-2.5rem)] z-30 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-xl dark:border-slate-700 dark:bg-slate-900 animate-in fade-in duration-100">
+                    {/* Sort Order Section */}
+                    <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Sort Order
+                    </div>
+                    <div className="space-y-0.5">
+                      <button
+                        type="button"
+                        onClick={() => { setTxSortOrder('desc'); }}
+                        className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                          txSortOrder === 'desc'
+                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span>Newest First</span>
+                        {txSortOrder === 'desc' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setTxSortOrder('asc'); }}
+                        className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                          txSortOrder === 'asc'
+                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span>Oldest First</span>
+                        {txSortOrder === 'asc' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                      </button>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="my-2 border-t border-slate-100 dark:border-slate-800" />
+
+                    {/* Date Range Section */}
+                    <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Date Range
+                    </div>
+                    <div className="space-y-0.5">
+                      <button
+                        type="button"
+                        onClick={() => { setDateFilterMode('all'); }}
+                        className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                          dateFilterMode === 'all'
+                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span>All Time</span>
+                        {dateFilterMode === 'all' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setDateFilterMode('this_month'); }}
+                        className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                          dateFilterMode === 'this_month'
+                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span>This Month</span>
+                        {dateFilterMode === 'this_month' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setDateFilterMode('last_30_days'); }}
+                        className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                          dateFilterMode === 'last_30_days'
+                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span>Last 30 Days</span>
+                        {dateFilterMode === 'last_30_days' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setDateFilterMode('custom'); }}
+                        className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                          dateFilterMode === 'custom'
+                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span>Custom Range</span>
+                        {dateFilterMode === 'custom' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                      </button>
+                    </div>
+
+                    {/* Custom Range Date Pickers */}
+                    {dateFilterMode === 'custom' && (
+                      <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                        <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 px-1">
+                          Select Date Span:
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-1.5 text-[11px]">
+                            <span className="w-10 text-slate-400 shrink-0">From:</span>
+                            <input
+                              type="date"
+                              value={customStartDate}
+                              onChange={e => setCustomStartDate(e.target.value)}
+                              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-slate-700 dark:text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[11px]">
+                            <span className="w-10 text-slate-400 shrink-0">To:</span>
+                            <input
+                              type="date"
+                              value={customEndDate}
+                              onChange={e => setCustomEndDate(e.target.value)}
+                              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-slate-700 dark:text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                        </div>
+                        {(customStartDate || customEndDate) && (
+                          <div className="flex justify-end pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => { setCustomStartDate(''); setCustomEndDate(''); }}
+                              className="text-[10px] font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer"
+                            >
+                              Clear Dates
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handleExportCSV}
@@ -2096,29 +3255,64 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </div>
           </div>
 
-          {/* Type Filter Pills */}
-          <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
-            {[
-              { id: 'all', label: `All (${transactions.length})` },
-              { id: 'expense', label: 'Expenses' },
-              { id: 'income', label: 'Income' },
-              { id: 'transfer', label: 'Transfers' },
-              { id: 'repayment', label: 'Repayments' },
-              { id: 'investment', label: 'Investments' }
-            ].map(f => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setTxTypeFilter(f.id as any)}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
-                  txTypeFilter === f.id
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+          {/* Filter Bar: Type Filter Pills & Active Date Filter Status */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+            {/* Type Filter Pills */}
+            <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
+              {[
+                { id: 'all', label: `All (${dateAndSearchFilteredTxs.length})` },
+                { id: 'expense', label: `Expenses (${dateAndSearchFilteredTxs.filter(t => t.type === 'expense').length})` },
+                { id: 'income', label: `Income (${dateAndSearchFilteredTxs.filter(t => t.type === 'income').length})` },
+                { id: 'loan', label: `Loans (${dateAndSearchFilteredTxs.filter(t => t.type === 'loan').length})` },
+                { id: 'transfer', label: `Transfers (${dateAndSearchFilteredTxs.filter(t => t.type === 'transfer').length})` },
+                { id: 'repayment', label: `Repayments (${dateAndSearchFilteredTxs.filter(t => t.type === 'repayment').length})` },
+                { id: 'investment', label: `Investments (${dateAndSearchFilteredTxs.filter(t => t.type === 'investment').length})` },
+                { id: 'savings', label: `Savings (${dateAndSearchFilteredTxs.filter(t => t.type === 'savings').length})` }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setTxTypeFilter(f.id as any)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                    txTypeFilter === f.id
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Active Date Filter Indicator & Quick Reset if filtered */}
+            {dateFilterMode !== 'all' && (
+              <div className="flex items-center gap-2 self-start lg:self-auto">
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">
+                  <span>Filtered:</span>
+                  <span className="font-semibold">
+                    {dateFilterMode === 'this_month'
+                      ? 'This Month'
+                      : dateFilterMode === 'last_30_days'
+                      ? 'Last 30 Days'
+                      : customStartDate || customEndDate
+                      ? `${customStartDate || 'Start'} to ${customEndDate || 'Now'}`
+                      : 'Custom Range'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateFilterMode('all');
+                      setCustomStartDate('');
+                      setCustomEndDate('');
+                    }}
+                    className="ml-0.5 rounded-full p-0.5 text-indigo-400 hover:bg-indigo-200 hover:text-indigo-900 dark:hover:bg-indigo-800 dark:hover:text-indigo-100 cursor-pointer"
+                    title="Clear date filter"
+                  >
+                    ✕
+                  </button>
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[600px] overflow-y-auto">
@@ -2185,9 +3379,34 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                      <span className={`font-mono font-bold tabular-nums text-sm ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900 dark:text-white'}`}>
-                        {tx.type === 'income' ? '+' : '-'}₹{tx.amount.toLocaleString('en-IN')}
-                      </span>
+                      <div className="text-right">
+                        <span className={`font-mono font-bold tabular-nums text-sm ${
+                          tx.type === 'income'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : tx.type === 'loan'
+                            ? 'text-teal-600 dark:text-teal-400'
+                            : tx.type === 'expense'
+                            ? 'text-rose-600 dark:text-rose-400'
+                            : tx.type === 'investment'
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : tx.type === 'savings'
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : tx.type === 'repayment'
+                            ? 'text-purple-600 dark:text-purple-400'
+                            : 'text-indigo-600 dark:text-indigo-400'
+                        }`}>
+                          {tx.type === 'income' || tx.type === 'loan' ? '+' : tx.type === 'transfer' ? '⇄ ' : '-'}₹{tx.amount.toLocaleString('en-IN')}
+                        </span>
+                        <div className="text-[10px] font-medium text-slate-400">
+                          {tx.type === 'income' && 'Income Inflow'}
+                          {tx.type === 'loan' && 'Borrowing Inflow'}
+                          {tx.type === 'expense' && 'Expense Outflow'}
+                          {tx.type === 'investment' && 'Capital Deployed'}
+                          {tx.type === 'savings' && 'Savings Reserve'}
+                          {tx.type === 'repayment' && 'Debt Service'}
+                          {tx.type === 'transfer' && 'Internal Transfer'}
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setDeleteTarget({ store: 'finance', id: tx.id, name: `${tx.category} (₹${tx.amount})` })}
@@ -2277,6 +3496,95 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <span>Download File</span>
               </a>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SAVINGS DEPOSIT / CONTRIBUTION MODAL */}
+      {depositTargetPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Contribute to Savings
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {depositTargetPlan.name} (Current: ₹{Number(depositTargetPlan.currentAmount).toLocaleString('en-IN')})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDepositTargetPlan(null)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDepositToSavings} className="mt-4 space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Contribution Amount (₹) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={depositAmount}
+                  onChange={e => setDepositAmount(e.target.value)}
+                  placeholder="e.g. 5000"
+                  className="mt-1 h-9.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-indigo-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Deduct from Bank / Cash Account
+                </label>
+                <select
+                  value={depositAccountId}
+                  onChange={e => setDepositAccountId(e.target.value)}
+                  className="mt-1 h-9.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+                >
+                  <option value="">-- No Account Deduction (Manual / Cash In Hand) --</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Note / Memo (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={depositNote}
+                  onChange={e => setDepositNote(e.target.value)}
+                  placeholder="Monthly savings, bonus deposit, etc."
+                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setDepositTargetPlan(null)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-500 cursor-pointer"
+                >
+                  Deposit Funds
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

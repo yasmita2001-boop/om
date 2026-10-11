@@ -996,7 +996,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       {activeTab === 'goals' && (
         <div className="space-y-6">
           <div className="flex flex-col gap-6 w-full">
-            {/* Add Goal Form (Upper Card) */}
+            {/* Add Goal Form (Single Column - Upper) */}
             <div ref={goalFormRef} className="w-full flex flex-col">
               <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
@@ -1330,7 +1330,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               </div>
             </div>
 
-            {/* Goals Tree/List Display (Bottom Card) */}
+            {/* Strategic Goals Portfolio (Single Column - Lower) */}
             <div className="w-full flex flex-col">
               <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
                 <div className="space-y-3 border-b border-slate-100 pb-3.5 dark:border-slate-800">

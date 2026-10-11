@@ -11,7 +11,7 @@ import {
   CalcHistoryItem, Skill, Course, WorkResponsibility
 } from './types';
 import {
-  storage, seedInitialDataIfEmpty
+  storage, seedInitialDataIfEmpty, getProfileSecurityInfo
 } from './lib/storage';
 
 // Components
@@ -316,15 +316,35 @@ export default function App() {
         setAppSettings(settingsData);
         if (settingsData.themeMode) setTheme(settingsData.themeMode);
 
-        const targetId = settingsData.profileId;
+        const targetId = settingsData.profileId || settingsData.profiles?.[0]?.id || 'om-master-profile';
         if (targetId) {
-          // App must always require lock screen on open/launch
-          storage.setActiveProfile(null);
-          setUnlockedProfileId(null);
-          try {
-            sessionStorage.removeItem('om_session_unlocked');
-            localStorage.removeItem('om_unlocked_profile');
-          } catch {}
+          const savedUnlocked = localStorage.getItem('om_unlocked_profile') || sessionStorage.getItem('om_session_unlocked');
+          const isKnownProfile = settingsData.profiles?.some(p => p.id === savedUnlocked);
+          const activeProfId = (isKnownProfile && savedUnlocked) ? savedUnlocked : targetId;
+
+          // If activeProfId differs from settingsData.profileId, keep appSettings in sync
+          if (settingsData.profileId !== activeProfId) {
+            settingsData.profileId = activeProfId;
+            settingsData.profiles = (settingsData.profiles || []).map(p => ({ ...p, isCurrent: p.id === activeProfId }));
+            await storage.setSingleton('appSettings', settingsData);
+            setAppSettings({ ...settingsData });
+          }
+
+          const secInfo = await getProfileSecurityInfo(activeProfId);
+          if (secInfo?.credentialsReady) {
+            // Workspace is password protected: ALWAYS show Lock Screen on file open/startup!
+            storage.setActiveProfile(null);
+            setUnlockedProfileId(null);
+            try {
+              sessionStorage.removeItem('om_session_unlocked');
+              localStorage.removeItem('om_unlocked_profile');
+            } catch {}
+          } else {
+            // No password set on this workspace: open directly!
+            storage.setActiveProfile(activeProfId);
+            setUnlockedProfileId(activeProfId);
+            await loadAllData(activeProfId);
+          }
         }
       }
     }).catch(err => console.error('Failed to initialize Om-LifeOS', err));
@@ -398,6 +418,7 @@ export default function App() {
   const handleProfileUnlocked = useCallback(async (profileId: string) => {
     try {
       sessionStorage.setItem('om_session_unlocked', profileId);
+      localStorage.setItem('om_unlocked_profile', profileId);
     } catch {}
     const settings = (await storage.getSingleton<AppState>('appSettings')) || ({} as AppState);
     const profile = settings.profiles?.find(p => p.id === profileId);
@@ -437,6 +458,7 @@ export default function App() {
 
       try {
         sessionStorage.setItem('om_session_unlocked', id);
+        localStorage.setItem('om_unlocked_profile', id);
       } catch {}
 
       setUnlockedProfileId(id);
@@ -523,7 +545,7 @@ export default function App() {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">Loading Om-LifeOS…</div>;
   }
 
-  if (!unlockedProfileId || unlockedProfileId !== appSettings.profileId) {
+  if (!unlockedProfileId) {
     return (
       <AppLockScreen
         settings={appSettings}
@@ -570,6 +592,7 @@ export default function App() {
           remindersCount={reminders.filter(r => r.status !== 'done').length}
           recycleBinCount={recycleBinCount}
           onLockApp={handleLockApp}
+          onToast={showToast}
         />
 
         {/* Main Content Viewport - Responsive across Mobile, Tablet, Laptop, and Desktop */}

@@ -465,6 +465,51 @@ export function buildDocxBlob(title: string, rows: (string | number)[][]): Blob 
 }
 
 // ============================================================================
+// DATE RANGE FILTER TYPES & HELPERS
+// ============================================================================
+
+export interface DateRangeFilter {
+  mode: 'all' | 'this_month' | 'last_30_days' | 'custom';
+  startDate?: string;
+  endDate?: string;
+}
+
+export function isDateInFilterRange(
+  dateStr: string | null | undefined,
+  filter?: DateRangeFilter
+): boolean {
+  if (!filter || filter.mode === 'all') return true;
+  if (!dateStr) return true;
+  const itemDate = dateStr.slice(0, 10);
+  if (filter.mode === 'this_month') {
+    const currentYearMonth = new Date().toISOString().slice(0, 7);
+    return itemDate.startsWith(currentYearMonth);
+  }
+  if (filter.mode === 'last_30_days') {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return itemDate >= thirtyDaysAgo;
+  }
+  if (filter.mode === 'custom') {
+    if (filter.startDate && itemDate < filter.startDate) return false;
+    if (filter.endDate && itemDate > filter.endDate) return false;
+    return true;
+  }
+  return true;
+}
+
+export function formatScopeSuffix(filter?: DateRangeFilter): string {
+  if (!filter || filter.mode === 'all') return '';
+  if (filter.mode === 'this_month') return '-this-month';
+  if (filter.mode === 'last_30_days') return '-last-30-days';
+  if (filter.mode === 'custom') {
+    const s = filter.startDate ? filter.startDate.replace(/[^0-9]/g, '') : 'start';
+    const e = filter.endDate ? filter.endDate.replace(/[^0-9]/g, '') : 'end';
+    return `-${s}-to-${e}`;
+  }
+  return '';
+}
+
+// ============================================================================
 // UNIVERSAL DATA MANAGER CLASS (Central Operation Coordinator)
 // ============================================================================
 
@@ -574,67 +619,68 @@ export class UniversalDataManager {
    * Maps multi-store workspace entities into a uniform 2D tabular array
    * suitable for Word (.docx) and CSV (.csv) exports.
    */
-  public async getUnifiedTabularRows(profileId?: string): Promise<(string | number)[][]> {
+  public async getUnifiedTabularRows(profileId?: string, dateFilter?: DateRangeFilter): Promise<(string | number)[][]> {
     const { cleanData } = await this.extractCanonicalWorkspaceData({ profileId, includeFullMedia: false });
+    const matchesDate = (itemDate?: string) => isDateInFilterRange(itemDate, dateFilter);
 
     const rows: (string | number)[][] = [
       ['Module', 'Record ID', 'Title / Description', 'Status / Category', 'Value / Progress', 'Date', 'Details']
     ];
 
     // 1. Tasks
-    (cleanData.tasks || []).forEach(t => {
+    (cleanData.tasks || []).filter(t => matchesDate(t.dueAt || t.date || t.createdAt)).forEach(t => {
       rows.push(['Task', t.id || '', t.title || '', t.status || '', t.priority || '', t.dueAt || t.date || '', t.description || '']);
     });
 
     // 2. Daily Routines & Habits
-    (cleanData.routines || []).forEach(r => {
+    (cleanData.routines || []).filter(r => matchesDate(r.createdAt)).forEach(r => {
       rows.push(['Routine', r.id || '', r.title || '', r.timeOfDay || '', r.days?.join?.(', ') || '', '', r.notes || '']);
     });
-    (cleanData.habits || []).forEach(h => {
+    (cleanData.habits || []).filter(h => matchesDate(h.createdAt)).forEach(h => {
       rows.push(['Habit', h.id || '', h.title || '', h.frequency || '', `${h.streak || 0} streak`, '', h.notes || '']);
     });
 
     // 3. Strategic Goals & Milestones
-    (cleanData.goals || []).forEach(g => {
+    (cleanData.goals || []).filter(g => matchesDate(g.targetDate || g.createdAt)).forEach(g => {
       rows.push(['Goal', g.id || '', g.title || '', g.category || '', `${g.progress || 0}%`, g.targetDate || '', g.description || '']);
     });
-    (cleanData.milestones || []).forEach(m => {
+    (cleanData.milestones || []).filter(m => matchesDate(m.dueDate || m.createdAt)).forEach(m => {
       rows.push(['Milestone', m.id || '', m.title || '', m.completed ? 'Completed' : 'Pending', '', m.dueDate || '', '']);
     });
 
     // 4. Notes & Notebooks
-    (cleanData.notes || []).forEach(n => {
+    (cleanData.notes || []).filter(n => matchesDate(n.date || n.updatedAt || n.createdAt)).forEach(n => {
       rows.push(['Note', n.id || '', n.title || '', n.category || '', '', n.date || '', (n.content || '').slice(0, 100)]);
     });
 
     // 5. Journal Entries
-    (cleanData.journal || []).forEach(j => {
+    (cleanData.journal || []).filter(j => matchesDate(j.date || j.createdAt)).forEach(j => {
       rows.push(['Journal', j.id || '', j.title || j.mood || 'Entry', j.mood || '', '', j.date || '', (j.content || '').slice(0, 100)]);
     });
 
     // 6. Finance & Accounts
-    (cleanData.finance || []).forEach(f => {
+    (cleanData.finance || []).filter(f => matchesDate(f.date || f.createdAt)).forEach(f => {
       rows.push(['Transaction', f.id || '', f.category + (f.note ? ` (${f.note})` : ''), f.type || '', `₹${f.amount ?? 0}`, f.date || '', f.paymentMethod || '']);
     });
     (cleanData.financeAccounts || []).forEach(a => {
       rows.push(['Account', a.id || '', a.name || '', a.type || '', `₹${a.balance ?? 0}`, '', a.accountNumber || '']);
     });
-    (cleanData.loans || []).forEach(l => {
+    (cleanData.loans || []).filter(l => matchesDate(l.dueDate || l.date || l.createdAt)).forEach(l => {
       rows.push(['Loan', l.id || '', l.personName || l.title || '', l.type || '', `₹${l.amount ?? 0}`, l.dueDate || '', l.note || '']);
     });
 
     // 7. People & Network
-    (cleanData.people || []).forEach(p => {
+    (cleanData.people || []).filter(p => matchesDate(p.importantDate || p.createdAt)).forEach(p => {
       rows.push(['Person', p.id || '', p.name || '', p.relationship || '', '', p.importantDate || '', p.contact || '']);
     });
 
     // 8. Projects & Responsibilities
-    (cleanData.workProjects || []).forEach(w => {
+    (cleanData.workProjects || []).filter(w => matchesDate(w.deadline || w.startDate || w.createdAt)).forEach(w => {
       rows.push(['Project', w.id || '', w.title || '', w.status || '', `${w.progress || 0}%`, w.deadline || '', '']);
     });
 
     // 9. Attachments Metadata
-    (cleanData.attachments || []).forEach(att => {
+    (cleanData.attachments || []).filter(att => matchesDate(att.createdAt)).forEach(att => {
       rows.push(['Attachment', att.id || '', att.name || '', att.type || '', `${Math.round((att.size || 0) / 1024)} KB`, '', '']);
     });
 
@@ -722,6 +768,7 @@ export class UniversalDataManager {
       includeFullMedia?: boolean;
       customTitle?: string;
       autoDownload?: boolean;
+      dateRangeFilter?: DateRangeFilter;
     }
   ): Promise<{ blob: Blob; filename: string; sizeBytes: number; recordCount?: number }> {
     const {
@@ -729,7 +776,8 @@ export class UniversalDataManager {
       profileName,
       includeFullMedia = true,
       customTitle = 'Om-LifeOS',
-      autoDownload = true
+      autoDownload = true,
+      dateRangeFilter
     } = options;
 
     let blob: Blob;
@@ -737,6 +785,7 @@ export class UniversalDataManager {
     let recordCount = 0;
     const dateStr = new Date().toISOString().slice(0, 10);
     const safeTitle = customTitle.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const suffix = formatScopeSuffix(dateRangeFilter);
 
     switch (format) {
       case 'omlifeos': {
@@ -752,18 +801,18 @@ export class UniversalDataManager {
       }
 
       case 'docx': {
-        const rows = await this.getUnifiedTabularRows(profileId);
+        const rows = await this.getUnifiedTabularRows(profileId, dateRangeFilter);
         recordCount = Math.max(0, rows.length - 1);
         blob = buildDocxBlob(`${customTitle} — Workspace Report`, rows);
-        filename = `${safeTitle}-report-${dateStr}.docx`;
+        filename = `${safeTitle}-report${suffix}-${dateStr}.docx`;
         break;
       }
 
       case 'csv': {
-        const rows = await this.getUnifiedTabularRows(profileId);
+        const rows = await this.getUnifiedTabularRows(profileId, dateRangeFilter);
         recordCount = Math.max(0, rows.length - 1);
         blob = buildCsvBlob(rows);
-        filename = `${safeTitle}-records-${dateStr}.csv`;
+        filename = `${safeTitle}-records${suffix}-${dateStr}.csv`;
         break;
       }
 
@@ -773,10 +822,21 @@ export class UniversalDataManager {
           profileName,
           includeFullMedia: false
         });
-        recordCount = totalActiveCount;
-        const htmlString = generateCompleteStandaloneHtml(cleanData);
+        let filteredCleanData = cleanData;
+        if (dateRangeFilter && dateRangeFilter.mode !== 'all') {
+          filteredCleanData = {};
+          for (const [key, list] of Object.entries(cleanData)) {
+            if (Array.isArray(list)) {
+              filteredCleanData[key] = list.filter(item => isDateInFilterRange(item.date || item.dueAt || item.targetDate || item.dueDate || item.deadline || item.createdAt || item.updatedAt, dateRangeFilter));
+            } else {
+              filteredCleanData[key] = list;
+            }
+          }
+        }
+        recordCount = Object.values(filteredCleanData).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 1), 0);
+        const htmlString = generateCompleteStandaloneHtml(filteredCleanData);
         blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });
-        filename = `${safeTitle}-standalone-app-${dateStr}.html`;
+        filename = `${safeTitle}-standalone-app${suffix}-${dateStr}.html`;
         break;
       }
 

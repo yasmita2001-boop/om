@@ -3,7 +3,7 @@ import {
   Download, Upload, RefreshCw, CheckCircle2,
   AlertTriangle, ChevronDown, ChevronUp,
   FileText, FileCode, Globe, ShieldCheck,
-  ArrowRight, Database
+  ArrowRight, Database, Calendar, Check
 } from 'lucide-react';
 import {
   universalDataManager,
@@ -33,6 +33,25 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
   // Export State
   const [includeFullMedia, setIncludeFullMedia] = useState<boolean>(true);
   const [exportingFormat, setExportingFormat] = useState<UniversalExportFormat | null>(null);
+  const [dateFilterMode, setDateFilterMode] = useState<'all' | 'this_month' | 'last_30_days' | 'custom'>('all');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [isDateDropdownOpen, setIsDateDropdownOpen] = useState<boolean>(false);
+  const dateFilterDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dateFilterDropdownRef.current && !dateFilterDropdownRef.current.contains(event.target as Node)) {
+        setIsDateDropdownOpen(false);
+      }
+    }
+    if (isDateDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDateDropdownOpen]);
 
   // Storage Stats
   const [activeRecordsCount, setActiveRecordsCount] = useState<number>(0);
@@ -89,11 +108,19 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
         profileId,
         profileName,
         includeFullMedia,
-        customTitle: `${profileName} LifeOS`
+        customTitle: `${profileName} LifeOS`,
+        dateRangeFilter: {
+          mode: dateFilterMode,
+          startDate: customStartDate,
+          endDate: customEndDate
+        }
       });
 
       const mediaNotice = format === 'omlifeos' && !includeFullMedia ? ' (Without media)' : '';
-      onSuccess?.(`✓ ${formatDef?.name || format} downloaded successfully${mediaNotice}! (${formatBytes(res.sizeBytes)})`);
+      const scopeNotice = dateFilterMode !== 'all'
+        ? ` [${dateFilterMode === 'this_month' ? 'This Month' : dateFilterMode === 'last_30_days' ? 'Last 30 Days' : 'Custom Range'}]`
+        : '';
+      onSuccess?.(`✓ ${formatDef?.name || format} downloaded successfully${mediaNotice}${scopeNotice}! (${formatBytes(res.sizeBytes)})`);
       await loadStats();
     } catch (err: any) {
       onError?.(`Export failed: ${err.message || 'Unknown export error'}`);
@@ -169,6 +196,11 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
         targetProfileId: profileId,
         targetProfileName: profileName
       });
+
+      try {
+        sessionStorage.setItem('om_session_unlocked', profileId);
+        localStorage.setItem('om_unlocked_profile', profileId);
+      } catch {}
 
       const ghostInfo = result.blockedGhostCount > 0 ? ` (${result.blockedGhostCount} deleted items blocked)` : '';
       onSuccess?.(`✓ Restored ${result.restoredRecordCount} record(s) into "${profileName}"!${ghostInfo}`);
@@ -487,11 +519,164 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
       </div>
 
       {/* Section 2: Document & Table Exports */}
-      <div className="space-y-2 pt-1">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400">
-            Document & Table Exports
-          </span>
+      <div className="space-y-2.5 pt-1">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400">
+              Document & Table Exports
+            </span>
+            {dateFilterMode !== 'all' && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">
+                <span>Scope:</span>
+                <span>
+                  {dateFilterMode === 'this_month'
+                    ? 'This Month'
+                    : dateFilterMode === 'last_30_days'
+                    ? 'Last 30 Days'
+                    : customStartDate || customEndDate
+                    ? `${customStartDate || 'Start'} to ${customEndDate || 'Now'}`
+                    : 'Custom Range'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFilterMode('all');
+                    setCustomStartDate('');
+                    setCustomEndDate('');
+                  }}
+                  className="hover:text-rose-500 cursor-pointer ml-0.5 text-xs"
+                  title="Reset scope to All Time"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+          </div>
+
+          {/* Date Filter Dropdown Menu (Suitable & clean placement) */}
+          <div className="relative" ref={dateFilterDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsDateDropdownOpen(prev => !prev)}
+              className={`flex items-center gap-1.5 h-7 rounded-lg border px-2.5 text-xs font-medium cursor-pointer transition-colors ${
+                isDateDropdownOpen || dateFilterMode !== 'all'
+                  ? 'border-indigo-300 bg-indigo-50/80 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+              }`}
+              title="Filter export data by date range"
+            >
+              <Calendar className="h-3 w-3 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">Date Filter:</span>
+              <span className="text-[11px] font-semibold">
+                {dateFilterMode === 'all'
+                  ? 'All Time'
+                  : dateFilterMode === 'this_month'
+                  ? 'This Month'
+                  : dateFilterMode === 'last_30_days'
+                  ? 'Last 30 Days'
+                  : 'Custom Range'}
+              </span>
+              <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${isDateDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isDateDropdownOpen && (
+              <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-60 max-w-[calc(100vw-2.5rem)] z-30 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900 animate-in fade-in duration-100">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Export Date Scope
+                </div>
+                <div className="space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => { setDateFilterMode('all'); setIsDateDropdownOpen(false); }}
+                    className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                      dateFilterMode === 'all'
+                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>All Time (Full Workspace)</span>
+                    {dateFilterMode === 'all' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDateFilterMode('this_month'); setIsDateDropdownOpen(false); }}
+                    className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                      dateFilterMode === 'this_month'
+                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>This Month</span>
+                    {dateFilterMode === 'this_month' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDateFilterMode('last_30_days'); setIsDateDropdownOpen(false); }}
+                    className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                      dateFilterMode === 'last_30_days'
+                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>Last 30 Days</span>
+                    {dateFilterMode === 'last_30_days' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDateFilterMode('custom'); }}
+                    className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                      dateFilterMode === 'custom'
+                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
+                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>Custom Range</span>
+                    {dateFilterMode === 'custom' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                  </button>
+                </div>
+
+                {/* Custom Range Inputs */}
+                {dateFilterMode === 'custom' && (
+                  <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                    <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 px-1">
+                      Custom Date Span:
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <span className="w-10 text-slate-400 shrink-0">From:</span>
+                        <input
+                          type="date"
+                          value={customStartDate}
+                          onChange={e => setCustomStartDate(e.target.value)}
+                          className="flex-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <span className="w-10 text-slate-400 shrink-0">To:</span>
+                        <input
+                          type="date"
+                          value={customEndDate}
+                          onChange={e => setCustomEndDate(e.target.value)}
+                          className="flex-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+                    {(customStartDate || customEndDate) && (
+                      <div className="flex justify-end pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => { setCustomStartDate(''); setCustomEndDate(''); }}
+                          className="text-[10px] font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 cursor-pointer"
+                        >
+                          Clear Dates
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

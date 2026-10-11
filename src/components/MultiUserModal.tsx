@@ -35,6 +35,7 @@ export const MultiUserModal: React.FC<MultiUserModalProps> = ({
   // New Profile Form
   const [newProfileName, setNewProfileName] = useState('');
   const [newProfileRole, setNewProfileRole] = useState('Family Member');
+  const [protectWithPassword, setProtectWithPassword] = useState(false);
   const [newProfilePassword, setNewProfilePassword] = useState('');
   const [newProfilePasswordConfirm, setNewProfilePasswordConfirm] = useState('');
   const [newProfileHint, setNewProfileHint] = useState('');
@@ -76,8 +77,13 @@ export const MultiUserModal: React.FC<MultiUserModalProps> = ({
       }
       await storage.setSingleton('appSettings', settings);
       storage.setActiveProfile(profileId);
+      try {
+        sessionStorage.setItem('om_session_unlocked', profileId);
+        localStorage.setItem('om_unlocked_profile', profileId);
+      } catch {}
       onSuccess(`Switched to workspace: ${switchedProfile?.name || 'Workspace'}`);
       onRefresh();
+      onClose();
     } catch (e: any) {
       onError(`Failed to switch profile: ${e.message}`);
     }
@@ -86,28 +92,6 @@ export const MultiUserModal: React.FC<MultiUserModalProps> = ({
   const handleCreateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProfileName.trim()) return;
-    const passVal = validatePasswordStrength(newProfilePassword);
-    if (!passVal.isValid) {
-      onError(passVal.errorMessage || 'Password must meet all complexity requirements.');
-      return;
-    }
-    if (newProfilePassword !== newProfilePasswordConfirm) {
-      onError('Password and Confirm Password do not match.');
-      return;
-    }
-    const qaVal = validateSecurityQuestionAndAnswer(newProfileRecoveryQuestion, newProfileRecoveryAnswer, newProfilePassword);
-    if (!qaVal.isValid) {
-      onError(qaVal.errorMessage || 'Please provide a valid recovery answer.');
-      return;
-    }
-    if (!newProfileHint.trim()) {
-      onError('Password hint is required.');
-      return;
-    }
-    if (newProfileHint.toLowerCase().includes(newProfilePassword.toLowerCase())) {
-      onError('Password hint cannot contain the password itself.');
-      return;
-    }
 
     try {
       const settings = (await storage.getSingleton<AppState>('appSettings')) || ({} as AppState);
@@ -128,11 +112,44 @@ export const MultiUserModal: React.FC<MultiUserModalProps> = ({
         isCurrent: false,
         createdAt: now
       };
-      await createLocalProfile(settings, newProf, newProfilePassword, newProfileHint, newProfileRecoveryQuestion, newProfileRecoveryAnswer);
+
+      if (protectWithPassword) {
+        const passVal = validatePasswordStrength(newProfilePassword);
+        if (!passVal.isValid) {
+          onError(passVal.errorMessage || 'Password must meet all complexity requirements.');
+          return;
+        }
+        if (newProfilePassword !== newProfilePasswordConfirm) {
+          onError('Password and Confirm Password do not match.');
+          return;
+        }
+        const qaVal = validateSecurityQuestionAndAnswer(newProfileRecoveryQuestion, newProfileRecoveryAnswer, newProfilePassword);
+        if (!qaVal.isValid) {
+          onError(qaVal.errorMessage || 'Please provide a valid recovery answer.');
+          return;
+        }
+        if (!newProfileHint.trim()) {
+          onError('Password hint is required.');
+          return;
+        }
+        if (newProfileHint.toLowerCase().includes(newProfilePassword.toLowerCase())) {
+          onError('Password hint cannot contain the password itself.');
+          return;
+        }
+
+        await createLocalProfile(settings, newProf, newProfilePassword, newProfileHint, newProfileRecoveryQuestion, newProfileRecoveryAnswer);
+      } else {
+        await createLocalProfile(settings, newProf);
+      }
 
       onSuccess(`User profile "${newProfileName}" created successfully`);
-      setNewProfileName(''); setNewProfilePassword(''); setNewProfilePasswordConfirm('');
-      setNewProfileHint(''); setNewProfileRecoveryQuestion(PROFESSIONAL_SECURITY_QUESTIONS[0]); setNewProfileRecoveryAnswer('');
+      setNewProfileName('');
+      setProtectWithPassword(false);
+      setNewProfilePassword('');
+      setNewProfilePasswordConfirm('');
+      setNewProfileHint('');
+      setNewProfileRecoveryQuestion(PROFESSIONAL_SECURITY_QUESTIONS[0]);
+      setNewProfileRecoveryAnswer('');
       onRefresh();
     } catch (e: any) {
       onError(`Failed to create profile: ${e.message}`);
@@ -390,54 +407,68 @@ export const MultiUserModal: React.FC<MultiUserModalProps> = ({
                     <option value="Guest / Student">Guest / Student</option>
                   </select>
 
-                  <div>
-                    <input
-                      type="password"
-                      required
-                      value={newProfilePassword}
-                      onChange={e => setNewProfilePassword(e.target.value)}
-                      placeholder="Password (Min 8 chars, Mixed Case, Num & Symbol)"
-                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                  </div>
-                  <input
-                    type="password"
-                    required
-                    value={newProfilePasswordConfirm}
-                    onChange={e => setNewProfilePasswordConfirm(e.target.value)}
-                    placeholder="Confirm Password"
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                  <input
-                    type="text"
-                    required
-                    value={newProfileHint}
-                    onChange={e => setNewProfileHint(e.target.value)}
-                    placeholder="Password Hint / Clue (cannot contain password)"
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
+                  <div className="rounded-xl border border-slate-200 bg-white/70 p-2.5 dark:border-slate-700 dark:bg-slate-800/60 space-y-2">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                        Protect with Password (Optional)
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={protectWithPassword}
+                        onChange={e => setProtectWithPassword(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-0 cursor-pointer"
+                      />
+                    </label>
 
-                  <div className="space-y-1">
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Security Recovery Question</label>
-                    <select
-                      value={newProfileRecoveryQuestion}
-                      onChange={e => setNewProfileRecoveryQuestion(e.target.value)}
-                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
-                    >
-                      {PROFESSIONAL_SECURITY_QUESTIONS.map(q => (
-                        <option key={q} value={q}>{q}</option>
-                      ))}
-                    </select>
+                    {protectWithPassword && (
+                      <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <input
+                          type="password"
+                          required={protectWithPassword}
+                          value={newProfilePassword}
+                          onChange={e => setNewProfilePassword(e.target.value)}
+                          placeholder="Password (Min 8 chars, 1 num & symbol)"
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        />
+                        <input
+                          type="password"
+                          required={protectWithPassword}
+                          value={newProfilePasswordConfirm}
+                          onChange={e => setNewProfilePasswordConfirm(e.target.value)}
+                          placeholder="Confirm Password"
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        />
+                        <input
+                          type="text"
+                          required={protectWithPassword}
+                          value={newProfileHint}
+                          onChange={e => setNewProfileHint(e.target.value)}
+                          placeholder="Password Hint / Clue"
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        />
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Security Recovery Question</label>
+                          <select
+                            value={newProfileRecoveryQuestion}
+                            onChange={e => setNewProfileRecoveryQuestion(e.target.value)}
+                            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+                          >
+                            {PROFESSIONAL_SECURITY_QUESTIONS.map(q => (
+                              <option key={q} value={q}>{q}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <input
+                          type="text"
+                          required={protectWithPassword}
+                          value={newProfileRecoveryAnswer}
+                          onChange={e => setNewProfileRecoveryAnswer(e.target.value)}
+                          placeholder="Confidential Recovery Answer"
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        />
+                      </div>
+                    )}
                   </div>
-
-                  <input
-                    type="text"
-                    required
-                    value={newProfileRecoveryAnswer}
-                    onChange={e => setNewProfileRecoveryAnswer(e.target.value)}
-                    placeholder="Confidential Recovery Answer (min 3 chars)"
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
 
                   <button
                     type="submit"

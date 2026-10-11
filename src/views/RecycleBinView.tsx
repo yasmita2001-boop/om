@@ -3,7 +3,7 @@ import {
   Trash2, RotateCcw, Search, ShieldCheck, AlertTriangle,
   ArchiveRestore, CheckCircle2, Filter, Layers, Eye, ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react';
-import { storage } from '../lib/storage';
+import { storage, cleanOrphanedCacheAndTrash } from '../lib/storage';
 import { RecycleBinItem } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
 
@@ -178,8 +178,12 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
     try {
       const activeProf = profileId || storage.getActiveProfileId();
       const count = await storage.emptyRecycleBin(activeProf);
+      // Also clean up any lingering media cache or orphaned blobs
+      try {
+        await cleanOrphanedCacheAndTrash({ emptyRecycleBinFirst: false, profileId: activeProf });
+      } catch {}
       setSelectedIds(new Set());
-      onSuccess(`✓ Recycle Bin emptied (${count} item(s) permanently destroyed).`);
+      onSuccess(`✓ Recycle Bin emptied (${count} item(s) permanently destroyed and cache freed).`);
       await loadRecycleBin();
       onRefresh();
     } catch (err: any) {

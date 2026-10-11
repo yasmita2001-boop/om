@@ -449,7 +449,8 @@ class StorageEngine {
       try {
         const tx = db.transaction(storeNames, 'readwrite');
         for (const { storeName, item } of items) {
-          tx.objectStore(storeName).put(item);
+          const prepared = this.withActiveProfile(storeName, item);
+          tx.objectStore(storeName).put(prepared);
         }
         tx.oncomplete = () => {
           for (const s of storeNames) {
@@ -491,17 +492,110 @@ class StorageEngine {
 
   public async deleteFinanceTransactionWithLink(id: string): Promise<void> {
     const tx = await this.get<any>('finance', id);
-    if (tx && tx.accountId && tx.amount) {
-      const acct = await this.get<any>('financeAccounts', tx.accountId);
-      if (acct) {
-        const amt = Number(tx.amount) || 0;
-        let newBal = Number(acct.balance || 0);
-        if (tx.type === 'expense' || tx.type === 'investment') {
-          newBal += amt;
-        } else if (tx.type === 'income' || tx.type === 'loan') {
-          newBal -= amt;
+    if (tx) {
+      const amt = Number(tx.amount) || 0;
+
+      // 1. Account Transfer deletion: Reverse both accounts
+      if (tx.type === 'transfer') {
+        if (tx.fromAccountId) {
+          const fromAcct = await this.get<any>('financeAccounts', tx.fromAccountId);
+          if (fromAcct) {
+            await this.put('financeAccounts', {
+              ...fromAcct,
+              balance: (Number(fromAcct.balance) || 0) + amt
+            });
+          }
         }
-        await this.put('financeAccounts', { ...acct, balance: newBal });
+        if (tx.toAccountId) {
+          const toAcct = await this.get<any>('financeAccounts', tx.toAccountId);
+          if (toAcct) {
+            await this.put('financeAccounts', {
+              ...toAcct,
+              balance: (Number(toAcct.balance) || 0) - amt
+            });
+          }
+        }
+      }
+      // 2. Loan Repayment deletion: Refund account, restore loan outstanding principal, clean payment
+      else if (tx.type === 'repayment') {
+        if (tx.accountId && amt > 0) {
+          const acct = await this.get<any>('financeAccounts', tx.accountId);
+          if (acct) {
+            await this.put('financeAccounts', {
+              ...acct,
+              balance: (Number(acct.balance) || 0) + amt
+            });
+          }
+        }
+
+        // Restore loan outstanding
+        if (tx.linkedLoanId) {
+          const loan = await this.get<any>('loans', tx.linkedLoanId);
+          if (loan) {
+            const principal = Number(tx.principal) || amt;
+            await this.put('loans', {
+              ...loan,
+              outstanding: (Number(loan.outstanding) || 0) + principal
+            });
+          }
+        }
+
+        // Clean up linked loan payment record
+        if (tx.linkedLoanPaymentId) {
+          try {
+            await this.delete('loanPayments', tx.linkedLoanPaymentId);
+          } catch {}
+        }
+      }
+      // 3. Regular Expense, Investment, Savings, Income, or Loan Receipt
+      else {
+        if (tx.accountId && amt > 0) {
+          const acct = await this.get<any>('financeAccounts', tx.accountId);
+          if (acct) {
+            let newBal = Number(acct.balance || 0);
+            if (tx.type === 'expense' || tx.type === 'investment' || tx.type === 'savings') {
+              newBal += amt;
+            } else if (tx.type === 'income' || tx.type === 'loan') {
+              newBal -= amt;
+            }
+            await this.put('financeAccounts', { ...acct, balance: newBal });
+          }
+        }
+
+        // Clean up linked investment asset if this was an investment transaction
+        if (tx.linkedInvestmentId) {
+          try {
+            await this.delete('investments', tx.linkedInvestmentId);
+          } catch {}
+        }
+
+        // Adjust linked savings plan current amount if this was a savings contribution
+        if (tx.linkedSavingsPlanId) {
+          try {
+            const sp = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
+            if (sp) {
+              await this.put('savingsPlans', {
+                ...sp,
+                currentAmount: Math.max(0, (Number(sp.currentAmount) || 0) - amt),
+                updatedAt: Date.now()
+              });
+            }
+          } catch {}
+        }
+      }
+
+      // 4. Unlink receipt if linked
+      if (tx.linkedReceiptId) {
+        try {
+          const receipt = await this.get<any>('receipts', tx.linkedReceiptId);
+          if (receipt) {
+            await this.put('receipts', {
+              ...receipt,
+              linkedTransactionId: null,
+              linkedExpenseId: null
+            });
+          }
+        } catch {}
       }
     }
     await this.delete('finance', id);
@@ -515,6 +609,54 @@ class StorageEngine {
       } catch {}
     }
     await this.delete('receipts', id);
+  }
+
+  private async reapplyFinanceTransactionEffect(tx: any): Promise<void> {
+    if (!tx) return;
+    const amt = Number(tx.amount) || 0;
+    if (amt <= 0) return;
+
+    if (tx.type === 'transfer') {
+      if (tx.fromAccountId) {
+        const fromAcct = await this.get<any>('financeAccounts', tx.fromAccountId);
+        if (fromAcct) {
+          await this.put('financeAccounts', { ...fromAcct, balance: (Number(fromAcct.balance) || 0) - amt });
+        }
+      }
+      if (tx.toAccountId) {
+        const toAcct = await this.get<any>('financeAccounts', tx.toAccountId);
+        if (toAcct) {
+          await this.put('financeAccounts', { ...toAcct, balance: (Number(toAcct.balance) || 0) + amt });
+        }
+      }
+    } else if (tx.type === 'repayment') {
+      if (tx.accountId) {
+        const acct = await this.get<any>('financeAccounts', tx.accountId);
+        if (acct) {
+          await this.put('financeAccounts', { ...acct, balance: (Number(acct.balance) || 0) - amt });
+        }
+      }
+      if (tx.linkedLoanId) {
+        const loan = await this.get<any>('loans', tx.linkedLoanId);
+        if (loan) {
+          const principal = Number(tx.principal) || amt;
+          await this.put('loans', { ...loan, outstanding: Math.max(0, (Number(loan.outstanding) || 0) - principal) });
+        }
+      }
+    } else {
+      if (tx.accountId) {
+        const acct = await this.get<any>('financeAccounts', tx.accountId);
+        if (acct) {
+          let newBal = Number(acct.balance || 0);
+          if (tx.type === 'expense' || tx.type === 'investment' || tx.type === 'savings') {
+            newBal -= amt;
+          } else if (tx.type === 'income' || tx.type === 'loan') {
+            newBal += amt;
+          }
+          await this.put('financeAccounts', { ...acct, balance: newBal });
+        }
+      }
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -604,6 +746,9 @@ class StorageEngine {
         tx.oncomplete = () => {
           this.broadcastChange(storeName, 'restore', recordId);
           this.broadcastChange('recycleBin', 'delete', binKey);
+          if (storeName === 'finance') {
+            this.reapplyFinanceTransactionEffect(restoredData).catch(console.error);
+          }
           resolve(true);
         };
         tx.onerror = () => resolve(false);
@@ -783,24 +928,72 @@ class StorageEngine {
     recordCount: number;
     storesRestored: number;
     blockedCount: number;
+    restoredProfileId: string;
+    restoredProfileName: string;
   }> {
     const validation = await universalDataManager.validateImport(jsonString, this.activeProfileId);
     if (!validation.valid) {
       throw new Error(validation.error || 'Invalid JSON format in backup file.');
     }
 
+    const targetProfileId = validation.workspaceId || this.activeProfileId || 'om-master-profile';
+    const targetProfileName = validation.workspaceName || 'Primary Workspace';
+
+    // Ensure this profile exists and is active in appSettings
+    let settings = await this.getSingleton<AppState>('appSettings');
+    if (!settings) {
+      settings = await ensureDefaultProfiles();
+    }
+    const existingIndex = (settings.profiles || []).findIndex(p => p.id === targetProfileId);
+    if (existingIndex >= 0) {
+      settings.profiles = settings.profiles.map(p => ({
+        ...p,
+        isCurrent: p.id === targetProfileId,
+        name: p.id === targetProfileId && targetProfileName ? targetProfileName : p.name
+      }));
+    } else {
+      const now = Date.now();
+      const newProf: UserProfile = {
+        id: targetProfileId,
+        name: targetProfileName,
+        email: `${targetProfileName.toLowerCase().replace(/[^a-z0-9]/g, '')}@omlifeos.local`,
+        role: 'Personal',
+        authType: 'local',
+        avatarChar: targetProfileName.trim().charAt(0).toUpperCase() || 'W',
+        avatarColor: '#6366f1',
+        isCurrent: true,
+        createdAt: now
+      };
+      settings.profiles = [...(settings.profiles || []).map(p => ({ ...p, isCurrent: false })), newProf];
+    }
+    settings.profileId = targetProfileId;
+    settings.currentUser = {
+      name: targetProfileName,
+      email: `${targetProfileName.toLowerCase().replace(/[^a-z0-9]/g, '')}@omlifeos.local`,
+      provider: 'local'
+    };
+    await this.setSingleton('appSettings', settings);
+    this.setActiveProfile(targetProfileId);
+
     const res = await universalDataManager.restoreValidatedData(validation, {
       mode: 'replace_workspace',
-      targetProfileId: this.activeProfileId,
-      targetProfileName: 'Workspace'
+      targetProfileId,
+      targetProfileName
     });
+
+    try {
+      sessionStorage.setItem('om_session_unlocked', targetProfileId);
+      localStorage.setItem('om_unlocked_profile', targetProfileId);
+    } catch {}
 
     this.broadcastChange('all', 'importFullBackup');
     return {
       success: res.success,
       recordCount: res.restoredRecordCount,
       storesRestored: res.storesRestored,
-      blockedCount: res.blockedGhostCount
+      blockedCount: res.blockedGhostCount,
+      restoredProfileId: targetProfileId,
+      restoredProfileName: targetProfileName
     };
   }
 
@@ -1041,40 +1234,53 @@ export async function setProfileCredentials(
 export async function createLocalProfile(
   settings: AppState,
   profile: UserProfile,
-  password: string,
-  passwordHint: string,
-  recoveryQuestion: string,
-  recoveryAnswer: string
+  password?: string,
+  passwordHint?: string,
+  recoveryQuestion?: string,
+  recoveryAnswer?: string
 ): Promise<void> {
-  const passVal = validatePasswordStrength(password);
-  if (!passVal.isValid) throw new Error(passVal.errorMessage);
-  const qaVal = validateSecurityQuestionAndAnswer(recoveryQuestion, recoveryAnswer, password);
-  if (!qaVal.isValid) throw new Error(qaVal.errorMessage);
-  if (!passwordHint.trim()) throw new Error('Password hint is required.');
-  if (passwordHint.toLowerCase().includes(password.toLowerCase())) {
-    throw new Error('Password hint cannot contain the password itself.');
+  const hasPassword = Boolean(password && password.trim());
+  let credentialRecord: ProfileCredentialRecord | null = null;
+
+  if (hasPassword) {
+    const cleanPass = password!.trim();
+    const passVal = validatePasswordStrength(cleanPass);
+    if (!passVal.isValid) throw new Error(passVal.errorMessage);
+    const cleanHint = (passwordHint || '').trim();
+    const cleanQ = (recoveryQuestion || PROFESSIONAL_SECURITY_QUESTIONS[0]).trim();
+    const cleanA = (recoveryAnswer || '').trim();
+
+    if (!cleanHint) throw new Error('Password hint is required when setting a password.');
+    if (cleanHint.toLowerCase().includes(cleanPass.toLowerCase())) {
+      throw new Error('Password hint cannot contain the password itself.');
+    }
+    const qaVal = validateSecurityQuestionAndAnswer(cleanQ, cleanA, cleanPass);
+    if (!qaVal.isValid) throw new Error(qaVal.errorMessage);
+
+    const passwordSalt = createSalt();
+    const recoverySalt = createSalt();
+    credentialRecord = {
+      passwordHash: await deriveCredentialHash(cleanPass, passwordSalt),
+      passwordSalt: bytesToBase64(passwordSalt),
+      passwordHint: cleanHint,
+      recoveryQuestion: cleanQ,
+      recoveryAnswerHash: await deriveCredentialHash(cleanA.toLowerCase(), recoverySalt),
+      recoveryAnswerSalt: bytesToBase64(recoverySalt)
+    };
   }
 
-  const passwordSalt = createSalt();
-  const recoverySalt = createSalt();
-  const credentialRecord: ProfileCredentialRecord = {
-    passwordHash: await deriveCredentialHash(password, passwordSalt),
-    passwordSalt: bytesToBase64(passwordSalt),
-    passwordHint: passwordHint.trim(),
-    recoveryQuestion: recoveryQuestion.trim(),
-    recoveryAnswerHash: await deriveCredentialHash(recoveryAnswer.trim().toLowerCase(), recoverySalt),
-    recoveryAnswerSalt: bytesToBase64(recoverySalt)
-  };
   const credentialedProfile: UserProfile = {
     ...profile,
     authType: 'local',
     isCurrent: true,
-    passwordHash: credentialRecord.passwordHash,
-    passwordSalt: credentialRecord.passwordSalt,
-    passwordHint: credentialRecord.passwordHint,
-    recoveryQuestion: credentialRecord.recoveryQuestion,
-    recoveryAnswerHash: credentialRecord.recoveryAnswerHash,
-    recoveryAnswerSalt: credentialRecord.recoveryAnswerSalt
+    ...(credentialRecord ? {
+      passwordHash: credentialRecord.passwordHash,
+      passwordSalt: credentialRecord.passwordSalt,
+      passwordHint: credentialRecord.passwordHint,
+      recoveryQuestion: credentialRecord.recoveryQuestion,
+      recoveryAnswerHash: credentialRecord.recoveryAnswerHash,
+      recoveryAnswerSalt: credentialRecord.recoveryAnswerSalt
+    } : {})
   };
   const nextSettings: AppState = {
     ...settings,
@@ -1082,12 +1288,46 @@ export async function createLocalProfile(
     profiles: [...(settings.profiles || []).map(p => ({ ...p, isCurrent: false })), credentialedProfile],
     currentUser: { name: credentialedProfile.name, email: credentialedProfile.email, provider: 'local' }
   };
+  const atomicItems: { storeName: string; item: any }[] = [
+    { storeName: 'appSettings', item: { id: 'root', value: nextSettings } }
+  ];
+  if (credentialRecord) {
+    const security = await storage.getProfileSecurityRecord();
+    security.profiles[profile.id] = credentialRecord;
+    atomicItems.push({ storeName: 'profileSecurity', item: { id: 'root', value: security } });
+  }
+  await storage.atomicPutMany(atomicItems);
+}
+
+export async function removeProfilePassword(profileId: string): Promise<AppState> {
+  const settings = await storage.getSingleton<AppState>('appSettings');
+  if (!settings) throw new Error('App settings not found.');
+  const profile = settings.profiles?.find(p => p.id === profileId);
+  if (!profile) throw new Error('Profile not found.');
+
+  const updatedProfile: UserProfile = { ...profile };
+  delete updatedProfile.passwordHash;
+  delete updatedProfile.passwordSalt;
+  delete updatedProfile.passwordHint;
+  delete updatedProfile.recoveryQuestion;
+  delete updatedProfile.recoveryAnswerHash;
+  delete updatedProfile.recoveryAnswerSalt;
+
+  const nextSettings: AppState = {
+    ...settings,
+    profiles: (settings.profiles || []).map(p => p.id === profileId ? updatedProfile : p)
+  };
+
   const security = await storage.getProfileSecurityRecord();
-  security.profiles[profile.id] = credentialRecord;
+  if (security.profiles[profileId]) {
+    delete security.profiles[profileId];
+  }
+
   await storage.atomicPutMany([
     { storeName: 'appSettings', item: { id: 'root', value: nextSettings } },
     { storeName: 'profileSecurity', item: { id: 'root', value: security } }
   ]);
+  return nextSettings;
 }
 
 export async function resetProfilePassword(profileId: string, password: string, passwordHint: string): Promise<void> {
@@ -1352,30 +1592,119 @@ export async function restoreDefaultWorkspaceData(
   return { success: true, restoredCount: 0 };
 }
 
+/**
+ * Clears orphaned attachments, temporary files, browser cache storage, and Service Worker caches
+ * WITHOUT touching active workspace records or un-purged Recycle Bin items.
+ * If emptyRecycleBinFirst is true, it permanently empties the Recycle Bin first, then purges all
+ * associated media and browser cache.
+ */
+export async function cleanOrphanedCacheAndTrash(options?: {
+  emptyRecycleBinFirst?: boolean;
+  profileId?: string;
+}): Promise<{
+  purgedRecycleCount: number;
+  purgedOrphanedAttachments: number;
+  clearedCacheKeys: number;
+}> {
+  let purgedRecycleCount = 0;
+  let purgedOrphanedAttachments = 0;
+  let clearedCacheKeys = 0;
+
+  try {
+    const db = await storage.open();
+
+    // 1. If requested, permanently empty Recycle Bin
+    if (options?.emptyRecycleBinFirst) {
+      const emptyRes = await permanentlyEmptyRecycleBin(db, ENTITY_STORES, options?.profileId);
+      purgedRecycleCount = emptyRes.totalPurged;
+    }
+
+    // 2. Scan attachments store for orphaned records (where parent record was permanently deleted)
+    if (db.objectStoreNames.contains('attachments')) {
+      try {
+        const allAttachments = await storage.getAllRaw<any>('attachments');
+        if (allAttachments.length > 0) {
+          // Gather all active record IDs across all entity stores
+          const activeEntityIds = new Set<string>();
+          for (const sName of ['notes', 'journal', 'things', 'receipts', 'documents', 'tasks', 'finance']) {
+            if (db.objectStoreNames.contains(sName)) {
+              try {
+                const records = await storage.getAllRaw<any>(sName);
+                records.forEach(r => {
+                  if (r && r.id && !r.inRecycleBin && !r.isDeleted) {
+                    activeEntityIds.add(r.id);
+                  }
+                });
+              } catch {}
+            }
+          }
+
+          // Orphaned attachments have no living parent entity
+          const orphanedIds = allAttachments
+            .filter(att => att && att.id && att.parentId && !activeEntityIds.has(att.parentId))
+            .map(att => att.id);
+
+          if (orphanedIds.length > 0) {
+            await new Promise<void>((resolve) => {
+              const tx = db.transaction('attachments', 'readwrite');
+              const os = tx.objectStore('attachments');
+              for (const id of orphanedIds) {
+                os.delete(id);
+              }
+              tx.oncomplete = () => {
+                purgedOrphanedAttachments = orphanedIds.length;
+                resolve();
+              };
+              tx.onerror = () => resolve();
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[cleanOrphanedCacheAndTrash] Error checking attachments:', err);
+      }
+    }
+
+    // 3. Purge browser Cache Storage
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      try {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          await caches.delete(k).catch(() => {});
+          clearedCacheKeys++;
+        }
+      } catch {}
+    }
+
+    // 4. Send message to Service Worker to wipe internal caches
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      try {
+        navigator.serviceWorker.controller.postMessage({ action: 'CLEAR_ALL_CACHES' });
+      } catch {}
+    }
+
+    storage.broadcastChange('all', 'cleanCacheAndTrash');
+  } catch (err) {
+    console.warn('[cleanOrphanedCacheAndTrash] Error during cleanup:', err);
+  }
+
+  return {
+    purgedRecycleCount,
+    purgedOrphanedAttachments,
+    clearedCacheKeys
+  };
+}
+
 export async function performHardAppReset(): Promise<void> {
   try {
     storage.close();
   } catch {}
 
-  try {
-    if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
-      await new Promise<void>((resolve) => {
-        const req = indexedDB.deleteDatabase(DB_NAME);
-        req.onsuccess = () => resolve();
-        req.onerror = () => resolve();
-        req.onblocked = () => resolve();
-        setTimeout(resolve, 1500);
-      });
-    }
-  } catch {}
-
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.clear();
-    if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
-  } catch {}
-
+  // 1. Notify Service Worker to clear all caches first
   try {
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ action: 'CLEAR_ALL_CACHES' });
+      }
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (const reg of registrations) {
         await reg.unregister().catch(() => {});
@@ -1383,6 +1712,7 @@ export async function performHardAppReset(): Promise<void> {
     }
   } catch {}
 
+  // 2. Clear all Cache Storage instances
   try {
     if (typeof window !== 'undefined' && 'caches' in window) {
       const keys = await caches.keys();
@@ -1390,6 +1720,59 @@ export async function performHardAppReset(): Promise<void> {
         await caches.delete(k).catch(() => {});
       }
     }
+  } catch {}
+
+  // 3. Clear IndexedDB directly by clearing object stores before database deletion
+  try {
+    const dbReq = indexedDB.open(DB_NAME);
+    await new Promise<void>((resolve) => {
+      dbReq.onsuccess = () => {
+        const db = dbReq.result;
+        try {
+          const storeNames = Array.from(db.objectStoreNames);
+          if (storeNames.length > 0) {
+            const tx = db.transaction(storeNames, 'readwrite');
+            storeNames.forEach(name => {
+              try { tx.objectStore(name).clear(); } catch {}
+            });
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = () => {
+              db.close();
+              resolve();
+            };
+          } else {
+            db.close();
+            resolve();
+          }
+        } catch {
+          db.close();
+          resolve();
+        }
+      };
+      dbReq.onerror = () => resolve();
+    });
+  } catch {}
+
+  // 4. Delete the database
+  try {
+    if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
+      await new Promise<void>((resolve) => {
+        const req = indexedDB.deleteDatabase(DB_NAME);
+        req.onsuccess = () => resolve();
+        req.onerror = () => resolve();
+        req.onblocked = () => resolve();
+        setTimeout(resolve, 800);
+      });
+    }
+  } catch {}
+
+  // 5. Clear localStorage & sessionStorage
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.clear();
+    if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
   } catch {}
 
   if (typeof window !== 'undefined') {

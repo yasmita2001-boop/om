@@ -70,17 +70,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   let income = 0;
   let expense = 0;
   let investment = 0;
+  let savingsFlow = 0;
   let loanRepay = 0;
+  let loanReceived = 0;
   finance.forEach(f => {
     const amt = Number(f.amount) || 0;
     if (f.type === 'income') income += amt;
     else if (f.type === 'expense') expense += amt;
     else if (f.type === 'investment') investment += amt;
+    else if (f.type === 'savings') savingsFlow += amt;
     else if (f.type === 'repayment') loanRepay += amt;
+    else if (f.type === 'loan') loanReceived += amt;
   });
 
   const operatingCashFlow = income - expense;
-  const netCashFlow = operatingCashFlow - investment - loanRepay;
+  const netCashFlow = operatingCashFlow - investment - savingsFlow - loanRepay + loanReceived;
   const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   const todayHabitLogs = habitLogs.filter(l => l.date === today);
   const activeReminders = [...reminders]

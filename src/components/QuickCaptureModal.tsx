@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, CheckSquare, FileText, BookOpen, DollarSign, Target, Bell, User, Volume2, Clock } from 'lucide-react';
 import { storage, generateUUID } from '../lib/storage';
-import { Task, Note, JournalEntry, FinanceTransaction, Goal, ReminderItem, Person } from '../types';
+import { Task, Note, JournalEntry, FinanceTransaction, FinanceAccount, Goal, ReminderItem, Person } from '../types';
 import { AttachmentUploader, StoredAttachmentMeta } from './AttachmentUploader';
 import { alarmAudio, BUILTIN_RINGTONES } from '../lib/alarmAudio';
 
@@ -34,11 +34,19 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
   const [alarmEnabled, setAlarmEnabled] = useState(true);
   const [reminderRingtone, setReminderRingtone] = useState(alarmAudio.getDefaultRingtoneId());
   const [attachments, setAttachments] = useState<StoredAttachmentMeta[]>([]);
+  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
   React.useEffect(() => {
     if (isOpen) {
       setActiveType(initialType);
       setAttachments([]);
+      storage.getAll<FinanceAccount>('financeAccounts').then(accts => {
+        setFinanceAccounts(accts || []);
+        if (accts && accts.length > 0) {
+          setSelectedAccountId(accts[0].id);
+        }
+      });
     }
   }, [isOpen, initialType]);
 
@@ -98,6 +106,30 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
       } else if (activeType === 'expense') {
         const amt = Number(amount);
         if (!amt || amt <= 0) return;
+
+        let targetAcct = financeAccounts.find(a => a.id === selectedAccountId) || financeAccounts[0];
+        const ops: Array<{ storeName: string; item: any }> = [];
+
+        if (!targetAcct && financeAccounts.length === 0) {
+          const initialAcct: FinanceAccount = {
+            id: generateUUID(),
+            name: 'Main Bank Account',
+            type: 'bank',
+            balance: 0,
+            openingBalance: 0,
+            createdAt: now
+          };
+          targetAcct = initialAcct;
+        }
+
+        if (targetAcct) {
+          const newBal = (Number(targetAcct.balance) || 0) - amt;
+          ops.push({
+            storeName: 'financeAccounts',
+            item: { ...targetAcct, balance: newBal }
+          });
+        }
+
         const newTx: FinanceTransaction = {
           id: generateUUID(),
           type: 'expense',
@@ -105,10 +137,16 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           category: category.trim() || 'Daily Expense',
           date,
           note: title.trim() || undefined,
+          accountId: targetAcct?.id || null,
           createdAt: now
         };
-        await storage.put('finance', newTx);
-        onSuccess('💰 Expense logged');
+        ops.push({
+          storeName: 'finance',
+          item: newTx
+        });
+
+        await storage.atomicPutMany(ops);
+        onSuccess(`💰 Expense of ₹${amt.toLocaleString('en-IN')} logged & deducted from ${targetAcct?.name || 'account'}`);
       } else if (activeType === 'goal') {
         const newGoal: Goal = {
           id: generateUUID(),
@@ -231,33 +269,54 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           </div>
 
           {activeType === 'expense' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Amount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Category
+                  </label>
+                  <input
+                    type="text"
+                    value={category}
+                    onChange={e => setCategory(e.target.value)}
+                    placeholder="Food, Tech, Travel..."
+                    className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Category
-                </label>
-                <input
-                  type="text"
-                  value={category}
-                  onChange={e => setCategory(e.target.value)}
-                  placeholder="Food, Tech, Travel..."
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
+
+              {financeAccounts.length > 0 && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Deduct From Account / Wallet
+                  </label>
+                  <select
+                    value={selectedAccountId}
+                    onChange={e => setSelectedAccountId(e.target.value)}
+                    className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    {financeAccounts.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 

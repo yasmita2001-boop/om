@@ -7,12 +7,11 @@ import {
   storage,
   generateUUID, createLocalProfile, PROFESSIONAL_SECURITY_QUESTIONS,
   validatePasswordStrength, validateSecurityQuestionAndAnswer,
-  purgeAllDefaultDataPermanently, performHardAppReset
+  purgeAllDefaultDataPermanently, performHardAppReset, cleanOrphanedCacheAndTrash
 } from '../lib/storage';
 import { AppState, UserProfile } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { UniversalDataManagerCard } from '../components/UniversalDataManagerCard';
-import { GoogleDriveSyncCard } from '../components/GoogleDriveSyncCard';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { SlideTabs } from '../components/SlideTabs';
 import { RecycleBinView } from './RecycleBinView';
@@ -38,6 +37,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'system' | 'workspaces' | 'exports'>('system');
   const [newProfileName, setNewProfileName] = useState('');
+  const [protectWithPassword, setProtectWithPassword] = useState(false);
   const [newProfilePassword, setNewProfilePassword] = useState('');
   const [newProfilePasswordConfirm, setNewProfilePasswordConfirm] = useState('');
   const [newProfileHint, setNewProfileHint] = useState('');
@@ -81,29 +81,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       calcFavorites: []
     };
 
-    const passVal = validatePasswordStrength(newProfilePassword);
-    if (!passVal.isValid) {
-      onError(passVal.errorMessage || 'Password must meet all complexity requirements.');
-      return;
-    }
-    if (newProfilePassword !== newProfilePasswordConfirm) {
-      onError('Password and Confirm Password do not match.');
-      return;
-    }
-    const qaVal = validateSecurityQuestionAndAnswer(newProfileRecoveryQuestion, newProfileRecoveryAnswer, newProfilePassword);
-    if (!qaVal.isValid) {
-      onError(qaVal.errorMessage || 'Please provide a valid recovery answer.');
-      return;
-    }
-    if (!newProfileHint.trim()) {
-      onError('Password hint is required.');
-      return;
-    }
-    if (newProfileHint.toLowerCase().includes(newProfilePassword.toLowerCase())) {
-      onError('Password hint cannot contain the password itself.');
-      return;
-    }
-
     const id = generateUUID();
     const newProfile: UserProfile = {
       id,
@@ -114,9 +91,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     };
 
     try {
-      await createLocalProfile(appSettings, newProfile, newProfilePassword, newProfileHint, newProfileRecoveryQuestion, newProfileRecoveryAnswer);
-      onSuccess(`Workspace profile "${newProfileName}" created`);
+      if (protectWithPassword) {
+        const passVal = validatePasswordStrength(newProfilePassword);
+        if (!passVal.isValid) {
+          onError(passVal.errorMessage || 'Password must meet all complexity requirements.');
+          return;
+        }
+        if (newProfilePassword !== newProfilePasswordConfirm) {
+          onError('Password and Confirm Password do not match.');
+          return;
+        }
+        const qaVal = validateSecurityQuestionAndAnswer(newProfileRecoveryQuestion, newProfileRecoveryAnswer, newProfilePassword);
+        if (!qaVal.isValid) {
+          onError(qaVal.errorMessage || 'Please provide a valid recovery answer.');
+          return;
+        }
+        if (!newProfileHint.trim()) {
+          onError('Password hint is required.');
+          return;
+        }
+        if (newProfileHint.toLowerCase().includes(newProfilePassword.toLowerCase())) {
+          onError('Password hint cannot contain the password itself.');
+          return;
+        }
+
+        await createLocalProfile(appSettings, newProfile, newProfilePassword, newProfileHint, newProfileRecoveryQuestion, newProfileRecoveryAnswer);
+      } else {
+        await createLocalProfile(appSettings, newProfile);
+      }
+
+      onSuccess(`Workspace profile "${newProfileName}" created successfully`);
       setNewProfileName('');
+      setProtectWithPassword(false);
       setNewProfilePassword('');
       setNewProfilePasswordConfirm('');
       setNewProfileHint('');
@@ -199,6 +205,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsResetConfirmOpen(false);
     onSuccess('Wiping all IndexedDB databases, Cache Storage, and Service Workers...');
     await performHardAppReset();
+  };
+
+  const [isCleanCacheOpen, setIsCleanCacheOpen] = useState(false);
+  const [isCleaningCache, setIsCleaningCache] = useState(false);
+
+  const handleCleanCache = () => {
+    setIsCleanCacheOpen(true);
+  };
+
+  const handleConfirmCleanCache = async () => {
+    setIsCleanCacheOpen(false);
+    setIsCleaningCache(true);
+    try {
+      const res = await cleanOrphanedCacheAndTrash({
+        emptyRecycleBinFirst: false, // Keep un-purged recycle bin items intact for restore
+        profileId: settings?.profileId
+      });
+      const parts = [];
+      if (res.clearedCacheKeys > 0) parts.push(`${res.clearedCacheKeys} browser cache buckets`);
+      if (res.purgedOrphanedAttachments > 0) parts.push(`${res.purgedOrphanedAttachments} orphaned media files`);
+      const msg = parts.length > 0
+        ? `✓ Cleaned ${parts.join(' & ')}. Active data & Recycle Bin are intact!`
+        : '✓ Cache & temporary storage are completely clean. Active data is intact!';
+      onSuccess(msg);
+      const newStats = await storage.getStorageEstimate();
+      setStorageStats(newStats);
+      onRefresh();
+    } catch (e: any) {
+      onError('Cache cleaning failed: ' + e?.message);
+    } finally {
+      setIsCleaningCache(false);
+    }
   };
 
   const handlePurgeDefaultData = () => {
@@ -547,18 +585,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Tab: Workspaces */}
       {activeTab === 'workspaces' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 items-start min-w-0">
-          {/* Side 1: Sovereign Google Drive Cloud Sync (6 cols) */}
-          <div className="lg:col-span-6 space-y-5 min-w-0">
-            <GoogleDriveSyncCard
-              onSuccess={onSuccess}
-              onError={onError}
-              onRefresh={onRefresh}
-            />
-          </div>
-
-          {/* Side 2: Workspace Management (6 cols) */}
-          <div className="lg:col-span-6 space-y-5 min-w-0">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 min-w-0">
+          {/* Left Column: Active Workspaces */}
+          <div className="lg:col-span-6 space-y-6 min-w-0">
             {/* Active Workspace Selector */}
             <div className="rounded-3xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 min-w-0">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
@@ -634,8 +663,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 })}
               </div>
             </div>
+          </div>
 
-            {/* Create New Workspace Form */}
+          {/* Right Column: Create New Workspace Form */}
+          <div className="lg:col-span-6 space-y-6 min-w-0">
             <div className="rounded-3xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 min-w-0">
               <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3.5 dark:border-slate-800">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -654,88 +685,113 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <form onSubmit={handleCreateProfile} className="mt-4 space-y-3.5">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                    Workspace Name
+                    Workspace Name <span className="text-indigo-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
                     value={newProfileName}
                     onChange={e => setNewProfileName(e.target.value)}
-                    placeholder="e.g. Venture Operations, Family"
+                    placeholder="e.g. Venture Operations, Family, Personal"
                     className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                      Password
-                    </label>
+                {/* Optional Password Protection Checkbox */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-850/60 space-y-2.5">
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      Protect with Password (Optional)
+                    </span>
                     <input
-                      type="password"
-                      required
-                      value={newProfilePassword}
-                      onChange={e => setNewProfilePassword(e.target.value)}
-                      placeholder="Min 8 chars, 1 num & symbol"
-                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
+                      type="checkbox"
+                      checked={protectWithPassword}
+                      onChange={e => setProtectWithPassword(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 bg-white text-indigo-600 focus:ring-0 dark:border-slate-600 dark:bg-slate-700 cursor-pointer"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                      Confirm Password
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={newProfilePasswordConfirm}
-                      onChange={e => setNewProfilePasswordConfirm(e.target.value)}
-                      placeholder="Repeat password"
-                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                    Password Hint / Clue
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={newProfileHint}
-                    onChange={e => setNewProfileHint(e.target.value)}
-                    placeholder="Hint or reminder (cannot contain the password)"
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
-                  />
-                </div>
 
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                    Security Recovery Question
-                  </label>
-                  <select
-                    value={newProfileRecoveryQuestion}
-                    onChange={e => setNewProfileRecoveryQuestion(e.target.value)}
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer focus:outline-hidden"
-                  >
-                    {PROFESSIONAL_SECURITY_QUESTIONS.map(q => (
-                      <option key={q} value={q}>{q}</option>
-                    ))}
-                  </select>
-                </div>
+                  {!protectWithPassword && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Password is off. You can switch and access this workspace instantly with one click.
+                    </p>
+                  )}
 
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                    Confidential Recovery Answer
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newProfileRecoveryAnswer}
-                    onChange={e => setNewProfileRecoveryAnswer(e.target.value)}
-                    placeholder="Min 3 characters"
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
-                  />
+                  {protectWithPassword && (
+                    <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                            Password
+                          </label>
+                          <input
+                            type="password"
+                            required={protectWithPassword}
+                            value={newProfilePassword}
+                            onChange={e => setNewProfilePassword(e.target.value)}
+                            placeholder="Min 8 chars, 1 num & symbol"
+                            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                            Confirm Password
+                          </label>
+                          <input
+                            type="password"
+                            required={protectWithPassword}
+                            value={newProfilePasswordConfirm}
+                            onChange={e => setNewProfilePasswordConfirm(e.target.value)}
+                            placeholder="Repeat password"
+                            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                          Password Hint / Clue
+                        </label>
+                        <input
+                          type="text"
+                          required={protectWithPassword}
+                          value={newProfileHint}
+                          onChange={e => setNewProfileHint(e.target.value)}
+                          placeholder="Hint or reminder (cannot contain the password)"
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                          Security Recovery Question
+                        </label>
+                        <select
+                          value={newProfileRecoveryQuestion}
+                          onChange={e => setNewProfileRecoveryQuestion(e.target.value)}
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer focus:outline-hidden"
+                        >
+                          {PROFESSIONAL_SECURITY_QUESTIONS.map(q => (
+                            <option key={q} value={q}>{q}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                          Confidential Recovery Answer
+                        </label>
+                        <input
+                          type="text"
+                          required={protectWithPassword}
+                          value={newProfileRecoveryAnswer}
+                          onChange={e => setNewProfileRecoveryAnswer(e.target.value)}
+                          placeholder="Min 3 characters"
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -777,6 +833,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
+                disabled={isCleaningCache}
+                onClick={handleCleanCache}
+                className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-2xs hover:bg-amber-50 hover:text-amber-900 dark:border-amber-900/60 dark:bg-slate-800 dark:text-amber-300 dark:hover:bg-amber-950/40 cursor-pointer transition-all active:scale-98 disabled:opacity-50"
+                title="Safely remove browser cache and orphaned temporary files without deleting active data or recycle bin items"
+              >
+                <RefreshCw className={`h-3 w-3 text-amber-600 dark:text-amber-400 ${isCleaningCache ? 'animate-spin' : ''}`} />
+                <span>{isCleaningCache ? 'Cleaning…' : 'Clear Cache & Temp Files'}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handlePurgeDefaultData}
                 className="flex items-center gap-1.5 rounded-xl border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-2xs hover:bg-rose-50 hover:text-rose-900 dark:border-rose-900/60 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/40 cursor-pointer transition-all active:scale-98"
                 title="Permanently delete all default/seed records and sources"
@@ -797,6 +864,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* CLEAR CACHE CONFIRMATION MODAL */}
+      <ConfirmModal
+        isOpen={isCleanCacheOpen}
+        title="Clear Cache & Temporary Files?"
+        message="This will wipe browser Cache Storage, Service Worker offline caches, and orphaned media files. Your active workspace data and Recycle Bin items will remain 100% safe and intact."
+        confirmText="Yes, Clear Cache"
+        cancelText="Cancel"
+        isDanger={false}
+        onConfirm={handleConfirmCleanCache}
+        onCancel={() => setIsCleanCacheOpen(false)}
+      />
 
       {/* DANGER RESET CONFIRMATION MODAL */}
       <ConfirmModal

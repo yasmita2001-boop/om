@@ -293,3 +293,34 @@ button[role="switch"] {
   overflow-x: auto !important;
 }
 
+
+/*
+ * Mobile repaint fallback for Chromium browsers.
+ * Preserve the existing sticky header and fixed bottom navigation positions;
+ * only disable backdrop-filter compositing on those mobile layers.
+ */
+@media (max-width: 767px) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  header.sticky {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background-color: #ffffff !important;
+  }
+
+  html.dark header.sticky {
+    background-color: #0B0F19 !important;
+  }
+
+  nav.fixed.inset-x-0.bottom-0 {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background-color: #ffffff !important;
+  }
+
+  html.dark nav.fixed.inset-x-0.bottom-0 {
+    background-color: #0B0F19 !important;
+  }
+}

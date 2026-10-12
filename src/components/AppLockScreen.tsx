@@ -75,17 +75,19 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
   onUnlocked,
   onSettingsReloaded
 }) => {
-  const profiles = settings.profiles || [
-    {
-      id: settings.profileId || 'om-master-profile',
-      name: 'Primary Workspace',
-      createdAt: Date.now()
-    } as UserProfile
-  ];
-  const initialProfile = profiles.find(p => p.id === settings.profileId) || profiles[0];
+  const profiles = settings?.profiles && settings.profiles.length > 0 
+    ? settings.profiles 
+    : [{
+        id: settings?.profileId || 'om-master-profile',
+        name: 'Primary Workspace',
+        role: 'Personal',
+        createdAt: Date.now()
+      } as UserProfile];
+
+  const initialProfile = profiles.find(p => p?.id === settings?.profileId) || profiles[0];
 
   const [activeTab, setActiveTab] = useState<'workspaces' | 'create'>('workspaces');
-  const [selectedProfileId, setSelectedProfileId] = useState(initialProfile?.id || profiles[0]?.id || '');
+  const [selectedProfileId, setSelectedProfileId] = useState(initialProfile?.id || profiles[0]?.id || 'om-master-profile');
   const [password, setPassword] = useState('');
   const [hasPassword, setHasPassword] = useState(false);
   const [hint, setHint] = useState('');
@@ -97,7 +99,6 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   const [newHint, setNewHint] = useState('');
 
-  // Create Workspace form state (password is OPTIONAL!)
   const [createName, setCreateName] = useState('');
   const [protectWithPassword, setProtectWithPassword] = useState(false);
   const [createPassword, setCreatePassword] = useState('');
@@ -110,19 +111,21 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
   const [error, setError] = useState('');
   const [successNotice, setSuccessNotice] = useState('');
 
-  // Track password status for all profiles for quick visual indicators
   const [profileSecurityMap, setProfileSecurityMap] = useState<Record<string, boolean>>({});
 
   const loadAllProfileSecurity = async () => {
     const map: Record<string, boolean> = {};
     for (const p of profiles) {
-      const info = await getProfileSecurityInfo(p.id);
-      map[p.id] = Boolean(info?.credentialsReady);
+      if (p?.id) {
+        const info = await getProfileSecurityInfo(p.id);
+        map[p.id] = Boolean(info?.credentialsReady);
+      }
     }
     setProfileSecurityMap(map);
   };
 
   const loadSelectedProfileSecurity = async (id: string) => {
+    if (!id) return;
     const info = await getProfileSecurityInfo(id);
     setHasPassword(Boolean(info?.credentialsReady));
     setHint(info?.passwordHint || '');
@@ -152,12 +155,10 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
     try {
       const info = await getProfileSecurityInfo(targetId);
       if (!info?.credentialsReady) {
-        // No password needed: unlock and open instantly!
         unlockWorkspace(targetId);
         return;
       }
 
-      // Password required
       if (!password) {
         throw new Error('Please enter your workspace password, or click "Unlock without Password" below.');
       }
@@ -291,7 +292,6 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
       const res = await storage.importFullBackup(text);
       const targetId = res.restoredProfileId || 'om-master-profile';
 
-      // Auto-remove any stale locked password state on restored backup so it opens cleanly
       try {
         await removeProfilePassword(targetId);
       } catch {}
@@ -316,12 +316,16 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
     }
   };
 
-  const currentSelectedProfile = profiles.find(p => p.id === selectedProfileId) || profiles[0];
+  const currentSelectedProfile = profiles.find(p => p?.id === selectedProfileId) || profiles[0] || {
+    id: 'om-master-profile',
+    name: 'Primary Workspace',
+    role: 'Personal',
+    createdAt: Date.now()
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-3 sm:p-4 selection:bg-indigo-500 selection:text-white">
       <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900/95 p-4 sm:p-5 shadow-2xl backdrop-blur-xl space-y-3.5">
-        {/* Compact App Header */}
         <div className="flex items-center gap-2.5 pb-0.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-md shadow-indigo-600/30 shrink-0">
             OM
@@ -336,7 +340,6 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
           </div>
         </div>
 
-        {/* Compact Navigation Tabs */}
         <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-800 bg-slate-950/80 p-1">
           <button
             type="button"
@@ -374,13 +377,12 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
           </button>
         </div>
 
-        {/* Tab 1: Workspaces List & Unlock */}
         {activeTab === 'workspaces' && (
           <div className="space-y-3">
-            {/* If multiple workspaces exist, show compact selector */}
             {profiles.length > 1 && (
               <div className="space-y-1.5 max-h-32 overflow-y-auto pr-0.5">
                 {profiles.map(p => {
+                  if (!p) return null;
                   const isSelected = p.id === selectedProfileId;
                   const isLocked = Boolean(profileSecurityMap[p.id]);
                   const initial = (p.name || 'W').charAt(0).toUpperCase();
@@ -418,7 +420,6 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
               </div>
             )}
 
-            {/* Selected Workspace Card (Compact) */}
             {profiles.length === 1 && (
               <div className="flex items-center justify-between gap-2.5 rounded-xl border border-indigo-500/60 bg-indigo-950/30 p-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -438,7 +439,6 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
               </div>
             )}
 
-            {/* Unlock Actions */}
             {!hasPassword ? (
               <button
                 type="button"
@@ -572,7 +572,6 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
               </div>
             )}
 
-            {/* Compact Restore Backup Option */}
             <div className="pt-2 border-t border-slate-800/80">
               <label className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950/50 hover:bg-slate-800/60 hover:border-slate-700 py-1.5 px-3 text-[11px] font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer">
                 <FolderDown className="h-3 w-3 text-indigo-400 shrink-0" />
@@ -588,7 +587,6 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Create New Workspace */}
         {activeTab === 'create' && (
           <form onSubmit={handleCreateWorkspace} className="space-y-3">
             <div>
@@ -606,7 +604,6 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
               />
             </div>
 
-            {/* Optional Password Protection Toggle */}
             <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5 space-y-2">
               <label className="flex items-center justify-between cursor-pointer">
                 <div className="flex items-center gap-1.5">
@@ -680,7 +677,6 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
           </form>
         )}
 
-        {/* Status Notices */}
         {successNotice && (
           <div className="rounded-xl border border-emerald-800/70 bg-emerald-950/60 p-2 text-xs text-emerald-300 text-center animate-in fade-in">
             {successNotice}

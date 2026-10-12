@@ -306,7 +306,7 @@ export default function App() {
     }
   }, []);
 
-  // First turn initialization: run ONCE on mount
+  // First turn initialization: run ONCE on mount with robust security check
   useEffect(() => {
     let active = true;
     seedInitialDataIfEmpty().then(async () => {
@@ -320,31 +320,24 @@ export default function App() {
         if (targetId) {
           const savedUnlocked = localStorage.getItem('om_unlocked_profile') || sessionStorage.getItem('om_session_unlocked');
           const isKnownProfile = settingsData.profiles?.some(p => p.id === savedUnlocked);
-          const activeProfId = (isKnownProfile && savedUnlocked) ? savedUnlocked : targetId;
-
-          // If activeProfId differs from settingsData.profileId, keep appSettings in sync
-          if (settingsData.profileId !== activeProfId) {
-            settingsData.profileId = activeProfId;
-            settingsData.profiles = (settingsData.profiles || []).map(p => ({ ...p, isCurrent: p.id === activeProfId }));
-            await storage.setSingleton('appSettings', settingsData);
-            setAppSettings({ ...settingsData });
+          
+          if (isKnownProfile && savedUnlocked) {
+            const secInfo = await getProfileSecurityInfo(savedUnlocked);
+            if (!secInfo?.credentialsReady) {
+              setUnlockedProfileId(savedUnlocked);
+              storage.setActiveProfile(savedUnlocked);
+              await loadAllData(savedUnlocked);
+              return;
+            }
           }
 
-          const secInfo = await getProfileSecurityInfo(activeProfId);
-          if (secInfo?.credentialsReady) {
-            // Workspace is password protected: ALWAYS show Lock Screen on file open/startup!
-            storage.setActiveProfile(null);
-            setUnlockedProfileId(null);
-            try {
-              sessionStorage.removeItem('om_session_unlocked');
-              localStorage.removeItem('om_unlocked_profile');
-            } catch {}
-          } else {
-            // No password set on this workspace: open directly!
-            storage.setActiveProfile(activeProfId);
-            setUnlockedProfileId(activeProfId);
-            await loadAllData(activeProfId);
-          }
+          // Fallback if password or lock is required
+          storage.setActiveProfile(null);
+          setUnlockedProfileId(null);
+          try {
+            sessionStorage.removeItem('om_session_unlocked');
+            localStorage.removeItem('om_unlocked_profile');
+          } catch {}
         }
       }
     }).catch(err => console.error('Failed to initialize Om-LifeOS', err));
@@ -356,8 +349,9 @@ export default function App() {
 
     return () => {
       active = false;
+      unsub();
     };
-  }, []);
+  }, [loadAllData]);
 
   // Load all data whenever unlockedProfileId updates
   useEffect(() => {
@@ -477,6 +471,7 @@ export default function App() {
     } catch {}
     storage.setActiveProfile(null);
     setUnlockedProfileId(null);
+    setAppSettings(undefined); // White-screen aur stale state fix karne ke liye reset karein
     showToast('Workspace Locked 🔒');
   }, [showToast]);
 
@@ -541,6 +536,7 @@ export default function App() {
   const openTasksCount = tasks.filter(t => !t.done).length;
   const categoriesList = appSettings?.noteCategories || ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'];
 
+  // Safe checks to avoid white screen crashes
   if (!appSettings) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">Loading Om-LifeOS…</div>;
   }
@@ -595,7 +591,7 @@ export default function App() {
           onToast={showToast}
         />
 
-        {/* Main Content Viewport - Responsive across Mobile, Tablet, Laptop, and Desktop */}
+        {/* Main Content Viewport */}
         <main className="flex-1 min-w-0 overflow-y-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-24 md:pb-10 transition-colors w-full">
           <div className="w-full space-y-6">
             {activeModule === 'dashboard' && (
@@ -873,7 +869,7 @@ export default function App() {
         }}
       />
 
-      {/* Global High-Accuracy Voice-to-Text & Text Reading Studio (Hindi & English) */}
+      {/* Global High-Accuracy Voice-to-Text & Text Reading Studio */}
       <VoiceStudioWidget
         onSuccess={showToast}
         onRefreshNotes={loadAllData}

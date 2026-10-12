@@ -306,7 +306,7 @@ export default function App() {
     }
   }, []);
 
-  // First turn initialization: run ONCE on mount with robust security check
+  // First turn initialization: run ONCE on mount with robust security check[cite: 2]
   useEffect(() => {
     let active = true;
     seedInitialDataIfEmpty().then(async () => {
@@ -331,7 +331,7 @@ export default function App() {
             }
           }
 
-          // Fallback if password or lock is required
+          // Fallback if password or lock is required[cite: 2]
           storage.setActiveProfile(null);
           setUnlockedProfileId(null);
           try {
@@ -342,7 +342,7 @@ export default function App() {
       }
     }).catch(err => console.error('Failed to initialize Om-LifeOS', err));
 
-    // Subscribe to scheduled alarms & reminder triggers
+    // Subscribe to scheduled alarms & reminder triggers[cite: 2]
     const unsub = alarmService.onAlarmTrigger((alarmData) => {
       setActiveTriggeredAlarm(alarmData);
     });
@@ -353,14 +353,14 @@ export default function App() {
     };
   }, [loadAllData]);
 
-  // Load all data whenever unlockedProfileId updates
+  // Load all data whenever unlockedProfileId updates[cite: 2]
   useEffect(() => {
     if (unlockedProfileId) {
       loadAllData(unlockedProfileId);
     }
   }, [unlockedProfileId, loadAllData]);
 
-  // Sync theme with HTML root class and accent color
+  // Sync theme with HTML root class and accent color[cite: 2]
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -373,7 +373,7 @@ export default function App() {
     document.documentElement.style.setProperty('--color-brand', brandColor);
   }, [theme, appSettings?.accentColor]);
 
-  // Keyboard Shortcuts (⌘K for search)
+  // Keyboard Shortcuts (⌘K for search)[cite: 2]
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -385,7 +385,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Multi-tab cross-device broadcast listener & storage event listener
+  // Multi-tab cross-device broadcast listener & storage event listener[cite: 2]
   useEffect(() => {
     const channel = storage.getChannel();
     const unsub = storage.onStorageChange((store, action) => {
@@ -471,7 +471,7 @@ export default function App() {
     } catch {}
     storage.setActiveProfile(null);
     setUnlockedProfileId(null);
-    setAppSettings(undefined); // White-screen aur stale state fix karne ke liye reset karein
+    setAppSettings(undefined); // White-screen aur stale state fix karne ke liye reset karein[cite: 2]
     showToast('Workspace Locked 🔒');
   }, [showToast]);
 
@@ -536,7 +536,7 @@ export default function App() {
   const openTasksCount = tasks.filter(t => !t.done).length;
   const categoriesList = appSettings?.noteCategories || ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'];
 
-  // Safe checks to avoid white screen crashes
+  // Safe checks to avoid white screen crashes[cite: 2, 3]
   if (!appSettings) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">Loading Om-LifeOS…</div>;
   }

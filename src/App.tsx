@@ -502,7 +502,7 @@ export default function App() {
         />
 
         {/* Main Content Viewport - Responsive across Mobile, Tablet, Laptop, and Desktop */}
-        <main className="flex-1 min-w-0 overflow-y-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-24 md:pb-10 transition-colors w-full">
+       className="flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-24 md:pb-10 transition-colors w-full"
           <div className="w-full space-y-6">
             {activeModule === 'dashboard' && (
               <DashboardView

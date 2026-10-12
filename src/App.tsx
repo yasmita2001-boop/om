@@ -11,7 +11,7 @@ import {
   CalcHistoryItem, Skill, Course, WorkResponsibility
 } from './types';
 import {
-  storage, seedInitialDataIfEmpty, getProfileSecurityInfo
+  storage, seedInitialDataIfEmpty
 } from './lib/storage';
 
 // Components
@@ -21,11 +21,9 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { QuickCaptureModal } from './components/QuickCaptureModal';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { BsDateModal } from './components/BsDateModal';
-import { MultiUserModal } from './components/MultiUserModal';
 import { AlarmTriggerModal } from './components/AlarmTriggerModal';
 import { VoiceStudioWidget } from './components/VoiceStudioWidget';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { AppLockScreen } from './components/AppLockScreen';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
 import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress } from './lib/goalTaskSync';
 
@@ -57,16 +55,15 @@ export default function App() {
   const [quickCaptureType, setQuickCaptureType] = useState<string>('task');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBsModalOpen, setIsBsModalOpen] = useState(false);
-  const [isMultiUserOpen, setIsMultiUserOpen] = useState(false);
   const [activeTriggeredAlarm, setActiveTriggeredAlarm] = useState<TriggeredAlarmData | null>(null);
 
   // Entities state
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
-  const [unlockedProfileId, setUnlockedProfileId] = useState<string | null>(null);
-  const unlockedProfileIdRef = useRef<string | null>(null);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const activeProfileIdRef = useRef<string | null>(null);
   useEffect(() => {
-    unlockedProfileIdRef.current = unlockedProfileId;
-  }, [unlockedProfileId]);
+    activeProfileIdRef.current = activeProfileId;
+  }, [activeProfileId]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -136,7 +133,7 @@ export default function App() {
   const loadAllData = useCallback(async (overrideProfileId?: string) => {
     try {
       const settingsData = await storage.getSingleton<AppState>('appSettings');
-      const activeId = overrideProfileId || unlockedProfileIdRef.current || settingsData?.profileId;
+      const activeId = overrideProfileId || activeProfileIdRef.current || settingsData?.profileId;
       if (!activeId) return;
       if (settingsData) {
         setAppSettings(settingsData);
@@ -306,7 +303,7 @@ export default function App() {
     }
   }, []);
 
-  // First turn initialization: run ONCE on mount with robust security check[cite: 2]
+  // First turn initialization: run ONCE on mount
   useEffect(() => {
     let active = true;
     seedInitialDataIfEmpty().then(async () => {
@@ -318,49 +315,42 @@ export default function App() {
 
         const targetId = settingsData.profileId || settingsData.profiles?.[0]?.id || 'om-master-profile';
         if (targetId) {
-          const savedUnlocked = localStorage.getItem('om_unlocked_profile') || sessionStorage.getItem('om_session_unlocked');
-          const isKnownProfile = settingsData.profiles?.some(p => p.id === savedUnlocked);
-          
-          if (isKnownProfile && savedUnlocked) {
-            const secInfo = await getProfileSecurityInfo(savedUnlocked);
-            if (!secInfo?.credentialsReady) {
-              setUnlockedProfileId(savedUnlocked);
-              storage.setActiveProfile(savedUnlocked);
-              await loadAllData(savedUnlocked);
-              return;
-            }
+          const savedProfile = localStorage.getItem('om_active_profile');
+          const isKnownProfile = settingsData.profiles?.some(p => p.id === savedProfile);
+          const activeProfId = (isKnownProfile && savedProfile) ? savedProfile : targetId;
+
+          if (settingsData.profileId !== activeProfId) {
+            settingsData.profileId = activeProfId;
+            settingsData.profiles = (settingsData.profiles || []).map(p => ({ ...p, isCurrent: p.id === activeProfId }));
+            await storage.setSingleton('appSettings', settingsData);
+            setAppSettings({ ...settingsData });
           }
 
-          // Fallback if password or lock is required[cite: 2]
-          storage.setActiveProfile(null);
-          setUnlockedProfileId(null);
-          try {
-            sessionStorage.removeItem('om_session_unlocked');
-            localStorage.removeItem('om_unlocked_profile');
-          } catch {}
+          storage.setActiveProfile(activeProfId);
+          setActiveProfileId(activeProfId);
+          await loadAllData(activeProfId);
         }
       }
     }).catch(err => console.error('Failed to initialize Om-LifeOS', err));
 
-    // Subscribe to scheduled alarms & reminder triggers[cite: 2]
+    // Subscribe to scheduled alarms & reminder triggers
     const unsub = alarmService.onAlarmTrigger((alarmData) => {
       setActiveTriggeredAlarm(alarmData);
     });
 
     return () => {
       active = false;
-      unsub();
     };
-  }, [loadAllData]);
+  }, []);
 
-  // Load all data whenever unlockedProfileId updates[cite: 2]
+  // Load all data whenever activeProfileId updates
   useEffect(() => {
-    if (unlockedProfileId) {
-      loadAllData(unlockedProfileId);
+    if (activeProfileId) {
+      loadAllData(activeProfileId);
     }
-  }, [unlockedProfileId, loadAllData]);
+  }, [activeProfileId, loadAllData]);
 
-  // Sync theme with HTML root class and accent color[cite: 2]
+  // Sync theme with HTML root class and accent color
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -373,7 +363,7 @@ export default function App() {
     document.documentElement.style.setProperty('--color-brand', brandColor);
   }, [theme, appSettings?.accentColor]);
 
-  // Keyboard Shortcuts (⌘K for search)[cite: 2]
+  // Keyboard Shortcuts (⌘K for search)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -385,11 +375,11 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Multi-tab cross-device broadcast listener & storage event listener[cite: 2]
+  // Multi-tab cross-device broadcast listener & storage event listener
   useEffect(() => {
     const channel = storage.getChannel();
     const unsub = storage.onStorageChange((store, action) => {
-      if (action === 'purgeDefaultData' && unlockedProfileIdRef.current) {
+      if (action === 'purgeDefaultData' && activeProfileIdRef.current) {
         loadAllData();
       }
     });
@@ -397,7 +387,7 @@ export default function App() {
     if (!channel) return unsub;
 
     const handleMessage = (e: MessageEvent) => {
-      if (e.data?.sourceDevice !== storage.deviceId && unlockedProfileId) {
+      if (e.data?.sourceDevice !== storage.deviceId && activeProfileId) {
         loadAllData();
       }
     };
@@ -406,74 +396,10 @@ export default function App() {
       unsub();
       channel.removeEventListener('message', handleMessage);
     };
-  }, [loadAllData, unlockedProfileId]);
+  }, [loadAllData, activeProfileId]);
 
 
-  const handleProfileUnlocked = useCallback(async (profileId: string) => {
-    try {
-      sessionStorage.setItem('om_session_unlocked', profileId);
-      localStorage.setItem('om_unlocked_profile', profileId);
-    } catch {}
-    const settings = (await storage.getSingleton<AppState>('appSettings')) || ({} as AppState);
-    const profile = settings.profiles?.find(p => p.id === profileId);
-    if (!profile) return;
-    settings.profileId = profileId;
-    settings.profiles = (settings.profiles || []).map(p => ({ ...p, isCurrent: p.id === profileId }));
-    settings.currentUser = { name: profile.name, email: profile.email, provider: 'local' };
-    await storage.setSingleton('appSettings', settings);
-    storage.setActiveProfile(profileId);
-    await storage.ensureProfileOwnership(profileId);
-    try {
-      await recalculateAllGoalsProgress();
-    } catch (err) {
-      console.error('Failed to recalculate goals progress', err);
-    }
-    setUnlockedProfileId(profileId);
-    setAppSettings(settings);
-    await loadAllData(profileId);
-  }, [loadAllData]);
 
-  const handleSwitchWorkspace = useCallback(async (id: string) => {
-    try {
-      const s = (await storage.getSingleton<AppState>('appSettings')) || ({} as AppState);
-      const targetProfile = (s.profiles || []).find(p => p.id === id);
-      if (!targetProfile) return;
-
-      s.profileId = id;
-      s.profiles = (s.profiles || []).map(p => ({ ...p, isCurrent: p.id === id }));
-      s.currentUser = {
-        name: targetProfile.name,
-        email: targetProfile.email,
-        provider: targetProfile.authType || 'local'
-      };
-      await storage.setSingleton('appSettings', s);
-      storage.setActiveProfile(id);
-      await storage.ensureProfileOwnership(id);
-
-      try {
-        sessionStorage.setItem('om_session_unlocked', id);
-        localStorage.setItem('om_unlocked_profile', id);
-      } catch {}
-
-      setUnlockedProfileId(id);
-      setAppSettings(s);
-      await loadAllData(id);
-      showToast(`✓ Switched to workspace: ${targetProfile.name}`);
-    } catch (err: any) {
-      showToast(`⚠️ Failed to switch workspace: ${err?.message || err}`);
-    }
-  }, [loadAllData, showToast]);
-
-  const handleLockApp = useCallback(() => {
-    try {
-      sessionStorage.removeItem('om_session_unlocked');
-      localStorage.removeItem('om_unlocked_profile');
-    } catch {}
-    storage.setActiveProfile(null);
-    setUnlockedProfileId(null);
-    setAppSettings(undefined); // White-screen aur stale state fix karne ke liye reset karein[cite: 2]
-    showToast('Workspace Locked 🔒');
-  }, [showToast]);
 
   const toggleTheme = async () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
@@ -536,19 +462,8 @@ export default function App() {
   const openTasksCount = tasks.filter(t => !t.done).length;
   const categoriesList = appSettings?.noteCategories || ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'];
 
-  // Safe checks to avoid white screen crashes[cite: 2, 3]
   if (!appSettings) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">Loading Om-LifeOS…</div>;
-  }
-
-  if (!unlockedProfileId) {
-    return (
-      <AppLockScreen
-        settings={appSettings}
-        onUnlocked={handleProfileUnlocked}
-        onSettingsReloaded={nextSettings => setAppSettings(nextSettings)}
-      />
-    );
   }
 
   return (
@@ -566,14 +481,9 @@ export default function App() {
         }}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenBsModal={() => setIsBsModalOpen(true)}
-        onOpenMultiUser={() => setIsMultiUserOpen(true)}
         theme={theme}
         onToggleTheme={toggleTheme}
-        profiles={appSettings?.profiles || [{ id: 'default', name: 'Primary Workspace', createdAt: Date.now() }]}
-        currentProfileId={appSettings?.profileId || 'default'}
-        onSelectProfile={handleSwitchWorkspace}
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
-        onLockApp={handleLockApp}
         onShowToast={showToast}
       />
 
@@ -587,11 +497,11 @@ export default function App() {
           openTasksCount={openTasksCount}
           remindersCount={reminders.filter(r => r.status !== 'done').length}
           recycleBinCount={recycleBinCount}
-          onLockApp={handleLockApp}
           onToast={showToast}
+          onDataRestored={loadAllData}
         />
 
-        {/* Main Content Viewport */}
+        {/* Main Content Viewport - Responsive across Mobile, Tablet, Laptop, and Desktop */}
         <main className="flex-1 min-w-0 overflow-y-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-24 md:pb-10 transition-colors w-full">
           <div className="w-full space-y-6">
             {activeModule === 'dashboard' && (
@@ -608,7 +518,6 @@ export default function App() {
                 dailyPlanner={appSettings?.dailyPlanner}
                 reminders={reminders}
                 achievements={achievements}
-                currentProfileName={appSettings?.profiles?.find(p => p.id === appSettings?.profileId)?.name || 'Primary Workspace'}
                 onNavigate={setActiveModule}
                 onToggleTask={handleToggleTask}
                 onLogHabit={handleLogHabit}
@@ -811,7 +720,6 @@ export default function App() {
                 onError={msg => showToast(`⚠️ ${msg}`)}
                 theme={theme}
                 onToggleTheme={toggleTheme}
-                onSelectProfile={handleSwitchWorkspace}
               />
             )}
           </div>
@@ -819,7 +727,7 @@ export default function App() {
       </div>
 
       {/* Mobile Bottom Thumb Navigation */}
-      <MobileBottomNav activeModule={activeModule} onNavigate={setActiveModule} onLockApp={handleLockApp} />
+      <MobileBottomNav activeModule={activeModule} onNavigate={setActiveModule} />
 
       {/* Quick Capture Dialog */}
       <QuickCaptureModal
@@ -843,16 +751,6 @@ export default function App() {
         onClose={() => setIsBsModalOpen(false)}
       />
 
-      <MultiUserModal
-        isOpen={isMultiUserOpen}
-        onClose={() => setIsMultiUserOpen(false)}
-        appSettings={appSettings}
-        onRefresh={loadAllData}
-        onSuccess={showToast}
-        onError={msg => showToast(`⚠️ ${msg}`)}
-        onSelectProfile={handleSwitchWorkspace}
-      />
-
       {/* Real-time Global Alarm Trigger Modal */}
       <AlarmTriggerModal
         alarm={activeTriggeredAlarm}
@@ -869,7 +767,7 @@ export default function App() {
         }}
       />
 
-      {/* Global High-Accuracy Voice-to-Text & Text Reading Studio */}
+      {/* Global High-Accuracy Voice-to-Text & Text Reading Studio (Hindi & English) */}
       <VoiceStudioWidget
         onSuccess={showToast}
         onRefreshNotes={loadAllData}

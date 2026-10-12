@@ -4,8 +4,6 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const host = process.env.TAURI_DEV_HOST;
-
 export default defineConfig(() => {
   return {
     base: './',
@@ -17,9 +15,9 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'Om',
-          short_name: 'Om',
-          description: 'Unified personal operating system for project timelines, task genesis, routines, habit architecture, financial mastery, and life strategy.',
+          name: 'Om-LifeOS — Executive Operating System',
+          short_name: 'Om-LifeOS',
+          description: 'Executive Personal Operating System with unified project timelines, routines, habit architecture, finance, health, and sovereign Google Drive sync.',
           theme_color: '#4F46E5',
           background_color: '#0B0F19',
           display: 'standalone',
@@ -28,19 +26,19 @@ export default defineConfig(() => {
           scope: './',
           icons: [
             {
-              src: './pwa-192x192.png',
+              src: 'pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: './pwa-512x512.png',
+              src: 'pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: './pwa-maskable-512x512.png',
+              src: 'pwa-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
@@ -48,8 +46,8 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html}', 'manifest.webmanifest', '*.{ico,svg}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          cleanupOutdatedCaches: true,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -82,7 +80,8 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: false,
+          enabled: true,
+          type: 'module',
         },
       }),
     ],
@@ -145,7 +144,7 @@ export default defineConfig(() => {
     server: {
       port: 3000,
       strictPort: true,
-      host: host || '0.0.0.0',
+      host: '0.0.0.0',
       allowedHosts: true as const,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
@@ -153,6 +152,6 @@ export default defineConfig(() => {
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
-    envPrefix: ['VITE_', 'TAURI_ENV_*'],
+    envPrefix: ['VITE_'],
   };
 });

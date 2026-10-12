@@ -23,7 +23,6 @@ interface DashboardViewProps {
   dailyPlanner?: DailyPlanner;
   reminders?: ReminderItem[];
   achievements?: AchievementItem[];
-  currentProfileName?: string;
   onNavigate: (module: NavModule) => void;
   onToggleTask: (id: string) => void;
   onLogHabit: (habitId: string, occurrence?: number) => void;

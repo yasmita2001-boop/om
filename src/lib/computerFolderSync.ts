@@ -178,7 +178,7 @@ export function isRunningInsideIframe(): boolean {
  */
 export async function getFolderSyncState(): Promise<FolderSyncStatus> {
   const { handle, metadata } = await getHandleFromDB();
-  if (!handle) {
+  if (!handle && !metadata?.isDirectMode) {
     return {
       isSupported: true,
       isConnected: false,
@@ -190,16 +190,29 @@ export async function getFolderSyncState(): Promise<FolderSyncStatus> {
     };
   }
 
+  const isDirect = Boolean(metadata?.isDirectMode);
   return {
     isSupported: true,
     isConnected: true,
-    folderName: handle.name || metadata?.folderName || 'Connected Folder',
+    folderName: (handle ? handle.name : metadata?.folderName) || (isDirect ? 'PC Downloads/Vault' : 'Connected Folder'),
     lastSyncedAt: metadata?.lastSyncedAt || null,
     isSyncing: false,
     lastRecordCount: metadata?.lastRecordCount || null,
     error: null,
-    isDirectMode: false
+    isDirectMode: isDirect
   };
+}
+
+/**
+ * Connect to direct PC sync mode (works reliably in all environments including iframes)
+ */
+export async function connectDirectPcSync(folderName = 'PC Folder (Direct Sync)'): Promise<{ success: boolean; folderName: string }> {
+  try {
+    await saveHandleToDB(null, folderName, true);
+    return { success: true, folderName };
+  } catch (err: any) {
+    return { success: false, folderName: '' };
+  }
 }
 
 /**
@@ -337,7 +350,7 @@ export async function executeSyncNow(): Promise<{
 
     // 4. Build canonical sovereign snapshot
     const activeProfileId = storage.getActiveProfileId() || settingsData?.profileId || 'default';
-    const activeProfileName = settingsData?.profiles?.find(p => p.id === activeProfileId)?.name || 'Primary Workspace';
+    const activeProfileName = settingsData?.profiles?.find(p => p.id === activeProfileId)?.name || 'Om-LifeOS';
 
     const timestampIso = new Date().toISOString();
     const payload = {
@@ -365,7 +378,7 @@ export async function executeSyncNow(): Promise<{
     // 5. Output to PC
     if (handle && !isDirectMode) {
       // Write directly to local folder via Native File System Handle
-      const primaryFileHandle = await handle.getFileHandle('om-lifeos-workspace.omlifeos', { create: true });
+      const primaryFileHandle = await handle.getFileHandle('om-lifeos-backup.omlifeos', { create: true });
       const primaryWritable = await (primaryFileHandle as any).createWritable();
       await primaryWritable.write(finalBundleJson);
       await primaryWritable.close();
@@ -380,7 +393,7 @@ export async function executeSyncNow(): Promise<{
         '  Om-LifeOS Local Computer Folder Sync',
         '=================================================================',
         `Last Synced:           ${new Date().toLocaleString()}`,
-        `Workspace Name:        ${activeProfileName}`,
+        `Profile:               ${activeProfileName}`,
         `Active Records Synced: ${totalActiveCount}`,
         `Recycle Bin Excluded:  ${purgedCount} (Permanently purged & trashed records excluded)`,
         `Integrity Checksum:    ${checksum}`,
@@ -395,7 +408,7 @@ export async function executeSyncNow(): Promise<{
     } else {
       // Seamless direct download to user's PC (works in iframes and preview environments)
       const blob = new Blob([finalBundleJson], { type: 'application/json' });
-      downloadBlob(blob, 'om-lifeos-workspace.omlifeos');
+      downloadBlob(blob, 'om-lifeos-backup.omlifeos');
     }
 
     // 6. Update metadata in IndexedDB

@@ -3,20 +3,18 @@ import {
   LayoutDashboard, CheckSquare, Repeat, Briefcase,
   Target, MoreHorizontal, FileText, BookOpen, Calculator,
   DollarSign, Heart, Users, Compass, Folder, Settings,
-  X, Lock
+  X
 } from 'lucide-react';
 import { NavModule } from '../types';
 
 interface MobileBottomNavProps {
   activeModule: NavModule;
   onNavigate: (module: NavModule) => void;
-  onLockApp?: () => void;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeModule,
   onNavigate,
-  onLockApp,
 }) => {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
@@ -61,7 +59,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   ॐ
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">All Workspaces & Modules</h3>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">All Modules & Tools</h3>
                   <p className="text-[10px] text-slate-400">Quickly switch to any life operating domain</p>
                 </div>
               </div>
@@ -99,22 +97,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                 );
               })}
             </div>
-
-            {onLockApp && (
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/[0.08]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMoreOpen(false);
-                    onLockApp();
-                  }}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 py-2.5 text-xs font-bold text-rose-700 dark:text-rose-300"
-                >
-                  <Lock className="h-3.5 w-3.5" />
-                  <span>Lock Workspace App</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -151,7 +133,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               ? 'font-bold text-indigo-600 dark:text-indigo-400'
               : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 font-medium'
           }`}
-          aria-label="More workspaces"
+          aria-label="More modules"
         >
           <div className="transition-transform">
             <MoreHorizontal className="h-4 w-4" />

@@ -72,7 +72,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                 OM LifeOS - Self Healing Triggered
               </h1>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                An unexpected runtime condition was intercepted by system crash protection. Your workspace data remains securely preserved in local storage.
+                An unexpected runtime condition was intercepted by system crash protection. Your application data remains securely preserved in local storage.
               </p>
             </div>
 
@@ -97,7 +97,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                 className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-98 px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
               >
                 <RefreshCw className="h-4 w-4" />
-                <span>Recover Workspace (Reload)</span>
+                <span>Reload System</span>
               </button>
 
               <button

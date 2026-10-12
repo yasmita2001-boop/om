@@ -101,7 +101,7 @@ export async function permanentlyEmptyRecycleBin(
   const storesToScan = (entityStores && entityStores.length > 0)
     ? entityStores
     : Array.from(db.objectStoreNames).filter(
-        name => name !== 'recycleBin' && name !== 'tombstones' && name !== 'profileSecurity'
+        name => name !== 'recycleBin' && name !== 'tombstones'
       );
 
   // 1. Scan stores for soft-deleted records
@@ -171,12 +171,19 @@ export async function permanentlyEmptyRecycleBin(
     } catch {}
   }
 
-  // 4. Clear tombstones store
+  // 4. Mark all tombstones as permanentlyDeleted: true so they can NEVER be re-uploaded or resurrected
   if (db.objectStoreNames.contains('tombstones')) {
     try {
       await new Promise<void>((resolve) => {
         const tx = db.transaction('tombstones', 'readwrite');
-        tx.objectStore('tombstones').clear();
+        const os = tx.objectStore('tombstones');
+        const req = os.getAll();
+        req.onsuccess = () => {
+          const tombstones = req.result || [];
+          for (const tomb of tombstones) {
+            os.put({ ...tomb, permanentlyDeleted: true, purgedAt: Date.now() });
+          }
+        };
         tx.oncomplete = () => resolve();
         tx.onerror = () => resolve();
       });

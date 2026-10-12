@@ -1,19 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Download, Database, Trash2, Users,
-  Palette, ChevronDown, Layers, Plus, RefreshCw
+  Download, Database, Trash2,
+  Palette, ChevronDown, RefreshCw
 } from 'lucide-react';
 import {
   storage,
-  generateUUID, createLocalProfile, PROFESSIONAL_SECURITY_QUESTIONS,
-  validatePasswordStrength, validateSecurityQuestionAndAnswer,
   purgeAllDefaultDataPermanently, performHardAppReset, cleanOrphanedCacheAndTrash
 } from '../lib/storage';
-import { AppState, UserProfile } from '../types';
+import { AppState } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { UniversalDataManagerCard } from '../components/UniversalDataManagerCard';
-import { GoogleDriveSyncCard } from '../components/GoogleDriveSyncCard';
-import { PWAInstallButton } from '../components/PWAInstallButton';
 import { SlideTabs } from '../components/SlideTabs';
 import { RecycleBinView } from './RecycleBinView';
 
@@ -24,7 +20,6 @@ interface SettingsViewProps {
   onError: (msg: string) => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
-  onSelectProfile?: (id: string) => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -34,16 +29,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onError,
   theme,
   onToggleTheme,
-  onSelectProfile,
 }) => {
-  const [activeTab, setActiveTab] = useState<'system' | 'workspaces' | 'exports'>('system');
-  const [newProfileName, setNewProfileName] = useState('');
-  const [protectWithPassword, setProtectWithPassword] = useState(false);
-  const [newProfilePassword, setNewProfilePassword] = useState('');
-  const [newProfilePasswordConfirm, setNewProfilePasswordConfirm] = useState('');
-  const [newProfileHint, setNewProfileHint] = useState('');
-  const [newProfileRecoveryQuestion, setNewProfileRecoveryQuestion] = useState<string>(PROFESSIONAL_SECURITY_QUESTIONS[0]);
-  const [newProfileRecoveryAnswer, setNewProfileRecoveryAnswer] = useState('');
+  const [activeTab, setActiveTab] = useState<'system' | 'exports'>('system');
   const [storageStats, setStorageStats] = useState<{
     usage: number;
     quota: number;
@@ -63,98 +50,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   }, [settings?.accentColor]);
 
-
   useEffect(() => {
     storage.getStorageEstimate().then(setStorageStats);
   }, []);
-
-  const handleCreateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProfileName.trim()) return;
-
-    const appSettings = await storage.getSingleton<AppState>('appSettings') || {
-      profileId: 'default',
-      profiles: [],
-      themeMode: 'light',
-      accentColor: '#5d57c9',
-      notificationsEnabled: true,
-      noteCategories: ['General'],
-      calcFavorites: []
-    };
-
-    const id = generateUUID();
-    const newProfile: UserProfile = {
-      id,
-      name: newProfileName.trim(),
-      email: `${newProfileName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'user'}-${id.slice(0, 8)}@omlifeos.local`,
-      authType: 'local',
-      createdAt: Date.now()
-    };
-
-    try {
-      if (protectWithPassword) {
-        const passVal = validatePasswordStrength(newProfilePassword);
-        if (!passVal.isValid) {
-          onError(passVal.errorMessage || 'Password must meet all complexity requirements.');
-          return;
-        }
-        if (newProfilePassword !== newProfilePasswordConfirm) {
-          onError('Password and Confirm Password do not match.');
-          return;
-        }
-        const qaVal = validateSecurityQuestionAndAnswer(newProfileRecoveryQuestion, newProfileRecoveryAnswer, newProfilePassword);
-        if (!qaVal.isValid) {
-          onError(qaVal.errorMessage || 'Please provide a valid recovery answer.');
-          return;
-        }
-        if (!newProfileHint.trim()) {
-          onError('Password hint is required.');
-          return;
-        }
-        if (newProfileHint.toLowerCase().includes(newProfilePassword.toLowerCase())) {
-          onError('Password hint cannot contain the password itself.');
-          return;
-        }
-
-        await createLocalProfile(appSettings, newProfile, newProfilePassword, newProfileHint, newProfileRecoveryQuestion, newProfileRecoveryAnswer);
-      } else {
-        await createLocalProfile(appSettings, newProfile);
-      }
-
-      onSuccess(`Workspace profile "${newProfileName}" created successfully`);
-      setNewProfileName('');
-      setProtectWithPassword(false);
-      setNewProfilePassword('');
-      setNewProfilePasswordConfirm('');
-      setNewProfileHint('');
-      setNewProfileRecoveryQuestion(PROFESSIONAL_SECURITY_QUESTIONS[0]);
-      setNewProfileRecoveryAnswer('');
-      onRefresh();
-    } catch (err: any) {
-      onError(err?.message || 'Unable to create workspace profile.');
-    }
-  };
-
-  const handleSwitchProfile = async (id: string) => {
-    if (onSelectProfile) {
-      onSelectProfile(id);
-      return;
-    }
-    const appSettings = await storage.getSingleton<AppState>('appSettings') || {
-      profileId: 'default',
-      profiles: [],
-      themeMode: 'light',
-      accentColor: '#5d57c9',
-      notificationsEnabled: true,
-      noteCategories: ['General'],
-      calcFavorites: []
-    };
-    appSettings.profileId = id;
-    await storage.setSingleton('appSettings', appSettings);
-    storage.setActiveProfile(id);
-    onSuccess('Workspace profile switched');
-    onRefresh();
-  };
 
   const handleRunIntegrityAudit = async () => {
     setIsAuditing(true);
@@ -277,13 +175,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               badge: null
             },
             {
-              id: 'workspaces',
-              label: 'Workspaces',
-              shortLabel: 'Workspaces',
-              icon: Users,
-              badge: `${settings?.profiles?.length || 1}`
-            },
-            {
               id: 'exports',
               label: 'Data & Backups',
               shortLabel: 'Backups',
@@ -297,11 +188,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Tab: System & Appearance */}
       {activeTab === 'system' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Progressive Web App Browser Install Card */}
-          <div className="lg:col-span-12">
-            <PWAInstallButton variant="card" />
-          </div>
-
           {/* Appearance Card (6 cols) */}
           <div className="lg:col-span-6 flex flex-col">
             <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-5 flex flex-col justify-between">
@@ -584,244 +470,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* Tab: Workspaces */}
-      {activeTab === 'workspaces' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 min-w-0">
-          {/* Left Column: Google Drive Sync */}
-          <div className="lg:col-span-6 space-y-6 min-w-0">
-            <GoogleDriveSyncCard
-              onSuccess={onSuccess}
-              onError={onError}
-              onRefresh={onRefresh}
-            />
-          </div>
-
-          {/* Right Column: Create New Workspace Form */}
-          <div className="lg:col-span-6 space-y-6 min-w-0">
-            {/* Active Workspace Selector */}
-            <div className="rounded-3xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 min-w-0">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                    <Layers className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Active Workspaces
-                    </h2>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Isolated environments & local databases
-                    </p>
-                  </div>
-                </div>
-                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  {(settings?.profiles || []).length} Total
-                </span>
-              </div>
-
-              <div className="mt-4 space-y-2.5">
-                {(settings?.profiles || []).map(p => {
-                  const isCurrent = p.id === settings?.profileId;
-                  const initial = (p.name || 'W').charAt(0).toUpperCase();
-                  return (
-                    <div
-                      key={p.id}
-                      className={`flex items-center justify-between gap-3 rounded-2xl p-3.5 sm:p-4 border transition-all ${
-                        isCurrent
-                          ? 'border-indigo-500/80 bg-indigo-50/40 shadow-xs dark:border-indigo-500/40 dark:bg-indigo-950/30'
-                          : 'border-slate-100 bg-slate-50/40 hover:bg-white hover:border-slate-200 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:bg-slate-850'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold text-xs ${
-                            isCurrent
-                              ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                          }`}
-                        >
-                          {initial}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                              {p.name}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-                            Created {new Date(p.createdAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
-
-                      {isCurrent ? (
-                        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-semibold text-white shadow-xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
-                          Current
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleSwitchProfile(p.id)}
-                          className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-indigo-500/60 dark:hover:text-indigo-300 cursor-pointer transition-colors"
-                        >
-                          Switch
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-
-            <div className="rounded-3xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 min-w-0">
-              <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3.5 dark:border-slate-800">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                  <Plus className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Create New Workspace
-                  </h2>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Add an isolated profile with protected credentials
-                  </p>
-                </div>
-              </div>
-
-              <form onSubmit={handleCreateProfile} className="mt-4 space-y-3.5">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                    Workspace Name <span className="text-indigo-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newProfileName}
-                    onChange={e => setNewProfileName(e.target.value)}
-                    placeholder="e.g. Venture Operations, Family, Personal"
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
-                  />
-                </div>
-
-                {/* Optional Password Protection Checkbox */}
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-850/60 space-y-2.5">
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                      Protect with Password (Optional)
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={protectWithPassword}
-                      onChange={e => setProtectWithPassword(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 bg-white text-indigo-600 focus:ring-0 dark:border-slate-600 dark:bg-slate-700 cursor-pointer"
-                    />
-                  </label>
-
-                  {!protectWithPassword && (
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Password is off. You can switch and access this workspace instantly with one click.
-                    </p>
-                  )}
-
-                  {protectWithPassword && (
-                    <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                            Password
-                          </label>
-                          <input
-                            type="password"
-                            required={protectWithPassword}
-                            value={newProfilePassword}
-                            onChange={e => setNewProfilePassword(e.target.value)}
-                            placeholder="Min 8 chars, 1 num & symbol"
-                            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                            Confirm Password
-                          </label>
-                          <input
-                            type="password"
-                            required={protectWithPassword}
-                            value={newProfilePasswordConfirm}
-                            onChange={e => setNewProfilePasswordConfirm(e.target.value)}
-                            placeholder="Repeat password"
-                            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                          Password Hint / Clue
-                        </label>
-                        <input
-                          type="text"
-                          required={protectWithPassword}
-                          value={newProfileHint}
-                          onChange={e => setNewProfileHint(e.target.value)}
-                          placeholder="Hint or reminder (cannot contain the password)"
-                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                          Security Recovery Question
-                        </label>
-                        <select
-                          value={newProfileRecoveryQuestion}
-                          onChange={e => setNewProfileRecoveryQuestion(e.target.value)}
-                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer focus:outline-hidden"
-                        >
-                          {PROFESSIONAL_SECURITY_QUESTIONS.map(q => (
-                            <option key={q} value={q}>{q}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                          Confidential Recovery Answer
-                        </label>
-                        <input
-                          type="text"
-                          required={protectWithPassword}
-                          value={newProfileRecoveryAnswer}
-                          onChange={e => setNewProfileRecoveryAnswer(e.target.value)}
-                          placeholder="Min 3 characters"
-                          className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white hover:bg-indigo-500 active:scale-[0.99] transition-all shadow-xs cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Create Workspace</span>
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Tab: Universal Data Manager, Backups & System Maintenance */}
       {activeTab === 'exports' && (
         <div className="space-y-4 min-w-0">
           {/* Section 1: Universal Data Manager (Export & Import) */}
           <UniversalDataManagerCard
-            profileId={settings?.profileId || settings?.profiles?.[0]?.id || 'om-master-profile'}
-            profileName={settings?.profiles?.find(p => p.id === settings?.profileId)?.name || settings?.profiles?.[0]?.name || 'Primary Workspace'}
+            profileId={settings?.profileId || 'om-master-profile'}
+            profileName="Om-LifeOS"
             onSuccess={onSuccess}
             onError={onError}
             onRefreshData={onRefresh}
@@ -877,7 +532,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <ConfirmModal
         isOpen={isCleanCacheOpen}
         title="Clear Cache & Temporary Files?"
-        message="This will wipe browser Cache Storage, Service Worker offline caches, and orphaned media files. Your active workspace data and Recycle Bin items will remain 100% safe and intact."
+        message="This will wipe browser Cache Storage, Service Worker offline caches, and orphaned media files. Your stored data and Recycle Bin items will remain 100% safe and intact."
         confirmText="Yes, Clear Cache"
         cancelText="Cancel"
         isDanger={false}

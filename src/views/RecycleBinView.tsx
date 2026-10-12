@@ -6,6 +6,7 @@ import {
 import { storage, cleanOrphanedCacheAndTrash } from '../lib/storage';
 import { RecycleBinItem } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { syncToGoogleDriveAfterPermanentDelete } from '../lib/googleDriveSync';
 
 interface RecycleBinViewProps {
   profileId?: string;
@@ -140,7 +141,12 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
     setIsProcessing(true);
     try {
       await storage.permanentlyDeleteFromRecycleBin(target.id);
-      onSuccess(`✓ Permanently deleted "${target.title}". It is blocked from future backup imports.`);
+      const driveSync = await syncToGoogleDriveAfterPermanentDelete();
+      if (driveSync.syncedToDrive) {
+        onSuccess(`✓ Permanently deleted "${target.title}" (Local & Google Drive dono se delete ho gaya, dubara kabhi upload nahi hoga).`);
+      } else {
+        onSuccess(`✓ Permanently deleted "${target.title}". Dubara kabhi upload ya restore nahi hoga.`);
+      }
       await loadRecycleBin();
       onRefresh();
     } catch (err: any) {
@@ -161,7 +167,12 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
         purged++;
       }
       setSelectedIds(new Set());
-      onSuccess(`✓ Permanently purged ${purged} item(s). They will never reappear.`);
+      const driveSync = await syncToGoogleDriveAfterPermanentDelete();
+      if (driveSync.syncedToDrive) {
+        onSuccess(`✓ Permanently purged ${purged} item(s) from Local & Google Drive. Dubara kabhi upload nahi honge.`);
+      } else {
+        onSuccess(`✓ Permanently purged ${purged} item(s). Dubara kabhi upload ya restore nahi honge.`);
+      }
       await loadRecycleBin();
       onRefresh();
     } catch (err: any) {
@@ -183,7 +194,12 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
         await cleanOrphanedCacheAndTrash({ emptyRecycleBinFirst: false, profileId: activeProf });
       } catch {}
       setSelectedIds(new Set());
-      onSuccess(`✓ Recycle Bin emptied (${count} item(s) permanently destroyed and cache freed).`);
+      const driveSync = await syncToGoogleDriveAfterPermanentDelete();
+      if (driveSync.syncedToDrive) {
+        onSuccess(`✓ Recycle Bin emptied (${count} item(s)). Google Drive backup updated & deleted records permanently removed.`);
+      } else {
+        onSuccess(`✓ Recycle Bin emptied (${count} item(s) permanently destroyed and blocked from future uploads).`);
+      }
       await loadRecycleBin();
       onRefresh();
     } catch (err: any) {

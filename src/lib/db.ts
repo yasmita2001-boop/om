@@ -23,7 +23,7 @@ export const ENTITY_STORES = [
   'achievements', 'calcHistory', 'attachments'
 ];
 
-export const SINGLETON_STORES = ['appSettings', 'healthProfile', 'profileSecurity'];
+export const SINGLETON_STORES = ['appSettings', 'healthProfile'];
 export const SYSTEM_STORES = ['tombstones', 'appliedBundles', 'recycleBin'];
 
 export const TRANSIENT_RECYCLE_SKIP_STORES = new Set(['habitLogs', 'notifications']);
@@ -32,7 +32,6 @@ export const SYSTEM_METADATA_STORES = new Set([
   'recycleBin',
   'tombstones',
   'appliedBundles',
-  'profileSecurity',
   'syncChanges'
 ]);
 
@@ -210,4 +209,10 @@ export function createDatabaseSchema(db: IDBDatabase): void {
       } catch {}
     }
   }
+
+  try {
+    if (db.objectStoreNames.contains('profileSecurity')) {
+      db.deleteObjectStore('profileSecurity');
+    }
+  } catch {}
 }

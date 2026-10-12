@@ -823,12 +823,6 @@ export interface UserProfile {
   avatarChar?: string;
   avatarUrl?: string;
   authType?: 'local' | 'google';
-  passwordHash?: string;
-  passwordSalt?: string;
-  passwordHint?: string;
-  recoveryQuestion?: string;
-  recoveryAnswerHash?: string;
-  recoveryAnswerSalt?: string;
   isCurrent?: boolean;
   createdAt: number;
 }

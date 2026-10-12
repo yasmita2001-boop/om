@@ -255,7 +255,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                Workspace Data & Backups
+                Data & Sovereign Backups
               </h2>
               <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">
                 100% Offline
@@ -287,7 +287,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
         className="hidden"
       />
 
-      {/* Section 1: Full Workspace Backup & Restore (Balanced Side-by-Side Symmetrical Cards) */}
+      {/* Section 1: Full Backup & Restore (Balanced Side-by-Side Symmetrical Cards) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
         {/* Left: Export Full Backup */}
         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40 flex flex-col justify-between">
@@ -296,7 +296,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
               <div className="flex items-center gap-2 min-w-0">
                 <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                 <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                  Full Workspace Snapshot
+                  Full System Snapshot
                 </span>
                 <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-mono shrink-0">
                   .omlifeos
@@ -358,7 +358,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                 <div className="flex items-center gap-2 min-w-0">
                   <Upload className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                    Restore Workspace
+                    Restore Backup
                   </span>
                   <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 font-mono shrink-0">
                     Import
@@ -508,7 +508,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                   ) : (
                     <>
                       <ArrowRight className="h-3 w-3" />
-                      <span>Restore Workspace</span>
+                      <span>Restore Backup</span>
                     </>
                   )}
                 </button>
@@ -594,7 +594,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                         : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
                     }`}
                   >
-                    <span>All Time (Full Workspace)</span>
+                    <span>All Time (Complete Data)</span>
                     {dateFilterMode === 'all' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
                   </button>
                   <button
@@ -731,8 +731,8 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
       {/* Confirmation Modal for Restore */}
       <ConfirmModal
         isOpen={showConfirmRestoreModal}
-        title="Restore Workspace"
-        message={`Are you sure you want to restore ${validationResult?.totalActiveRecords} records into "${profileName}"?`}
+        title="Restore Backup"
+        message={`Are you sure you want to restore ${validationResult?.totalActiveRecords} records into your application?`}
         confirmText="Restore Now"
         cancelText="Cancel"
         isDanger={false}

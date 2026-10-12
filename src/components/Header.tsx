@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Zap, Moon, Sun, Users, Calendar, ChevronDown, Check, Clock, Lock } from 'lucide-react';
-import { NavModule, UserProfile } from '../types';
+import { Search, Plus, Zap, Moon, Sun, Calendar, ChevronDown, Clock } from 'lucide-react';
+import { NavModule } from '../types';
 import { adToBs, getTodayIso } from '../lib/nepaliDate';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   activeModule: NavModule;
@@ -9,14 +10,9 @@ interface HeaderProps {
   onOpenQuickCapture: (initialType?: string) => void;
   onOpenSearch: () => void;
   onOpenBsModal: () => void;
-  onOpenMultiUser: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
-  profiles: UserProfile[];
-  currentProfileId: string;
-  onSelectProfile: (id: string) => void;
   onOpenMobileMenu: () => void;
-  onLockApp?: () => void;
   onShowToast?: (msg: string) => void;
 }
 
@@ -25,14 +21,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenQuickCapture,
   onOpenSearch,
   onOpenBsModal,
-  onOpenMultiUser,
   theme,
   onToggleTheme,
-  profiles,
-  currentProfileId,
-  onSelectProfile,
   onOpenMobileMenu,
-  onLockApp,
   onShowToast
 }) => {
   const [bsDateInfo, setBsDateInfo] = useState({
@@ -42,7 +33,6 @@ export const Header: React.FC<HeaderProps> = ({
     adIso: '2026-09-25'
   });
   const [isActionsOpen, setIsActionsOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [is24Hour, setIs24Hour] = useState(false);
 
@@ -76,18 +66,10 @@ export const Header: React.FC<HeaderProps> = ({
     }
   }, []);
 
-  const currentProfile = profiles.find(p => p.id === currentProfileId) || profiles[0];
-
   const formattedTimeFull = currentTime.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
-    hour12: !is24Hour
-  });
-
-  const formattedTimeCompact = currentTime.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
     hour12: !is24Hour
   });
 
@@ -218,9 +200,8 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </div>
           <Clock className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0 hidden sm:inline" />
-          <span className="font-mono text-xs sm:text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
-            <span className="hidden xl:inline">{formattedTimeFull}</span>
-            <span className="xl:hidden inline">{formattedTimeCompact}</span>
+          <span className="font-mono text-[11px] sm:text-xs md:text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
+            {formattedTimeFull}
           </span>
         </button>
 
@@ -282,79 +263,8 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Multi-User Workspace Selector (Mobile: Compact Pill, Tablet: Short Name, Desktop: Extended Name) */}
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={() => setIsProfileOpen(!isProfileOpen)}
-            className="flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 lg:px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200 cursor-pointer shrink-0 shadow-2xs transition-colors"
-            title={`Workspace Profile: ${currentProfile?.name || 'Workspace'}`}
-            aria-label="Switch Workspace Profile"
-          >
-            <Users className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-            <span className="hidden sm:inline font-semibold max-w-[46px] md:max-w-[64px] lg:max-w-[145px] truncate text-xs">
-              {currentProfile?.name || 'Workspace'}
-            </span>
-            <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
-          </button>
-
-          {isProfileOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)} />
-              <div className="absolute right-0 top-full z-50 mt-1.5 w-60 sm:w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-800 dark:bg-slate-900 animate-in fade-in zoom-in-95">
-                <div className="flex items-center justify-between px-2 py-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Switch Workspace
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => { onOpenMultiUser(); setIsProfileOpen(false); }}
-                    className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                  >
-                    View All
-                  </button>
-                </div>
-                <div className="max-h-48 overflow-y-auto space-y-1 my-1">
-                  {profiles.map(prof => (
-                    <button
-                      key={prof.id}
-                      type="button"
-                      onClick={() => { onSelectProfile(prof.id); setIsProfileOpen(false); }}
-                      className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs transition-colors cursor-pointer ${
-                        prof.id === currentProfileId
-                          ? 'bg-amber-50 font-semibold text-amber-900 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800/60'
-                          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className="truncate">{prof.name}</span>
-                      {prof.id === currentProfileId && <Check className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-1.5 border-t border-slate-100 pt-1.5 dark:border-slate-800 space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => { onOpenMultiUser(); setIsProfileOpen(false); }}
-                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-amber-700 font-semibold hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30 cursor-pointer transition-colors"
-                  >
-                    <Users className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                    <span>Multi-User Profiles & Pairing</span>
-                  </button>
-                  {onLockApp && (
-                    <button
-                      type="button"
-                      onClick={() => { onLockApp(); setIsProfileOpen(false); }}
-                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-rose-600 font-semibold hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30 cursor-pointer transition-colors"
-                    >
-                      <Lock className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-                      <span>Lock App Now</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+        {/* PWA Install Button (Windows & Android instant install, iOS instructions) */}
+        <PWAInstallButton />
 
         {/* Theme Toggle Button */}
         <button

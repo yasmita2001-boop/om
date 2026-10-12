@@ -3,8 +3,7 @@
  *
  * Consolidated Repository & Storage Engine for Om-LifeOS.
  * - Single source of truth for all 54 entity stores, singletons, and system stores.
- * - Logically separated database schema (db.ts), profile security (profileSecurity.ts),
- *   recycle bin & soft deletion (recycleBin.ts), exports (exportManager.ts), and imports (importManager.ts).
+ * - Logically separated database schema (db.ts), recycle bin & soft deletion (recycleBin.ts), exports (exportManager.ts), and imports (importManager.ts).
  * - Zero duplicate wrapper code, zero redundant patches.
  * - Full backward-compatibility preserved for all existing consumers.
  */
@@ -15,12 +14,6 @@ import {
   DeletionTombstone, generateUUID, parseTimestampMs, computeRecordSignature,
   describeDeletedRecord, createDatabaseSchema
 } from './db';
-
-import {
-  PROFESSIONAL_SECURITY_QUESTIONS, PasswordValidationResult, ProfileCredentialRecord,
-  ProfileSecurityStoreRecord, validatePasswordStrength, validateSecurityQuestionAndAnswer,
-  bytesToBase64, base64ToBytes, createSalt, deriveCredentialHash
-} from './profileSecurity';
 
 import {
   isRecordActive, isRecordDeleted, filterActiveRecords, permanentlyEmptyRecycleBin
@@ -51,13 +44,12 @@ export {
   DB_NAME, DB_VERSION, ENTITY_STORES, SINGLETON_STORES, SYSTEM_STORES,
   TRANSIENT_RECYCLE_SKIP_STORES, SYSTEM_METADATA_STORES, STORE_LABELS,
   generateUUID, parseTimestampMs, computeRecordSignature, describeDeletedRecord,
-  PROFESSIONAL_SECURITY_QUESTIONS, validatePasswordStrength, validateSecurityQuestionAndAnswer,
   isRecordActive, isRecordDeleted, filterActiveRecords, permanentlyEmptyRecycleBin,
   sanitizeWorkspacePayload, downloadBlob,
   universalDataManager, UniversalDataManager, SUPPORTED_EXPORT_FORMATS
 };
 export type {
-  DeletionTombstone, PasswordValidationResult, ProfileCredentialRecord,
+  DeletionTombstone,
   UniversalExportFormat, UniversalBackupPayload, UniversalValidationResult,
   UniversalRestoreOptions, UniversalRestoreResult
 };
@@ -768,8 +760,21 @@ class StorageEngine {
         const req = tombStore.get(binId);
         req.onsuccess = () => {
           const tomb = req.result;
+          const parts = binId.split(':');
+          const storeName = parts[0];
+          const recordId = parts.slice(1).join(':') || binId;
           if (tomb) {
-            tombStore.put({ ...tomb, permanentlyDeleted: true });
+            tombStore.put({ ...tomb, permanentlyDeleted: true, purgedAt: Date.now() });
+          } else {
+            tombStore.put({
+              id: binId,
+              storeName,
+              recordId,
+              profileId: this.activeProfileId || 'default',
+              deletedAt: Date.now(),
+              purgedAt: Date.now(),
+              permanentlyDeleted: true
+            });
           }
         };
         tx.oncomplete = () => {
@@ -1133,23 +1138,6 @@ class StorageEngine {
     return this.performIntegrityAudit();
   }
 
-  // --------------------------------------------------------------------------
-  // PROFILE CREDENTIAL MANAGEMENT HELPERS
-  // --------------------------------------------------------------------------
-
-  public async getProfileSecurityRecord(): Promise<ProfileSecurityStoreRecord> {
-    const record = await this.getSingleton<ProfileSecurityStoreRecord>('profileSecurity');
-    if (record && typeof record === 'object' && record.profiles) {
-      return record;
-    }
-    return { id: 'root', profiles: {} };
-  }
-
-  public async resolveProfileCredentials(profileId: string): Promise<ProfileCredentialRecord | null> {
-    const sec = await this.getProfileSecurityRecord();
-    return sec.profiles[profileId] || null;
-  }
-
   public async deleteProfileAndSettings(profileId: string, settings: AppState): Promise<void> {
     const db = await this.open();
     for (const storeName of ENTITY_STORES) {
@@ -1175,252 +1163,6 @@ class StorageEngine {
 export const storage = new StorageEngine();
 
 // --------------------------------------------------------------------------
-// PROFILE SECURITY CONSOLIDATED FUNCTIONS
-// --------------------------------------------------------------------------
-
-export async function setProfileCredentials(
-  profileId: string,
-  password: string,
-  passwordHint: string,
-  recoveryQuestion: string,
-  recoveryAnswer: string
-): Promise<void> {
-  const passVal = validatePasswordStrength(password);
-  if (!passVal.isValid) throw new Error(passVal.errorMessage);
-  const qaVal = validateSecurityQuestionAndAnswer(recoveryQuestion, recoveryAnswer, password);
-  if (!qaVal.isValid) throw new Error(qaVal.errorMessage);
-  if (!passwordHint.trim()) throw new Error('Password hint is required.');
-  if (passwordHint.toLowerCase().includes(password.toLowerCase())) {
-    throw new Error('Password hint cannot contain the password itself.');
-  }
-
-  const settings = await storage.getSingleton<AppState>('appSettings');
-  const profile = settings?.profiles?.find(p => p.id === profileId);
-  if (!settings || !profile) throw new Error('Profile not found.');
-
-  const passwordSalt = createSalt();
-  const recoverySalt = createSalt();
-  const credentialRecord: ProfileCredentialRecord = {
-    passwordHash: await deriveCredentialHash(password, passwordSalt),
-    passwordSalt: bytesToBase64(passwordSalt),
-    passwordHint: passwordHint.trim(),
-    recoveryQuestion: recoveryQuestion.trim(),
-    recoveryAnswerHash: await deriveCredentialHash(recoveryAnswer.trim().toLowerCase(), recoverySalt),
-    recoveryAnswerSalt: bytesToBase64(recoverySalt)
-  };
-
-  const updatedProfile: UserProfile = {
-    ...profile,
-    passwordHash: credentialRecord.passwordHash,
-    passwordSalt: credentialRecord.passwordSalt,
-    passwordHint: credentialRecord.passwordHint,
-    recoveryQuestion: credentialRecord.recoveryQuestion,
-    recoveryAnswerHash: credentialRecord.recoveryAnswerHash,
-    recoveryAnswerSalt: credentialRecord.recoveryAnswerSalt
-  };
-  const nextSettings: AppState = {
-    ...settings,
-    profiles: settings.profiles.map(p => p.id === profileId ? updatedProfile : p)
-  };
-
-  const security = await storage.getProfileSecurityRecord();
-  security.profiles[profileId] = credentialRecord;
-  await storage.atomicPutMany([
-    { storeName: 'appSettings', item: { id: 'root', value: nextSettings } },
-    { storeName: 'profileSecurity', item: { id: 'root', value: security } }
-  ]);
-}
-
-export async function createLocalProfile(
-  settings: AppState,
-  profile: UserProfile,
-  password?: string,
-  passwordHint?: string,
-  recoveryQuestion?: string,
-  recoveryAnswer?: string
-): Promise<void> {
-  const hasPassword = Boolean(password && password.trim());
-  let credentialRecord: ProfileCredentialRecord | null = null;
-
-  if (hasPassword) {
-    const cleanPass = password!.trim();
-    const passVal = validatePasswordStrength(cleanPass);
-    if (!passVal.isValid) throw new Error(passVal.errorMessage);
-    const cleanHint = (passwordHint || '').trim();
-    const cleanQ = (recoveryQuestion || PROFESSIONAL_SECURITY_QUESTIONS[0]).trim();
-    const cleanA = (recoveryAnswer || '').trim();
-
-    if (!cleanHint) throw new Error('Password hint is required when setting a password.');
-    if (cleanHint.toLowerCase().includes(cleanPass.toLowerCase())) {
-      throw new Error('Password hint cannot contain the password itself.');
-    }
-    const qaVal = validateSecurityQuestionAndAnswer(cleanQ, cleanA, cleanPass);
-    if (!qaVal.isValid) throw new Error(qaVal.errorMessage);
-
-    const passwordSalt = createSalt();
-    const recoverySalt = createSalt();
-    credentialRecord = {
-      passwordHash: await deriveCredentialHash(cleanPass, passwordSalt),
-      passwordSalt: bytesToBase64(passwordSalt),
-      passwordHint: cleanHint,
-      recoveryQuestion: cleanQ,
-      recoveryAnswerHash: await deriveCredentialHash(cleanA.toLowerCase(), recoverySalt),
-      recoveryAnswerSalt: bytesToBase64(recoverySalt)
-    };
-  }
-
-  const credentialedProfile: UserProfile = {
-    ...profile,
-    authType: 'local',
-    isCurrent: true,
-    ...(credentialRecord ? {
-      passwordHash: credentialRecord.passwordHash,
-      passwordSalt: credentialRecord.passwordSalt,
-      passwordHint: credentialRecord.passwordHint,
-      recoveryQuestion: credentialRecord.recoveryQuestion,
-      recoveryAnswerHash: credentialRecord.recoveryAnswerHash,
-      recoveryAnswerSalt: credentialRecord.recoveryAnswerSalt
-    } : {})
-  };
-  const nextSettings: AppState = {
-    ...settings,
-    profileId: credentialedProfile.id,
-    profiles: [...(settings.profiles || []).map(p => ({ ...p, isCurrent: false })), credentialedProfile],
-    currentUser: { name: credentialedProfile.name, email: credentialedProfile.email, provider: 'local' }
-  };
-  const atomicItems: { storeName: string; item: any }[] = [
-    { storeName: 'appSettings', item: { id: 'root', value: nextSettings } }
-  ];
-  if (credentialRecord) {
-    const security = await storage.getProfileSecurityRecord();
-    security.profiles[profile.id] = credentialRecord;
-    atomicItems.push({ storeName: 'profileSecurity', item: { id: 'root', value: security } });
-  }
-  await storage.atomicPutMany(atomicItems);
-}
-
-export async function removeProfilePassword(profileId: string): Promise<AppState> {
-  const settings = await storage.getSingleton<AppState>('appSettings');
-  if (!settings) throw new Error('App settings not found.');
-  const profile = settings.profiles?.find(p => p.id === profileId);
-  if (!profile) throw new Error('Profile not found.');
-
-  const updatedProfile: UserProfile = { ...profile };
-  delete updatedProfile.passwordHash;
-  delete updatedProfile.passwordSalt;
-  delete updatedProfile.passwordHint;
-  delete updatedProfile.recoveryQuestion;
-  delete updatedProfile.recoveryAnswerHash;
-  delete updatedProfile.recoveryAnswerSalt;
-
-  const nextSettings: AppState = {
-    ...settings,
-    profiles: (settings.profiles || []).map(p => p.id === profileId ? updatedProfile : p)
-  };
-
-  const security = await storage.getProfileSecurityRecord();
-  if (security.profiles[profileId]) {
-    delete security.profiles[profileId];
-  }
-
-  await storage.atomicPutMany([
-    { storeName: 'appSettings', item: { id: 'root', value: nextSettings } },
-    { storeName: 'profileSecurity', item: { id: 'root', value: security } }
-  ]);
-  return nextSettings;
-}
-
-export async function resetProfilePassword(profileId: string, password: string, passwordHint: string): Promise<void> {
-  const passVal = validatePasswordStrength(password);
-  if (!passVal.isValid) throw new Error(passVal.errorMessage);
-  if (!passwordHint.trim()) throw new Error('Password hint is required.');
-  if (passwordHint.toLowerCase().includes(password.toLowerCase())) {
-    throw new Error('Password hint cannot contain the password itself.');
-  }
-  const settings = await storage.getSingleton<AppState>('appSettings');
-  const profile = settings?.profiles?.find(p => p.id === profileId);
-  if (!settings || !profile) throw new Error('Profile not found.');
-  const existing = await storage.resolveProfileCredentials(profileId);
-  if (!existing) throw new Error('Profile recovery data is unavailable.');
-
-  const passwordSalt = createSalt();
-  const passwordHash = await deriveCredentialHash(password, passwordSalt);
-  const updatedProfile: UserProfile = {
-    ...profile,
-    passwordSalt: bytesToBase64(passwordSalt),
-    passwordHash,
-    passwordHint: passwordHint.trim()
-  };
-  const nextSettings: AppState = {
-    ...settings,
-    profiles: settings.profiles.map(p => p.id === profileId ? updatedProfile : p)
-  };
-  const security = await storage.getProfileSecurityRecord();
-  security.profiles[profileId] = {
-    ...existing,
-    passwordHash,
-    passwordSalt: updatedProfile.passwordSalt!,
-    passwordHint: updatedProfile.passwordHint || ''
-  };
-  await storage.atomicPutMany([
-    { storeName: 'appSettings', item: { id: 'root', value: nextSettings } },
-    { storeName: 'profileSecurity', item: { id: 'root', value: security } }
-  ]);
-}
-
-export async function verifyProfilePassword(profileId: string, password: string): Promise<boolean> {
-  const record = await storage.resolveProfileCredentials(profileId);
-  if (!record?.passwordHash || !record.passwordSalt) return false;
-  const candidate = await deriveCredentialHash(password, base64ToBytes(record.passwordSalt));
-  return candidate === record.passwordHash;
-}
-
-export async function verifyProfileRecoveryAnswer(profileId: string, answer: string): Promise<boolean> {
-  const record = await storage.resolveProfileCredentials(profileId);
-  if (!record?.recoveryAnswerHash || !record.recoveryAnswerSalt) return false;
-  const candidate = await deriveCredentialHash(answer.trim().toLowerCase(), base64ToBytes(record.recoveryAnswerSalt));
-  return candidate === record.recoveryAnswerHash;
-}
-
-export async function getProfileSecurityInfo(
-  profileId: string
-): Promise<(Pick<UserProfile, 'passwordHint' | 'recoveryQuestion'> & { credentialsReady: boolean }) | null> {
-  const settings = await storage.getSingleton<AppState>('appSettings');
-  const profile = settings?.profiles?.find(p => p.id === profileId);
-  if (!profile) return null;
-  const record = await storage.resolveProfileCredentials(profileId);
-  return {
-    passwordHint: record?.passwordHint || profile.passwordHint || '',
-    recoveryQuestion: record?.recoveryQuestion || profile.recoveryQuestion || '',
-    credentialsReady: Boolean(record)
-  };
-}
-
-export async function deleteLocalProfile(profileId: string): Promise<AppState> {
-  const settings = await storage.getSingleton<AppState>('appSettings');
-  if (!settings?.profiles?.length) throw new Error('No profiles exist.');
-  if (settings.profiles.length <= 1) throw new Error('At least one local profile must remain.');
-  const deletingCurrent = settings.profileId === profileId;
-  settings.profiles = settings.profiles.filter(p => p.id !== profileId);
-  if (!settings.profiles.length) throw new Error('At least one local profile must remain.');
-  if (deletingCurrent) {
-    const next = settings.profiles[0];
-    settings.profileId = next.id;
-    settings.profiles = settings.profiles.map(p => ({ ...p, isCurrent: p.id === next.id }));
-    settings.currentUser = { name: next.name, email: next.email, provider: 'local' };
-  }
-
-  const security = await storage.getProfileSecurityRecord();
-  delete security.profiles[profileId];
-
-  await storage.atomicPutMany([
-    { storeName: 'appSettings', item: { id: 'root', value: settings } },
-    { storeName: 'profileSecurity', item: { id: 'root', value: security } }
-  ]);
-  return settings;
-}
-
-// --------------------------------------------------------------------------
 // WORKSPACE BASELINE DATA & RESET HELPERS
 // --------------------------------------------------------------------------
 
@@ -1433,7 +1175,7 @@ export async function ensureDefaultProfiles(): Promise<AppState> {
       profiles: [
         {
           id: 'om-master-profile',
-          name: 'Primary Workspace',
+          name: 'Personal',
           email: 'master@omlifeos.local',
           role: 'Personal',
           authType: 'local',
@@ -1444,7 +1186,7 @@ export async function ensureDefaultProfiles(): Promise<AppState> {
         }
       ],
       currentUser: {
-        name: 'Primary Workspace',
+        name: 'Personal',
         email: 'master@omlifeos.local',
         provider: 'local'
       },
@@ -1501,7 +1243,7 @@ export async function purgeAllDefaultDataPermanently(): Promise<{ success: boole
     const allStoreNames = Array.from(db.objectStoreNames);
 
     for (const storeName of allStoreNames) {
-      if (storeName === 'appSettings' || storeName === 'profileSecurity') {
+      if (storeName === 'appSettings') {
         continue;
       }
 

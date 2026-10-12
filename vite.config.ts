@@ -15,8 +15,8 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'Om-LifeOS — Executive Operating System',
-          short_name: 'Om-LifeOS',
+          name: 'Om',
+          short_name: 'Om',
           description: 'Executive Personal Operating System with unified project timelines, routines, habit architecture, finance, health, and sovereign Google Drive sync.',
           theme_color: '#4F46E5',
           background_color: '#0B0F19',

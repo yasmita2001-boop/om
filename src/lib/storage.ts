@@ -986,11 +986,6 @@ class StorageEngine {
       targetProfileName
     });
 
-    try {
-      sessionStorage.setItem('om_session_unlocked', targetProfileId);
-      localStorage.setItem('om_unlocked_profile', targetProfileId);
-    } catch {}
-
     this.broadcastChange('all', 'importFullBackup');
     return {
       success: res.success,

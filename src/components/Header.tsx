@@ -74,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
   });
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full items-center justify-between border-b border-slate-200/80 bg-white/90 px-2 sm:px-3 lg:px-6 backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0B0F19]/90 transition-colors gap-1 sm:gap-1.5 lg:gap-2">
+    <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full items-center justify-between border-b border-slate-200/80 bg-white px-2 sm:px-3 lg:px-6 dark:border-white/[0.08] dark:bg-[#0B0F19] gap-1 sm:gap-1.5 lg:gap-2">
       {/* Zone 1: Left - Brand Identity & Nepali BS / Gregorian AD Date (Date is placed where search was) */}
       <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 shrink-0 select-none">
         {/* Mobile & Tablet Hamburger Drawer Trigger */}

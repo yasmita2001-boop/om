@@ -35,10 +35,13 @@
     background-color: #F8FAFC;
     color: #0f172a;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
   }
 
   html.dark, html.dark body, html.dark #root {
-    background-color: #0B0F19;
+    background-color: #0B0F19 !important;
     color: #f8fafc;
   }
 
@@ -57,6 +60,8 @@
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
     overscroll-behavior-x: none;
   }
 
@@ -65,6 +70,10 @@
     min-height: 100vh;
     min-height: 100dvh;
     overflow-x: clip;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    background-color: #F8FAFC;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;

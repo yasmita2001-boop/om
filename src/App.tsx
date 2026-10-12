@@ -350,14 +350,19 @@ export default function App() {
     }
   }, [activeProfileId, loadAllData]);
 
-  // Sync theme with HTML root class and accent color
+  // Sync theme with HTML root class, localStorage, and accent color
   useEffect(() => {
+    try {
+      localStorage.setItem('om_theme', theme);
+    } catch {}
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
       document.documentElement.setAttribute('data-lifeos-mode', 'dark');
+      document.documentElement.style.backgroundColor = '#0B0F19';
     } else {
       document.documentElement.classList.remove('dark');
       document.documentElement.setAttribute('data-lifeos-mode', 'light');
+      document.documentElement.style.backgroundColor = '#F8FAFC';
     }
     const brandColor = appSettings?.accentColor || '#6366f1';
     document.documentElement.style.setProperty('--color-brand', brandColor);
@@ -404,6 +409,16 @@ export default function App() {
   const toggleTheme = async () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
+    try {
+      localStorage.setItem('om_theme', newTheme);
+      if (newTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.style.backgroundColor = '#0B0F19';
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.style.backgroundColor = '#F8FAFC';
+      }
+    } catch {}
     const settingsObj = (await storage.getSingleton<AppState>('appSettings')) || {
       profileId: 'default',
       profiles: [],
@@ -463,7 +478,16 @@ export default function App() {
   const categoriesList = appSettings?.noteCategories || ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'];
 
   if (!appSettings) {
-    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">Loading Om-LifeOS…</div>;
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F19] flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm font-medium">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 font-serif font-bold text-white text-xs">
+            ॐ
+          </div>
+          <span>Loading Om-LifeOS…</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -502,7 +526,7 @@ export default function App() {
         />
 
         {/* Main Content Viewport - Responsive across Mobile, Tablet, Laptop, and Desktop */}
-        <main className="flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-28 md:pb-12 transition-colors w-full">
+        <main className="flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-28 md:pb-12 w-full">
           <div className="w-full space-y-6">
             {activeModule === 'dashboard' && (
               <DashboardView

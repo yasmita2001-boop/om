@@ -197,11 +197,6 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
         targetProfileName: profileName
       });
 
-      try {
-        sessionStorage.setItem('om_session_unlocked', profileId);
-        localStorage.setItem('om_unlocked_profile', profileId);
-      } catch {}
-
       const ghostInfo = result.blockedGhostCount > 0 ? ` (${result.blockedGhostCount} deleted items blocked)` : '';
       onSuccess?.(`✓ Restored ${result.restoredRecordCount} record(s) into "${profileName}"!${ghostInfo}`);
 

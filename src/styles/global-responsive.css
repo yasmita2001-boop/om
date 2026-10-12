@@ -84,7 +84,9 @@
 html, body {
   min-height: 100%;
   width: 100%;
-  overscroll-behavior-x: none;
+  overscroll-behavior: none !important;
+  overscroll-behavior-y: none !important;
+  overscroll-behavior-x: none !important;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -92,6 +94,7 @@ html, body {
   min-height: 100vh;
   min-height: 100dvh;
   width: 100%;
+  overscroll-behavior: none !important;
 }
 
 main {

@@ -946,7 +946,16 @@ export class UniversalDataManager {
 
     if (parsed.format === 'om-lifeos-universal-v1') {
       formatDetected = 'universal-backup';
-      rawEntities = parsed.data || {};
+      // Support both the canonical `data` field and older/alternate backups using `entities`.
+      // Prefer a non-empty `data` object; fall back to `entities` when `data` is missing or empty.
+      const hasDataEntities =
+        parsed.data &&
+        typeof parsed.data === 'object' &&
+        !Array.isArray(parsed.data) &&
+        Object.keys(parsed.data).length > 0;
+      rawEntities = hasDataEntities
+        ? parsed.data
+        : (parsed.entities && typeof parsed.entities === 'object' ? parsed.entities : {});
       providedChecksum = parsed.checksum;
     } else if (parsed.backupType === 'full-atomic-snapshot' || (parsed.app === 'Om-LifeOS' && parsed.data)) {
       formatDetected = 'atomic-snapshot';
@@ -1005,9 +1014,10 @@ export class UniversalDataManager {
 
     // 3. Integrity verification (if checksum provided)
     if (providedChecksum) {
-      const dataStr = JSON.stringify(parsed.data || cleanData);
+      // Hash the exact entity source selected by format detection (`data` or `entities`).
+      const dataStr = JSON.stringify(rawEntities);
       computedChecksum = calculateChecksum(dataStr);
-      if (providedChecksum === computedChecksum || providedChecksum === calculateChecksum(JSON.stringify(parsed.data))) {
+      if (providedChecksum === computedChecksum) {
         checksumStatus = 'verified';
       } else {
         checksumStatus = 'mismatch';

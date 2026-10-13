@@ -13,6 +13,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { AttachmentUploader, AttachmentViewer, StoredAttachmentMeta } from '../components/AttachmentUploader';
 import { NoteRichEditor } from '../components/NoteRichEditor';
 import { globalTextReader } from '../lib/voiceService';
+import { sanitizeHtml } from '../lib/sanitizeHtml';
 
 interface NotesViewProps {
   notes: Note[];
@@ -1028,7 +1029,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                       {/* Content Preview */}
                       <div 
                         className="mt-2.5 text-xs text-slate-600 dark:text-slate-300 max-h-36 overflow-hidden line-clamp-4 leading-relaxed om-rich-rendered"
-                        dangerouslySetInnerHTML={{ __html: n.html || (n.body ? n.body.replace(/\n/g, '<br/>') : '') }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.html || (n.body ? n.body.replace(/\n/g, '<br/>') : '')) }}
                       />
 
                       {/* Attached Files indicator */}
@@ -1427,7 +1428,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               {/* Content */}
               <div 
                 className="text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-slate-200 max-w-none om-rich-rendered"
-                dangerouslySetInnerHTML={{ __html: viewingNote.html || (viewingNote.body ? viewingNote.body.replace(/\n/g, '<br/>') : '') }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(viewingNote.html || (viewingNote.body ? viewingNote.body.replace(/\n/g, '<br/>') : '')) }}
               />
 
               {/* Tags */}

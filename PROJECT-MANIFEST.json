@@ -1,11 +1,10 @@
 {
   "project": "Om LifeOS",
-  "package": "Vite browser app",
-  "frontend": {
-    "html": "index.html",
-    "css": "assets/app.css",
-    "javascript": "assets/app.js"
-  },
+  "package": "Vite + React browser app (PWA)",
+  "entry": "index.html",
+  "source": "src/",
+  "build": "npm run build",
+  "output": "dist/",
   "data_migration": false,
   "storage_schema_changed": false,
   "application_data_deleted": false,

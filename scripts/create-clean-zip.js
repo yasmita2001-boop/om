@@ -57,14 +57,6 @@ async function createCleanZip() {
   const rootZipPath = path.join(rootDir, 'om-lifeos-clean-github-vercel.zip');
   fs.writeFileSync(rootZipPath, content);
   console.log(`✓ Created root archive: ${rootZipPath} (${(content.length / 1024 / 1024).toFixed(2)} MB)`);
-
-  // Also put in public/ so it can be downloaded via browser
-  const publicDir = path.join(rootDir, 'public');
-  if (fs.existsSync(publicDir)) {
-    const publicZipPath = path.join(publicDir, 'om-lifeos-clean-github-vercel.zip');
-    fs.writeFileSync(publicZipPath, content);
-    console.log(`✓ Saved public downloadable copy: ${publicZipPath}`);
-  }
 }
 
 createCleanZip().catch(err => {

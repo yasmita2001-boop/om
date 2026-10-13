@@ -10,6 +10,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { AttachmentUploader, AttachmentViewer, StoredAttachmentMeta } from '../components/AttachmentUploader';
 import { globalTextReader } from '../lib/voiceService';
 import { NoteRichEditor } from '../components/NoteRichEditor';
+import { sanitizeHtml } from '../lib/sanitizeHtml';
 
 interface JournalViewProps {
   journal: JournalEntry[];
@@ -644,7 +645,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
 
                     <div
                       className="mt-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed om-rich-rendered"
-                      dangerouslySetInnerHTML={{ __html: j.html || (j.text ? j.text.replace(/\n/g, '<br/>') : '') }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(j.html || (j.text ? j.text.replace(/\n/g, '<br/>') : '')) }}
                     />
 
                     {/* Attached files indicator / download list */}

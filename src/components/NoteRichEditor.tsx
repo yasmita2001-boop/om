@@ -7,6 +7,7 @@ import {
   ChevronDown, Plus, Minus, Trash2, Sparkles,
   Grid, Volume2, X, Columns, Check, RotateCcw
 } from 'lucide-react';
+import { sanitizeHtml } from '../lib/sanitizeHtml';
 import { TextReaderController, VoiceLanguage, isSpeechSynthesisSupported } from '../lib/voiceService';
 
 export interface NoteRichEditorProps {
@@ -424,7 +425,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
 
   useEffect(() => {
     if (editorRef.current && initialHtml !== lastRenderedHtmlRef.current) {
-      editorRef.current.innerHTML = initialHtml || '';
+      editorRef.current.innerHTML = sanitizeHtml(initialHtml || '');
       lastRenderedHtmlRef.current = initialHtml || '';
     }
   }, [initialHtml]);
@@ -533,7 +534,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     range.deleteContents();
 
     const el = document.createElement('div');
-    el.innerHTML = html;
+    el.innerHTML = sanitizeHtml(html);
     const frag = document.createDocumentFragment();
     let node: Node | null;
     let lastNode: Node | null = null;

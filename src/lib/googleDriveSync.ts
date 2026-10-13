@@ -35,9 +35,16 @@ export const DRIVE_SCOPES = [
 
 export const BACKUP_FILE_NAME = 'om-lifeos-backup.omlifeos';
 
-// Initialize Firebase App instance safely
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-export const auth = getAuth(app);
+// Lazy, guarded Firebase init: a failure here (blocked storage, unsupported
+// webview, etc.) must never prevent the rest of the app from opening.
+let cachedAuth: ReturnType<typeof getAuth> | null = null;
+function getFirebaseAuth() {
+  if (!cachedAuth) {
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    cachedAuth = getAuth(app);
+  }
+  return cachedAuth;
+}
 
 // Provider setup
 const provider = new GoogleAuthProvider();
@@ -87,7 +94,8 @@ let isSigningIn = false;
 export function initGoogleAuth(
   onStateChange: (user: GoogleUser | null, token: string | null) => void
 ): () => void {
-  return onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
+  try {
+    return onAuthStateChanged(getFirebaseAuth(), async (fbUser: FirebaseUser | null) => {
     if (fbUser && inMemoryAccessToken) {
       currentGoogleUser = {
         email: fbUser.email,
@@ -103,7 +111,12 @@ export function initGoogleAuth(
       }
       onStateChange(null, null);
     }
-  });
+    });
+  } catch (err) {
+    console.warn('[googleDriveSync] Auth unavailable:', err);
+    onStateChange(null, null);
+    return () => {};
+  }
 }
 
 /**
@@ -112,14 +125,15 @@ export function initGoogleAuth(
 export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToken: string }> {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(getFirebaseAuth(), provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
 
     if (!credential?.accessToken) {
       throw new Error('Failed to retrieve access token from Google Sign-In.');
     }
 
-    inMemoryAccessToken = credential.accessToken;
+    const accessToken: string = credential.accessToken;
+    inMemoryAccessToken = accessToken;
     currentGoogleUser = {
       email: result.user.email,
       displayName: result.user.displayName,
@@ -129,7 +143,7 @@ export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToke
 
     return {
       user: currentGoogleUser,
-      accessToken: inMemoryAccessToken
+      accessToken
     };
   } catch (error: any) {
     console.error('Google Sign-in failed:', error);
@@ -150,7 +164,7 @@ export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToke
  */
 export async function signOutGoogle(): Promise<void> {
   try {
-    await signOut(auth);
+    await signOut(getFirebaseAuth());
   } catch {}
   inMemoryAccessToken = null;
   currentGoogleUser = null;

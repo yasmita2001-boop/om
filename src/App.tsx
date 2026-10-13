@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import {
   NavModule, AppState, Task, Goal, Milestone, Strategy, KPI, Mission,
   Routine, Habit, HabitLog, FinanceAccount, FinanceTransaction, Loan,
@@ -25,28 +25,43 @@ import { AlarmTriggerModal } from './components/AlarmTriggerModal';
 import { VoiceStudioWidget } from './components/VoiceStudioWidget';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
+import { lazyWithRetry } from './lib/lazyWithRetry';
 import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress } from './lib/goalTaskSync';
 
 // Views
 import { DashboardView } from './views/DashboardView';
-import { TasksView } from './views/TasksView';
-import { RoutineView } from './views/RoutineView';
-import { GoalsView } from './views/GoalsView';
-import { FocusView } from './views/FocusView';
-import { NotesView } from './views/NotesView';
-import { JournalView } from './views/JournalView';
-import { CalculatorView } from './views/CalculatorView';
-import { FinanceView } from './views/FinanceView';
-import { HealthView } from './views/HealthView';
-import { WorkView } from './views/WorkView';
-import { PeopleView } from './views/PeopleView';
-import { SpiritualView } from './views/SpiritualView';
-import { ThingsView } from './views/ThingsView';
-import { SettingsView } from './views/SettingsView';
+const TasksView = lazyWithRetry(() => import('./views/TasksView').then(m => ({ default: m.TasksView })));
+const RoutineView = lazyWithRetry(() => import('./views/RoutineView').then(m => ({ default: m.RoutineView })));
+const GoalsView = lazyWithRetry(() => import('./views/GoalsView').then(m => ({ default: m.GoalsView })));
+const FocusView = lazyWithRetry(() => import('./views/FocusView').then(m => ({ default: m.FocusView })));
+const NotesView = lazyWithRetry(() => import('./views/NotesView').then(m => ({ default: m.NotesView })));
+const JournalView = lazyWithRetry(() => import('./views/JournalView').then(m => ({ default: m.JournalView })));
+const CalculatorView = lazyWithRetry(() => import('./views/CalculatorView').then(m => ({ default: m.CalculatorView })));
+const FinanceView = lazyWithRetry(() => import('./views/FinanceView').then(m => ({ default: m.FinanceView })));
+const HealthView = lazyWithRetry(() => import('./views/HealthView').then(m => ({ default: m.HealthView })));
+const WorkView = lazyWithRetry(() => import('./views/WorkView').then(m => ({ default: m.WorkView })));
+const PeopleView = lazyWithRetry(() => import('./views/PeopleView').then(m => ({ default: m.PeopleView })));
+const SpiritualView = lazyWithRetry(() => import('./views/SpiritualView').then(m => ({ default: m.SpiritualView })));
+const ThingsView = lazyWithRetry(() => import('./views/ThingsView').then(m => ({ default: m.ThingsView })));
+const SettingsView = lazyWithRetry(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
+
+
+const ViewFallback: React.FC = () => (
+  <div role="status" aria-live="polite" className="flex items-center justify-center py-24">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-500 dark:border-slate-700 dark:border-t-indigo-400" />
+    <span className="sr-only">Loading…</span>
+  </div>
+);
 
 export default function App() {
   const [activeModule, setActiveModule] = useState<NavModule>('dashboard');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('om_theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+    } catch {}
+    return 'light';
+  });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -315,7 +330,8 @@ export default function App() {
 
         const targetId = settingsData.profileId || settingsData.profiles?.[0]?.id || 'om-master-profile';
         if (targetId) {
-          const savedProfile = localStorage.getItem('om_active_profile');
+          let savedProfile: string | null = null;
+          try { savedProfile = localStorage.getItem('om_active_profile'); } catch {}
           const isKnownProfile = settingsData.profiles?.some(p => p.id === savedProfile);
           const activeProfId = (isKnownProfile && savedProfile) ? savedProfile : targetId;
 
@@ -528,6 +544,7 @@ export default function App() {
         {/* Main Content Viewport - Responsive across Mobile, Tablet, Laptop, and Desktop */}
         <main className="flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-28 md:pb-12 w-full">
           <div className="w-full space-y-6">
+            <Suspense fallback={<ViewFallback />}>
             {activeModule === 'dashboard' && (
               <DashboardView
                 tasks={tasks}
@@ -746,6 +763,7 @@ export default function App() {
                 onToggleTheme={toggleTheme}
               />
             )}
+            </Suspense>
           </div>
         </main>
       </div>

@@ -7,15 +7,10 @@ const __dirname = path.dirname(__filename);
 
 const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
-const publicDir = path.join(rootDir, 'public');
 
 if (!fs.existsSync(distDir)) {
   console.error('Error: dist directory does not exist. Run "npm run build" first.');
   process.exit(1);
-}
-
-if (!fs.existsSync(publicDir)) {
-  fs.mkdirSync(publicDir, { recursive: true });
 }
 
 const indexHtmlPath = path.join(distDir, 'index.html');
@@ -35,7 +30,7 @@ if (fs.existsSync(assetsDir)) {
     if (file.endsWith('.css')) {
       const cssContent = fs.readFileSync(path.join(assetsDir, file), 'utf8');
       const cssRegex = new RegExp(`<link[^>]+href=["'](?:\\./|/)?assets/${file}["'][^>]*>`, 'g');
-      html = html.replace(cssRegex, `<style>/* ${file} */\n${cssContent}</style>`);
+      html = html.replace(cssRegex, () => `<style>/* ${file} */\n${cssContent}</style>`);
     }
   }
 
@@ -46,18 +41,20 @@ if (fs.existsSync(assetsDir)) {
       // Escape </script> inside script tags
       const safeJs = jsContent.replace(/<\/script>/gi, '<\\/script>');
       const scriptRegex = new RegExp(`<script[^>]+src=["'](?:\\./|/)?assets/${file}["'][^>]*></script>`, 'g');
-      html = html.replace(scriptRegex, `<script type="module">/* ${file} */\n${safeJs}\n</script>`);
+      html = html.replace(scriptRegex, () => `<script type="module">/* ${file} */\n${safeJs}\n</script>`);
     }
   }
 }
 
-// Write the complete standalone HTML to both dist/ and public/
+// Remove leftovers that point to files which do not exist in a standalone file
+html = html.replace(/<link[^>]+rel=["']modulepreload["'][^>]*>\s*/g, '');
+html = html.replace(/<link[^>]+rel=["']manifest["'][^>]*>\s*/g, '');
+html = html.replace(/<script[^>]+id=["']vite-plugin-pwa:register-sw["'][^>]*><\/script>\s*/g, '');
+
+// Write the complete standalone HTML to dist/
 const outputDistPath = path.join(distDir, 'om-lifeos-complete.html');
-const outputPublicPath = path.join(publicDir, 'om-lifeos-complete.html');
 
 fs.writeFileSync(outputDistPath, html, 'utf8');
-fs.writeFileSync(outputPublicPath, html, 'utf8');
 
 const sizeMb = (fs.statSync(outputDistPath).size / 1024 / 1024).toFixed(2);
 console.log(`✓ Successfully generated complete standalone HTML: ${outputDistPath} (${sizeMb} MB)`);
-console.log(`✓ Copied to public: ${outputPublicPath}`);

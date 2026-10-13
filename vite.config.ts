@@ -1,8 +1,16 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
+
+// `npm run build:single` inlines everything into ONE html file, so code-splitting
+// and the service worker must be off for that build (otherwise the inlined entry
+// would try to import chunk files that do not exist next to the html file).
+const isSingleFile = process.env.npm_lifecycle_event === 'build:single';
 
 export default defineConfig(() => {
   return {
@@ -10,7 +18,16 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
-      VitePWA({
+      ...(isSingleFile ? [{
+        // No service worker in the single-file build: give main.tsx a no-op register function.
+        name: 'om-stub-pwa-register',
+        resolveId(id: string) {
+          return id === 'virtual:pwa-register' ? '\0om-pwa-register-stub' : null;
+        },
+        load(id: string) {
+          return id === '\0om-pwa-register-stub' ? 'export const registerSW = () => () => {};' : null;
+        },
+      }] : [VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
@@ -47,6 +64,9 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globIgnores: ['**/om-lifeos-complete.html'],
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          navigateFallback: 'index.html',
           cleanupOutdatedCaches: true,
           runtimeCaching: [
             {
@@ -80,18 +100,17 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
-      }),
+      })]),
     ],
     resolve: {
       alias: {
-        '@': path.resolve('.'),
+        '@': rootDir,
       },
     },
     build: {
-      target: 'esnext',
+      target: 'es2020', // broad device support (iOS 14+, Chrome 80+, Firefox 80+); 'esnext' can white-screen older phones
       minify: 'terser',
       terserOptions: {
         compress: {
@@ -106,26 +125,24 @@ export default defineConfig(() => {
       cssCodeSplit: true,
       sourcemap: false,
       chunkSizeWarningLimit: 1000,
+      modulePreload: isSingleFile ? (false as const) : undefined,
       rollupOptions: {
         output: {
+          ...(isSingleFile ? { inlineDynamicImports: true } : {}),
           chunkFileNames: 'assets/[name]-[hash].js',
           entryFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash].[ext]',
-          manualChunks(id) {
+          manualChunks: isSingleFile ? undefined : (id: string) => {
             if (id.includes('node_modules')) {
-              if (id.includes('react') || id.includes('react-dom')) {
-                return 'vendor-react';
-              }
               if (id.includes('lucide-react')) {
                 return 'vendor-icons';
               }
-              if (id.includes('motion')) {
-                return 'vendor-motion';
+              if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) {
+                return 'vendor-react';
               }
-              if (id.includes('jszip')) {
-                return 'vendor-jszip';
+              if (id.includes('firebase')) {
+                return 'vendor-firebase';
               }
-              return 'vendor-misc';
             }
             if (id.includes('calculatorConfig') || id.includes('CalculatorView')) {
               return 'feature-calculator';
@@ -133,7 +150,7 @@ export default defineConfig(() => {
             if (id.includes('nepaliDate')) {
               return 'feature-date';
             }
-            if (id.includes('exportHtml') || id.includes('exportManager')) {
+            if (id.includes('exportHtml')) {
               return 'feature-export';
             }
           },

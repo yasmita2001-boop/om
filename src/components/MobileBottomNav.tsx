@@ -102,7 +102,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       )}
 
       {/* Persistent Bottom Bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex h-16 pb-safe items-center justify-around border-t border-slate-200/80 bg-white/95 px-1 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#0B0F19]/95 md:hidden shadow-lg transition-colors">
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex h-16 pb-safe items-center justify-around border-t border-slate-200/80 bg-white px-1 dark:border-white/[0.08] dark:bg-[#0B0F19] md:hidden shadow-lg transition-colors">
         {primaryTabs.map(tab => {
           const isActive = activeModule === tab.id;
           return (

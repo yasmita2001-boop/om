@@ -242,7 +242,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
           className={`flex items-center gap-2 px-3.5 py-2.5 rounded-full shadow-lg border transition-all cursor-pointer ${
             isSpeaking
               ? 'bg-slate-900 text-white border-indigo-500/40 ring-4 ring-indigo-500/10'
-              : 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xl'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xl'
           }`}
           title="Open Voice & Audio Studio"
         >

@@ -400,13 +400,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {[...finance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3).map(tx => (
               <div
                 key={tx.id}
-                className="flex items-center justify-between text-xs sm:text-sm py-1.5 border-b border-slate-50 dark:border-slate-800/40 last:border-0"
+                className="flex items-center justify-between gap-2 min-w-0 text-xs sm:text-sm py-1.5 border-b border-slate-50 dark:border-slate-800/40 last:border-0"
               >
-                <div>
+                <div className="min-w-0 flex-1 truncate">
                   <span className="font-semibold text-slate-800 dark:text-slate-200">{tx.category}</span>
-                  {tx.note && <span className="ml-1.5 text-slate-400 truncate">({tx.note})</span>}
+                  {tx.note && <span className="ml-1.5 text-slate-400">({tx.note})</span>}
                 </div>
-                <span className={`font-mono font-bold tabular-nums ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900 dark:text-white'}`}>
+                <span className={`shrink-0 font-mono font-bold tabular-nums ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900 dark:text-white'}`}>
                   {tx.type === 'income' ? '+' : '-'}₹{Number(tx.amount || 0).toLocaleString('en-IN')}
                 </span>
               </div>

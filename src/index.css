@@ -33,10 +33,6 @@
     min-height: 100%;
     background-color: #F8FAFC;
     color: #0f172a;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: none;
-    overscroll-behavior-y: none;
-    overscroll-behavior-x: none;
   }
 
   html.dark, html.dark body, html.dark #root {
@@ -56,22 +52,17 @@
   }
 
   html {
-    scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-    overscroll-behavior: none;
-    overscroll-behavior-y: none;
-    overscroll-behavior-x: none;
+    overflow-x: hidden;
+    max-width: 100%;
   }
 
   body {
     font-family: var(--font-sans);
     min-height: 100vh;
     min-height: 100dvh;
-    overflow-x: clip;
-    overscroll-behavior: none;
-    overscroll-behavior-y: none;
-    overscroll-behavior-x: none;
+    max-width: 100%;
     background-color: #F8FAFC;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -136,10 +127,12 @@
 
 /* Ultra-premium interactive button press */
 .btn-press, button:not([disabled]) {
-  transition: transform 0.12s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-.btn-press:active, button:not([disabled]):active {
-  transform: scale(0.98);
+@media (hover: hover) and (pointer: fine) {
+  .btn-press:active, button:not([disabled]):active {
+    transform: scale(0.98);
+  }
 }
 
 /* Accessible and polished focus rings */

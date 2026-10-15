@@ -1,5 +1,8 @@
 {
-  "name": "Om LifeOS",
-  "description": "Executive personal operating system: tasks, goals, routines, finance, health, notes and Google Drive backup.",
-  "requestFramePermissions": []
+  "name": "Remix Remix Remix Remix Remix Remix  Echo1",
+  "description": "Mirror your actions and inputs instantly across multiple devices without any modifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

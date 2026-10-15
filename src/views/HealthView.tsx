@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import {
   Heart, Activity, Moon, Droplet, Calendar, Trash2,
-  Stethoscope, FileText, Edit3, X
+  Stethoscope, FileText, Edit3, X, Target, CheckCircle2, Circle
 } from 'lucide-react';
 import {
   HealthProfile, HealthMeasurement, SleepRecord, WaterRecord,
-  NutritionRecord, HealthAppointment, HealthNote
+  NutritionRecord, HealthAppointment, HealthNote, Goal
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
+import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
+import { syncGoalProgressFromHealth, syncGoalProgressFromAppointments } from '../lib/goalTaskSync';
 
 interface HealthViewProps {
   profile?: HealthProfile;
@@ -19,6 +21,7 @@ interface HealthViewProps {
   nutritionRecords: NutritionRecord[];
   appointments: HealthAppointment[];
   healthNotes?: HealthNote[];
+  goals?: Goal[];
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
@@ -44,11 +47,21 @@ export const HealthView: React.FC<HealthViewProps> = ({
   nutritionRecords,
   appointments,
   healthNotes = [],
+  goals = [],
   onRefresh,
   onSuccess
 }) => {
   const today = new Date().toISOString().slice(0, 10);
   const [activeTab, setActiveTab] = useState<HealthTab>('movement');
+
+  // Goal linking state for appointments
+  const [apptInputMode, setApptInputMode] = useState<'manual' | 'link'>('manual');
+  const [apptGoalId, setApptGoalId] = useState<string>('');
+
+  const [hNoteInputMode, setHNoteInputMode] = useState<'manual' | 'link'>('manual');
+  const [hNoteGoalId, setHNoteGoalId] = useState<string>('');
+
+  const [editGoalId, setEditGoalId] = useState<string>('');
 
   // Profile form
   const [name, setName] = useState(profile?.name || '');
@@ -92,6 +105,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
   const handleOpenEdit = (store: EditTarget['store'], item: any) => {
     setEditTarget({ store, item });
     setEditDate(item.date || today);
+    setEditGoalId(item.goalId || '');
 
     if (store === 'healthMeasurements') {
       setEditTitle(item.exercise || 'Workout');
@@ -119,6 +133,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
     const { store, item } = editTarget;
     const now = Date.now();
+    const targetGoalId = editGoalId || null;
 
     if (store === 'healthMeasurements') {
       const updated: HealthMeasurement = {
@@ -128,6 +143,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
         steps: editVal1 ? Number(editVal1) : undefined,
         duration: editVal2 ? Number(editVal2) : undefined,
         weight: editSubtitle ? Number(editSubtitle) : undefined,
+        goalId: targetGoalId,
         updatedAt: now
       };
       await storage.put('healthMeasurements', updated);
@@ -137,6 +153,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
         ...item,
         date: editDate || today,
         hours: Number(editVal1) || 0,
+        goalId: targetGoalId,
         updatedAt: now
       };
       await storage.put('sleepRecords', updated);
@@ -146,6 +163,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
         ...item,
         date: editDate || today,
         amount: Number(editVal1) || 0,
+        goalId: targetGoalId,
         updatedAt: now
       };
       await storage.put('waterRecords', updated);
@@ -156,6 +174,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
         date: editDate || today,
         calories: editVal1 ? Number(editVal1) : undefined,
         note: editNote.trim() || undefined,
+        goalId: targetGoalId,
         updatedAt: now
       };
       await storage.put('nutritionRecords', updated);
@@ -166,6 +185,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
         title: editTitle.trim(),
         doctor: editSubtitle.trim() || undefined,
         date: editDate || today,
+        goalId: targetGoalId,
         updatedAt: now
       };
       await storage.put('healthAppointments', updated);
@@ -175,10 +195,18 @@ export const HealthView: React.FC<HealthViewProps> = ({
         ...item,
         date: editDate || today,
         text: editNote.trim(),
+        goalId: targetGoalId,
         updatedAt: now
       };
       await storage.put('healthNotes', updated);
       onSuccess('✓ Health note updated');
+    }
+
+    if (targetGoalId) {
+      await syncGoalProgressFromHealth(targetGoalId);
+    }
+    if (item.goalId && item.goalId !== targetGoalId) {
+      await syncGoalProgressFromHealth(item.goalId);
     }
 
     setEditTarget(null);
@@ -188,7 +216,12 @@ export const HealthView: React.FC<HealthViewProps> = ({
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     try {
+      const itemToDelete: any = await storage.get(deleteTarget.store, deleteTarget.id);
+      const linkedGoalId = itemToDelete?.goalId;
       await storage.delete(deleteTarget.store, deleteTarget.id);
+      if (linkedGoalId) {
+        await syncGoalProgressFromHealth(linkedGoalId);
+      }
       onSuccess(`✓ ${deleteTarget.name} deleted`);
       setDeleteTarget(null);
       onRefresh();
@@ -205,6 +238,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
       height: Number(height),
       weight: Number(weight),
       targetWeight: Number(targetWeight),
+      goalId: profile?.goalId || null,
       updatedAt: Date.now()
     };
     await storage.setSingleton('healthProfile', updated);
@@ -291,12 +325,38 @@ export const HealthView: React.FC<HealthViewProps> = ({
       title: apptTitle.trim(),
       doctor: apptDoctor.trim() || undefined,
       date: apptDate,
+      status: 'scheduled',
+      completed: false,
+      goalId: apptGoalId || undefined,
       createdAt: Date.now()
     };
     await storage.put('healthAppointments', appt);
-    onSuccess('✓ Doctor appointment logged');
+    if (appt.goalId) {
+      await syncGoalProgressFromAppointments(appt.goalId, appt.id, false, 'scheduled');
+    }
+    onSuccess('✓ Doctor appointment scheduled');
     setApptTitle('');
     setApptDoctor('');
+    setApptGoalId('');
+    setApptInputMode('manual');
+    onRefresh();
+  };
+
+  const handleToggleAppointmentComplete = async (appt: HealthAppointment) => {
+    const isComp = Boolean(appt.completed || appt.status === 'completed');
+    const nextCompleted = !isComp;
+    const nextStatus: 'scheduled' | 'completed' = nextCompleted ? 'completed' : 'scheduled';
+    const updated: HealthAppointment = {
+      ...appt,
+      completed: nextCompleted,
+      status: nextStatus,
+      updatedAt: Date.now()
+    };
+    await storage.put('healthAppointments', updated);
+    if (appt.goalId) {
+      await syncGoalProgressFromAppointments(appt.goalId, appt.id, nextCompleted, nextStatus);
+    }
+    onSuccess(nextCompleted ? `✓ Attended checkup: "${appt.title}"` : `Checkup marked scheduled: "${appt.title}"`);
     onRefresh();
   };
 
@@ -308,11 +368,17 @@ export const HealthView: React.FC<HealthViewProps> = ({
       id: generateUUID(),
       date: today,
       text: hNoteText.trim(),
+      goalId: hNoteGoalId || undefined,
       createdAt: Date.now()
     };
     await storage.put('healthNotes', hn);
+    if (hn.goalId) {
+      await syncGoalProgressFromHealth(hn.goalId);
+    }
     onSuccess('✓ Health observation saved');
     setHNoteText('');
+    setHNoteGoalId('');
+    setHNoteInputMode('manual');
     onRefresh();
   };
 
@@ -456,7 +522,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
                 [...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
                   <div key={m.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="font-bold text-slate-900 dark:text-white truncate">{m.exercise || 'Daily Activity'}</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-900 dark:text-white truncate">{m.exercise || 'Daily Activity'}</span>
+                        <GoalBadge goalId={m.goalId} goals={goals} />
+                      </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{m.date}</div>
                     </div>
                     <div className="text-right font-mono font-bold text-slate-700 dark:text-slate-300 shrink-0">
@@ -500,7 +569,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
               <span>Log Sleep, Water & Nutrition</span>
             </h2>
             <form onSubmit={handleAddWellness} className="mt-4 space-y-3">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Sleep (Hrs)</label>
                   <input
@@ -509,7 +578,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     value={sleepHours}
                     onChange={e => setSleepHours(e.target.value)}
                     placeholder="7.5"
-                    className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
                 <div>
@@ -519,7 +588,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     value={waterMl}
                     onChange={e => setWaterMl(e.target.value)}
                     placeholder="2500"
-                    className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
                 <div>
@@ -529,7 +598,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     value={calories}
                     onChange={e => setCalories(e.target.value)}
                     placeholder="2200"
-                    className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
@@ -609,8 +678,8 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   .slice(0, 40)
                   .map(item => (
                   <div key={item.id} className="rounded-2xl border border-slate-100 p-3 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold mr-2 ${
+                    <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                      <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
                         item.type === 'Sleep' ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400' :
                         item.type === 'Water' ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-400' :
                         'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400'
@@ -618,7 +687,8 @@ export const HealthView: React.FC<HealthViewProps> = ({
                         {item.type}
                       </span>
                       <span className="font-semibold text-slate-800 dark:text-slate-200">{item.text}</span>
-                      <span className="font-mono text-[10px] text-slate-400 ml-2">· {item.date}</span>
+                      <span className="font-mono text-[10px] text-slate-400">· {item.date}</span>
+                      <GoalBadge goalId={(item.raw as any)?.goalId} goals={goals} />
                     </div>
 
                     {/* EDIT & DELETE BUTTONS */}
@@ -658,6 +728,13 @@ export const HealthView: React.FC<HealthViewProps> = ({
                 <span>Log Medical Appointment</span>
               </h2>
               <form onSubmit={handleAddAppointment} className="mt-4 space-y-3">
+                <GoalLinkSelector
+                  goals={goals}
+                  mode={apptInputMode}
+                  goalId={apptGoalId}
+                  onModeChange={setApptInputMode}
+                  onGoalChange={setApptGoalId}
+                />
                 <input
                   type="text"
                   required
@@ -693,6 +770,13 @@ export const HealthView: React.FC<HealthViewProps> = ({
                 <span>Quick Health Observation</span>
               </h2>
               <form onSubmit={handleAddHealthNote} className="mt-4 space-y-3">
+                <GoalLinkSelector
+                  goals={goals}
+                  mode={hNoteInputMode}
+                  goalId={hNoteGoalId}
+                  onModeChange={setHNoteInputMode}
+                  onGoalChange={setHNoteGoalId}
+                />
                 <textarea
                   rows={2}
                   required
@@ -720,8 +804,34 @@ export const HealthView: React.FC<HealthViewProps> = ({
                 ) : (
                   [...appointments].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(a => (
                     <div key={a.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAppointmentComplete(a)}
+                        className="text-slate-400 hover:text-emerald-600 cursor-pointer shrink-0"
+                        title={a.completed || a.status === 'completed' ? 'Mark as Scheduled / Upcoming' : 'Mark as Attended / Completed'}
+                      >
+                        {a.completed || a.status === 'completed' ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <Circle className="h-4 w-4" />
+                        )}
+                      </button>
                       <div className="min-w-0 flex-1">
-                        <div className="font-bold text-slate-900 dark:text-white truncate">{a.title}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`font-bold text-slate-900 dark:text-white truncate ${a.completed || a.status === 'completed' ? 'line-through text-slate-400' : ''}`}>
+                            {a.title}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                            a.completed || a.status === 'completed'
+                              ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
+                              : a.date > today
+                              ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400'
+                              : 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400'
+                          }`}>
+                            {a.completed || a.status === 'completed' ? '✓ Attended' : a.date > today ? 'Upcoming' : 'Scheduled'}
+                          </span>
+                          <GoalBadge goalId={a.goalId} goals={goals} />
+                        </div>
                         <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
                           <Calendar className="h-3 w-3" />
                           <span>{a.date}</span>
@@ -765,7 +875,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     <div key={n.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-slate-800 dark:text-slate-200 leading-relaxed">{n.text}</div>
-                        <div className="mt-1 font-mono text-[10px] text-slate-400">{n.date}</div>
+                        <div className="mt-1 flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-[10px] text-slate-400">{n.date}</span>
+                          <GoalBadge goalId={n.goalId} goals={goals} />
+                        </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
@@ -902,6 +1015,25 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   onChange={e => setEditDate(e.target.value)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
                 />
+              </div>
+
+              <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-800/80 dark:bg-indigo-950/30">
+                <label className="block text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1 mb-1">
+                  <Target className="h-3.5 w-3.5" />
+                  <span>Linked Goal Alignment:</span>
+                </label>
+                <select
+                  value={editGoalId}
+                  onChange={e => setEditGoalId(e.target.value)}
+                  className="h-8 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
+                >
+                  <option value="">None (Standalone)</option>
+                  {goals.map(g => (
+                    <option key={g.id} value={g.id}>
+                      🎯 {g.title} ({g.progress}%)
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {editTarget.store === 'healthMeasurements' && (

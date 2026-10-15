@@ -4,14 +4,17 @@ import {
   Zap, Check, GitBranch, Layers, ChevronRight, ChevronDown,
   CornerDownRight, CheckCircle2, Edit2, Link2, ListTree,
   ArrowRight, Sparkles, FolderTree, Info, CheckSquare, X,
-  BarChart2
+  BarChart2, ArrowUp, ArrowDown, Unlink
 } from 'lucide-react';
 import {
   Goal, Milestone, Strategy, KPI, Mission, MentorRule,
   MentorQuote, CapitalStrategy, MentorProfile, FinanceAccount,
   Task, Habit, HabitLog, Routine, WorkProject, LearningItem, Skill,
   ReminderItem, Note, JournalEntry,
-  FinanceTransaction, Loan, Investment, SavingsPlan, Liability, Asset
+  FinanceTransaction, Loan, Investment, SavingsPlan, Liability, Asset,
+  HealthMeasurement, SleepRecord, WaterRecord, NutritionRecord,
+  HealthAppointment, HealthNote, Meeting, Person, Interaction,
+  ValueItem, SpiritualPractice, Commitment, FocusSession
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -23,6 +26,8 @@ import {
   syncGoalProgressFromMilestones,
   syncGoalProgressDirect,
   syncGoalProgressFromTasks,
+  syncGoalProgressFromAppointments,
+  syncGoalProgressFromMeetings,
   recalculateGoalAggregateProgress
 } from '../lib/goalTaskSync';
 
@@ -37,6 +42,8 @@ function GoalLinkedBreakdownWidget({
   onToggleExpand,
   onQuickToggleTask,
   onQuickToggleMilestone,
+  onQuickToggleAppointment,
+  onQuickToggleMeeting,
   onAdjustManualProgress,
 }: {
   goal: Goal;
@@ -45,6 +52,8 @@ function GoalLinkedBreakdownWidget({
   onToggleExpand: () => void;
   onQuickToggleTask?: (taskId: string) => Promise<void>;
   onQuickToggleMilestone?: (milestoneId: string) => Promise<void>;
+  onQuickToggleAppointment?: (appointmentId: string) => Promise<void>;
+  onQuickToggleMeeting?: (meetingId: string) => Promise<void>;
   onAdjustManualProgress?: (delta: number) => void;
 }) {
   const hasItems = breakdown.hasLinkedItems;
@@ -151,54 +160,154 @@ function GoalLinkedBreakdownWidget({
 
           {/* Category Summary Badges */}
           <div className="flex flex-wrap gap-1.5 text-[11px]">
-            {breakdown.categories.tasks.count > 0 && (
+            {breakdown.categories.tasks?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Tasks: {breakdown.categories.tasks.completedCount}/{breakdown.categories.tasks.count}
               </span>
             )}
-            {breakdown.categories.milestones.count > 0 && (
+            {breakdown.categories.milestones?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Milestones: {breakdown.categories.milestones.completedCount}/{breakdown.categories.milestones.count}
               </span>
             )}
-            {breakdown.categories.habits.count > 0 && (
+            {breakdown.categories.habits?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Habits: {breakdown.categories.habits.completedCount}/{breakdown.categories.habits.count}
               </span>
             )}
-            {breakdown.categories.routines.count > 0 && (
+            {breakdown.categories.routines?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Routines: {breakdown.categories.routines.completedCount}/{breakdown.categories.routines.count}
               </span>
             )}
-            {breakdown.categories.projects.count > 0 && (
+            {breakdown.categories.projects?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Projects: {breakdown.categories.projects.completedCount}/{breakdown.categories.projects.count}
               </span>
             )}
-            {breakdown.categories.learning.count > 0 && (
+            {breakdown.categories.learning?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Learning: {breakdown.categories.learning.completedCount}/{breakdown.categories.learning.count}
               </span>
             )}
-            {breakdown.categories.skills.count > 0 && (
+            {breakdown.categories.skills?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Skills: {breakdown.categories.skills.completedCount}/{breakdown.categories.skills.count}
               </span>
             )}
-            {breakdown.categories.notes.count > 0 && (
+            {breakdown.categories.notes?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Notebooks: {breakdown.categories.notes.completedCount}/{breakdown.categories.notes.count}
               </span>
             )}
-            {breakdown.categories.journal.count > 0 && (
+            {breakdown.categories.journal?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Journal: {breakdown.categories.journal.completedCount}/{breakdown.categories.journal.count}
               </span>
             )}
-            {breakdown.categories.childGoals.count > 0 && (
+            {breakdown.categories.childGoals?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Sub-Goals: {breakdown.categories.childGoals.completedCount}/{breakdown.categories.childGoals.count}
+              </span>
+            )}
+            {breakdown.categories.savingsPlans?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-emerald-700 shadow-2xs border border-emerald-200/70 dark:bg-slate-800 dark:text-emerald-400 dark:border-emerald-800/60">
+                💰 Savings: {breakdown.categories.savingsPlans.completedCount}/{breakdown.categories.savingsPlans.count}
+              </span>
+            )}
+            {breakdown.categories.loans?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-700 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
+                💳 Loans: {breakdown.categories.loans.completedCount}/{breakdown.categories.loans.count}
+              </span>
+            )}
+            {breakdown.categories.investments?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-blue-700 shadow-2xs border border-blue-200/70 dark:bg-slate-800 dark:text-blue-400 dark:border-blue-800/60">
+                📈 Investments: {breakdown.categories.investments.completedCount}/{breakdown.categories.investments.count}
+              </span>
+            )}
+            {breakdown.categories.assets?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-700 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
+                🏛️ Assets: {breakdown.categories.assets.completedCount}/{breakdown.categories.assets.count}
+              </span>
+            )}
+            {breakdown.categories.liabilities?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-orange-700 shadow-2xs border border-orange-200/70 dark:bg-slate-800 dark:text-orange-400 dark:border-orange-800/60">
+                ⚖️ Liabilities: {breakdown.categories.liabilities.completedCount}/{breakdown.categories.liabilities.count}
+              </span>
+            )}
+            {breakdown.categories.transactions?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-teal-700 shadow-2xs border border-teal-200/70 dark:bg-slate-800 dark:text-teal-400 dark:border-teal-800/60">
+                💵 Ledger: {breakdown.categories.transactions.completedCount}/{breakdown.categories.transactions.count}
+              </span>
+            )}
+            {breakdown.categories.healthMeasurements?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-600 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
+                🏃 Vitals/Movement: {breakdown.categories.healthMeasurements.completedCount}/{breakdown.categories.healthMeasurements.count}
+              </span>
+            )}
+            {breakdown.categories.sleepRecords?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-indigo-700 shadow-2xs border border-indigo-200/70 dark:bg-slate-800 dark:text-indigo-400 dark:border-indigo-800/60">
+                💤 Sleep: {breakdown.categories.sleepRecords.completedCount}/{breakdown.categories.sleepRecords.count}
+              </span>
+            )}
+            {breakdown.categories.waterRecords?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-cyan-700 shadow-2xs border border-cyan-200/70 dark:bg-slate-800 dark:text-cyan-400 dark:border-cyan-800/60">
+                💧 Hydration: {breakdown.categories.waterRecords.completedCount}/{breakdown.categories.waterRecords.count}
+              </span>
+            )}
+            {breakdown.categories.nutritionRecords?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-green-700 shadow-2xs border border-green-200/70 dark:bg-slate-800 dark:text-green-400 dark:border-green-800/60">
+                🥗 Nutrition: {breakdown.categories.nutritionRecords.completedCount}/{breakdown.categories.nutritionRecords.count}
+              </span>
+            )}
+            {breakdown.categories.appointments?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-pink-700 shadow-2xs border border-pink-200/70 dark:bg-slate-800 dark:text-pink-400 dark:border-pink-800/60">
+                🩺 Appointments: {breakdown.categories.appointments.completedCount}/{breakdown.categories.appointments.count}
+              </span>
+            )}
+            {breakdown.categories.healthNotes?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-700 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                📋 Health Notes: {breakdown.categories.healthNotes.completedCount}/{breakdown.categories.healthNotes.count}
+              </span>
+            )}
+            {breakdown.categories.meetings?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-violet-700 shadow-2xs border border-violet-200/70 dark:bg-slate-800 dark:text-violet-400 dark:border-violet-800/60">
+                🤝 Meetings: {breakdown.categories.meetings.completedCount}/{breakdown.categories.meetings.count}
+              </span>
+            )}
+            {breakdown.categories.people?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-sky-700 shadow-2xs border border-sky-200/70 dark:bg-slate-800 dark:text-sky-400 dark:border-sky-800/60">
+                👤 Network: {breakdown.categories.people.completedCount}/{breakdown.categories.people.count}
+              </span>
+            )}
+            {breakdown.categories.interactions?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-purple-700 shadow-2xs border border-purple-200/70 dark:bg-slate-800 dark:text-purple-400 dark:border-purple-800/60">
+                💬 Interactions: {breakdown.categories.interactions.completedCount}/{breakdown.categories.interactions.count}
+              </span>
+            )}
+            {breakdown.categories.values?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-600 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
+                💎 Values: {breakdown.categories.values.completedCount}/{breakdown.categories.values.count}
+              </span>
+            )}
+            {breakdown.categories.practices?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-emerald-600 shadow-2xs border border-emerald-200/70 dark:bg-slate-800 dark:text-emerald-400 dark:border-emerald-800/60">
+                🧘 Practices: {breakdown.categories.practices.completedCount}/{breakdown.categories.practices.count}
+              </span>
+            )}
+            {breakdown.categories.commitments?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-indigo-600 shadow-2xs border border-indigo-200/70 dark:bg-slate-800 dark:text-indigo-400 dark:border-indigo-800/60">
+                📜 Commitments: {breakdown.categories.commitments.completedCount}/{breakdown.categories.commitments.count}
+              </span>
+            )}
+            {breakdown.categories.focusSessions?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-500 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
+                ⚡ Focus: {breakdown.categories.focusSessions.completedCount}/{breakdown.categories.focusSessions.count}
+              </span>
+            )}
+            {breakdown.categories.reminders?.count > 0 && (
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-500 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
+                ⏰ Reminders: {breakdown.categories.reminders.completedCount}/{breakdown.categories.reminders.count}
               </span>
             )}
           </div>
@@ -234,6 +343,32 @@ function GoalLinkedBreakdownWidget({
                           : 'border-slate-300 bg-white hover:border-indigo-500 dark:border-slate-600 dark:bg-slate-800'
                       }`}
                       title={item.isCompleted ? 'Mark Milestone Pending' : 'Reach Milestone (Instant Reflection)'}
+                    >
+                      {item.isCompleted && '✓'}
+                    </button>
+                  ) : item.type === 'appointment' && onQuickToggleAppointment ? (
+                    <button
+                      type="button"
+                      onClick={() => onQuickToggleAppointment(item.id)}
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
+                        item.isCompleted
+                          ? 'border-emerald-600 bg-emerald-600 text-white'
+                          : 'border-slate-300 bg-white hover:border-pink-500 dark:border-slate-600 dark:bg-slate-800'
+                      }`}
+                      title={item.isCompleted ? 'Mark Checkup Scheduled' : 'Mark Checkup Attended (Instant Reflection)'}
+                    >
+                      {item.isCompleted && '✓'}
+                    </button>
+                  ) : item.type === 'meeting' && onQuickToggleMeeting ? (
+                    <button
+                      type="button"
+                      onClick={() => onQuickToggleMeeting(item.id)}
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
+                        item.isCompleted
+                          ? 'border-emerald-600 bg-emerald-600 text-white'
+                          : 'border-slate-300 bg-white hover:border-violet-500 dark:border-slate-600 dark:bg-slate-800'
+                      }`}
+                      title={item.isCompleted ? 'Mark Meeting Scheduled' : 'Mark Meeting Completed (Instant Reflection)'}
                     >
                       {item.isCompleted && '✓'}
                     </button>
@@ -305,6 +440,19 @@ interface GoalsViewProps {
   notes?: Note[];
   journal?: JournalEntry[];
   reminders?: ReminderItem[];
+  healthMeasurements?: HealthMeasurement[];
+  sleepRecords?: SleepRecord[];
+  waterRecords?: WaterRecord[];
+  nutritionRecords?: NutritionRecord[];
+  appointments?: HealthAppointment[];
+  healthNotes?: HealthNote[];
+  meetings?: Meeting[];
+  people?: Person[];
+  interactions?: Interaction[];
+  values?: ValueItem[];
+  practices?: SpiritualPractice[];
+  commitments?: Commitment[];
+  focusSessions?: FocusSession[];
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
@@ -336,9 +484,58 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   notes = [],
   journal = [],
   reminders = [],
+  healthMeasurements = [],
+  sleepRecords = [],
+  waterRecords = [],
+  nutritionRecords = [],
+  appointments = [],
+  healthNotes = [],
+  meetings = [],
+  people = [],
+  interactions = [],
+  values = [],
+  practices = [],
+  commitments = [],
+  focusSessions = [],
   onRefresh,
   onSuccess
 }) => {
+  const getGoalBreakdown = (targetGoalId: string): GoalProgressBreakdown => {
+    return computeGoalAggregateBreakdown(targetGoalId, {
+      goals,
+      tasks,
+      milestones,
+      habits,
+      habitLogs,
+      routines,
+      workProjects,
+      learningItems,
+      skills,
+      notes,
+      journal,
+      savingsPlans,
+      loans,
+      investments,
+      assets,
+      liabilities,
+      transactions,
+      healthMeasurements,
+      sleepRecords,
+      waterRecords,
+      nutritionRecords,
+      appointments,
+      healthNotes,
+      meetings,
+      people,
+      interactions,
+      values,
+      practices,
+      commitments,
+      focusSessions,
+      reminders
+    });
+  };
+
   const [activeTab, setActiveTab] = useState<'goals' | 'timeline' | 'strategies' | 'milestones' | 'kpis' | 'missions' | 'mentor'>('goals');
 
   // Hierarchy form state
@@ -349,6 +546,18 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const [goalDescription, setGoalDescription] = useState('');
   const [goalLevel, setGoalLevel] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [goalParentId, setGoalParentId] = useState<string>('');
+  const [goalOrder, setGoalOrder] = useState<string>('');
+
+  // Helper to format clean ordinal badges: 1 -> 1st, 2 -> 2nd, 3 -> 3rd, 4 -> 4th, 5 -> 5th...
+  const formatOrdinalBadge = (num: number): string => {
+    if (num <= 0 || !Number.isFinite(num)) return `#${num}`;
+    const rem10 = num % 10;
+    const rem100 = num % 100;
+    if (rem10 === 1 && rem100 !== 11) return `${num}st`;
+    if (rem10 === 2 && rem100 !== 12) return `${num}nd`;
+    if (rem10 === 3 && rem100 !== 13) return `${num}rd`;
+    return `${num}th`;
+  };
 
   // Hierarchy viewing state
   const [goalViewMode, setGoalViewMode] = useState<'tree' | 'flat'>('tree');
@@ -392,6 +601,60 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     await handleToggleMilestoneStatus(m);
   };
 
+  const handleQuickToggleAppointment = async (appointmentId: string) => {
+    const allA = appointments.length > 0 ? appointments : await storage.getAll<HealthAppointment>('healthAppointments');
+    const appt = allA.find(a => a.id === appointmentId);
+    if (!appt) return;
+    const isComp = Boolean(appt.completed || appt.status === 'completed');
+    const nextCompleted = !isComp;
+    const nextStatus: 'scheduled' | 'completed' = nextCompleted ? 'completed' : 'scheduled';
+    const updated: HealthAppointment = {
+      ...appt,
+      completed: nextCompleted,
+      status: nextStatus,
+      updatedAt: Date.now()
+    };
+    await storage.put('healthAppointments', updated);
+    if (appt.goalId) {
+      const res = await syncGoalProgressFromAppointments(appt.goalId, appt.id, nextCompleted, nextStatus);
+      if (res.targetGoal) {
+        onSuccess(
+          nextCompleted
+            ? `✓ Checkup attended! Goal "${res.targetGoal.title}" progress updated to ${res.targetGoal.progress}%`
+            : `Checkup marked scheduled. Goal "${res.targetGoal.title}" progress adjusted to ${res.targetGoal.progress}%`
+        );
+      }
+    }
+    onRefresh();
+  };
+
+  const handleQuickToggleMeeting = async (meetingId: string) => {
+    const allM = meetings.length > 0 ? meetings : await storage.getAll<Meeting>('meetings');
+    const meet = allM.find(m => m.id === meetingId);
+    if (!meet) return;
+    const isComp = Boolean(meet.completed || meet.status === 'completed');
+    const nextCompleted = !isComp;
+    const nextStatus: 'scheduled' | 'completed' = nextCompleted ? 'completed' : 'scheduled';
+    const updated: Meeting = {
+      ...meet,
+      completed: nextCompleted,
+      status: nextStatus,
+      updatedAt: Date.now()
+    };
+    await storage.put('meetings', updated);
+    if (meet.goalId) {
+      const res = await syncGoalProgressFromMeetings(meet.goalId, meet.id, nextCompleted, nextStatus);
+      if (res.targetGoal) {
+        onSuccess(
+          nextCompleted
+            ? `✓ Meeting attended! Goal "${res.targetGoal.title}" progress updated to ${res.targetGoal.progress}%`
+            : `Meeting marked scheduled. Goal "${res.targetGoal.title}" progress adjusted to ${res.targetGoal.progress}%`
+        );
+      }
+    }
+    onRefresh();
+  };
+
   const goalFormRef = useRef<HTMLDivElement>(null);
 
   // Helper to determine effective level of any goal (5 Branches: Main 1 -> Sub 2 -> Micro 3 -> Nano 4 -> Atomic 5)
@@ -411,30 +674,173 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     return Math.min(5, Math.max(1, depth)) as 1 | 2 | 3 | 4 | 5;
   };
 
-  const mainGoals = goals.filter(g => getGoalLevel(g) === 1);
-  const subGoals = goals.filter(g => getGoalLevel(g) === 2);
-  const microGoals = goals.filter(g => getGoalLevel(g) === 3);
-  const nanoGoals = goals.filter(g => getGoalLevel(g) === 4);
-  const atomicGoals = goals.filter(g => getGoalLevel(g) === 5);
+  // Extracts natural sequence index from goal title (supports "01 ...", "1. ...", "1st", "2nd", "[1]", "Goal 1", "Physical 1", "१. ...")
+  const extractGoalSequenceNumber = (title: string): number | null => {
+    if (!title) return null;
+    const raw = title.trim();
+    // Normalize Devnagari numerals (०-९) to Latin digits (0-9)
+    const normalized = raw.replace(/[०-९]/g, d => String(d.charCodeAt(0) - 2406));
+
+    // 1. Ordinals at start: "1st", "2nd", "3rd", "4th", "1st.", "1st -"
+    const ordinalMatch = normalized.match(/^(\d+)(?:st|nd|rd|th)\b/i);
+    if (ordinalMatch) {
+      const num = parseInt(ordinalMatch[1], 10);
+      if (!Number.isNaN(num)) return num;
+    }
+
+    // 2. Prefix with brackets or punctuation: "[1]", "(1)", "{1}", "1.", "1)", "1:", "1-", "1 -", "#1", "No. 1", "No 1", "Step 1", "Goal 1", "Part 1", "Phase 1"
+    const prefixWordMatch = normalized.match(/^(?:#|no\.?\s*|step\s*|goal\s*|sub\s*goal\s*|part\s*|phase\s*)?\[?\(?(\d+)[\.\)\:\-\]\}\s]/i);
+    if (prefixWordMatch) {
+      const num = parseInt(prefixWordMatch[1], 10);
+      if (!Number.isNaN(num)) return num;
+    }
+
+    // 3. Simple leading number: "1 Physical", "01 Physical", "1"
+    const leadMatch = normalized.match(/^\[?\(?(\d+)\]?\)?(?:\s|$)/);
+    if (leadMatch) {
+      const num = parseInt(leadMatch[1], 10);
+      if (!Number.isNaN(num)) return num;
+    }
+
+    // 4. Roman numerals at start: "I.", "II.", "III.", "IV.", "V."
+    const romanMatch = normalized.match(/^(i|ii|iii|iv|v|vi|vii|viii|ix|x)[\.\)\:\-\s]/i);
+    if (romanMatch) {
+      const romanMap: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
+      const r = romanMatch[1].toLowerCase();
+      if (romanMap[r]) return romanMap[r];
+    }
+
+    // 5. Suffix number at the end of title: "Physical Development 1", "Physical Development - 1", "Physical Development (1)", "Physical Development #1", "Physical 1st"
+    const suffixOrdinalMatch = normalized.match(/(?:^|\s)(\d+)(?:st|nd|rd|th)$/i);
+    if (suffixOrdinalMatch) {
+      const num = parseInt(suffixOrdinalMatch[1], 10);
+      if (!Number.isNaN(num)) return num;
+    }
+
+    const suffixMatch = normalized.match(/(?:^|[\s\-\:\(\[\#])(\d+)\)?\]?$/);
+    if (suffixMatch) {
+      const num = parseInt(suffixMatch[1], 10);
+      if (!Number.isNaN(num)) return num;
+    }
+
+    return null;
+  };
+
+  // Stable sequence sorter prioritizing natural title numbers (01, 02, 1., 2., 1st, 2nd, etc.), then custom order, then creation time
+  const sortGoals = (list: Goal[]) => {
+    return [...list].sort((a, b) => {
+      // 1. Natural title sequence number has highest priority if numbers are in titles
+      const numA = extractGoalSequenceNumber(a.title);
+      const numB = extractGoalSequenceNumber(b.title);
+      if (numA !== null && numB !== null) {
+        if (numA !== numB) return numA - numB;
+      } else if (numA !== null && (b.order === undefined || b.order === null)) {
+        return -1;
+      } else if (numB !== null && (a.order === undefined || a.order === null)) {
+        return 1;
+      }
+
+      // 2. Explicit order property (set via Order field or Move Up / Move Down buttons)
+      const ordA = a.order;
+      const ordB = b.order;
+      if (ordA !== undefined && ordB !== undefined && ordA !== null && ordB !== null) {
+        if (ordA !== ordB) return ordA - ordB;
+      } else if (ordA !== undefined && ordA !== null) {
+        return -1;
+      } else if (ordB !== undefined && ordB !== null) {
+        return 1;
+      }
+
+      // 3. Fallback: Creation timestamp (first created is first in natural 1st, 2nd, 3rd, 4th order)
+      return (a.createdAt || 0) - (b.createdAt || 0);
+    });
+  };
+
+  const mainGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 1));
+  const subGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 2));
+  const microGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 3));
+  const nanoGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 4));
+  const atomicGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 5));
 
   const getChildrenOf = (parentId: string) => {
-    return goals.filter(g => g.parentId === parentId);
+    return sortGoals(goals.filter(g => g.parentId === parentId || (g.parentIds && g.parentIds.includes(parentId))));
   };
 
   const getSubGoalsOf = (mainGoalId: string) => {
-    return goals.filter(g => g.parentId === mainGoalId);
+    return sortGoals(goals.filter(g => g.parentId === mainGoalId || (g.parentIds && g.parentIds.includes(mainGoalId))));
   };
 
   const getMicroGoalsOf = (subGoalId: string) => {
-    return goals.filter(g => g.parentId === subGoalId);
+    return sortGoals(goals.filter(g => g.parentId === subGoalId || (g.parentIds && g.parentIds.includes(subGoalId))));
   };
 
   const getNanoGoalsOf = (microGoalId: string) => {
-    return goals.filter(g => g.parentId === microGoalId);
+    return sortGoals(goals.filter(g => g.parentId === microGoalId || (g.parentIds && g.parentIds.includes(microGoalId))));
   };
 
   const getAtomicGoalsOf = (nanoGoalId: string) => {
-    return goals.filter(g => g.parentId === nanoGoalId);
+    return sortGoals(goals.filter(g => g.parentId === nanoGoalId || (g.parentIds && g.parentIds.includes(nanoGoalId))));
+  };
+
+  const handleMoveGoalOrder = async (targetGoal: Goal, direction: 'up' | 'down') => {
+    const siblings = targetGoal.parentId
+      ? goals.filter(g => g.parentId === targetGoal.parentId || (g.parentIds && g.parentIds.includes(targetGoal.parentId!)))
+      : goals.filter(g => (!g.parentId && (!g.parentIds || g.parentIds.length === 0)) || getGoalLevel(g) === 1);
+
+    const sorted = sortGoals(siblings);
+    const index = sorted.findIndex(g => g.id === targetGoal.id);
+    if (index === -1) return;
+
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= sorted.length) return;
+
+    // Check if both have numbers in their title; if so, swap numeric prefixes as well
+    const numA = extractGoalSequenceNumber(sorted[index].title);
+    const numB = extractGoalSequenceNumber(sorted[swapIndex].title);
+    if (numA !== null && numB !== null && numA !== numB) {
+      const prefixRegex = /^(\s*(?:#|no\.?\s*|step\s*|goal\s*|part\s*|phase\s*)?\[?\(?\d+(?:st|nd|rd|th)?[\.\)\:\-\]\}\s]*)/i;
+      const matchA = sorted[index].title.match(prefixRegex);
+      const matchB = sorted[swapIndex].title.match(prefixRegex);
+      if (matchA && matchB) {
+        const bodyA = sorted[index].title.slice(matchA[1].length);
+        const bodyB = sorted[swapIndex].title.slice(matchB[1].length);
+        sorted[index].title = matchB[1] + bodyA;
+        sorted[swapIndex].title = matchA[1] + bodyB;
+      }
+    }
+
+    sorted.forEach((item, idx) => {
+      item.order = idx;
+    });
+
+    const currentOrder = sorted[index].order ?? index;
+    const targetOrder = sorted[swapIndex].order ?? swapIndex;
+
+    sorted[index].order = targetOrder;
+    sorted[swapIndex].order = currentOrder;
+
+    for (const item of sorted) {
+      await storage.put('goals', item);
+    }
+    onRefresh();
+  };
+
+  const handleUnlinkGoal = async (g: Goal) => {
+    const oldParentId = g.parentId;
+    const updated: Goal = {
+      ...g,
+      parentId: null,
+      parentIds: (g.parentIds || []).filter(p => p !== oldParentId),
+      level: 1,
+      updatedAt: Date.now()
+    };
+    await storage.put('goals', updated);
+    if (oldParentId) {
+      await recalculateGoalAggregateProgress(oldParentId);
+    }
+    await recalculateGoalAggregateProgress(updated.id);
+    onSuccess(`"${g.title}" unlinked`);
+    onRefresh();
   };
 
   const toggleCollapse = (id: string) => {
@@ -540,6 +946,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       effectiveLevel = 1;
     }
 
+    const parsedOrder = goalOrder.trim() !== ''
+      ? Number(goalOrder)
+      : (extractGoalSequenceNumber(goalTitle) ?? undefined);
+
     const newGoalId = generateUUID();
     const newGoal: Goal = {
       id: newGoalId,
@@ -551,6 +961,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       status: goalProgress >= 100 ? 'completed' : 'active',
       parentId: goalParentId || null,
       level: effectiveLevel,
+      order: parsedOrder,
       autoRollupProgress: true,
       createdAt: now,
       updatedAt: now
@@ -575,6 +986,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
     setGoalTitle('');
     setGoalDescription('');
+    setGoalOrder('');
     setGoalProgress(0);
     onRefresh();
   };
@@ -688,17 +1100,28 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     e.preventDefault();
     if (!editingGoal || !editingGoal.title.trim()) return;
 
+    const originalGoal = goals.find(g => g.id === editingGoal.id);
+    const oldParentId = originalGoal?.parentId;
+    const newParentId = editingGoal.parentId;
+
+    const parsedOrder = editingGoal.order !== undefined && editingGoal.order !== null && String(editingGoal.order).trim() !== ''
+      ? Number(editingGoal.order)
+      : (extractGoalSequenceNumber(editingGoal.title) ?? undefined);
+
     await storage.put('goals', {
       ...editingGoal,
       title: editingGoal.title.trim(),
+      order: parsedOrder,
       updatedAt: Date.now()
     });
 
-    if (editingGoal.parentId) {
-      await recalculateGoalAggregateProgress(editingGoal.parentId);
-    } else {
-      await recalculateGoalAggregateProgress(editingGoal.id);
+    if (oldParentId && oldParentId !== newParentId) {
+      await recalculateGoalAggregateProgress(oldParentId);
     }
+    if (newParentId) {
+      await recalculateGoalAggregateProgress(newParentId);
+    }
+    await recalculateGoalAggregateProgress(editingGoal.id);
 
     setEditingGoal(null);
     onSuccess('✓ Goal updated');
@@ -902,9 +1325,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       {/* Delayed Tasks Alert Banner in GoalsView */}
       {(() => {
         const delayedTasksCount = tasks.filter(t => !t.done && computeItemDelay(t).isDelayed).length;
+        const delayedMilestonesCount = milestones.filter(m => m.status !== 'completed' && (m.progress || 0) < 100 && computeItemDelay({ dueDate: m.dueDate, status: m.status, progress: m.progress }).isDelayed).length;
         const delayedProjectsCount = workProjects.filter(p => p.status !== 'Completed' && computeItemDelay({ ...p, dueAt: p.due }).isDelayed).length;
         const delayedRoutinesCount = routines.filter(r => computeItemDelay(r).isDelayed).length;
-        const totalDelays = delayedTasksCount + delayedProjectsCount + delayedRoutinesCount;
+        const totalDelays = delayedTasksCount + delayedMilestonesCount + delayedProjectsCount + delayedRoutinesCount;
 
         if (totalDelays > 0 && activeTab !== 'timeline') {
           return (
@@ -918,10 +1342,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     <span>Cross-System Delay Alert</span>
                   </div>
                   <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
-                    {totalDelays} {totalDelays === 1 ? 'item is delayed' : 'items are delayed'} across Deliverables, Routines, and Tasks!
+                    {totalDelays} {totalDelays === 1 ? 'item is delayed' : 'items are delayed'} across Deliverables, Milestones, Routines, and Tasks!
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
-                    {delayedTasksCount} tasks, {delayedProjectsCount} projects, {delayedRoutinesCount} routines behind schedule. Open timeline for Task Genesis & Alarms.
+                    {delayedTasksCount} tasks, {delayedMilestonesCount} milestones, {delayedProjectsCount} projects, {delayedRoutinesCount} routines behind schedule. Open timeline for Task Genesis & Alarms.
                   </p>
                 </div>
               </div>
@@ -947,9 +1371,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           onChange={(id) => setActiveTab(id as any)}
           tabs={(() => {
             const delayedTasksCount = tasks.filter(t => !t.done && computeItemDelay(t).isDelayed).length;
+            const delayedMilestonesCount = milestones.filter(m => m.status !== 'completed' && (m.progress || 0) < 100 && computeItemDelay({ dueDate: m.dueDate, status: m.status, progress: m.progress }).isDelayed).length;
             const delayedProjectsCount = workProjects.filter(p => p.status !== 'Completed' && computeItemDelay({ ...p, dueAt: p.due }).isDelayed).length;
             const delayedRoutinesCount = routines.filter(r => computeItemDelay(r).isDelayed).length;
-            const totalDelays = delayedTasksCount + delayedProjectsCount + delayedRoutinesCount;
+            const totalDelays = delayedTasksCount + delayedMilestonesCount + delayedProjectsCount + delayedRoutinesCount;
 
             return [
               {
@@ -987,6 +1412,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           savingsPlans={savingsPlans}
           liabilities={liabilities}
           assets={assets}
+          appointments={appointments}
+          meetings={meetings}
+          notes={notes}
+          journal={journal}
+          practices={practices}
+          commitments={commitments}
+          healthMeasurements={healthMeasurements}
+          people={people}
+          interactions={interactions}
           onRefresh={onRefresh}
           onSuccess={onSuccess}
         />
@@ -1234,7 +1668,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                         Category
@@ -1261,6 +1695,21 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         value={targetDate}
                         onChange={e => setTargetDate(e.target.value)}
                         className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                        Sequence Order # (1st, 2nd...)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Auto (1, 2, 3...)"
+                        value={goalOrder}
+                        onChange={e => setGoalOrder(e.target.value)}
+                        className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        title="Custom sequence position (e.g. 1 for 1st, 2 for 2nd)"
                       />
                     </div>
                   </div>
@@ -1332,7 +1781,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
             {/* Strategic Goals Portfolio (Single Column - Lower) */}
             <div className="w-full flex flex-col">
-              <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
                 <div className="space-y-3 border-b border-slate-100 pb-3.5 dark:border-slate-800">
                   {/* Top Row: Title on Left, Hierarchy Counts on Right (Full Width) */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full">
@@ -1425,23 +1874,28 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     /* 3-TIER HIERARCHY TREE VIEW */
                     mainGoals
                       .filter(m => levelFilter === 'all' || levelFilter === '1')
-                      .map(mainGoal => {
+                      .map((mainGoal, mainIndex) => {
                         const childSubGoals = getSubGoalsOf(mainGoal.id);
                         const isMainCollapsed = Boolean(collapsedGoalIds[mainGoal.id]);
                         const totalDescendantMicro = childSubGoals.reduce(
                           (acc, s) => acc + getMicroGoalsOf(s.id).length,
                           0
                         );
+                        const mainSeqNum = extractGoalSequenceNumber(mainGoal.title) ?? (mainGoal.order !== undefined && mainGoal.order !== null ? mainGoal.order : mainIndex + 1);
+                        const mainSeqBadge = formatOrdinalBadge(mainSeqNum);
 
                         return (
                           <div
                             key={mainGoal.id}
-                            className="group rounded-2xl border border-slate-200/90 bg-white p-3.5 sm:p-5 shadow-xs hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700 transition-all space-y-3 min-w-0"
+                            className="group rounded-2xl border border-slate-200/90 bg-white p-2.5 sm:p-5 shadow-xs hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700 transition-all space-y-2.5 sm:space-y-3 min-w-0"
                           >
                             {/* LEVEL 1: MAIN GOAL HEADER */}
                             <div className="space-y-1.5 min-w-0">
                               <div className="flex flex-wrap items-center justify-between gap-y-1.5 gap-x-2 min-w-0">
                                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">
+                                  <span className="inline-flex items-center rounded-md bg-indigo-100/90 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800/60 shrink-0 whitespace-nowrap">
+                                    {mainSeqBadge}
+                                  </span>
                                   <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/50 shrink-0 whitespace-nowrap">
                                     <Target className="h-3 w-3 shrink-0" />
                                     Main Goal
@@ -1478,6 +1932,22 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   </button>
                                   <button
                                     type="button"
+                                    onClick={() => handleMoveGoalOrder(mainGoal, 'up')}
+                                    className="p-1 sm:p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors cursor-pointer shrink-0"
+                                    title="Move Up"
+                                  >
+                                    <ArrowUp className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveGoalOrder(mainGoal, 'down')}
+                                    className="p-1 sm:p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors cursor-pointer shrink-0"
+                                    title="Move Down"
+                                  >
+                                    <ArrowDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => setEditingGoal(mainGoal)}
                                     className="p-1 sm:p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors cursor-pointer shrink-0"
                                     title="Edit Main Goal"
@@ -1509,23 +1979,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                             {/* MAIN GOAL LINKED PROGRESS BAR & REAL-TIME BREAKDOWN */}
                             <GoalLinkedBreakdownWidget
                               goal={mainGoal}
-                              breakdown={computeGoalAggregateBreakdown(mainGoal.id, {
-                                goals,
-                                tasks,
-                                milestones,
-                                habits,
-                                habitLogs,
-                                routines,
-                                workProjects,
-                                learningItems,
-                                skills,
-                                notes,
-                                journal
-                              })}
+                              breakdown={getGoalBreakdown(mainGoal.id)}
                               isExpanded={Boolean(expandedBreakdownGoalIds[mainGoal.id])}
                               onToggleExpand={() => toggleBreakdown(mainGoal.id)}
                               onQuickToggleTask={handleQuickToggleTask}
                               onQuickToggleMilestone={handleQuickToggleMilestone}
+                              onQuickToggleAppointment={handleQuickToggleAppointment}
+                              onQuickToggleMeeting={handleQuickToggleMeeting}
                               onAdjustManualProgress={(delta) => handleProgressChange(mainGoal, delta)}
                             />
 
@@ -1551,19 +2011,25 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                             {/* LEVEL 2: SUB GOALS CONTAINER */}
                             {!isMainCollapsed && childSubGoals.length > 0 && (
-                              <div className="ml-1 sm:ml-3 pl-2 sm:pl-3.5 border-l-2 border-indigo-200 dark:border-indigo-900/50 space-y-2.5 pt-1 min-w-0">
-                                {childSubGoals.map(subGoal => {
+                              <div className="ml-0.5 sm:ml-3 pl-1 sm:pl-3.5 border-l sm:border-l-2 border-indigo-200 dark:border-indigo-900/50 space-y-2 pt-1 min-w-0">
+                                {childSubGoals.map((subGoal, subIndex) => {
                                   const childMicroGoals = getMicroGoalsOf(subGoal.id);
+                                  const isSubCollapsed = Boolean(collapsedGoalIds[subGoal.id]);
+                                  const subSeqNum = extractGoalSequenceNumber(subGoal.title) ?? (subGoal.order !== undefined && subGoal.order !== null ? subGoal.order : subIndex + 1);
+                                  const subSeqBadge = formatOrdinalBadge(subSeqNum);
 
                                   return (
                                     <div
                                       key={subGoal.id}
-                                      className="rounded-xl border border-emerald-200/70 bg-emerald-50/20 p-2.5 sm:p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/15 space-y-2.5 transition-all min-w-0 shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-800"
+                                      className="rounded-xl border border-emerald-200/70 bg-emerald-50/20 p-2 sm:p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/15 space-y-2 sm:space-y-2.5 transition-all min-w-0 shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-800"
                                     >
                                       {/* Sub Goal Header */}
                                       <div className="space-y-1 min-w-0">
                                         <div className="flex flex-wrap items-center justify-between gap-y-1.5 gap-x-2 min-w-0">
                                           <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">
+                                            <span className="inline-flex items-center rounded-md bg-emerald-100/90 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/60 shrink-0 whitespace-nowrap">
+                                              {subSeqBadge}
+                                            </span>
                                             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50 shrink-0 whitespace-nowrap">
                                               Sub Goal
                                             </span>
@@ -1584,6 +2050,30 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                             >
                                               <Plus className="h-3 w-3 shrink-0" />
                                               <span>Micro Goal</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleMoveGoalOrder(subGoal, 'up')}
+                                              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md hover:bg-slate-200/50 dark:hover:bg-slate-700 cursor-pointer shrink-0"
+                                              title="Move Up"
+                                            >
+                                              <ArrowUp className="h-3 w-3" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleMoveGoalOrder(subGoal, 'down')}
+                                              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md hover:bg-slate-200/50 dark:hover:bg-slate-700 cursor-pointer shrink-0"
+                                              title="Move Down"
+                                            >
+                                              <ArrowDown className="h-3 w-3" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleUnlinkGoal(subGoal)}
+                                              className="p-1 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/40 cursor-pointer shrink-0"
+                                              title="Unlink to Main Goal"
+                                            >
+                                              <Unlink className="h-3 w-3" />
                                             </button>
                                             <button
                                               type="button"
@@ -1612,62 +2102,56 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                       {/* Sub Goal Linked Progress Bar & Breakdown */}
                                       <GoalLinkedBreakdownWidget
                                         goal={subGoal}
-                                        breakdown={computeGoalAggregateBreakdown(subGoal.id, {
-                                          goals,
-                                          tasks,
-                                          milestones,
-                                          habits,
-                                          habitLogs,
-                                          routines,
-                                          workProjects,
-                                          learningItems,
-                                          skills,
-                                          notes,
-                                          journal
-                                        })}
+                                        breakdown={getGoalBreakdown(subGoal.id)}
                                         isExpanded={Boolean(expandedBreakdownGoalIds[subGoal.id])}
                                         onToggleExpand={() => toggleBreakdown(subGoal.id)}
                                         onQuickToggleTask={handleQuickToggleTask}
                                         onQuickToggleMilestone={handleQuickToggleMilestone}
+                                        onQuickToggleAppointment={handleQuickToggleAppointment}
+                                        onQuickToggleMeeting={handleQuickToggleMeeting}
                                         onAdjustManualProgress={(delta) => handleProgressChange(subGoal, delta)}
                                       />
 
-                                      {/* LEVEL 3: MICRO GOALS CONTAINER */}
+                                      {/* LEVEL 3: MICRO GOALS ACCORDION TRIGGER */}
                                       {childMicroGoals.length > 0 && (
-                                        <div className="ml-1 sm:ml-2.5 pl-2 sm:pl-3 border-l-2 border-emerald-200 dark:border-emerald-900/50 space-y-2 pt-1 min-w-0">
-                                          <div className="flex flex-wrap items-center justify-between gap-1 text-xs text-slate-400 pb-0.5 min-w-0">
-                                            <span className="font-semibold text-slate-600 dark:text-slate-300 text-[10px] sm:text-[11px] uppercase tracking-wider shrink-0 whitespace-nowrap">
-                                              Micro Goals ({childMicroGoals.length})
-                                            </span>
-                                            <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap ml-auto">Auto-rolls up</span>
-                                          </div>
+                                        <div className="flex flex-wrap items-center justify-between gap-1 pt-2 pb-0.5 border-t border-emerald-200/50 dark:border-emerald-900/30 min-w-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleCollapse(subGoal.id)}
+                                            className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer py-0.5 shrink-0"
+                                          >
+                                            <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${isSubCollapsed ? '-rotate-90' : ''}`} />
+                                            <span>Micro Goals ({childMicroGoals.length})</span>
+                                          </button>
+                                          <span className="text-[11px] sm:text-xs text-slate-400 shrink-0 whitespace-nowrap ml-auto">
+                                            {childMicroGoals.filter(m => m.progress >= 100).length} of {childMicroGoals.length} completed
+                                          </span>
+                                        </div>
+                                      )}
 
-                                          {childMicroGoals.map(microGoal => {
+                                      {/* LEVEL 3: MICRO GOALS CONTAINER */}
+                                      {!isSubCollapsed && childMicroGoals.length > 0 && (
+                                        <div className="ml-0.5 sm:ml-2.5 pl-1 sm:pl-3 border-l sm:border-l-2 border-emerald-200 dark:border-emerald-900/50 space-y-1.5 sm:space-y-2 pt-1 min-w-0">
+
+                                          {childMicroGoals.map((microGoal, microIndex) => {
+                                            const microSeqNum = extractGoalSequenceNumber(microGoal.title) ?? (microGoal.order !== undefined && microGoal.order !== null ? microGoal.order : microIndex + 1);
+                                            const microSeqBadge = formatOrdinalBadge(microSeqNum);
                                             const childNanoGoals = getNanoGoalsOf(microGoal.id);
                                             const isMicroCollapsed = Boolean(collapsedGoalIds[microGoal.id]);
-                                            const microBreakdown = computeGoalAggregateBreakdown(microGoal.id, {
-                                              goals,
-                                              tasks,
-                                              milestones,
-                                              habits,
-                                              habitLogs,
-                                              routines,
-                                              workProjects,
-                                              learningItems,
-                                              skills,
-                                              notes,
-                                              journal
-                                            });
+                                            const microBreakdown = getGoalBreakdown(microGoal.id);
 
                                             return (
                                               <div
                                                 key={microGoal.id}
-                                                className="rounded-lg border border-amber-200/70 bg-amber-50/20 p-2 sm:p-3 dark:border-amber-900/40 dark:bg-amber-950/15 space-y-2 transition-all min-w-0 shadow-2xs hover:border-amber-300 dark:hover:border-amber-800"
+                                                className="rounded-lg border border-amber-200/70 bg-amber-50/20 p-2 sm:p-3 dark:border-amber-900/40 dark:bg-amber-950/15 space-y-1.5 sm:space-y-2 transition-all min-w-0 shadow-2xs hover:border-amber-300 dark:hover:border-amber-800"
                                               >
                                                 {/* Micro Goal Header */}
                                                 <div className="space-y-1 min-w-0">
                                                   <div className="flex flex-wrap items-center justify-between gap-y-1.5 gap-x-2 min-w-0">
                                                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">
+                                                      <span className="inline-flex items-center rounded-md bg-amber-100/90 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-amber-800 dark:bg-amber-950/80 dark:text-amber-200 border border-amber-200 dark:border-amber-800/60 shrink-0 whitespace-nowrap">
+                                                        {microSeqBadge}
+                                                      </span>
                                                       <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/50 shrink-0 whitespace-nowrap">
                                                         Micro Goal
                                                       </span>
@@ -1688,6 +2172,30 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                       >
                                                         <Plus className="h-3 w-3 shrink-0" />
                                                         <span>Nano Goal</span>
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleMoveGoalOrder(microGoal, 'up')}
+                                                        className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md hover:bg-slate-200/50 dark:hover:bg-slate-700 cursor-pointer shrink-0"
+                                                        title="Move Up"
+                                                      >
+                                                        <ArrowUp className="h-3 w-3" />
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleMoveGoalOrder(microGoal, 'down')}
+                                                        className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md hover:bg-slate-200/50 dark:hover:bg-slate-700 cursor-pointer shrink-0"
+                                                        title="Move Down"
+                                                      >
+                                                        <ArrowDown className="h-3 w-3" />
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleUnlinkGoal(microGoal)}
+                                                        className="p-1 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/40 cursor-pointer shrink-0"
+                                                        title="Unlink to Main Goal"
+                                                      >
+                                                        <Unlink className="h-3 w-3" />
                                                       </button>
                                                       <button
                                                         type="button"
@@ -1721,6 +2229,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                   onToggleExpand={() => toggleBreakdown(microGoal.id)}
                                                   onQuickToggleTask={handleQuickToggleTask}
                                                   onQuickToggleMilestone={handleQuickToggleMilestone}
+                                                  onQuickToggleAppointment={handleQuickToggleAppointment}
+                                                  onQuickToggleMeeting={handleQuickToggleMeeting}
                                                   onAdjustManualProgress={(delta) => handleProgressChange(microGoal, delta)}
                                                 />
 
@@ -1737,33 +2247,26 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                     </button>
 
                                                     {!isMicroCollapsed && (
-                                                      <div className="ml-1 sm:ml-2 pl-1.5 sm:pl-2.5 border-l-2 border-amber-200 dark:border-amber-900/50 space-y-1.5 pt-1.5 min-w-0">
-                                                        {childNanoGoals.map(nanoGoal => {
+                                                      <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2.5 border-l sm:border-l-2 border-amber-200 dark:border-amber-900/50 space-y-1 sm:space-y-1.5 pt-1 min-w-0">
+                                                        {childNanoGoals.map((nanoGoal, nanoIndex) => {
+                                                          const nanoSeqNum = extractGoalSequenceNumber(nanoGoal.title) ?? (nanoGoal.order !== undefined && nanoGoal.order !== null ? nanoGoal.order : nanoIndex + 1);
+                                                          const nanoSeqBadge = formatOrdinalBadge(nanoSeqNum);
                                                           const childAtomicGoals = getAtomicGoalsOf(nanoGoal.id);
                                                           const isNanoCollapsed = Boolean(collapsedGoalIds[nanoGoal.id]);
-                                                          const nanoBreakdown = computeGoalAggregateBreakdown(nanoGoal.id, {
-                                                            goals,
-                                                            tasks,
-                                                            milestones,
-                                                            habits,
-                                                            habitLogs,
-                                                            routines,
-                                                            workProjects,
-                                                            learningItems,
-                                                            skills,
-                                                            notes,
-                                                            journal
-                                                          });
+                                                          const nanoBreakdown = getGoalBreakdown(nanoGoal.id);
 
                                                           return (
                                                             <div
                                                               key={nanoGoal.id}
-                                                              className="rounded-lg border border-sky-200/70 bg-sky-50/20 p-2 sm:p-2.5 dark:border-sky-900/40 dark:bg-sky-950/15 space-y-1.5 transition-all min-w-0 shadow-2xs hover:border-sky-300 dark:hover:border-sky-800"
+                                                              className="rounded-lg border border-sky-200/70 bg-sky-50/20 p-1.5 sm:p-2.5 dark:border-sky-900/40 dark:bg-sky-950/15 space-y-1 sm:space-y-1.5 transition-all min-w-0 shadow-2xs hover:border-sky-300 dark:hover:border-sky-800"
                                                             >
                                                               {/* Nano Goal Header */}
                                                               <div className="space-y-1 min-w-0">
                                                                 <div className="flex flex-wrap items-center justify-between gap-y-1.5 gap-x-2 min-w-0">
                                                                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">
+                                                                    <span className="inline-flex items-center rounded-md bg-sky-100/90 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-sky-800 dark:bg-sky-950/80 dark:text-sky-200 border border-sky-200 dark:border-sky-800/60 shrink-0 whitespace-nowrap">
+                                                                      {nanoSeqBadge}
+                                                                    </span>
                                                                     <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-sky-700 dark:bg-sky-950/50 dark:text-sky-300 border border-sky-200/60 dark:border-sky-800/50 shrink-0 whitespace-nowrap">
                                                                       Nano Goal
                                                                     </span>
@@ -1784,6 +2287,30 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                     >
                                                                       <Plus className="h-3 w-3 shrink-0" />
                                                                       <span>Atomic Goal</span>
+                                                                    </button>
+                                                                    <button
+                                                                      type="button"
+                                                                      onClick={() => handleMoveGoalOrder(nanoGoal, 'up')}
+                                                                      className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md hover:bg-slate-200/50 dark:hover:bg-slate-700 cursor-pointer shrink-0"
+                                                                      title="Move Up"
+                                                                    >
+                                                                      <ArrowUp className="h-3 w-3" />
+                                                                    </button>
+                                                                    <button
+                                                                      type="button"
+                                                                      onClick={() => handleMoveGoalOrder(nanoGoal, 'down')}
+                                                                      className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md hover:bg-slate-200/50 dark:hover:bg-slate-700 cursor-pointer shrink-0"
+                                                                      title="Move Down"
+                                                                    >
+                                                                      <ArrowDown className="h-3 w-3" />
+                                                                    </button>
+                                                                    <button
+                                                                      type="button"
+                                                                      onClick={() => handleUnlinkGoal(nanoGoal)}
+                                                                      className="p-1 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/40 cursor-pointer shrink-0"
+                                                                      title="Unlink to Main Goal"
+                                                                    >
+                                                                      <Unlink className="h-3 w-3" />
                                                                     </button>
                                                                     <button
                                                                       type="button"
@@ -1817,6 +2344,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                 onToggleExpand={() => toggleBreakdown(nanoGoal.id)}
                                                                 onQuickToggleTask={handleQuickToggleTask}
                                                                 onQuickToggleMilestone={handleQuickToggleMilestone}
+                                                                onQuickToggleAppointment={handleQuickToggleAppointment}
+                                                                onQuickToggleMeeting={handleQuickToggleMeeting}
                                                                 onAdjustManualProgress={(delta) => handleProgressChange(nanoGoal, delta)}
                                                               />
 
@@ -1833,26 +2362,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                   </button>
 
                                                                   {!isNanoCollapsed && (
-                                                                    <div className="ml-1 sm:ml-2 pl-1.5 sm:pl-2 border-l-2 border-sky-200 dark:border-sky-900/50 space-y-1 pt-1 min-w-0">
-                                                                      {childAtomicGoals.map(atomicGoal => {
-                                                                        const atomicBreakdown = computeGoalAggregateBreakdown(atomicGoal.id, {
-                                                                          goals,
-                                                                          tasks,
-                                                                          milestones,
-                                                                          habits,
-                                                                          habitLogs,
-                                                                          routines,
-                                                                          workProjects,
-                                                                          learningItems,
-                                                                          skills,
-                                                                          notes,
-                                                                          journal
-                                                                        });
+                                                                    <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2 border-l sm:border-l-2 border-sky-200 dark:border-sky-900/50 space-y-1 pt-1 min-w-0">
+                                                                      {childAtomicGoals.map((atomicGoal, atomicIndex) => {
+                                                                        const atomicSeqNum = extractGoalSequenceNumber(atomicGoal.title) ?? (atomicGoal.order !== undefined && atomicGoal.order !== null ? atomicGoal.order : atomicIndex + 1);
+                                                                        const atomicSeqBadge = formatOrdinalBadge(atomicSeqNum);
+                                                                        const atomicBreakdown = getGoalBreakdown(atomicGoal.id);
 
                                                                         return (
                                                                           <div
                                                                             key={atomicGoal.id}
-                                                                            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-md border border-purple-200/70 bg-purple-50/20 p-2 sm:p-2.5 text-xs dark:border-purple-900/40 dark:bg-purple-950/15 shadow-2xs hover:border-purple-300 dark:hover:border-purple-700 transition-all min-w-0"
+                                                                            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 rounded-md border border-purple-200/70 bg-purple-50/20 p-1.5 sm:p-2.5 text-xs dark:border-purple-900/40 dark:bg-purple-950/15 shadow-2xs hover:border-purple-300 dark:hover:border-purple-700 transition-all min-w-0"
                                                                           >
                                                                             <div className="flex items-start sm:items-center gap-2 min-w-0 w-full sm:flex-1">
                                                                               <button
@@ -1881,6 +2400,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                                       : 'text-slate-900 dark:text-slate-100'
                                                                                   }`}
                                                                                 >
+                                                                                  <span className="inline-flex items-center rounded bg-purple-100/80 px-1 py-0.5 text-[9px] font-bold text-purple-700 dark:bg-purple-950/70 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 mr-1 shrink-0">
+                                                                                    {atomicSeqBadge}
+                                                                                  </span>
                                                                                   <span className="text-purple-600 dark:text-purple-400 font-bold mr-1 shrink-0">⚡</span>
                                                                                   {atomicGoal.title}
                                                                                 </div>
@@ -1970,10 +2492,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       })
                   ) : (
                     /* FLAT LIST VIEW */
-                    goals
-                      .filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter)
-                      .map(g => {
+                    sortGoals(goals.filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter))
+                      .map((g, flatIndex) => {
                         const lvl = getGoalLevel(g);
+                        const flatSeqNum = extractGoalSequenceNumber(g.title) ?? (g.order !== undefined && g.order !== null ? g.order : flatIndex + 1);
+                        const flatSeqBadge = formatOrdinalBadge(flatSeqNum);
                         const parent = g.parentId ? goals.find(p => p.id === g.parentId) : null;
 
                         return (
@@ -1984,6 +2507,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                             <div className="space-y-1.5">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                  <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0">
+                                    {flatSeqBadge}
+                                  </span>
                                   <span
                                     className={`text-[11px] font-bold uppercase tracking-wider ${
                                       lvl === 1
@@ -2055,23 +2581,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                             <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
                               <GoalLinkedBreakdownWidget
                                 goal={g}
-                                breakdown={computeGoalAggregateBreakdown(g.id, {
-                                  goals,
-                                  tasks,
-                                  milestones,
-                                  habits,
-                                  habitLogs,
-                                  routines,
-                                  workProjects,
-                                  learningItems,
-                                  skills,
-                                  notes,
-                                  journal
-                                })}
+                                breakdown={getGoalBreakdown(g.id)}
                                 isExpanded={Boolean(expandedBreakdownGoalIds[g.id])}
                                 onToggleExpand={() => toggleBreakdown(g.id)}
                                 onQuickToggleTask={handleQuickToggleTask}
                                 onQuickToggleMilestone={handleQuickToggleMilestone}
+                                onQuickToggleAppointment={handleQuickToggleAppointment}
+                                onQuickToggleMeeting={handleQuickToggleMeeting}
                                 onAdjustManualProgress={(delta) => handleProgressChange(g, delta)}
                               />
                             </div>
@@ -2705,6 +3221,56 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Hierarchy Level
+                  </label>
+                  <select
+                    value={editingGoal.level || getGoalLevel(editingGoal)}
+                    onChange={e => {
+                      const lvl = Number(e.target.value) as 1 | 2 | 3 | 4 | 5;
+                      setEditingGoal({
+                        ...editingGoal,
+                        level: lvl,
+                        parentId: lvl === 1 ? null : editingGoal.parentId
+                      });
+                    }}
+                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value={1}>Level 1: Main Goal</option>
+                    <option value={2}>Level 2: Sub Goal</option>
+                    <option value={3}>Level 3: Micro Goal</option>
+                    <option value={4}>Level 4: Nano Goal</option>
+                    <option value={5}>Level 5: Atomic Goal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Parent Goal (Branch)
+                  </label>
+                  <select
+                    disabled={(editingGoal.level || getGoalLevel(editingGoal)) === 1}
+                    value={editingGoal.parentId || ''}
+                    onChange={e => {
+                      const pId = e.target.value || null;
+                      setEditingGoal({ ...editingGoal, parentId: pId });
+                    }}
+                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50"
+                  >
+                    <option value="">None (Independent Main Goal)</option>
+                    {goals
+                      .filter(g => g.id !== editingGoal.id)
+                      .map(g => (
+                        <option key={g.id} value={g.id}>
+                          {g.level === 1 ? '🎯 ' : g.level === 2 ? '🔹 ' : g.level === 3 ? '▫️ ' : '🔸 '}{g.title}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                     Category
                   </label>
                   <select
@@ -2729,6 +3295,21 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     value={editingGoal.targetDate || ''}
                     onChange={e => setEditingGoal({ ...editingGoal, targetDate: e.target.value })}
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Sequence Order #
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 1, 2, 3..."
+                    value={editingGoal.order ?? ''}
+                    onChange={e => setEditingGoal({ ...editingGoal, order: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    title="Sequence order number (e.g. 1 for 1st, 2 for 2nd)"
                   />
                 </div>
               </div>

@@ -32,31 +32,16 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'quick',
     description: 'Standard arithmetic calculations',
     fields: [
-      { label: 'Operand A', type: 'number', default: '100' },
-      {
-        label: 'Operator',
-        type: 'select',
-        options: [
-          { value: '+', label: '+' },
-          { value: '-', label: '-' },
-          { value: '*', label: '×' },
-          { value: '/', label: '÷' },
-          { value: '%', label: '%' },
-          { value: '^', label: '^' }
-        ],
-        default: '+'
-      },
-      { label: 'Operand B', type: 'number', default: '25' }
+      { label: 'Calculation Expression', type: 'text', default: '', placeholder: '0' }
     ],
-    calculate: (f1, f2, f3) => String(calculatorEngine.basic(f1, f2, f3))
+    calculate: (f1) => String(calculatorEngine.scientific(f1))
   },
   'Scientific': {
     name: 'Scientific',
     category: 'quick',
-    description: 'Advanced math expression evaluator with sin, cos, sqrt, log, pow',
-    formula: 'Supports sqrt, sin, cos, tan, log, ln, pi, e, pow(^)',
+    description: 'Scientific mathematical calculations',
     fields: [
-      { label: 'Expression', type: 'text', default: 'sqrt(144) + sin(30) * 10', placeholder: 'e.g. 5^2 + log(100)' }
+      { label: 'Scientific Expression', type: 'text', default: '', placeholder: '0' }
     ],
     calculate: (f1) => String(calculatorEngine.scientific(f1))
   },

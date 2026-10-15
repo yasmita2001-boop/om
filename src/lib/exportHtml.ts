@@ -35,6 +35,15 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
   const sleepRecords: any[] = fullData.sleepRecords || [];
   const settings: any = fullData.appSettings || {};
 
+  // Timeline & Plan Datasets
+  const workProjects: any[] = fullData.workProjects || [];
+  const milestones: any[] = fullData.milestones || [];
+  const learningItems: any[] = fullData.learningItems || [];
+  const skills: any[] = fullData.skills || [];
+  const reminders: any[] = fullData.reminders || [];
+  const meetings: any[] = fullData.meetings || [];
+  const appointments: any[] = fullData.healthAppointments || [];
+
   // Basic computed totals
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.done || t.status === 'completed').length;
@@ -42,6 +51,124 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
   const totalGoals = goals.length;
   const totalNotes = notes.length;
   const totalJournal = journal.length;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const checkDelay = (dueDate?: string, status?: string, progress?: number) => {
+    const isDone = status === 'completed' || status === 'done' || status === 'Completed' || (progress !== undefined && progress >= 100);
+    if (isDone) {
+      return { isDelayed: false, delayDays: 0, delayLabel: 'Completed', delaySeverity: 'completed' as const };
+    }
+    if (!dueDate) {
+      return { isDelayed: false, delayDays: 0, delayLabel: 'No deadline', delaySeverity: 'none' as const };
+    }
+    const dStr = dueDate.slice(0, 10);
+    if (dStr === todayStr) {
+      return { isDelayed: false, delayDays: 0, delayLabel: 'Due Today', delaySeverity: 'today' as const };
+    }
+    const dueTime = new Date(`${dStr}T23:59:59`).getTime();
+    const nowTime = new Date(`${todayStr}T00:00:00`).getTime();
+    const diffDays = Math.round((nowTime - dueTime) / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) {
+      const severity = diffDays > 7 ? 'critical' as const : 'warning' as const;
+      return { isDelayed: true, delayDays: diffDays, delayLabel: `${diffDays}d overdue`, delaySeverity: severity };
+    }
+    const remDays = Math.abs(diffDays);
+    return { isDelayed: false, delayDays: 0, delayLabel: `${remDays}d left`, delaySeverity: 'upcoming' as const };
+  };
+
+  interface TimelineExportItem {
+    id: string;
+    type: 'project' | 'milestone' | 'task' | 'learning';
+    typeLabel: string;
+    title: string;
+    dueDate?: string;
+    status: string;
+    progress: number;
+    goalId?: string;
+    goalTitle?: string;
+    description?: string;
+    isDelayed: boolean;
+    delayDays: number;
+    delayLabel: string;
+    delaySeverity: 'critical' | 'warning' | 'today' | 'upcoming' | 'completed' | 'none';
+  }
+
+  const goalsMap = new Map<string, string>();
+  goals.forEach(g => {
+    if (g.id) goalsMap.set(g.id, g.title || 'Goal');
+  });
+
+  const timelineItems: TimelineExportItem[] = [
+    ...workProjects.map(p => ({
+      id: p.id || '',
+      type: 'project' as const,
+      typeLabel: 'Work Project',
+      title: p.title || p.name || 'Untitled Project',
+      dueDate: p.due || p.dueAt || p.deadline,
+      status: p.status || 'Active',
+      progress: Number(p.progress) || 0,
+      goalId: p.goalId,
+      goalTitle: p.goalId ? goalsMap.get(p.goalId) : undefined,
+      description: p.description || p.note,
+      ...checkDelay(p.due || p.dueAt || p.deadline, p.status, Number(p.progress) || 0)
+    })),
+    ...milestones.map(m => ({
+      id: m.id || '',
+      type: 'milestone' as const,
+      typeLabel: 'Milestone',
+      title: m.title || 'Milestone',
+      dueDate: m.dueDate,
+      status: m.status || 'open',
+      progress: Number(m.progress) || 0,
+      goalId: m.goalId,
+      goalTitle: m.goalId ? goalsMap.get(m.goalId) : undefined,
+      description: m.note,
+      ...checkDelay(m.dueDate, m.status, Number(m.progress) || 0)
+    })),
+    ...tasks.filter(t => t.dueAt || t.date || t.dueDate || t.priority === 'High' || t.priority === 'Urgent').map(t => ({
+      id: t.id || '',
+      type: 'task' as const,
+      typeLabel: 'Task Planner',
+      title: t.title || 'Task',
+      dueDate: t.dueAt || t.date || t.dueDate,
+      status: t.done ? 'completed' : t.status || 'open',
+      progress: t.done ? 100 : 0,
+      goalId: t.goalId,
+      goalTitle: t.goalId ? goalsMap.get(t.goalId) : undefined,
+      description: t.description,
+      ...checkDelay(t.dueAt || t.date || t.dueDate, t.done ? 'completed' : t.status, t.done ? 100 : 0)
+    })),
+    ...learningItems.map(l => ({
+      id: l.id || '',
+      type: 'learning' as const,
+      typeLabel: 'Learning & Skill',
+      title: l.title || l.name || 'Learning Item',
+      dueDate: l.targetDate || l.deadline,
+      status: l.status || 'In Progress',
+      progress: Number(l.progress) || 0,
+      goalId: l.goalId,
+      goalTitle: l.goalId ? goalsMap.get(l.goalId) : undefined,
+      description: l.notes || l.note,
+      ...checkDelay(l.targetDate || l.deadline, l.status, Number(l.progress) || 0)
+    }))
+  ];
+
+  timelineItems.sort((a, b) => {
+    if (a.isDelayed !== b.isDelayed) return a.isDelayed ? -1 : 1;
+    if (a.delaySeverity === 'today') return -1;
+    if (b.delaySeverity === 'today') return 1;
+    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    if (a.dueDate) return -1;
+    if (b.dueDate) return 1;
+    return (a.title || '').localeCompare(b.title || '');
+  });
+
+  const totalTimelineItems = timelineItems.length;
+  const delayedTimelineItems = timelineItems.filter(i => i.isDelayed).length;
+  const dueTodayTimelineItems = timelineItems.filter(i => i.delaySeverity === 'today').length;
+  const upcomingTimelineItems = timelineItems.filter(i => i.delaySeverity === 'upcoming').length;
+  const completedTimelineItems = timelineItems.filter(i => i.delaySeverity === 'completed').length;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -308,6 +435,33 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
     .badge-medium { background-color: var(--warning-light); color: var(--warning-text); }
     .badge-low { background-color: var(--accent-light); color: var(--accent-text); }
     .badge-success { background-color: var(--success-light); color: var(--success-text); }
+    .badge-today { background-color: var(--warning-light); color: var(--warning-text); font-weight: 800; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .timeline-filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 1rem;
+    }
+    .timeline-filter-btn {
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-card);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .timeline-filter-btn:hover {
+      background-color: var(--bg-card-subtle);
+      color: var(--text-main);
+    }
+    .timeline-filter-btn.active {
+      background-color: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
     .data-table {
       width: 100%;
       border-collapse: collapse;
@@ -528,6 +682,10 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
       <div class="nav-item active" onclick="showTab('dashboard')">
         <span>⚡ Dashboard</span>
       </div>
+      <div class="nav-item" onclick="showTab('timeline')">
+        <span>📅 Timeline & Plan</span>
+        <span class="nav-badge" id="nav-count-timeline" style="${delayedTimelineItems > 0 ? 'background-color:var(--danger);color:white;font-weight:700;' : ''}">${delayedTimelineItems > 0 ? `⚠️ ${delayedTimelineItems}` : totalTimelineItems}</span>
+      </div>
       <div class="nav-item" onclick="showTab('tasks')">
         <span>📋 Tasks & Planner</span>
         <span class="nav-badge" id="nav-count-tasks">${tasks.length}</span>
@@ -599,6 +757,52 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
             <div class="value">${totalNotes + totalJournal}</div>
             <div class="sub">${totalNotes} notes · ${totalJournal} journals</div>
           </div>
+          <div class="metric-card" onclick="showTab('timeline')" style="cursor:pointer;" title="Click to view Timeline & Plan">
+            <div class="title">Timeline & Plan</div>
+            <div class="value" style="${delayedTimelineItems > 0 ? 'color:var(--danger);' : ''}">${totalTimelineItems}</div>
+            <div class="sub">${delayedTimelineItems > 0 ? `⚠️ ${delayedTimelineItems} delayed items` : 'All on track'} · ${workProjects.length} projects</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">📅 Timeline Milestones & Project Deadlines</h2>
+            <button type="button" class="btn" onclick="showTab('timeline')">Open Full Timeline →</button>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Item</th>
+                <th>Target Due</th>
+                <th>Progress</th>
+                <th>Delay Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${timelineItems.slice(0, 5).map(item => `
+                <tr>
+                  <td><span class="badge ${item.type === 'project' ? 'badge-low' : item.type === 'milestone' ? 'badge-medium' : 'badge-success'}">${escapeHtml(item.typeLabel)}</span></td>
+                  <td><strong>${escapeHtml(item.title)}</strong></td>
+                  <td style="font-family:ui-monospace, monospace; font-size:0.75rem;">${item.dueDate ? escapeHtml(item.dueDate) : '<span style="color:var(--text-muted)">Unscheduled</span>'}</td>
+                  <td>
+                    <div style="min-width:90px;">
+                      <div style="font-size:0.7rem; font-weight:700;">${item.progress}%</div>
+                      <div class="progress-bar-container"><div class="progress-bar-fill" style="width:${item.progress}%;"></div></div>
+                    </div>
+                  </td>
+                  <td>
+                    ${item.delaySeverity === 'critical' ? `<span class="badge badge-high">⚠️ ${escapeHtml(item.delayLabel)}</span>` :
+                      item.delaySeverity === 'warning' ? `<span class="badge badge-high">${escapeHtml(item.delayLabel)}</span>` :
+                      item.delaySeverity === 'today' ? `<span class="badge badge-today">🔔 Due Today</span>` :
+                      item.delaySeverity === 'completed' ? `<span class="badge badge-success">✓ Done</span>` :
+                      item.delaySeverity === 'upcoming' ? `<span class="badge badge-low">${escapeHtml(item.delayLabel)}</span>` :
+                      `<span class="badge" style="background:var(--bg-card-subtle);color:var(--text-muted)">-</span>`}
+                  </td>
+                </tr>
+              `).join('') || '<tr><td colspan="5" style="text-align:center; padding:1rem; color:var(--text-muted)">No timeline items scheduled.</td></tr>'}
+            </tbody>
+          </table>
         </div>
 
         <div class="card">
@@ -646,6 +850,109 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
                   <td style="font-weight:700">₹${(Number(a.balance) || 0).toLocaleString('en-IN')}</td>
                 </tr>
               `).join('') || '<tr><td colspan="4">No accounts found.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Tab: Timeline & Plan -->
+      <section id="tab-timeline" class="tab-content">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="title">Timeline Planned Items</div>
+            <div class="value">${totalTimelineItems}</div>
+            <div class="sub">${workProjects.length} projects · ${milestones.length} milestones</div>
+          </div>
+          <div class="metric-card">
+            <div class="title">Delayed Alarms</div>
+            <div class="value" style="${delayedTimelineItems > 0 ? 'color:var(--danger);' : ''}">${delayedTimelineItems}</div>
+            <div class="sub">${delayedTimelineItems > 0 ? 'Requires attention / reschedule' : 'Zero overdue milestones'}</div>
+          </div>
+          <div class="metric-card">
+            <div class="title">Due Today</div>
+            <div class="value" style="${dueTodayTimelineItems > 0 ? 'color:var(--warning);' : ''}">${dueTodayTimelineItems}</div>
+            <div class="sub">Deadlines matching today</div>
+          </div>
+          <div class="metric-card">
+            <div class="title">Upcoming / In-Progress</div>
+            <div class="value">${upcomingTimelineItems}</div>
+            <div class="sub">${completedTimelineItems} already completed</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">📅 Project Timeline & Execution Schedule (${totalTimelineItems})</h2>
+              <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">
+                Unified chronological timeline connecting Projects, Milestones, Deadlines, and Learning paths.
+              </p>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">
+              Reference Date: <strong>${escapeHtml(todayStr)}</strong>
+            </div>
+          </div>
+
+          <!-- Timeline Filter Controls -->
+          <div class="timeline-filter-bar">
+            <button type="button" class="timeline-filter-btn active" onclick="filterTimeline('all', this)">All Items (${totalTimelineItems})</button>
+            <button type="button" class="timeline-filter-btn" onclick="filterTimeline('project', this)">Projects (${workProjects.length})</button>
+            <button type="button" class="timeline-filter-btn" onclick="filterTimeline('milestone', this)">Milestones (${milestones.length})</button>
+            <button type="button" class="timeline-filter-btn" onclick="filterTimeline('task', this)">Tasks with Deadlines (${tasks.filter(t => t.dueAt || t.date || t.dueDate).length})</button>
+            <button type="button" class="timeline-filter-btn" onclick="filterTimeline('learning', this)">Learning & Skills (${learningItems.length})</button>
+            ${delayedTimelineItems > 0 ? `<button type="button" class="timeline-filter-btn" style="border-color:var(--danger);color:var(--danger);" onclick="filterTimeline('delayed', this)">⚠️ Delayed Only (${delayedTimelineItems})</button>` : ''}
+          </div>
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Item / Title</th>
+                <th>Target Due Date</th>
+                <th>Progress & Status</th>
+                <th>Delay Status</th>
+                <th>Linked Goal</th>
+              </tr>
+            </thead>
+            <tbody id="timeline-table-body">
+              ${timelineItems.map(item => `
+                <tr class="timeline-row" data-type="${escapeHtml(item.type)}" data-delayed="${item.isDelayed ? 'true' : 'false'}">
+                  <td>
+                    <span class="badge ${item.type === 'project' ? 'badge-low' : item.type === 'milestone' ? 'badge-medium' : 'badge-success'}">
+                      ${escapeHtml(item.typeLabel)}
+                    </span>
+                  </td>
+                  <td>
+                    <strong style="font-size:0.85rem;">${escapeHtml(item.title)}</strong>
+                    ${item.description ? `<div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.15rem;">${escapeHtml(item.description)}</div>` : ''}
+                  </td>
+                  <td style="font-family:ui-monospace, monospace; font-size:0.75rem; font-weight:600;">
+                    ${item.dueDate ? escapeHtml(item.dueDate) : '<span style="color:var(--text-muted)">Unscheduled</span>'}
+                  </td>
+                  <td>
+                    <div style="min-width:110px;">
+                      <div style="display:flex; justify-content:space-between; font-size:0.7rem; font-weight:700;">
+                        <span>${escapeHtml(item.status)}</span>
+                        <span>${item.progress}%</span>
+                      </div>
+                      <div class="progress-bar-container">
+                        <div class="progress-bar-fill" style="width:${item.progress}%; ${item.progress >= 100 ? 'background-color:var(--success);' : ''}"></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    ${item.delaySeverity === 'critical' ? `<span class="badge badge-high">⚠️ ${escapeHtml(item.delayLabel)}</span>` :
+                      item.delaySeverity === 'warning' ? `<span class="badge badge-high">${escapeHtml(item.delayLabel)}</span>` :
+                      item.delaySeverity === 'today' ? `<span class="badge badge-today">🔔 Due Today</span>` :
+                      item.delaySeverity === 'completed' ? `<span class="badge badge-success">✓ Done</span>` :
+                      item.delaySeverity === 'upcoming' ? `<span class="badge badge-low">${escapeHtml(item.delayLabel)}</span>` :
+                      `<span class="badge" style="background:var(--bg-card-subtle);color:var(--text-muted)">-</span>`}
+                  </td>
+                  <td>
+                    ${item.goalTitle ? `<span style="font-size:0.72rem; background:var(--bg-card-subtle); padding:0.15rem 0.45rem; border-radius:0.4rem; color:var(--text-muted);">🎯 ${escapeHtml(item.goalTitle)}</span>` : '<span style="color:var(--text-muted); font-size:0.72rem;">—</span>'}
+                  </td>
+                </tr>
+              `).join('') || '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted)">No timeline items planned yet.</td></tr>'}
             </tbody>
           </table>
         </div>
@@ -964,11 +1271,31 @@ ${safeDataJson}
       });
     }
 
+    // Timeline Filter
+    function filterTimeline(type, btn) {
+      document.querySelectorAll('.timeline-filter-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      const rows = document.querySelectorAll('#timeline-table-body .timeline-row');
+      rows.forEach(row => {
+        const itemType = row.getAttribute('data-type');
+        const isDelayed = row.getAttribute('data-delayed') === 'true';
+
+        if (type === 'all') {
+          row.style.display = '';
+        } else if (type === 'delayed') {
+          row.style.display = isDelayed ? '' : 'none';
+        } else {
+          row.style.display = itemType === type ? '' : 'none';
+        }
+      });
+    }
+
     // Global Search
     function handleSearch(query) {
       const q = (query || '').toLowerCase().trim();
       if (!q) {
-        document.querySelectorAll('.task-item, .note-card').forEach(el => el.style.display = '');
+        document.querySelectorAll('.task-item, .note-card, .timeline-row').forEach(el => el.style.display = '');
         return;
       }
       document.querySelectorAll('.task-item').forEach(el => {
@@ -978,6 +1305,10 @@ ${safeDataJson}
       document.querySelectorAll('.note-card').forEach(el => {
         const text = el.textContent.toLowerCase();
         el.style.display = text.includes(q) ? 'flex' : 'none';
+      });
+      document.querySelectorAll('.timeline-row').forEach(el => {
+        const text = el.textContent.toLowerCase();
+        el.style.display = text.includes(q) ? '' : 'none';
       });
     }
 

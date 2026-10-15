@@ -40,6 +40,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
   const [selectedTool, setSelectedTool] = useState<string>('Basic');
   const [searchQuery, setSearchQuery] = useState('');
   const [useKeypad, setUseKeypad] = useState(true);
+  const [keypadExpression, setKeypadExpression] = useState<string>('');
 
   // Dynamic input values
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -110,6 +111,21 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
     };
     await storage.put('calcHistory', historyItem);
     onRefresh();
+  };
+
+  const handleRecallToKeypad = (val: string, toolName?: string) => {
+    let clean = val;
+    if (val.includes('=')) {
+      clean = val.split('=').pop()?.trim() || val;
+    }
+    setKeypadExpression(clean);
+    if (toolName === 'Scientific' || selectedTool === 'Scientific') {
+      setSelectedTool('Scientific');
+    } else {
+      setSelectedTool('Basic');
+    }
+    setUseKeypad(true);
+    onSuccess(`✓ Loaded "${clean}" into active calculator`);
   };
 
   const handleToggleFavorite = async () => {
@@ -231,7 +247,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-28 sm:pb-8">
       {/* Header and Search Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -285,19 +301,19 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
         {/* Tool Selector + Calculator Engine (8 cols) */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           {/* Tool Pills */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between mb-3.5">
-              <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                {searchQuery ? `Search Results (${filteredTools.length})` : `${selectedCategory} Tools (${filteredTools.length})`}
+          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                {searchQuery ? `Search Results (${filteredTools.length})` : `${selectedCategory} Calculators (${filteredTools.length})`}
               </span>
               <button
                 type="button"
                 onClick={handleToggleFavorite}
-                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                   isFavorite ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                 }`}
               >
-                <Star className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
+                <Star className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current' : ''}`} />
                 <span>{isFavorite ? 'Favorited' : 'Favorite'}</span>
               </button>
             </div>
@@ -317,31 +333,33 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
           </div>
 
           {/* Calculator Workstation Box */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                  <Calculator className="h-4.5 w-4.5" />
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+                  <Calculator className="h-4 w-4" />
                 </div>
-                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                  {selectedTool} Engine
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  {selectedTool}
                 </h2>
               </div>
               {(selectedTool === 'Basic' || selectedTool === 'Scientific') && (
                 <button
                   type="button"
                   onClick={() => setUseKeypad(!useKeypad)}
-                  className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+                  className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-400 cursor-pointer"
                 >
                   <Sliders className="h-3 w-3" />
-                  <span>{useKeypad ? 'Switch to Form Fields' : 'Switch to Interactive Keypad'}</span>
+                  <span>{useKeypad ? 'Form Fields Mode' : 'Interactive Keypad'}</span>
                 </button>
               )}
             </div>
 
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              {currentConfig.description}
-            </p>
+            {currentConfig.description && currentConfig.description !== 'Standard arithmetic calculations' && currentConfig.description !== 'Scientific mathematical calculations' && (
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                {currentConfig.description}
+              </p>
+            )}
 
             {currentConfig.formula && (
               <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
@@ -356,6 +374,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                 <InteractiveKeypad
                   onComputeResult={handleKeypadResult}
                   isScientific={selectedTool === 'Scientific'}
+                  initialExpression={keypadExpression}
                 />
               ) : (
                 /* Dynamic Input Forms for All Tools */
@@ -452,35 +471,37 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                 </div>
               )}
 
-              {/* Formatted Output Container */}
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
-                    Computed Output
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleCopyResult}
-                    disabled={result === '—'}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-indigo-600 disabled:opacity-30 dark:text-slate-300 dark:hover:text-indigo-400"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="h-3 w-3 text-emerald-500" />
-                        <span className="text-emerald-600 dark:text-emerald-400">Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3 w-3" />
-                        <span>Copy Result</span>
-                      </>
-                    )}
-                  </button>
+              {/* Formatted Output Container (Shown only for form-based calculators & converters) */}
+              {(!useKeypad || (selectedTool !== 'Basic' && selectedTool !== 'Scientific')) && (
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
+                      Computed Output
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCopyResult}
+                      disabled={result === '—'}
+                      className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-indigo-600 disabled:opacity-30 dark:text-slate-300 dark:hover:text-indigo-400 cursor-pointer"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-3 w-3 text-emerald-500" />
+                          <span className="text-emerald-600 dark:text-emerald-400">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3 w-3" />
+                          <span>Copy Result</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="mt-2 font-mono text-base font-bold text-slate-900 dark:text-white break-words">
+                    {result}
+                  </div>
                 </div>
-                <div className="mt-2 font-mono text-base font-bold text-slate-900 dark:text-white break-words">
-                  {result}
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -521,19 +542,29 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                   .map(h => (
                     <div
                       key={h.id}
-                      onClick={() => {
-                        setSelectedTool(h.tool);
-                        setResult(h.result);
-                      }}
-                      className="cursor-pointer rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-indigo-800"
+                      className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-indigo-800"
                     >
                       <div className="flex items-center justify-between font-semibold text-slate-800 dark:text-slate-200">
                         <span>{h.tool}</span>
-                        <span className="text-[10px] text-slate-400">
-                          {new Date(h.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(h.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRecallToKeypad(h.result, h.tool)}
+                            className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded"
+                            title="Recall into Calculator"
+                          >
+                            Recall ↩
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-1 font-mono text-[11px] text-indigo-600 dark:text-indigo-400 break-words font-medium">
+                      <div
+                        onClick={() => handleRecallToKeypad(h.result, h.tool)}
+                        className="mt-1 font-mono text-[11px] text-indigo-600 dark:text-indigo-400 break-words font-medium cursor-pointer hover:underline"
+                        title="Click to recall into Calculator"
+                      >
                         {h.result}
                       </div>
                     </div>

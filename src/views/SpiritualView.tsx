@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
-import { Compass, Heart, Shield, Trash2 } from 'lucide-react';
-import { ValueItem, SpiritualPractice, Commitment, Habit, NavModule } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Compass, Heart, Shield, Trash2, Pencil, X } from 'lucide-react';
+import { ValueItem, SpiritualPractice, Commitment, Habit, NavModule, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
+import { syncGoalProgressFromSpiritual } from '../lib/goalTaskSync';
 
 interface SpiritualViewProps {
   values: ValueItem[];
   practices: SpiritualPractice[];
   commitments: Commitment[];
+  goals?: Goal[];
   onNavigate: (module: NavModule) => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
@@ -16,6 +19,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   values,
   practices,
   commitments,
+  goals = [],
   onNavigate,
   onRefresh,
   onSuccess
@@ -26,8 +30,27 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
 
   const [pracName, setPracName] = useState('');
   const [pracFreq, setPracFreq] = useState('Daily');
+  const [pracInputMode, setPracInputMode] = useState<'manual' | 'link'>('manual');
+  const [pracGoalId, setPracGoalId] = useState<string>('');
 
   const [commText, setCommText] = useState('');
+
+  // Daily Practice Edit state
+  const [editingPractice, setEditingPractice] = useState<SpiritualPractice | null>(null);
+  const [editPracName, setEditPracName] = useState('');
+  const [editPracFreq, setEditPracFreq] = useState('Daily');
+  const [editPracInputMode, setEditPracInputMode] = useState<'manual' | 'link'>('manual');
+  const [editPracGoalId, setEditPracGoalId] = useState<string>('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && editingPractice) {
+        setEditingPractice(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingPractice]);
 
   const handleAddValue = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +82,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
       name: pracName.trim(),
       frequency: pracFreq,
       linkedHabitId: habitId,
+      goalId: pracGoalId || undefined,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -76,8 +100,70 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     };
     await storage.put('habits', h);
 
+    if (p.goalId) {
+      await syncGoalProgressFromSpiritual(p.goalId);
+    }
+
     onSuccess('Spiritual practice saved and automatically linked to Habit tracker');
     setPracName('');
+    setPracGoalId('');
+    setPracInputMode('manual');
+    onRefresh();
+  };
+
+  const handleStartEditPractice = (p: SpiritualPractice) => {
+    setEditingPractice(p);
+    setEditPracName(p.name);
+    setEditPracFreq(p.frequency || 'Daily');
+    setEditPracGoalId(p.goalId || '');
+    setEditPracInputMode(p.goalId ? 'link' : 'manual');
+  };
+
+  const handleSaveEditPractice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPractice || !editPracName.trim()) return;
+
+    const oldGoalId = editingPractice.goalId;
+    const newGoalId = editPracGoalId || undefined;
+
+    const updatedPractice: SpiritualPractice = {
+      ...editingPractice,
+      name: editPracName.trim(),
+      frequency: editPracFreq.trim() || 'Daily',
+      goalId: newGoalId,
+      updatedAt: Date.now()
+    };
+
+    await storage.put('spiritualPractices', updatedPractice);
+
+    // Synchronize linked habit if present
+    try {
+      const allHabits = await storage.getAll<Habit>('habits');
+      const linkedHabit = allHabits.find(
+        h => (editingPractice.linkedHabitId && h.id === editingPractice.linkedHabitId) || h.linkedPracticeId === editingPractice.id
+      );
+      if (linkedHabit) {
+        const updatedHabit: Habit = {
+          ...linkedHabit,
+          name: `🕉 ${editPracName.trim()}`,
+          frequency: editPracFreq.trim() || 'Daily',
+          updatedAt: Date.now()
+        };
+        await storage.put('habits', updatedHabit);
+      }
+    } catch (err) {
+      console.error('Failed to update linked habit', err);
+    }
+
+    if (oldGoalId && oldGoalId !== newGoalId) {
+      await syncGoalProgressFromSpiritual(oldGoalId);
+    }
+    if (newGoalId) {
+      await syncGoalProgressFromSpiritual(newGoalId);
+    }
+
+    onSuccess('✓ Daily practice updated');
+    setEditingPractice(null);
     onRefresh();
   };
 
@@ -97,13 +183,19 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   };
 
   const handleDeleteValue = async (id: string) => {
+    const val = values.find(v => v.id === id);
+    const linkedGoalId = val?.goalId;
     await storage.delete('values', id);
+    if (linkedGoalId) {
+      await syncGoalProgressFromSpiritual(linkedGoalId);
+    }
     onSuccess('✓ Value deleted');
     onRefresh();
   };
 
   const handleDeletePractice = async (practice: SpiritualPractice) => {
     try {
+      const linkedGoalId = practice.goalId;
       await storage.delete('spiritualPractices', practice.id);
       // Clean up linked habit in habits store if any
       const allHabits = await storage.getAll<Habit>('habits');
@@ -112,6 +204,9 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
       );
       for (const h of linked) {
         await storage.delete('habits', h.id);
+      }
+      if (linkedGoalId) {
+        await syncGoalProgressFromSpiritual(linkedGoalId);
       }
       onSuccess('✓ Daily practice deleted');
       onRefresh();
@@ -122,7 +217,12 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   };
 
   const handleDeleteCommitment = async (id: string) => {
+    const comm = commitments.find(c => c.id === id);
+    const linkedGoalId = comm?.goalId;
     await storage.delete('commitments', id);
+    if (linkedGoalId) {
+      await syncGoalProgressFromSpiritual(linkedGoalId);
+    }
     onSuccess('✓ Commitment deleted');
     onRefresh();
   };
@@ -135,28 +235,28 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         </h1>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-6">
         {/* Core Values */}
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4.5 sm:p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Compass className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Values & Principles ({values.length})</h2>
           </div>
 
           <form onSubmit={handleAddValue} className="mt-4 space-y-2.5">
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <input
                 type="text"
                 required
                 value={valTitle}
                 onChange={e => setValTitle(e.target.value)}
                 placeholder="Title (e.g. Sovereign Truth)"
-                className="h-8 flex-1 rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800"
+                className="h-8 min-w-0 flex-1 rounded-xl border border-slate-200 px-2.5 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
               />
               <select
                 value={valType}
                 onChange={e => setValType(e.target.value as any)}
-                className="h-8 rounded-xl border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800"
+                className="h-8 w-24 sm:w-28 shrink-0 rounded-xl border border-slate-200 px-2 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800 cursor-pointer"
               >
                 <option value="value">Value</option>
                 <option value="principle">Principle</option>
@@ -167,11 +267,11 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               value={valDesc}
               onChange={e => setValDesc(e.target.value)}
               placeholder="What does living this standard look like?"
-              className="w-full rounded-xl border border-slate-200 p-2 text-xs dark:border-slate-700 dark:bg-slate-800"
+              className="w-full min-w-0 resize-y rounded-xl border border-slate-200 p-2 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <button
               type="submit"
-              className="w-full rounded-xl bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+              className="w-full rounded-xl bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer"
             >
               + Define Value
             </button>
@@ -180,8 +280,11 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
           <div className="mt-4 space-y-2.5 max-h-80 overflow-y-auto">
             {[...values].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(v => (
               <div key={v.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
-                <div className="flex justify-between items-start">
-                  <div className="font-bold text-slate-900 dark:text-white">{v.title}</div>
+                <div className="flex justify-between items-start gap-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-slate-900 dark:text-white">{v.title}</span>
+                    <GoalBadge goalId={v.goalId} goals={goals} />
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleDeleteValue(v.id)}
@@ -203,31 +306,38 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         </section>
 
         {/* Spiritual Practices */}
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4.5 sm:p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Heart className="h-4 w-4 text-rose-500" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Daily Practices ({practices.length})</h2>
           </div>
 
           <form onSubmit={handleAddPractice} className="mt-4 space-y-2.5">
+            <GoalLinkSelector
+              goals={goals}
+              mode={pracInputMode}
+              goalId={pracGoalId}
+              onModeChange={setPracInputMode}
+              onGoalChange={setPracGoalId}
+            />
             <input
               type="text"
               required
               value={pracName}
               onChange={e => setPracName(e.target.value)}
               placeholder="Practice (e.g. Breathwork, Meditation)"
-              className="h-8 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800"
+              className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2.5 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <input
               type="text"
               value={pracFreq}
               onChange={e => setPracFreq(e.target.value)}
               placeholder="Frequency (Daily, Sunrise)"
-              className="h-8 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800"
+              className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2.5 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <button
               type="submit"
-              className="w-full rounded-xl bg-rose-600 py-1.5 text-xs font-semibold text-white hover:bg-rose-500"
+              className="w-full rounded-xl bg-rose-600 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 cursor-pointer"
             >
               + Add Practice & Linked Habit
             </button>
@@ -249,20 +359,31 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                       handleDeletePractice(p);
                     }
                   }}
-                  className="group rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center hover:border-slate-200 dark:hover:border-slate-700 transition-colors focus:outline-none focus:ring-1 focus:ring-rose-400/50"
+                  className="group rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center gap-2 hover:border-slate-200 dark:hover:border-slate-700 transition-colors focus:outline-none focus:ring-1 focus:ring-rose-400/50"
                 >
-                  <div className="min-w-0 pr-2">
-                    <div className="font-semibold text-slate-900 dark:text-white truncate">{p.name}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{p.frequency} · Auto-linked to Habit</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-slate-900 dark:text-white truncate">{p.name}</span>
+                      <GoalBadge goalId={p.goalId} goals={goals} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
                       onClick={() => onNavigate('routine')}
-                      className="rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 transition-colors cursor-pointer"
+                      className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 transition-colors cursor-pointer whitespace-nowrap"
                       title="View linked habit in Routines & Habits"
                     >
                       View Habit →
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditPractice(p)}
+                      title="Edit daily practice"
+                      aria-label={`Edit ${p.name}`}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
@@ -281,7 +402,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         </section>
 
         {/* Personal Commitments */}
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4.5 sm:p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Shield className="h-4 w-4 text-amber-500" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Commitments & Vows ({commitments.length})</h2>
@@ -294,11 +415,11 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               value={commText}
               onChange={e => setCommText(e.target.value)}
               placeholder="A binding personal standard or moral commitment..."
-              className="w-full rounded-xl border border-slate-200 p-2 text-xs dark:border-slate-700 dark:bg-slate-800"
+              className="w-full min-w-0 resize-y rounded-xl border border-slate-200 p-2 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <button
               type="submit"
-              className="w-full rounded-xl bg-amber-500 py-1.5 text-xs font-semibold text-white hover:bg-amber-600"
+              className="w-full rounded-xl bg-amber-500 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 cursor-pointer"
             >
               + Commit Vow
             </button>
@@ -308,8 +429,15 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             {[...commitments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(c => (
               <div key={c.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
                 <div className="flex justify-between items-start">
-                  <div className="font-medium text-slate-800 dark:text-slate-200 italic leading-relaxed">
-                    "{c.text}"
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-slate-800 dark:text-slate-200 italic leading-relaxed">
+                      "{c.text}"
+                    </div>
+                    {c.goalId && (
+                      <div className="mt-1">
+                        <GoalBadge goalId={c.goalId} goals={goals} />
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -350,6 +478,109 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Edit Daily Practice Modal */}
+      {editingPractice && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-practice-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setEditingPractice(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-500 dark:bg-rose-950/50">
+                  <Heart className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 id="edit-practice-title" className="text-sm font-bold text-slate-900 dark:text-white">
+                    Edit Daily Practice
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Update practice details & synchronize linked habit
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingPractice(null)}
+                title="Close modal"
+                aria-label="Close"
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPractice} className="mt-4 space-y-3.5">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  Goal Link
+                </label>
+                <GoalLinkSelector
+                  goals={goals}
+                  mode={editPracInputMode}
+                  goalId={editPracGoalId}
+                  onModeChange={setEditPracInputMode}
+                  onGoalChange={setEditPracGoalId}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  Practice Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editPracName}
+                  onChange={e => setEditPracName(e.target.value)}
+                  placeholder="Practice (e.g. Breathwork, Meditation)"
+                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  Frequency
+                </label>
+                <input
+                  type="text"
+                  value={editPracFreq}
+                  onChange={e => setEditPracFreq(e.target.value)}
+                  placeholder="Frequency (Daily, Sunrise, Evening)"
+                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-2.5 text-[11px] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 leading-relaxed">
+                💡 Any changes made here are automatically synced to the corresponding habit in your Routines & Habits schedule.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingPractice(null)}
+                  className="rounded-xl px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 shadow-sm transition-colors cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

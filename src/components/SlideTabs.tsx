@@ -106,7 +106,9 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
       {/* Main Horizontal Slide Scroll Area */}
       <div
         ref={scrollRef}
-        className={`flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth w-full py-1 ${className}`}
+        className={`flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth w-full py-1 transition-all ${
+          showArrows && canScrollLeft ? 'pl-9' : ''
+        } ${showArrows && canScrollRight ? 'pr-9' : ''} ${className}`}
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {tabs.map(tab => {
@@ -130,7 +132,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
               ref={isSelected ? activeTabRef : null}
               type="button"
               onClick={() => onChange(tab.id)}
-              className={`flex shrink-0 lg:flex-1 items-center justify-center gap-1.5 sm:gap-2 rounded-xl font-semibold tracking-normal transition-all cursor-pointer whitespace-nowrap min-w-fit select-none ${
+              className={`flex shrink-0 items-center justify-center gap-1.5 sm:gap-2 rounded-xl font-semibold tracking-normal transition-all cursor-pointer whitespace-nowrap min-w-fit select-none ${
                 isSmall
                   ? 'px-2.5 sm:px-3 py-1.5 text-xs'
                   : 'px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm'

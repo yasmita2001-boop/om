@@ -14,6 +14,7 @@ import {
 import { storage, generateUUID } from '../lib/storage';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
+import { syncGoalProgressFromFinance } from '../lib/goalTaskSync';
 
 interface FinanceViewProps {
   accounts: FinanceAccount[];
@@ -828,6 +829,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     try {
       await storage.atomicPutMany(operations);
+      if (tx.goalId) {
+        await syncGoalProgressFromFinance(tx.goalId);
+      }
       if (txType === 'transfer' && nextFromAccount && nextToAccount) {
         onSuccess(`₹${amt.toLocaleString('en-IN')} transferred from ${nextFromAccount.name} to ${nextToAccount.name}`);
       } else if (txType === 'income') {
@@ -930,6 +934,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
 
     await storage.atomicPutMany(operations);
+    if (newLoan.goalId) {
+      await syncGoalProgressFromFinance(newLoan.goalId);
+    }
     setPayLoanId(newLoan.id);
     onSuccess(`Loan liability registered${loanDepositAccountId ? ' & funds deposited to account' : ''}`);
     setLoanName('');
@@ -977,6 +984,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     ];
 
     await storage.atomicPutMany(operations);
+    if (loan.goalId) {
+      await syncGoalProgressFromFinance(loan.goalId);
+    }
     onSuccess(`✓ ₹${p.toLocaleString('en-IN')} deposited into "${acct.name}" & recorded in Ledger!`);
     onRefresh();
   };
@@ -1058,6 +1068,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     operations.push({ storeName: 'finance', item: tx });
 
     await storage.atomicPutMany(operations);
+    if (loan.goalId) {
+      await syncGoalProgressFromFinance(loan.goalId);
+    }
     onSuccess(`✓ Loan payment logged: Principal ₹${principal.toFixed(0)}, Interest ₹${interest.toFixed(0)}`);
     setPayAmount('');
     onRefresh();
@@ -1076,6 +1089,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       goalId: liabInputMode === 'link' && liabGoalId ? liabGoalId : null
     };
     await storage.put('liabilities', l);
+    if (l.goalId) {
+      await syncGoalProgressFromFinance(l.goalId);
+    }
     onSuccess(`Liability "${liabName}" added${l.goalId ? ' & linked to Goal' : ''}`);
     setLiabName('');
     setLiabVal('');
@@ -1137,6 +1153,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     operations.push({ storeName: 'finance', item: tx });
 
     await storage.atomicPutMany(operations);
+    if (inv.goalId) {
+      await syncGoalProgressFromFinance(inv.goalId);
+    }
     onSuccess(`✓ Investment added to portfolio & logged in ledger${invAccountId ? ' (debited from account)' : ''}`);
     setInvName('');
     setInvAmount('');
@@ -1181,6 +1200,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     operations.push({ storeName: 'finance', item: tx });
 
     await storage.atomicPutMany(operations);
+    if (inv.goalId) {
+      await syncGoalProgressFromFinance(inv.goalId);
+    }
     onSuccess(`✓ ₹${amt.toLocaleString('en-IN')} logged in ledger for "${inv.name}"!`);
     onRefresh();
   };
@@ -1236,6 +1258,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
 
     await storage.atomicPutMany(operations);
+    if (sp.goalId) {
+      await syncGoalProgressFromFinance(sp.goalId);
+    }
     onSuccess(`Savings goal registered${saveAccountId && initialAmt > 0 ? ' & initial capital allocated' : ''}`);
     setSaveName('');
     setSaveCurrent('');
@@ -1291,6 +1316,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     operations.push({ storeName: 'finance', item: tx });
 
     await storage.atomicPutMany(operations);
+    if (depositTargetPlan.goalId) {
+      await syncGoalProgressFromFinance(depositTargetPlan.goalId);
+    }
     onSuccess(`✓ ₹${amt.toLocaleString('en-IN')} deposited into "${depositTargetPlan.name}" from account`);
     setDepositTargetPlan(null);
     setDepositAmount('');
@@ -1308,6 +1336,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       goalId: assetInputMode === 'link' && assetGoalId ? assetGoalId : null
     };
     await storage.put('assets', a);
+    if (a.goalId) {
+      await syncGoalProgressFromFinance(a.goalId);
+    }
     onSuccess(`Asset "${assetName}" saved to balance sheet${a.goalId ? ' & linked to Goal' : ''}`);
     setAssetName('');
     setAssetVal('');
@@ -1318,8 +1349,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+    let linkedGoalIdToDelete: string | null | undefined = null;
     if (deleteTarget.store === 'finance') {
       const tx = transactions.find(t => t.id === deleteTarget.id);
+      linkedGoalIdToDelete = tx?.goalId;
       await storage.deleteFinanceTransactionWithLink(deleteTarget.id);
       if (tx?.type === 'expense' || tx?.type === 'investment') {
         onSuccess(`✓ Removed "${deleteTarget.name}" & refunded account`);
@@ -1335,6 +1368,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         onSuccess(`✓ Removed "${deleteTarget.name}"`);
       }
     } else if (deleteTarget.store === 'investments') {
+      const inv = investments.find(i => i.id === deleteTarget.id);
+      linkedGoalIdToDelete = inv?.goalId;
       const linkedTx = transactions.find(t => t.linkedInvestmentId === deleteTarget.id);
       if (linkedTx) {
         await storage.deleteFinanceTransactionWithLink(linkedTx.id);
@@ -1342,8 +1377,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       await storage.delete('investments', deleteTarget.id);
       onSuccess(`✓ Removed investment asset "${deleteTarget.name}" & synced ledger`);
     } else {
+      const it: any = await storage.get(deleteTarget.store, deleteTarget.id);
+      linkedGoalIdToDelete = it?.goalId;
       await storage.delete(deleteTarget.store, deleteTarget.id);
       onSuccess(`✓ Removed "${deleteTarget.name}"`);
+    }
+    if (linkedGoalIdToDelete) {
+      await syncGoalProgressFromFinance(linkedGoalIdToDelete);
     }
     setDeleteTarget(null);
     onRefresh();

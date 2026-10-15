@@ -9,6 +9,7 @@ import { FocusSession, Task, Goal, Routine } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { alarmAudio, BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { alarmService, FocusAlarm } from '../lib/alarmService';
+import { syncGoalProgressFromFocus } from '../lib/goalTaskSync';
 
 interface FocusViewProps {
   sessions: FocusSession[];
@@ -150,6 +151,9 @@ export const FocusView: React.FC<FocusViewProps> = ({
     };
 
     await storage.put('focus', newSession);
+    if (newSession.goalId) {
+      await syncGoalProgressFromFocus(newSession.goalId);
+    }
     onSuccess(`🎯 Focus session logged (${Math.round(elapsed / 60)} minutes)`);
     handleReset();
     onRefresh();
@@ -228,11 +232,26 @@ export const FocusView: React.FC<FocusViewProps> = ({
       }
 
       // Auto-set repeat days based on routine cadence
-      if (routine.frequency === 'weekdays') {
+      const f = (routine.frequency || 'daily').toLowerCase();
+      if (f === 'weekdays') {
         setNewAlarmDays([1, 2, 3, 4, 5]);
-      } else if (routine.frequency === 'daily') {
+      } else if (f === 'daily') {
         setNewAlarmDays([0, 1, 2, 3, 4, 5, 6]);
-      } else if (routine.frequency === 'weekly') {
+      } else if (f === 'sunday') {
+        setNewAlarmDays([0]);
+      } else if (f === 'monday') {
+        setNewAlarmDays([1]);
+      } else if (f === 'tuesday') {
+        setNewAlarmDays([2]);
+      } else if (f === 'wednesday') {
+        setNewAlarmDays([3]);
+      } else if (f === 'thursday') {
+        setNewAlarmDays([4]);
+      } else if (f === 'friday') {
+        setNewAlarmDays([5]);
+      } else if (f === 'saturday') {
+        setNewAlarmDays([6]);
+      } else {
         const currentDay = new Date().getDay();
         setNewAlarmDays([currentDay]);
       }
@@ -682,9 +701,17 @@ export const FocusView: React.FC<FocusViewProps> = ({
                             const r = availableRoutines[0];
                             setSelectedRoutineId(r.id);
                             setNewAlarmLabel(r.name);
-                            if (r.startTime || r.time) setNewAlarmTime(r.startTime || r.time || '08:00');
-                            if (r.frequency === 'weekdays') setNewAlarmDays([1, 2, 3, 4, 5]);
-                            else if (r.frequency === 'daily') setNewAlarmDays([0, 1, 2, 3, 4, 5, 6]);
+                            const f = (r.frequency || 'daily').toLowerCase();
+                            if (f === 'weekdays') setNewAlarmDays([1, 2, 3, 4, 5]);
+                            else if (f === 'daily') setNewAlarmDays([0, 1, 2, 3, 4, 5, 6]);
+                            else if (f === 'sunday') setNewAlarmDays([0]);
+                            else if (f === 'monday') setNewAlarmDays([1]);
+                            else if (f === 'tuesday') setNewAlarmDays([2]);
+                            else if (f === 'wednesday') setNewAlarmDays([3]);
+                            else if (f === 'thursday') setNewAlarmDays([4]);
+                            else if (f === 'friday') setNewAlarmDays([5]);
+                            else if (f === 'saturday') setNewAlarmDays([6]);
+                            else setNewAlarmDays([new Date().getDay()]);
                           }
                         }}
                         className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${

@@ -111,7 +111,7 @@ export default defineConfig(() => {
     },
     build: {
       target: 'es2020', // broad device support (iOS 14+, Chrome 80+, Firefox 80+); 'esnext' can white-screen older phones
-      minify: 'terser',
+      minify: 'terser' as const,
       terserOptions: {
         compress: {
           drop_console: false,
@@ -123,6 +123,7 @@ export default defineConfig(() => {
         },
       },
       cssCodeSplit: true,
+      reportCompressedSize: false,
       sourcemap: false,
       chunkSizeWarningLimit: 1000,
       modulePreload: isSingleFile ? (false as const) : undefined,

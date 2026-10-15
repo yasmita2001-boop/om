@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Briefcase, BookOpen, Users, Trash2, Award, Edit3, X, Calendar,
-  Link2, Target, CheckCircle2, Check, ArrowRight, Layers, TrendingUp,
+  Link2, Target, CheckCircle2, Circle, Check, ArrowRight, Layers, TrendingUp,
   BellRing, Bell, Zap, AlertTriangle, Search, Plus
 } from 'lucide-react';
 import {
@@ -14,13 +14,16 @@ import {
   syncGoalProgressFromLearning,
   syncGoalProgressFromSkills,
   syncGoalProgressDirect,
-  syncGoalProgressFromTasks
+  syncGoalProgressFromTasks,
+  syncGoalProgressFromPeople,
+  syncGoalProgressFromMeetings
 } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
 import { computeItemDelay } from '../components/ProjectTimelinePlan';
 import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
+import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
 
 interface WorkViewProps {
   projects: WorkProject[];
@@ -142,6 +145,22 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [meetTitle, setMeetTitle] = useState('');
   const [meetPeople, setMeetPeople] = useState('');
   const [meetDate, setMeetDate] = useState(today);
+  const [meetInputMode, setMeetInputMode] = useState<'manual' | 'link'>('manual');
+  const [meetGoalId, setMeetGoalId] = useState<string>('');
+
+  const handleSelectGoalForMeeting = (gId: string) => {
+    setMeetGoalId(gId);
+    if (!gId) return;
+    const matched = goals.find(g => g.id === gId);
+    if (matched) {
+      if (!meetTitle.trim() || goals.some(g => meetTitle.includes(g.title))) {
+        setMeetTitle(`Agenda: ${matched.title}`);
+      }
+      if (matched.targetDate) {
+        setMeetDate(matched.targetDate);
+      }
+    }
+  };
 
   // Edit & Delete modal states
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -286,13 +305,21 @@ export const WorkView: React.FC<WorkViewProps> = ({
         await syncGoalProgressFromSkills(oldGoalId);
       }
     } else if (type === 'meeting') {
+      const oldGoalId = item.goalId;
       const updated: Meeting = {
         ...item,
         title: editTitle.trim(),
         people: editSubtitle.trim() || undefined,
-        date: editDate || today
+        date: editDate || today,
+        goalId: editGoalId || null
       };
       await storage.put('meetings', updated);
+      if (updated.goalId) {
+        await syncGoalProgressFromPeople(updated.goalId);
+      }
+      if (oldGoalId && oldGoalId !== updated.goalId) {
+        await syncGoalProgressFromPeople(oldGoalId);
+      }
       onSuccess('✓ Meeting agenda updated');
     }
 
@@ -310,6 +337,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
         linkedGoalId = learningItems.find(l => l.id === deleteTarget.id)?.goalId || null;
       } else if (deleteTarget.store === 'skills') {
         linkedGoalId = skills.find(s => s.id === deleteTarget.id)?.goalId || null;
+      } else if (deleteTarget.store === 'meetings') {
+        linkedGoalId = meetings.find(m => m.id === deleteTarget.id)?.goalId || null;
       }
 
       await storage.delete(deleteTarget.store, deleteTarget.id);
@@ -318,6 +347,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
         if (deleteTarget.store === 'workProjects') await syncGoalProgressFromProjects(linkedGoalId);
         else if (deleteTarget.store === 'learningItems') await syncGoalProgressFromLearning(linkedGoalId);
         else if (deleteTarget.store === 'skills') await syncGoalProgressFromSkills(linkedGoalId);
+        else if (deleteTarget.store === 'meetings') await syncGoalProgressFromPeople(linkedGoalId);
       }
 
       onSuccess(`✓ ${deleteTarget.name} deleted`);
@@ -775,12 +805,38 @@ export const WorkView: React.FC<WorkViewProps> = ({
       title: meetTitle.trim(),
       people: meetPeople.trim() || undefined,
       date: meetDate,
+      status: 'scheduled',
+      completed: false,
+      goalId: meetGoalId || undefined,
       createdAt: Date.now()
     };
     await storage.put('meetings', m);
+    if (m.goalId) {
+      await syncGoalProgressFromMeetings(m.goalId, m.id, false, 'scheduled');
+    }
     onSuccess('✓ Meeting scheduled');
     setMeetTitle('');
     setMeetPeople('');
+    setMeetGoalId('');
+    setMeetInputMode('manual');
+    onRefresh();
+  };
+
+  const handleToggleMeetingComplete = async (m: Meeting) => {
+    const isComp = Boolean(m.completed || m.status === 'completed');
+    const nextCompleted = !isComp;
+    const nextStatus: 'scheduled' | 'completed' = nextCompleted ? 'completed' : 'scheduled';
+    const updated: Meeting = {
+      ...m,
+      completed: nextCompleted,
+      status: nextStatus,
+      updatedAt: Date.now()
+    };
+    await storage.put('meetings', updated);
+    if (m.goalId) {
+      await syncGoalProgressFromMeetings(m.goalId, m.id, nextCompleted, nextStatus);
+    }
+    onSuccess(nextCompleted ? `✓ Attended meeting: "${m.title}"` : `Meeting marked scheduled: "${m.title}"`);
     onRefresh();
   };
 
@@ -1925,6 +1981,14 @@ export const WorkView: React.FC<WorkViewProps> = ({
               <span>Schedule Meeting</span>
             </h2>
             <form onSubmit={handleAddMeeting} className="mt-4 space-y-3">
+              <GoalLinkSelector
+                goals={goals}
+                mode={meetInputMode}
+                goalId={meetGoalId}
+                onModeChange={setMeetInputMode}
+                onGoalChange={handleSelectGoalForMeeting}
+                label="Meeting Goal Alignment"
+              />
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Agenda / Topic</label>
                 <input
@@ -1936,7 +2000,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Attendees</label>
                   <input
@@ -1944,7 +2008,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     value={meetPeople}
                     onChange={e => setMeetPeople(e.target.value)}
                     placeholder="Team, Alex"
-                    className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
                 <div>
@@ -1953,7 +2017,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     type="date"
                     value={meetDate}
                     onChange={e => setMeetDate(e.target.value)}
-                    className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
+                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
                   />
                 </div>
               </div>
@@ -1975,11 +2039,39 @@ export const WorkView: React.FC<WorkViewProps> = ({
                 <div className="py-12 text-center text-xs text-slate-400">No scheduled meetings on agenda.</div>
               ) : (
                 [...meetings].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
-                  <div key={m.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center">
-                    <div>
-                      <div className="font-bold text-slate-900 dark:text-white text-sm">{m.title}</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        {m.date} · {m.people || 'Internal'}
+                  <div key={m.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMeetingComplete(m)}
+                        className="text-slate-400 hover:text-emerald-600 cursor-pointer shrink-0"
+                        title={m.completed || m.status === 'completed' ? 'Mark as Scheduled' : 'Mark as Attended / Done'}
+                      >
+                        {m.completed || m.status === 'completed' ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <Circle className="h-4 w-4" />
+                        )}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`font-bold text-slate-900 dark:text-white text-sm truncate ${m.completed || m.status === 'completed' ? 'line-through text-slate-400' : ''}`}>
+                            {m.title}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                            m.completed || m.status === 'completed'
+                              ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
+                              : m.date > today
+                              ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400'
+                              : 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400'
+                          }`}>
+                            {m.completed || m.status === 'completed' ? '✓ Attended' : m.date > today ? 'Upcoming' : 'Scheduled'}
+                          </span>
+                          <GoalBadge goalId={m.goalId} goals={goals} />
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {m.date} · {m.people || 'Internal'}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -2043,7 +2135,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
             <form onSubmit={handleSaveEdit} className="mt-4 space-y-3.5">
               {/* GOAL LINK SELECTOR IN EDIT MODAL */}
-              {(editTarget.type === 'project' || editTarget.type === 'learning' || editTarget.type === 'skill') && (
+              {(editTarget.type === 'project' || editTarget.type === 'learning' || editTarget.type === 'skill' || editTarget.type === 'meeting') && (
                 <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-800/80 dark:bg-indigo-950/30">
                   <label className="block text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1 mb-1">
                     <Target className="h-3.5 w-3.5" />

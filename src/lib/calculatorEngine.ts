@@ -235,40 +235,86 @@ export class CalculatorEngine {
     throw new Error('Unsupported operation: ' + op);
   }
 
-  scientific(expr: string): number | string {
-    const s = String(expr).trim().toLowerCase();
+  scientific(expr: string, angleMode: 'deg' | 'rad' = 'deg'): number | string {
+    let s = String(expr).trim();
     if (!s) return 0;
+
+    // Normalize unicode operators
+    s = s
+      .replace(/×/g, '*')
+      .replace(/÷/g, '/')
+      .replace(/[−–]/g, '-')
+      .replace(/π/g, 'pi')
+      .replace(/√\s*\(/g, 'sqrt(')
+      .replace(/√\s*(\d+(?:\.\d+)?)/g, 'sqrt($1)')
+      .replace(/∛\s*\(/g, 'cbrt(')
+      .replace(/∛\s*(\d+(?:\.\d+)?)/g, 'cbrt($1)')
+      .toLowerCase();
+
+    // Factorial helper
+    const factFn = (val: number): number => {
+      if (val < 0 || !Number.isInteger(val)) return NaN;
+      if (val > 170) return Infinity;
+      let r = 1;
+      for (let i = 2; i <= val; i++) r *= i;
+      return r;
+    };
+
+    // Replace factorial syntax like 5! -> fact(5)
+    s = s.replace(/(\d+(?:\.\d+)?)\s*!/g, 'fact($1)');
+
+    // Replace percentage additions/subtractions: e.g. 100 + 10% -> 100 + (100 * 10 / 100)
+    s = s.replace(/(\d+(?:\.\d+)?)\s*([\+\-])\s*(\d+(?:\.\d+)?)%/g, '($1 $2 ($1 * $3 / 100))');
+    // Replace standalone percentage: 50% -> (50 / 100)
+    s = s.replace(/(\d+(?:\.\d+)?)%/g, '($1 / 100)');
+
     if (!/^[0-9+\-*/%().,\s_a-z^]+$/.test(s)) throw new Error('Invalid characters in mathematical expression');
 
-    const sanitized = s
+    let sanitized = s
       .replace(/\^/g, '**')
-      .replace(/pi/g, 'Math.PI')
-      .replace(/e\b/g, 'Math.E')
+      .replace(/\bpi\b/g, 'Math.PI')
+      .replace(/\be\b/g, 'Math.E')
       .replace(/sqrt\(/g, 'Math.sqrt(')
+      .replace(/cbrt\(/g, 'Math.cbrt(')
       .replace(/abs\(/g, 'Math.abs(')
       .replace(/log\(/g, 'Math.log10(')
       .replace(/ln\(/g, 'Math.log(')
-      .replace(/sin\(/g, 'Math.sin((Math.PI/180)*')
-      .replace(/cos\(/g, 'Math.cos((Math.PI/180)*')
-      .replace(/tan\(/g, 'Math.tan((Math.PI/180)*')
-      .replace(/asin\(/g, '(180/Math.PI)*Math.asin(')
-      .replace(/acos\(/g, '(180/Math.PI)*Math.acos(')
-      .replace(/atan\(/g, '(180/Math.PI)*Math.atan(');
+      .replace(/exp\(/g, 'Math.exp(')
+      .replace(/fact\(/g, 'factFn(');
+
+    if (angleMode === 'rad') {
+      sanitized = sanitized
+        .replace(/sin\(/g, 'Math.sin(')
+        .replace(/cos\(/g, 'Math.cos(')
+        .replace(/tan\(/g, 'Math.tan(')
+        .replace(/asin\(/g, 'Math.asin(')
+        .replace(/acos\(/g, 'Math.acos(')
+        .replace(/atan\(/g, 'Math.atan(');
+    } else {
+      sanitized = sanitized
+        .replace(/sin\(/g, 'Math.sin((Math.PI/180)*')
+        .replace(/cos\(/g, 'Math.cos((Math.PI/180)*')
+        .replace(/tan\(/g, 'Math.tan((Math.PI/180)*')
+        .replace(/asin\(/g, '(180/Math.PI)*Math.asin(')
+        .replace(/acos\(/g, '(180/Math.PI)*Math.acos(')
+        .replace(/atan\(/g, '(180/Math.PI)*Math.atan(');
+    }
 
     // Validate identifiers allowed
-    const remainingAlpha = sanitized.replace(/Math\.(PI|E|sqrt|abs|log10|log|sin|cos|tan|asin|acos|atan)/g, '');
+    const remainingAlpha = sanitized.replace(/Math\.(PI|E|sqrt|cbrt|abs|log10|log|exp|sin|cos|tan|asin|acos|atan)|factFn/g, '');
     if (/[a-z]/i.test(remainingAlpha)) {
       throw new Error('Unsupported function or identifier in expression');
     }
 
     try {
       // eslint-disable-next-line no-new-func
-      const result = Function(`"use strict"; return (${sanitized})`)();
+      const fn = new Function('factFn', `"use strict"; return (${sanitized})`);
+      const result = fn(factFn);
       if (typeof result !== 'number' || !Number.isFinite(result)) {
         if (Number.isNaN(result)) return 'Undefined / NaN';
         return 'Infinity';
       }
-      return Number(result.toFixed(8));
+      return Number(Math.round(Number(result + 'e+10')) + 'e-10');
     } catch {
       throw new Error('Invalid mathematical syntax');
     }

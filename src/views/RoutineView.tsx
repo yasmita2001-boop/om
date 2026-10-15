@@ -23,6 +23,23 @@ interface RoutineViewProps {
   onSuccess: (msg: string) => void;
 }
 
+export const formatCadenceLabel = (freq: string): string => {
+  if (!freq) return 'Daily';
+  const lower = freq.toLowerCase();
+  if (lower === 'daily') return 'Daily';
+  if (lower === 'weekdays') return 'Weekdays (Mon-Fri)';
+  if (lower === 'weekly') return 'Weekly';
+  if (lower === 'monthly') return 'Monthly';
+  if (lower === 'sunday') return 'Every Sunday';
+  if (lower === 'monday') return 'Every Monday';
+  if (lower === 'tuesday') return 'Every Tuesday';
+  if (lower === 'wednesday') return 'Every Wednesday';
+  if (lower === 'thursday') return 'Every Thursday';
+  if (lower === 'friday') return 'Every Friday';
+  if (lower === 'saturday') return 'Every Saturday';
+  return freq;
+};
+
 export const RoutineView: React.FC<RoutineViewProps> = ({
   routines,
   habits,
@@ -86,7 +103,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   const [routineName, setRoutineName] = useState('');
   const [startTime, setStartTime] = useState('07:00');
   const [endTime, setEndTime] = useState('08:00');
-  const [routineFreq, setRoutineFreq] = useState<'daily' | 'weekdays' | 'weekly' | 'custom'>('daily');
+  const [routineFreq, setRoutineFreq] = useState<string>('daily');
   const [routineCat, setRoutineCat] = useState<'personal' | 'work' | 'learning' | 'health' | 'spiritual' | 'social'>('health');
   const [routineNote, setRoutineNote] = useState('');
   const [routineInputMode, setRoutineInputMode] = useState<'manual' | 'link'>('manual');
@@ -616,8 +633,17 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   const handleSetAlarmFromRoutine = (routine: Routine) => {
     const alarmTime = routine.startTime || routine.time || '07:00';
     let days = [1, 2, 3, 4, 5];
-    if (routine.frequency === 'daily') days = [0, 1, 2, 3, 4, 5, 6];
-    else if (routine.frequency === 'weekly') days = [new Date().getDay()];
+    const freq = (routine.frequency || 'daily').toLowerCase();
+    if (freq === 'daily') days = [0, 1, 2, 3, 4, 5, 6];
+    else if (freq === 'weekdays') days = [1, 2, 3, 4, 5];
+    else if (freq === 'weekly' || freq === 'monthly') days = [new Date().getDay()];
+    else if (freq === 'sunday') days = [0];
+    else if (freq === 'monday') days = [1];
+    else if (freq === 'tuesday') days = [2];
+    else if (freq === 'wednesday') days = [3];
+    else if (freq === 'thursday') days = [4];
+    else if (freq === 'friday') days = [5];
+    else if (freq === 'saturday') days = [6];
 
     alarmService.addFocusAlarm({
       time: alarmTime,
@@ -946,12 +972,24 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 </label>
                 <select
                   value={routineFreq}
-                  onChange={e => setRoutineFreq(e.target.value as any)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  onChange={e => setRoutineFreq(e.target.value)}
+                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                 >
-                  <option value="daily">Daily</option>
-                  <option value="weekdays">Weekdays (Mon-Fri)</option>
-                  <option value="weekly">Weekly</option>
+                  <optgroup label="Standard Cadence">
+                    <option value="daily">Daily</option>
+                    <option value="weekdays">Weekdays (Mon-Fri)</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </optgroup>
+                  <optgroup label="Specific Day of Week">
+                    <option value="sunday">Every Sunday</option>
+                    <option value="monday">Every Monday</option>
+                    <option value="tuesday">Every Tuesday</option>
+                    <option value="wednesday">Every Wednesday</option>
+                    <option value="thursday">Every Thursday</option>
+                    <option value="friday">Every Friday</option>
+                    <option value="saturday">Every Saturday</option>
+                  </optgroup>
                 </select>
               </div>
             </div>
@@ -1164,11 +1202,23 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 <select
                   value={habitFrequency}
                   onChange={e => setHabitFrequency(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                 >
-                  <option value="Daily">Daily</option>
-                  <option value="Weekdays">Weekdays</option>
-                  <option value="Weekly">Weekly</option>
+                  <optgroup label="Standard Cadence">
+                    <option value="Daily">Daily</option>
+                    <option value="Weekdays">Weekdays (Mon-Fri)</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="Monthly">Monthly</option>
+                  </optgroup>
+                  <optgroup label="Specific Day of Week">
+                    <option value="Sunday">Sunday</option>
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                    <option value="Saturday">Saturday</option>
+                  </optgroup>
                 </select>
               </div>
 
@@ -1405,7 +1455,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
                       <span className="capitalize">{r.category}</span>
                       <span>·</span>
-                      <span className="capitalize">{r.frequency}</span>
+                      <span className="capitalize">{formatCadenceLabel(r.frequency)}</span>
                     </div>
 
                     {r.goalId && (() => {
@@ -1629,7 +1679,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     </div>
 
                     <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
-                      <span>{h.frequency} · {occCount}x per day</span>
+                      <span>{formatCadenceLabel(h.frequency)} · {occCount}x per day</span>
                       <span>·</span>
                       {/* Routine Link Selector directly on row */}
                       <div className="inline-flex items-center gap-1">
@@ -1859,11 +1909,23 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   <select
                     value={editingHabit.frequency}
                     onChange={e => setEditingHabit({ ...editingHabit, frequency: e.target.value })}
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                   >
-                    <option value="Daily">Daily</option>
-                    <option value="Weekdays">Weekdays</option>
-                    <option value="Weekly">Weekly</option>
+                    <optgroup label="Standard Cadence">
+                      <option value="Daily">Daily</option>
+                      <option value="Weekdays">Weekdays (Mon-Fri)</option>
+                      <option value="Weekly">Weekly</option>
+                      <option value="Monthly">Monthly</option>
+                    </optgroup>
+                    <optgroup label="Specific Day of Week">
+                      <option value="Sunday">Sunday</option>
+                      <option value="Monday">Monday</option>
+                      <option value="Tuesday">Tuesday</option>
+                      <option value="Wednesday">Wednesday</option>
+                      <option value="Thursday">Thursday</option>
+                      <option value="Friday">Friday</option>
+                      <option value="Saturday">Saturday</option>
+                    </optgroup>
                   </select>
                 </div>
 

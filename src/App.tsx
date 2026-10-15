@@ -26,7 +26,7 @@ import { VoiceStudioWidget } from './components/VoiceStudioWidget';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress } from './lib/goalTaskSync';
+import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress, computeGoalAggregateBreakdown } from './lib/goalTaskSync';
 
 // Views
 import { DashboardView } from './views/DashboardView';
@@ -313,6 +313,15 @@ export default function App() {
       setCalcHistory([...calcData]);
       const binData = await storage.getRecycleBinItems(activeId);
       setRecycleBinCount(binData.length);
+
+      // Auto-reconcile goal progress against actual linked items in database to fix stale/legacy 100% false progress
+      recalculateAllGoalsProgress().then(freshGoals => {
+        if (freshGoals && freshGoals.length > 0) {
+          setGoals([...freshGoals]);
+        }
+      }).catch(err => {
+        console.warn('Goal progress auto-reconcile error:', err);
+      });
     } catch (err) {
       console.error('Failed to load initial data', err);
     }
@@ -624,6 +633,19 @@ export default function App() {
                 notes={notes}
                 journal={journal}
                 reminders={reminders}
+                healthMeasurements={healthMeasurements}
+                sleepRecords={sleepRecords}
+                waterRecords={waterRecords}
+                nutritionRecords={nutritionRecords}
+                appointments={appointments}
+                healthNotes={healthNotes}
+                meetings={meetings}
+                people={people}
+                interactions={interactions}
+                values={values}
+                practices={practices}
+                commitments={commitments}
+                focusSessions={focusSessions}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -696,6 +718,7 @@ export default function App() {
                 nutritionRecords={nutritionRecords}
                 appointments={appointments}
                 healthNotes={healthNotes}
+                goals={goals}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -721,6 +744,8 @@ export default function App() {
               <PeopleView
                 people={people}
                 interactions={interactions}
+                goals={goals}
+                reminders={reminders}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -731,6 +756,7 @@ export default function App() {
                 values={values}
                 practices={practices}
                 commitments={commitments}
+                goals={goals}
                 onNavigate={setActiveModule}
                 onRefresh={loadAllData}
                 onSuccess={showToast}

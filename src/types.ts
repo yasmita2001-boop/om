@@ -57,7 +57,7 @@ export interface Routine {
   time?: string;
   startTime?: string;
   endTime?: string;
-  frequency: 'daily' | 'weekdays' | 'weekly' | 'custom';
+  frequency: 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'custom' | string;
   category: 'personal' | 'work' | 'learning' | 'health' | 'spiritual' | 'social';
   note?: string;
   active: boolean;
@@ -107,7 +107,9 @@ export interface Goal {
   category?: string;
   status?: 'active' | 'completed' | 'paused';
   parentId?: string | null;
+  parentIds?: string[];
   level?: 1 | 2 | 3 | 4 | 5;
+  order?: number;
   description?: string;
   autoRollupProgress?: boolean;
   createdAt: number;
@@ -420,6 +422,7 @@ export interface HealthProfile {
   weight?: number;
   targetWeight?: number;
   bloodGroup?: string;
+  goalId?: string | null;
   updatedAt?: number;
 }
 
@@ -430,6 +433,7 @@ export interface HealthMeasurement {
   steps?: number;
   exercise?: string;
   duration?: number;
+  goalId?: string | null;
   createdAt: number;
 }
 
@@ -438,6 +442,7 @@ export interface SleepRecord {
   date: string;
   hours: number;
   quality?: string;
+  goalId?: string | null;
   createdAt: number;
 }
 
@@ -445,6 +450,7 @@ export interface WaterRecord {
   id: string;
   date: string;
   amount: number; // in ml
+  goalId?: string | null;
   createdAt: number;
 }
 
@@ -453,6 +459,7 @@ export interface NutritionRecord {
   date: string;
   calories?: number;
   note?: string;
+  goalId?: string | null;
   createdAt: number;
 }
 
@@ -461,13 +468,18 @@ export interface HealthAppointment {
   date: string;
   title: string;
   doctor?: string;
+  status?: 'scheduled' | 'completed' | 'cancelled';
+  completed?: boolean;
+  goalId?: string | null;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface HealthNote {
   id: string;
   date: string;
   text: string;
+  goalId?: string | null;
   createdAt: number;
 }
 
@@ -500,7 +512,11 @@ export interface Meeting {
   title: string;
   people?: string;
   note?: string;
+  status?: 'scheduled' | 'completed' | 'cancelled';
+  completed?: boolean;
+  goalId?: string | null;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface Person {
@@ -510,6 +526,7 @@ export interface Person {
   contact?: string;
   importantDate?: string;
   note?: string;
+  goalId?: string | null;
   createdAt: number;
   updatedAt?: number;
 }
@@ -519,6 +536,7 @@ export interface Interaction {
   personId: string;
   date: string;
   text: string;
+  goalId?: string | null;
   createdAt: number;
 }
 
@@ -526,6 +544,7 @@ export interface ValueItem {
   id: string;
   title: string;
   description: string;
+  goalId?: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -535,6 +554,7 @@ export interface SpiritualPractice {
   name: string;
   frequency: string;
   linkedHabitId?: string;
+  goalId?: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -542,6 +562,7 @@ export interface SpiritualPractice {
 export interface Commitment {
   id: string;
   text: string;
+  goalId?: string | null;
   createdAt: number;
 }
 

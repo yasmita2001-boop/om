@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en" class="bg-[#F8FAFC] dark:bg-[#0B0F19]">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Om</title>
-    <meta name="description" content="Executive Personal Operating System with unified project timelines, routines, habit architecture, finance, health, and sovereign local storage." />
-    <meta property="og:title" content="Om-LifeOS — Executive Operating System" />
-    <meta property="og:description" content="Executive Personal Operating System with unified project timelines, routines, habit architecture, finance, health, and sovereign local storage." />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Om LifeOS</title>
+    <meta name="description" content="Executive personal operating system: tasks, goals, routines, finance, health, notes and Google Drive backup." />
+    <meta property="og:title" content="Om LifeOS" />
+    <meta property="og:description" content="Executive personal operating system: tasks, goals, routines, finance, health, notes and Google Drive backup." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#4F46E5" />
@@ -22,6 +22,7 @@
       })();
     </script>
     <meta name="mobile-web-app-capable" content="yes" />
+    <style>html{background:#F8FAFC}html.dark{background:#0B0F19}#om-splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:inherit;z-index:0}#om-splash i{width:32px;height:32px;border-radius:50%;border:3px solid #cbd5e1;border-top-color:#6366f1;animation:oms .7s linear infinite}@keyframes oms{to{transform:rotate(360deg)}}</style>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Om-LifeOS" />
@@ -34,10 +35,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"></noscript>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
-  <body class="bg-[#F8FAFC] text-slate-900 antialiased selection:bg-indigo-500 selection:text-white dark:bg-[#0B0F19] dark:text-slate-100 min-h-screen">
-    <div id="root" class="min-h-screen flex flex-col bg-[#F8FAFC] dark:bg-[#0B0F19]"></div>
+  <body class="text-slate-900 antialiased selection:bg-indigo-500 selection:text-white dark:bg-[#0B0F19] dark:text-slate-100 min-h-screen">
+    <div id="root" class="min-h-screen flex flex-col"><div id="om-splash" aria-hidden="true"><i></i></div></div>
     <noscript>Om needs JavaScript enabled to run.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>

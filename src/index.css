@@ -136,9 +136,17 @@
 }
 
 /* Accessible and polished focus rings */
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+button:focus-visible, input:not(.calc-display-input):focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
   outline: 2px solid var(--color-brand, #6366f1) !important;
   outline-offset: 2px !important;
+}
+
+input.calc-display-input:focus-visible,
+.calc-display-input:focus-visible,
+.calc-display-input:focus {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
 }
 
 /* Subtle elevation system */
@@ -355,3 +363,25 @@ a, button, input, select, textarea, label, [role="button"], summary {
 @media print {
   html, body, #root { background: #fff !important; color: #000 !important; }
 }
+
+
+/* ==========================================================================
+   SPEED & SMOOTHNESS (low-end phones / tablets / any device)
+   ========================================================================== */
+/* Backdrop blur is the #1 scroll-jank source on mid/low-end phones: drop it
+   on touch screens (panels already have translucent solid backgrounds). */
+@media (hover: none) and (pointer: coarse) {
+  [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+/* No rubber-band chain-scroll bleeding out of modals/panels */
+.overflow-y-auto, .overflow-auto { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+/* Media and embeds never overflow their container */
+img, video, canvas, svg { max-width: 100%; }
+img { height: auto; }
+/* Long unbroken strings (URLs, IDs) must not widen the page */
+p, h1, h2, h3, h4, li, td { overflow-wrap: anywhere; }
+/* Hide the startup spinner as soon as React renders anything beside it */
+#om-splash:not(:only-child) { display: none; }

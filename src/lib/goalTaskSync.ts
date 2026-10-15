@@ -10,16 +10,68 @@ import {
   LearningItem,
   Skill,
   Note,
-  JournalEntry
+  JournalEntry,
+  FinanceTransaction,
+  Loan,
+  Investment,
+  SavingsPlan,
+  Asset,
+  Liability,
+  HealthMeasurement,
+  SleepRecord,
+  WaterRecord,
+  NutritionRecord,
+  HealthAppointment,
+  HealthNote,
+  Meeting,
+  Person,
+  Interaction,
+  ValueItem,
+  SpiritualPractice,
+  Commitment,
+  FocusSession,
+  ReminderItem
 } from '../types';
+
+export type GoalItemType =
+  | 'goal'
+  | 'task'
+  | 'milestone'
+  | 'habit'
+  | 'routine'
+  | 'project'
+  | 'learning'
+  | 'skill'
+  | 'note'
+  | 'journal'
+  | 'savingsPlan'
+  | 'loan'
+  | 'investment'
+  | 'asset'
+  | 'liability'
+  | 'transaction'
+  | 'healthMeasurement'
+  | 'sleepRecord'
+  | 'waterRecord'
+  | 'nutritionRecord'
+  | 'appointment'
+  | 'healthNote'
+  | 'meeting'
+  | 'person'
+  | 'interaction'
+  | 'value'
+  | 'practice'
+  | 'commitment'
+  | 'focusSession'
+  | 'reminder';
 
 export interface GoalItemDetail {
   id: string;
-  type: 'goal' | 'task' | 'milestone' | 'habit' | 'routine' | 'project' | 'learning' | 'skill' | 'note' | 'journal';
+  type: GoalItemType;
   typeLabel: string;
   title: string;
   progress: number;
-  weightPercent: number; // e.g. 25% if 4 items
+  weightPercent: number; // e.g. 10% if 10 items
   isCompleted: boolean;
 }
 
@@ -47,6 +99,26 @@ export interface GoalProgressBreakdown {
     skills: GoalCategorySummary;
     notes: GoalCategorySummary;
     journal: GoalCategorySummary;
+    savingsPlans: GoalCategorySummary;
+    loans: GoalCategorySummary;
+    investments: GoalCategorySummary;
+    assets: GoalCategorySummary;
+    liabilities: GoalCategorySummary;
+    transactions: GoalCategorySummary;
+    healthMeasurements: GoalCategorySummary;
+    sleepRecords: GoalCategorySummary;
+    waterRecords: GoalCategorySummary;
+    nutritionRecords: GoalCategorySummary;
+    appointments: GoalCategorySummary;
+    healthNotes: GoalCategorySummary;
+    meetings: GoalCategorySummary;
+    people: GoalCategorySummary;
+    interactions: GoalCategorySummary;
+    values: GoalCategorySummary;
+    practices: GoalCategorySummary;
+    commitments: GoalCategorySummary;
+    focusSessions: GoalCategorySummary;
+    reminders: GoalCategorySummary;
   };
   items: GoalItemDetail[];
 }
@@ -71,27 +143,57 @@ export interface RecalcOverrides {
   updatedJournalId?: string;
   directChildGoalId?: string;
   directChildGoalProgress?: number;
+  updatedReminderId?: string;
+  updatedReminderDone?: boolean;
+  updatedAppointmentId?: string;
+  updatedAppointmentStatus?: 'scheduled' | 'completed' | 'cancelled';
+  updatedAppointmentCompleted?: boolean;
+  updatedMeetingId?: string;
+  updatedMeetingStatus?: 'scheduled' | 'completed' | 'cancelled';
+  updatedMeetingCompleted?: boolean;
+}
+
+export interface GoalRelatedData {
+  goals: Goal[];
+  tasks: Task[];
+  milestones?: Milestone[];
+  habits?: Habit[];
+  habitLogs?: HabitLog[];
+  routines?: Routine[];
+  workProjects?: WorkProject[];
+  learningItems?: LearningItem[];
+  skills?: Skill[];
+  notes?: Note[];
+  journal?: JournalEntry[];
+  savingsPlans?: SavingsPlan[];
+  loans?: Loan[];
+  investments?: Investment[];
+  assets?: Asset[];
+  liabilities?: Liability[];
+  transactions?: FinanceTransaction[];
+  healthMeasurements?: HealthMeasurement[];
+  sleepRecords?: SleepRecord[];
+  waterRecords?: WaterRecord[];
+  nutritionRecords?: NutritionRecord[];
+  appointments?: HealthAppointment[];
+  healthNotes?: HealthNote[];
+  meetings?: Meeting[];
+  people?: Person[];
+  interactions?: Interaction[];
+  values?: ValueItem[];
+  practices?: SpiritualPractice[];
+  commitments?: Commitment[];
+  focusSessions?: FocusSession[];
+  reminders?: ReminderItem[];
 }
 
 /**
  * Synchronously computes comprehensive aggregate breakdown for a given goal
- * from all provided data arrays in memory.
+ * from all provided data arrays in memory across all 21+ linked modules.
  */
 export function computeGoalAggregateBreakdown(
   goalId: string,
-  data: {
-    goals: Goal[];
-    tasks: Task[];
-    milestones?: Milestone[];
-    habits?: Habit[];
-    habitLogs?: HabitLog[];
-    routines?: Routine[];
-    workProjects?: WorkProject[];
-    learningItems?: LearningItem[];
-    skills?: Skill[];
-    notes?: Note[];
-    journal?: JournalEntry[];
-  }
+  data: GoalRelatedData
 ): GoalProgressBreakdown {
   const goal = data.goals.find(g => g.id === goalId);
   const goalTitle = goal?.title || 'Goal';
@@ -107,26 +209,66 @@ export function computeGoalAggregateBreakdown(
   const notes = data.notes || [];
   const journal = data.journal || [];
 
-  // 1. Child Sub-goals / Micro-goals
-  const childGoals = data.goals.filter(g => g.parentId === goalId);
-  // 2. Tasks
+  const savingsPlans = data.savingsPlans || [];
+  const loans = data.loans || [];
+  const investments = data.investments || [];
+  const assets = data.assets || [];
+  const liabilities = data.liabilities || [];
+  const transactions = data.transactions || [];
+
+  const healthMeasurements = data.healthMeasurements || [];
+  const sleepRecords = data.sleepRecords || [];
+  const waterRecords = data.waterRecords || [];
+  const nutritionRecords = data.nutritionRecords || [];
+  const appointments = data.appointments || [];
+  const healthNotes = data.healthNotes || [];
+
+  const meetings = data.meetings || [];
+  const people = data.people || [];
+  const interactions = data.interactions || [];
+
+  const values = data.values || [];
+  const practices = data.practices || [];
+  const commitments = data.commitments || [];
+  const focusSessions = data.focusSessions || [];
+  const reminders = data.reminders || [];
+
+  // Filter linked items
+  const childGoals = data.goals.filter(g => g.parentId === goalId || (g.parentIds && g.parentIds.includes(goalId)));
   const tasks = data.tasks.filter(t => t.goalId === goalId);
-  // 3. Milestones
   const linkedMilestones = milestones.filter(m => m.goalId === goalId);
-  // 4. Habits
   const linkedHabits = habits.filter(h => h.goalId === goalId);
-  // 5. Routines
   const linkedRoutines = routines.filter(r => r.goalId === goalId);
-  // 6. Work Projects
   const linkedProjects = projects.filter(p => p.goalId === goalId);
-  // 7. Learning Items
   const linkedLearning = learning.filter(l => l.goalId === goalId);
-  // 8. Skill Trees
   const linkedSkills = skills.filter(s => s.goalId === goalId);
-  // 9. Notebooks & Knowledge Vault
   const linkedNotes = notes.filter(n => n.goalId === goalId);
-  // 10. Daily Journal & Philosophical Reflections
   const linkedJournal = journal.filter(j => j.goalId === goalId);
+
+  const linkedSavingsPlans = savingsPlans.filter(s => s.goalId === goalId);
+  const linkedLoans = loans.filter(l => l.goalId === goalId);
+  const linkedInvestments = investments.filter(i => i.goalId === goalId);
+  const linkedAssets = assets.filter(a => a.goalId === goalId);
+  const linkedLiabilities = liabilities.filter(l => l.goalId === goalId);
+  const linkedTransactions = transactions.filter(t => t.goalId === goalId);
+
+  const linkedHealthMeasurements = healthMeasurements.filter(h => h.goalId === goalId);
+  const linkedSleepRecords = sleepRecords.filter(s => s.goalId === goalId);
+  const linkedWaterRecords = waterRecords.filter(w => w.goalId === goalId);
+  const linkedNutritionRecords = nutritionRecords.filter(n => n.goalId === goalId);
+  const linkedAppointments = appointments.filter(a => a.goalId === goalId);
+  const linkedHealthNotes = healthNotes.filter(n => n.goalId === goalId);
+
+  const linkedMeetings = meetings.filter(m => m.goalId === goalId);
+  const linkedPeople = people.filter(p => p.goalId === goalId);
+  const linkedInteractions = interactions.filter(i => i.goalId === goalId);
+
+  const linkedValues = values.filter(v => v.goalId === goalId);
+  const linkedPractices = practices.filter(p => p.goalId === goalId);
+  const linkedCommitments = commitments.filter(c => c.goalId === goalId);
+
+  const linkedFocusSessions = focusSessions.filter(f => f.goalId === goalId);
+  const linkedReminders = reminders.filter(r => r.linkedType === 'goal' && r.linkedId === goalId);
 
   const rawItems: Array<{
     id: string;
@@ -137,7 +279,7 @@ export function computeGoalAggregateBreakdown(
     isCompleted: boolean;
   }> = [];
 
-  // Child Goals
+  // 1. Child Goals
   childGoals.forEach(c => {
     const prog = Math.max(0, Math.min(100, Math.round(Number(c.progress) || 0)));
     const typeLabel =
@@ -155,7 +297,7 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // Tasks
+  // 2. Tasks
   tasks.forEach(t => {
     const isDone = Boolean(t.done || t.status === 'done');
     const prog = isDone ? 100 : t.status === 'in-progress' ? 50 : 0;
@@ -169,7 +311,7 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // Milestones
+  // 3. Milestones
   linkedMilestones.forEach(m => {
     const isDone = m.status === 'completed';
     const prog = isDone ? 100 : Math.max(0, Math.min(100, Math.round(Number(m.progress) || 0)));
@@ -183,33 +325,47 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // Habits
+  // 4. Habits (Evaluated based on 30-day consistency window)
   linkedHabits.forEach(h => {
-    const isDone = habitLogs.some(l => l.habitId === h.id && l.date === today);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoIso = thirtyDaysAgo.toISOString().slice(0, 10);
+    const recentLogs = habitLogs.filter(l => l.habitId === h.id && l.date >= thirtyDaysAgoIso);
+    const uniqueDays = new Set(recentLogs.map(l => l.date)).size;
+    const isDoneToday = habitLogs.some(l => l.habitId === h.id && l.date === today);
+    const effectiveDays = isDoneToday && uniqueDays === 0 ? 1 : uniqueDays;
+    const prog = Math.min(100, Math.round((effectiveDays / 30) * 100));
     rawItems.push({
       id: h.id,
       type: 'habit',
       typeLabel: '🔁 Habit Ritual',
-      title: h.name,
-      progress: isDone ? 100 : 0,
-      isCompleted: isDone
+      title: `${h.name} (${effectiveDays}/30d consistency${isDoneToday ? ' · ✓ Done Today' : ''})`,
+      progress: prog,
+      isCompleted: prog >= 90
     });
   });
 
-  // Routines
+  // 5. Routines (Evaluated based on 30-day consistency window)
   linkedRoutines.forEach(r => {
-    const isDone = Boolean(r.completedDate === today || (r.completedDates && r.completedDates.includes(today)));
+    const isDoneToday = Boolean(r.completedDate === today || (r.completedDates && r.completedDates.includes(today)));
+    const dates = Array.from(new Set([...(r.completedDates || []), ...(r.completedDate ? [r.completedDate] : [])]));
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoIso = thirtyDaysAgo.toISOString().slice(0, 10);
+    const recentDays = dates.filter(d => d >= thirtyDaysAgoIso).length;
+    const effectiveDays = isDoneToday && recentDays === 0 ? 1 : recentDays;
+    const prog = Math.min(100, Math.round((effectiveDays / 30) * 100));
     rawItems.push({
       id: r.id,
       type: 'routine',
       typeLabel: '⏱️ Routine Block',
-      title: r.name,
-      progress: isDone ? 100 : 0,
-      isCompleted: isDone
+      title: `${r.name} (${effectiveDays}/30d consistency${isDoneToday ? ' · ✓ Done Today' : ''})`,
+      progress: prog,
+      isCompleted: prog >= 90
     });
   });
 
-  // Projects
+  // 6. Projects
   linkedProjects.forEach(p => {
     let prog = 0;
     if (p.status === 'Completed') prog = 100;
@@ -229,7 +385,7 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // Learning Items
+  // 7. Learning Items
   linkedLearning.forEach(l => {
     const prog = Math.max(0, Math.min(100, Math.round(Number(l.progress) || 0)));
     rawItems.push({
@@ -242,7 +398,7 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // Skills
+  // 8. Skills
   linkedSkills.forEach(s => {
     let prog = 0;
     if (typeof s.progress === 'number' && !isNaN(s.progress)) {
@@ -265,39 +421,318 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // Notebooks & Knowledge Vault
+  // 9. Notebooks & Knowledge Vault (Reference Vault)
   linkedNotes.forEach(n => {
     rawItems.push({
       id: n.id,
       type: 'note',
       typeLabel: '📓 Knowledge Vault',
       title: n.title,
-      progress: 100,
-      isCompleted: true
+      progress: 0,
+      isCompleted: false
     });
   });
 
-  // Daily Journal & Philosophical Reflections
+  // 10. Daily Journal & Philosophical Reflections (Reference Reflection)
   linkedJournal.forEach(j => {
     rawItems.push({
       id: j.id,
       type: 'journal',
       typeLabel: '📖 Journal Reflection',
       title: j.title,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 11. Savings Plans
+  linkedSavingsPlans.forEach(s => {
+    const target = Number(s.targetAmount) || 0;
+    const current = Number(s.currentAmount) || 0;
+    const prog = target > 0 ? Math.max(0, Math.min(100, Math.round((current / target) * 100))) : 100;
+    rawItems.push({
+      id: s.id,
+      type: 'savingsPlan',
+      typeLabel: '💰 Savings Goal',
+      title: `${s.name} (₹${current.toLocaleString()} / ₹${target.toLocaleString()})`,
+      progress: prog,
+      isCompleted: prog >= 100
+    });
+  });
+
+  // 12. Loans & Debt Clearances
+  linkedLoans.forEach(l => {
+    const principal = Number(l.principal) || 0;
+    const outstanding = Number(l.outstanding) || 0;
+    const repaid = principal > 0 ? Math.max(0, principal - outstanding) : 0;
+    const prog = principal > 0 ? Math.max(0, Math.min(100, Math.round((repaid / principal) * 100))) : 100;
+    rawItems.push({
+      id: l.id,
+      type: 'loan',
+      typeLabel: '💳 Loan Repayment',
+      title: `${l.name} (Paid: ₹${repaid.toLocaleString()})`,
+      progress: prog,
+      isCompleted: outstanding <= 0 || prog >= 100
+    });
+  });
+
+  // 13. Investments & Portfolios
+  linkedInvestments.forEach(i => {
+    const amt = Number(i.amount) || 0;
+    const val = Number(i.currentValue) || 0;
+    const prog = amt > 0 ? Math.max(0, Math.min(100, Math.round((val / amt) * 100))) : 100;
+    rawItems.push({
+      id: i.id,
+      type: 'investment',
+      typeLabel: '📈 Investment',
+      title: `${i.name} (₹${val.toLocaleString()})`,
+      progress: prog,
+      isCompleted: val >= amt && val > 0
+    });
+  });
+
+  // 14. Capital Assets
+  linkedAssets.forEach(a => {
+    rawItems.push({
+      id: a.id,
+      type: 'asset',
+      typeLabel: '🏛️ Asset Holding',
+      title: `${a.name} (₹${(Number(a.value) || 0).toLocaleString()})`,
       progress: 100,
       isCompleted: true
     });
   });
 
+  // 15. Liabilities
+  linkedLiabilities.forEach(l => {
+    const amt = Number(l.amount) || 0;
+    const prog = amt <= 0 ? 100 : 50;
+    rawItems.push({
+      id: l.id,
+      type: 'liability',
+      typeLabel: '⚖️ Liability Item',
+      title: `${l.name} (₹${amt.toLocaleString()})`,
+      progress: prog,
+      isCompleted: amt <= 0
+    });
+  });
+
+  // 16. Finance Transactions (Deposits / Allocations)
+  linkedTransactions.forEach(t => {
+    rawItems.push({
+      id: t.id,
+      type: 'transaction',
+      typeLabel: '💵 Ledger Entry',
+      title: `${t.category || t.type}: ₹${(Number(t.amount) || 0).toLocaleString()} (${t.date})`,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 17. Health Measurements / Physical Movement Logs
+  linkedHealthMeasurements.forEach(h => {
+    const detail = h.exercise ? `${h.exercise} (${h.duration || 0}m)` : h.weight ? `${h.weight}kg` : h.steps ? `${h.steps} steps` : 'Vitals logged';
+    rawItems.push({
+      id: h.id,
+      type: 'healthMeasurement',
+      typeLabel: '🏃 Physical Movement',
+      title: `${detail} (${h.date})`,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 18. Sleep Records (Informational Daily Log)
+  linkedSleepRecords.forEach(s => {
+    rawItems.push({
+      id: s.id,
+      type: 'sleepRecord',
+      typeLabel: '💤 Sleep Log',
+      title: `${s.hours}h Sleep (${s.date})`,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 19. Water Hydration Records (Informational Daily Log)
+  linkedWaterRecords.forEach(w => {
+    rawItems.push({
+      id: w.id,
+      type: 'waterRecord',
+      typeLabel: '💧 Hydration',
+      title: `${w.amount}ml Water (${w.date})`,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 20. Nutrition Records
+  linkedNutritionRecords.forEach(n => {
+    rawItems.push({
+      id: n.id,
+      type: 'nutritionRecord',
+      typeLabel: '🥗 Nutrition Log',
+      title: `${n.calories ? n.calories + ' kcal' : n.note || 'Meal entry'} (${n.date})`,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 21. Health Appointments (Scheduled vs Attended/Completed)
+  linkedAppointments.forEach(a => {
+    const isDone = Boolean((a as any).completed === true || (a as any).status === 'completed');
+    rawItems.push({
+      id: a.id,
+      type: 'appointment',
+      typeLabel: '🩺 Medical Appointment',
+      title: `${a.title} (${a.date})`,
+      progress: isDone ? 100 : 0,
+      isCompleted: isDone
+    });
+  });
+
+  // 22. Health Clinical Notes
+  linkedHealthNotes.forEach(n => {
+    rawItems.push({
+      id: n.id,
+      type: 'healthNote',
+      typeLabel: '📋 Health Clinical Note',
+      title: `${(n.text || '').slice(0, 35)}... (${n.date})`,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 23. Meetings & Strategic Syncs (Scheduled vs Completed)
+  linkedMeetings.forEach(m => {
+    const isDone = Boolean((m as any).completed === true || (m as any).status === 'completed');
+    rawItems.push({
+      id: m.id,
+      type: 'meeting',
+      typeLabel: '🤝 Strategic Meeting',
+      title: `${m.title} (${m.date})`,
+      progress: isDone ? 100 : 0,
+      isCompleted: isDone
+    });
+  });
+
+  // 24. People & Strategic Network Contacts
+  linkedPeople.forEach(p => {
+    rawItems.push({
+      id: p.id,
+      type: 'person',
+      typeLabel: '👤 Network Contact',
+      title: `${p.name} (${p.relationship || 'Contact'})`,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 25. Interactions & Touchpoints
+  linkedInteractions.forEach(i => {
+    rawItems.push({
+      id: i.id,
+      type: 'interaction',
+      typeLabel: '💬 Interaction Touchpoint',
+      title: `${(i.text || '').slice(0, 35)}... (${i.date})`,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 26. Core Values
+  linkedValues.forEach(v => {
+    rawItems.push({
+      id: v.id,
+      type: 'value',
+      typeLabel: '💎 Core Value',
+      title: v.title,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 27. Spiritual Practices
+  linkedPractices.forEach(p => {
+    rawItems.push({
+      id: p.id,
+      type: 'practice',
+      typeLabel: '🧘 Spiritual Practice',
+      title: p.name,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 28. Philosophical Commitments
+  linkedCommitments.forEach(c => {
+    rawItems.push({
+      id: c.id,
+      type: 'commitment',
+      typeLabel: '📜 Commitment',
+      title: (c.text || '').slice(0, 40),
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 29. Focus Sessions (Deep Work Session Log)
+  linkedFocusSessions.forEach(f => {
+    const mins = f.minutes || Math.round((f.durationSeconds || 0) / 60);
+    rawItems.push({
+      id: f.id,
+      type: 'focusSession',
+      typeLabel: '⚡ Deep Work Session',
+      title: `${f.label || 'Focus'} (${mins}m on ${f.date})`,
+      progress: 0,
+      isCompleted: false
+    });
+  });
+
+  // 30. Reminders
+  linkedReminders.forEach(r => {
+    const isDone = r.status === 'done';
+    rawItems.push({
+      id: r.id,
+      type: 'reminder',
+      typeLabel: '⏰ Goal Reminder',
+      title: `${r.title} (${r.dueAt})`,
+      progress: isDone ? 100 : 0,
+      isCompleted: isDone
+    });
+  });
+
+  // Pure actionable types that legitimately count towards Goal completion rate
+  // Excludes informational notes, contacts, interactions, capital assets, transactions, vitals & focus logs
+  const actionableTypes = new Set<GoalItemType>([
+    'goal',
+    'task',
+    'milestone',
+    'habit',
+    'routine',
+    'project',
+    'learning',
+    'skill',
+    'savingsPlan',
+    'loan',
+    'investment',
+    'appointment',
+    'meeting',
+    'reminder'
+  ]);
+
+  const actionableItems = rawItems.filter(i => actionableTypes.has(i.type));
   const totalItems = rawItems.length;
-  const weightPerItem = totalItems > 0 ? Number((100 / totalItems).toFixed(1)) : 0;
+  const weightPerItem = actionableItems.length > 0
+    ? Number((100 / actionableItems.length).toFixed(1))
+    : (totalItems > 0 ? Number((100 / totalItems).toFixed(1)) : 0);
 
   const items: GoalItemDetail[] = rawItems.map(item => ({
     ...item,
-    weightPercent: weightPerItem
+    weightPercent: actionableTypes.has(item.type) ? weightPerItem : 0
   }));
 
-  const completedItems = items.filter(i => i.isCompleted).length;
+  const completedItems = items.filter(i => i.isCompleted && actionableTypes.has(i.type)).length;
 
   const calcCategory = (type: GoalItemDetail['type']): GoalCategorySummary => {
     const matched = items.filter(i => i.type === type);
@@ -307,8 +742,8 @@ export function computeGoalAggregateBreakdown(
     return { count, completedCount, avgPercent };
   };
 
-  const totalPercent = totalItems > 0
-    ? Math.max(0, Math.min(100, Math.round(items.reduce((acc, i) => acc + i.progress, 0) / totalItems)))
+  const totalPercent = actionableItems.length > 0
+    ? Math.max(0, Math.min(100, Math.round(actionableItems.reduce((acc, i) => acc + i.progress, 0) / actionableItems.length)))
     : Math.max(0, Math.min(100, Math.round(Number(goal?.progress) || 0)));
 
   return {
@@ -328,7 +763,27 @@ export function computeGoalAggregateBreakdown(
       learning: calcCategory('learning'),
       skills: calcCategory('skill'),
       notes: calcCategory('note'),
-      journal: calcCategory('journal')
+      journal: calcCategory('journal'),
+      savingsPlans: calcCategory('savingsPlan'),
+      loans: calcCategory('loan'),
+      investments: calcCategory('investment'),
+      assets: calcCategory('asset'),
+      liabilities: calcCategory('liability'),
+      transactions: calcCategory('transaction'),
+      healthMeasurements: calcCategory('healthMeasurement'),
+      sleepRecords: calcCategory('sleepRecord'),
+      waterRecords: calcCategory('waterRecord'),
+      nutritionRecords: calcCategory('nutritionRecord'),
+      appointments: calcCategory('appointment'),
+      healthNotes: calcCategory('healthNote'),
+      meetings: calcCategory('meeting'),
+      people: calcCategory('person'),
+      interactions: calcCategory('interaction'),
+      values: calcCategory('value'),
+      practices: calcCategory('practice'),
+      commitments: calcCategory('commitment'),
+      focusSessions: calcCategory('focusSession'),
+      reminders: calcCategory('reminder')
     },
     items
   };
@@ -336,9 +791,11 @@ export function computeGoalAggregateBreakdown(
 
 /**
  * MASTER AGGREGATE RECALCULATION ENGINE
- * Calculates proportional, real-time aggregate progress across all items
- * linked to a Goal (Tasks, Milestones, Habits, Routines, Projects, Learning Tracks, Skills, Notes, Journal, Sub-goals).
- * Recursively rolls up progress through the 3-Tier Hierarchy (Level 3 -> Level 2 -> Level 1).
+ * Calculates proportional, real-time aggregate progress across all 21+ item categories
+ * linked to a Goal (Tasks, Milestones, Habits, Routines, Projects, Learning Tracks, Skills, Notes, Journal,
+ * Savings Plans, Loans, Investments, Assets, Liabilities, Transactions, Health/Vitals, Sleep, Water, Nutrition,
+ * Medical Appointments, Clinical Notes, Meetings, Network Contacts, Interactions, Values, Practices, Commitments, Focus, Reminders).
+ * Recursively rolls up progress through the 5-Tier Hierarchy (Atomic 5 -> Nano 4 -> Micro 3 -> Sub 2 -> Main 1).
  */
 export async function recalculateGoalAggregateProgress(
   goalId: string,
@@ -350,16 +807,83 @@ export async function recalculateGoalAggregateProgress(
   const targetGoal = allGoals.find(g => g.id === goalId);
   if (!targetGoal) return { updatedGoals: [] };
 
-  let allTasks = await storage.getAll<Task>('tasks');
-  let allMilestones = await storage.getAll<Milestone>('milestones');
-  let allHabits = await storage.getAll<Habit>('habits');
-  let allHabitLogs = await storage.getAll<HabitLog>('habitLogs');
-  let allRoutines = await storage.getAll<Routine>('routines');
-  let allProjects = await storage.getAll<WorkProject>('workProjects');
-  let allLearning = await storage.getAll<LearningItem>('learningItems');
-  let allSkills = await storage.getAll<Skill>('skills');
-  let allNotes = await storage.getAll<Note>('notes');
-  let allJournal = await storage.getAll<JournalEntry>('journal');
+  const [
+    loadedTasks,
+    loadedMilestones,
+    loadedHabits,
+    loadedHabitLogs,
+    loadedRoutines,
+    loadedProjects,
+    loadedLearning,
+    loadedSkills,
+    loadedNotes,
+    loadedJournal,
+    loadedTransactions,
+    loadedLoans,
+    loadedInvestments,
+    loadedSavingsPlans,
+    loadedAssets,
+    loadedLiabilities,
+    loadedHealthMeasurements,
+    loadedSleep,
+    loadedWater,
+    loadedNutrition,
+    loadedAppointments,
+    loadedHealthNotes,
+    loadedMeetings,
+    loadedPeople,
+    loadedInteractions,
+    loadedValues,
+    loadedPractices,
+    loadedCommitments,
+    loadedFocus,
+    loadedReminders
+  ] = await Promise.all([
+    storage.getAll<Task>('tasks'),
+    storage.getAll<Milestone>('milestones'),
+    storage.getAll<Habit>('habits'),
+    storage.getAll<HabitLog>('habitLogs'),
+    storage.getAll<Routine>('routines'),
+    storage.getAll<WorkProject>('workProjects'),
+    storage.getAll<LearningItem>('learningItems'),
+    storage.getAll<Skill>('skills'),
+    storage.getAll<Note>('notes'),
+    storage.getAll<JournalEntry>('journal'),
+    storage.getAll<FinanceTransaction>('finance'),
+    storage.getAll<Loan>('loans'),
+    storage.getAll<Investment>('investments'),
+    storage.getAll<SavingsPlan>('savingsPlans'),
+    storage.getAll<Asset>('assets'),
+    storage.getAll<Liability>('liabilities'),
+    storage.getAll<HealthMeasurement>('healthMeasurements'),
+    storage.getAll<SleepRecord>('sleepRecords'),
+    storage.getAll<WaterRecord>('waterRecords'),
+    storage.getAll<NutritionRecord>('nutritionRecords'),
+    storage.getAll<HealthAppointment>('healthAppointments'),
+    storage.getAll<HealthNote>('healthNotes'),
+    storage.getAll<Meeting>('meetings'),
+    storage.getAll<Person>('people'),
+    storage.getAll<Interaction>('interactions'),
+    storage.getAll<ValueItem>('values'),
+    storage.getAll<SpiritualPractice>('spiritualPractices'),
+    storage.getAll<Commitment>('commitments'),
+    storage.getAll<FocusSession>('focus'),
+    storage.getAll<ReminderItem>('reminders')
+  ]);
+
+  let allTasks = loadedTasks;
+  let allMilestones = loadedMilestones;
+  let allHabits = loadedHabits;
+  const allHabitLogs = loadedHabitLogs;
+  let allRoutines = loadedRoutines;
+  let allProjects = loadedProjects;
+  let allLearning = loadedLearning;
+  let allSkills = loadedSkills;
+  const allNotes = loadedNotes;
+  const allJournal = loadedJournal;
+  let allReminders = loadedReminders;
+  let allAppointments = loadedAppointments;
+  let allMeetings = loadedMeetings;
 
   // Apply in-flight overrides if provided
   if (overrides) {
@@ -389,11 +913,18 @@ export async function recalculateGoalAggregateProgress(
 
     if (overrides.updatedRoutineId) {
       const today = new Date().toISOString().slice(0, 10);
-      allRoutines = allRoutines.map(r =>
-        r.id === overrides.updatedRoutineId
-          ? { ...r, completedDate: overrides.isRoutineDoneToday ? today : null }
-          : r
-      );
+      allRoutines = allRoutines.map(r => {
+        if (r.id !== overrides.updatedRoutineId) return r;
+        const prevDates = r.completedDates || [];
+        const nextDates = overrides.isRoutineDoneToday
+          ? Array.from(new Set([...prevDates, today]))
+          : prevDates.filter(d => d !== today);
+        return {
+          ...r,
+          completedDate: overrides.isRoutineDoneToday ? today : null,
+          completedDates: nextDates
+        };
+      });
     }
 
     if (overrides.updatedProjectId) {
@@ -436,13 +967,48 @@ export async function recalculateGoalAggregateProgress(
         return s;
       });
     }
+
+    if (overrides.updatedReminderId) {
+      allReminders = allReminders.map(r =>
+        r.id === overrides.updatedReminderId
+          ? {
+              ...r,
+              status: overrides.updatedReminderDone ? 'done' : 'open'
+            }
+          : r
+      );
+    }
+
+    if (overrides.updatedAppointmentId) {
+      allAppointments = allAppointments.map(a =>
+        a.id === overrides.updatedAppointmentId
+          ? {
+              ...a,
+              status: overrides.updatedAppointmentStatus !== undefined ? overrides.updatedAppointmentStatus : a.status,
+              completed: overrides.updatedAppointmentCompleted !== undefined ? overrides.updatedAppointmentCompleted : a.completed
+            }
+          : a
+      );
+    }
+
+    if (overrides.updatedMeetingId) {
+      allMeetings = allMeetings.map(m =>
+        m.id === overrides.updatedMeetingId
+          ? {
+              ...m,
+              status: overrides.updatedMeetingStatus !== undefined ? overrides.updatedMeetingStatus : m.status,
+              completed: overrides.updatedMeetingCompleted !== undefined ? overrides.updatedMeetingCompleted : m.completed
+            }
+          : m
+      );
+    }
   }
 
   // Work with a mutable clone map of goals
   const goalMap = new Map<string, Goal>();
   allGoals.forEach(g => goalMap.set(g.id, { ...g }));
 
-  // Helper to recompute and persist a single goal based on goalMap and linked stores
+  // Helper to recompute and persist a single goal based on goalMap and all linked stores
   const recomputeSingleGoal = async (currentGoalId: string): Promise<{ goal: Goal; breakdown: GoalProgressBreakdown } | null> => {
     const current = goalMap.get(currentGoalId);
     if (!current) return null;
@@ -459,7 +1025,27 @@ export async function recalculateGoalAggregateProgress(
       learningItems: allLearning,
       skills: allSkills,
       notes: allNotes,
-      journal: allJournal
+      journal: allJournal,
+      savingsPlans: loadedSavingsPlans,
+      loans: loadedLoans,
+      investments: loadedInvestments,
+      assets: loadedAssets,
+      liabilities: loadedLiabilities,
+      transactions: loadedTransactions,
+      healthMeasurements: loadedHealthMeasurements,
+      sleepRecords: loadedSleep,
+      waterRecords: loadedWater,
+      nutritionRecords: loadedNutrition,
+      appointments: allAppointments,
+      healthNotes: loadedHealthNotes,
+      meetings: allMeetings,
+      people: loadedPeople,
+      interactions: loadedInteractions,
+      values: loadedValues,
+      practices: loadedPractices,
+      commitments: loadedCommitments,
+      focusSessions: loadedFocus,
+      reminders: allReminders
     });
 
     const newProgress = breakdown.hasLinkedItems ? breakdown.totalPercent : (current.progress || 0);
@@ -481,15 +1067,26 @@ export async function recalculateGoalAggregateProgress(
 
   const updatedGoalsList: Goal[] = [targetResult.goal];
 
-  // 2. Recursively rollup up the 3-Tier Hierarchy
-  // If targetGoal was a Level 3 Micro-Goal, it recalculates its Level 2 Sub-Goal parent,
-  // which in turn recalculates its Level 1 Main Goal parent!
-  let currentParentId = targetResult.goal.parentId;
-  while (currentParentId) {
-    const parentResult = await recomputeSingleGoal(currentParentId);
-    if (!parentResult) break;
+  // 2. Recursively rollup up the hierarchy (Level 5 -> Level 4 -> Level 3 -> Level 2 -> Level 1)
+  const allParentIds = new Set<string>();
+  if (targetResult.goal.parentId) allParentIds.add(targetResult.goal.parentId);
+  (targetResult.goal.parentIds || []).forEach(p => { if (p) allParentIds.add(p); });
+
+  const visitedParents = new Set<string>([targetResult.goal.id]);
+  const parentQueue = Array.from(allParentIds);
+  while (parentQueue.length > 0) {
+    const pId = parentQueue.shift()!;
+    if (visitedParents.has(pId)) continue;
+    visitedParents.add(pId);
+    const parentResult = await recomputeSingleGoal(pId);
+    if (!parentResult) continue;
     updatedGoalsList.push(parentResult.goal);
-    currentParentId = parentResult.goal.parentId;
+    if (parentResult.goal.parentId && !visitedParents.has(parentResult.goal.parentId)) {
+      parentQueue.push(parentResult.goal.parentId);
+    }
+    (parentResult.goal.parentIds || []).forEach(p => {
+      if (p && !visitedParents.has(p)) parentQueue.push(p);
+    });
   }
 
   return {
@@ -624,8 +1221,99 @@ export async function syncGoalProgressFromJournal(
 }
 
 /**
+ * Recalculate linked goal progress from Finance (Transactions, Loans, Investments, Savings Plans, Assets, Liabilities)
+ */
+export async function syncGoalProgressFromFinance(
+  goalId: string
+): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
+  return recalculateGoalAggregateProgress(goalId);
+}
+
+/**
+ * Recalculate linked goal progress from Health (Vitals, Movement, Sleep, Water, Nutrition, Appointments, Clinical Notes)
+ */
+export async function syncGoalProgressFromHealth(
+  goalId: string
+): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
+  return recalculateGoalAggregateProgress(goalId);
+}
+
+/**
+ * Recalculate linked goal progress from Health Appointments
+ */
+export async function syncGoalProgressFromAppointments(
+  goalId: string,
+  updatedAppointmentId?: string,
+  updatedAppointmentCompleted?: boolean,
+  updatedAppointmentStatus?: 'scheduled' | 'completed' | 'cancelled'
+): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
+  return recalculateGoalAggregateProgress(goalId, {
+    updatedAppointmentId,
+    updatedAppointmentCompleted,
+    updatedAppointmentStatus
+  });
+}
+
+/**
+ * Recalculate linked goal progress from Strategic Network & People (Meetings, People, Interactions)
+ */
+export async function syncGoalProgressFromPeople(
+  goalId: string
+): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
+  return recalculateGoalAggregateProgress(goalId);
+}
+
+/**
+ * Recalculate linked goal progress from Strategic Meetings
+ */
+export async function syncGoalProgressFromMeetings(
+  goalId: string,
+  updatedMeetingId?: string,
+  updatedMeetingCompleted?: boolean,
+  updatedMeetingStatus?: 'scheduled' | 'completed' | 'cancelled'
+): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
+  return recalculateGoalAggregateProgress(goalId, {
+    updatedMeetingId,
+    updatedMeetingCompleted,
+    updatedMeetingStatus
+  });
+}
+
+/**
+ * Recalculate linked goal progress from Spiritual & Philosophical Foundations (Values, Practices, Commitments)
+ */
+export async function syncGoalProgressFromSpiritual(
+  goalId: string
+): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
+  return recalculateGoalAggregateProgress(goalId);
+}
+
+/**
+ * Recalculate linked goal progress from Deep Work Focus Sessions
+ */
+export async function syncGoalProgressFromFocus(
+  goalId: string
+): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
+  return recalculateGoalAggregateProgress(goalId);
+}
+
+/**
+ * Recalculate linked goal progress from Reminders
+ */
+export async function syncGoalProgressFromReminders(
+  goalId: string,
+  updatedReminderId?: string,
+  updatedReminderDone?: boolean
+): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
+  return recalculateGoalAggregateProgress(goalId, {
+    updatedReminderId,
+    updatedReminderDone
+  });
+}
+
+/**
  * Directly adjust or set a goal's manual progress (0-100) when it has no auto-linked items,
- * and roll up the 3-Tier Hierarchy.
+ * and roll up the 5-Tier Hierarchy.
  */
 export async function syncGoalProgressDirect(
   goalId: string,
@@ -655,11 +1343,12 @@ export async function syncGoalProgressDirect(
 
   // Rollup hierarchy
   let currentParentId = targetGoal.parentId;
-  while (currentParentId) {
+  const visited = new Set<string>([targetGoal.id]);
+  while (currentParentId && !visited.has(currentParentId)) {
+    visited.add(currentParentId);
     const parentGoal = goalMap.get(currentParentId);
     if (!parentGoal) break;
 
-    // Recalculate parent taking into account all its children & linked items
     const res = await recalculateGoalAggregateProgress(parentGoal.id);
     if (res.targetGoal) {
       updatedGoalsList.push(res.targetGoal);

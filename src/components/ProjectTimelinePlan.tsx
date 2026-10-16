@@ -1809,7 +1809,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               { id: 'skills', label: 'Skill Trees', shortLabel: 'Skills', icon: Award, badge: skills.length, delayed: delayedSkills.length },
               { id: 'routines', label: 'Routines & Habits', shortLabel: 'Routines', icon: Repeat, badge: routines.length + habits.length, delayed: delayedRoutines.length },
               { id: 'tasks', label: 'Tasks & Planner', shortLabel: 'Tasks', icon: CheckCircle2, badge: tasks.length, delayed: delayedTasks.length },
-              { id: 'finance', label: 'Financial Stream (Savings, Loans, Investments)', shortLabel: 'Finance', icon: Landmark, badge: savingsPlans.length + loans.length + investments.length, delayed: delayedSavings.length + delayedLoans.length }
+              { id: 'finance', label: 'Finance Stream', shortLabel: 'Finance', icon: Landmark, badge: savingsPlans.length + loans.length + investments.length, delayed: delayedSavings.length + delayedLoans.length }
             ]}
           />
         </div>
@@ -2278,7 +2278,15 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                 </div>
                                 {!isMobileCompactView && (
                                   <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                    {periodGoalRate !== null ? (
+                                    {activeStream === 'finance' ? (
+                                      <div className="flex items-center gap-1 font-mono text-emerald-700 dark:text-emerald-400">
+                                        <span className="font-bold">💰 Savings: {goalSavings.length}</span>
+                                        <span>·</span>
+                                        <span className="font-bold text-rose-600 dark:text-rose-400">💳 Loans: {goalLoans.length}</span>
+                                        <span>·</span>
+                                        <span className="font-bold text-blue-600 dark:text-blue-400">📈 Inv: {goalInvestments.length}</span>
+                                      </div>
+                                    ) : periodGoalRate !== null ? (
                                       <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded font-mono">
                                         {windowLabel}: {periodGoalRate}% ({periodGoalDone}/{periodGoalItems})
                                       </span>
@@ -2332,8 +2340,14 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                 />
                                 <div className="absolute inset-0 flex items-center justify-between px-2 text-[10px] font-bold pointer-events-none min-w-0">
                                   <div className="flex items-center gap-1.5 truncate">
-                                    {/* Prominent Window Pace Badge */}
-                                    {periodGoalRate !== null ? (
+                                    {/* Prominent Window Pace Badge / Finance Portfolio Badge */}
+                                    {activeStream === 'finance' ? (
+                                      <span className="font-mono text-white px-1.5 py-0.5 rounded bg-emerald-600 shadow-xs flex items-center gap-1 text-[9px]">
+                                        <span>Portfolio:</span>
+                                        <span>₹{goalSavings.reduce((s, sp) => s + (Number(sp.currentAmount) || 0), 0).toLocaleString('en-IN')} saved</span>
+                                        {goalLoans.length > 0 && <span className="opacity-90">· ₹{goalLoans.reduce((s, l) => s + (Number((l as any).outstanding) || 0), 0).toLocaleString('en-IN')} debt</span>}
+                                      </span>
+                                    ) : periodGoalRate !== null ? (
                                       <span className="font-mono text-white px-1.5 py-0.5 rounded bg-emerald-600 shadow-xs flex items-center gap-1 text-[9px]">
                                         <span className="opacity-90">{windowLabel}:</span>
                                         <span>{periodGoalRate}%</span>
@@ -3242,7 +3256,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                             <div className="flex items-center gap-1">
                               <Landmark className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                               <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 truncate">
-                                Financial Portfolio & Ledger
+                                Standalone Finance
                               </span>
                               <span className="text-[10px] text-emerald-600 shrink-0 font-mono">
                                 ({standaloneSavings.length + standaloneLoans.length + standaloneInvestments.length})
@@ -3250,7 +3264,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                             </div>
                             {!isMobileCompactView && (
                               <div className="text-[10px] text-emerald-700 dark:text-emerald-400 truncate">
-                                Standalone Savings, Loans & Investments
+                                Savings · Loans · Investments
                               </div>
                             )}
                           </div>
@@ -3266,30 +3280,37 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                       <div className="divide-y divide-slate-100/60 dark:divide-slate-800/40">
                         {/* Standalone Savings */}
                         {standaloneSavings.map(sp => {
-                          const prog = sp.targetAmount > 0 ? Math.min(100, Math.round(((Number(sp.currentAmount) || 0) / Number(sp.targetAmount)) * 100)) : 0;
-                          const spTarget = (sp as any).targetDate || (sp.durationMonths && sp.createdAt ? addDaysToDateStr(new Date(sp.createdAt).toISOString().slice(0, 10), sp.durationMonths * 30) : undefined);
-                          const spSpan = computeSpan(undefined, spTarget, timelineData.cols);
+                          const prog = sp.progress ?? (sp.targetAmount > 0 ? Math.min(100, Math.round(((Number(sp.currentAmount) || 0) / Number(sp.targetAmount)) * 100)) : 0);
+                          const spStart = sp.startDate || (sp as any).startDate || (sp.createdAt ? new Date(sp.createdAt).toISOString().slice(0, 10) : today);
+                          const spTarget = sp.targetDate || (sp as any).targetDate || (sp.durationMonths && sp.createdAt ? addDaysToDateStr(new Date(sp.createdAt).toISOString().slice(0, 10), sp.durationMonths * 30) : addDaysToDateStr(spStart, 90));
+                          const spSpan = computeSpan(spStart, spTarget, timelineData.cols);
+                          const isDelayed = sp.delay?.isDelayed && prog < 100;
                           return (
                             <div key={sp.id} className="flex items-center py-1.5 text-xs transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
                               <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} shrink-0 pl-6 pr-2 flex items-center justify-between sticky left-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border-r border-slate-200/80 dark:border-slate-800/80`}>
                                 <div className="flex items-center gap-1.5 truncate">
-                                  <Landmark className="h-3 w-3 text-emerald-600 shrink-0" />
+                                  <Landmark className={`h-3 w-3 shrink-0 ${isDelayed ? 'text-rose-500' : 'text-emerald-600'}`} />
                                   <span className="truncate font-medium text-slate-800 dark:text-slate-200">
                                     💰 {sp.name}
                                   </span>
                                 </div>
-                                <span className="text-[10px] font-mono font-bold text-emerald-600 shrink-0 ml-1">
+                                <span className={`text-[10px] font-mono font-bold shrink-0 ml-1 ${isDelayed ? 'text-rose-600' : 'text-emerald-600'}`}>
                                   {prog}%
                                 </span>
                               </div>
                               <div className="flex-1 relative h-6 flex items-center min-w-0">
                                 {spSpan.inWindow ? (
                                   <div
-                                    className="absolute top-1/2 -translate-y-1/2 h-5 rounded-lg border border-emerald-300 bg-emerald-50/90 dark:border-emerald-800 dark:bg-emerald-950/40 overflow-hidden flex items-center z-10 shadow-2xs"
+                                    className={`absolute top-1/2 -translate-y-1/2 h-5 rounded-lg border overflow-hidden flex items-center z-10 shadow-2xs ${
+                                      isDelayed
+                                        ? 'border-rose-300 bg-rose-50/90 dark:border-rose-800 dark:bg-rose-950/40'
+                                        : 'border-emerald-300 bg-emerald-50/90 dark:border-emerald-800 dark:bg-emerald-950/40'
+                                    }`}
                                     style={{ left: `${spSpan.leftPct}%`, width: `${Math.max(6, spSpan.widthPct)}%` }}
+                                    title={`Savings Plan: ${sp.name}\nTarget: ₹${(sp.targetAmount || 0).toLocaleString('en-IN')}\nCurrent: ₹${(sp.currentAmount || 0).toLocaleString('en-IN')} (${prog}%)\nTime Horizon: ${spStart} → ${spTarget}\nStatus: ${isDelayed ? 'Behind Schedule' : prog >= 100 ? 'Target Reached' : 'On Track'}`}
                                   >
-                                    <div className="h-full rounded-md bg-emerald-500" style={{ width: `${prog}%` }} />
-                                    <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 dark:text-slate-100 truncate">
+                                    <div className={`h-full rounded-md transition-all ${isDelayed ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${prog}%` }} />
+                                    <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 dark:text-slate-100 truncate pr-1">
                                       ₹{(sp.currentAmount || 0).toLocaleString('en-IN')} / ₹{(sp.targetAmount || 0).toLocaleString('en-IN')} ({prog}%)
                                     </span>
                                   </div>
@@ -3303,36 +3324,42 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
 
                         {/* Standalone Loans */}
                         {standaloneLoans.map(loan => {
-                          const loanPrincipal = Number((loan as any).principal ?? (loan as any).amount) || 0;
-                          const loanOutstanding = Number((loan as any).outstanding) || 0;
-                          const loanPaid = Number((loan as any).paidAmount) || (loanPrincipal ? Math.max(0, loanPrincipal - loanOutstanding) : 0);
-                          const prog = loanPrincipal > 0 ? Math.min(100, Math.round((loanPaid / loanPrincipal) * 100)) : 0;
-                          const isPaid = prog >= 100;
-                          const loanStart = (loan as any).startDate || (loan.createdAt ? new Date(loan.createdAt).toISOString().slice(0, 10) : undefined);
-                          const loanTarget = (loan as any).targetDate || (loanStart && (loan as any).tenure ? addDaysToDateStr(loanStart, (loan as any).tenure * 30) : undefined);
+                          const loanPrincipal = loan.principal ?? (Number((loan as any).principal ?? (loan as any).amount) || 0);
+                          const loanOutstanding = loan.outstanding ?? (Number((loan as any).outstanding) || 0);
+                          const loanPaid = loan.paid ?? (Number((loan as any).paidAmount) || (loanPrincipal ? Math.max(0, loanPrincipal - loanOutstanding) : 0));
+                          const prog = loan.progress ?? (loanPrincipal > 0 ? Math.min(100, Math.round((loanPaid / loanPrincipal) * 100)) : 0);
+                          const isPaid = loan.isPaid ?? (prog >= 100);
+                          const loanStart = loan.startDate || (loan as any).startDate || (loan.createdAt ? new Date(loan.createdAt).toISOString().slice(0, 10) : today);
+                          const loanTarget = loan.targetDate || (loan as any).targetDate || ((loan as any).tenure ? addDaysToDateStr(loanStart, (loan as any).tenure * 30) : addDaysToDateStr(loanStart, 365));
                           const loanSpan = computeSpan(loanStart, loanTarget, timelineData.cols);
+                          const isDelayed = loan.delay?.isDelayed && !isPaid;
                           return (
                             <div key={loan.id} className="flex items-center py-1.5 text-xs transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
                               <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} shrink-0 pl-6 pr-2 flex items-center justify-between sticky left-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border-r border-slate-200/80 dark:border-slate-800/80`}>
                                 <div className="flex items-center gap-1.5 truncate">
-                                  <ShieldAlert className="h-3 w-3 text-rose-600 shrink-0" />
+                                  <ShieldAlert className={`h-3 w-3 shrink-0 ${isPaid ? 'text-emerald-500' : isDelayed ? 'text-rose-600' : 'text-amber-500'}`} />
                                   <span className="truncate font-medium text-slate-800 dark:text-slate-200">
                                     💳 {(loan as any).lender || loan.name || 'Loan'}
                                   </span>
                                 </div>
-                                <span className="text-[10px] font-mono font-bold text-rose-600 shrink-0 ml-1">
+                                <span className={`text-[10px] font-mono font-bold shrink-0 ml-1 ${isPaid ? 'text-emerald-600' : 'text-rose-600'}`}>
                                   {prog}% Paid
                                 </span>
                               </div>
                               <div className="flex-1 relative h-6 flex items-center min-w-0">
                                 {loanSpan.inWindow ? (
                                   <div
-                                    className="absolute top-1/2 -translate-y-1/2 h-5 rounded-lg border border-rose-300 bg-rose-50/90 dark:border-rose-800 dark:bg-rose-950/40 overflow-hidden flex items-center z-10 shadow-2xs"
+                                    className={`absolute top-1/2 -translate-y-1/2 h-5 rounded-lg border overflow-hidden flex items-center z-10 shadow-2xs ${
+                                      isPaid
+                                        ? 'border-emerald-300 bg-emerald-50/90 dark:border-emerald-800 dark:bg-emerald-950/40'
+                                        : 'border-rose-300 bg-rose-50/90 dark:border-rose-800 dark:bg-rose-950/40'
+                                    }`}
                                     style={{ left: `${loanSpan.leftPct}%`, width: `${Math.max(6, loanSpan.widthPct)}%` }}
+                                    title={`Loan: ${(loan as any).lender || loan.name}\nPrincipal: ₹${loanPrincipal.toLocaleString('en-IN')}\nPaid: ₹${loanPaid.toLocaleString('en-IN')} (${prog}%)\nOutstanding: ₹${loanOutstanding.toLocaleString('en-IN')}\nTenure: ${loanStart} → ${loanTarget}\nStatus: ${isPaid ? 'Cleared' : isDelayed ? 'Payment Overdue' : 'Active Repayment'}`}
                                   >
-                                    <div className={`h-full rounded-md ${isPaid ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${prog}%` }} />
-                                    <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 dark:text-slate-100 truncate">
-                                      ₹{loanPaid.toLocaleString('en-IN')} / ₹{loanPrincipal.toLocaleString('en-IN')} paid
+                                    <div className={`h-full rounded-md transition-all ${isPaid ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${prog}%` }} />
+                                    <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 dark:text-slate-100 truncate pr-1">
+                                      ₹{loanPaid.toLocaleString('en-IN')} / ₹{loanPrincipal.toLocaleString('en-IN')} ({prog}%)
                                     </span>
                                   </div>
                                 ) : (
@@ -3345,9 +3372,14 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
 
                         {/* Standalone Investments */}
                         {standaloneInvestments.map(inv => {
-                          const invStart = (inv as any).startDate || inv.date || (inv.createdAt ? new Date(inv.createdAt).toISOString().slice(0, 10) : undefined);
-                          const invTarget = (inv as any).targetDate || (inv as any).maturityDate || inv.date;
+                          const invStart = inv.startDate || (inv as any).startDate || inv.date || (inv.createdAt ? new Date(inv.createdAt).toISOString().slice(0, 10) : today);
+                          const invTarget = inv.targetDate || (inv as any).targetDate || (inv as any).maturityDate || (inv as any).horizonDate || addDaysToDateStr(invStart, 180);
+                          const currentVal = inv.currentVal ?? (Number(inv.currentValue || inv.amount) || 0);
+                          const initialAmt = inv.initialAmt ?? (Number(inv.amount) || 0);
+                          const invGain = inv.gain ?? (currentVal - initialAmt);
+                          const invGainPct = inv.gainPct ?? (initialAmt > 0 ? Math.round((invGain / initialAmt) * 100) : 0);
                           const invSpan = computeSpan(invStart, invTarget, timelineData.cols);
+                          const valProg = initialAmt > 0 ? Math.min(100, Math.round((currentVal / initialAmt) * 100)) : 100;
                           return (
                             <div key={inv.id} className="flex items-center py-1.5 text-xs transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
                               <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} shrink-0 pl-6 pr-2 flex items-center justify-between sticky left-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border-r border-slate-200/80 dark:border-slate-800/80`}>
@@ -3357,18 +3389,20 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                     📈 {inv.name}
                                   </span>
                                 </div>
-                                <span className="text-[10px] font-mono text-blue-600 shrink-0 ml-1">
-                                  ₹{(inv.currentValue || inv.amount || 0).toLocaleString('en-IN')}
+                                <span className="text-[10px] font-mono font-bold text-blue-600 shrink-0 ml-1">
+                                  ₹{currentVal.toLocaleString('en-IN')}
                                 </span>
                               </div>
                               <div className="flex-1 relative h-6 flex items-center min-w-0">
                                 {invSpan.inWindow ? (
                                   <div
-                                    className="absolute top-1/2 -translate-y-1/2 h-5 rounded-lg border border-blue-300 bg-blue-50/90 dark:border-blue-800 dark:bg-blue-950/40 overflow-hidden flex items-center z-10 shadow-2xs px-2"
+                                    className="absolute top-1/2 -translate-y-1/2 h-5 rounded-lg border border-blue-300 bg-blue-50/90 dark:border-blue-800 dark:bg-blue-950/40 overflow-hidden flex items-center z-10 shadow-2xs"
                                     style={{ left: `${invSpan.leftPct}%`, width: `${Math.max(6, invSpan.widthPct)}%` }}
+                                    title={`Investment: ${inv.name}\nInvested: ₹${initialAmt.toLocaleString('en-IN')}\nCurrent Value: ₹${currentVal.toLocaleString('en-IN')} (${invGain >= 0 ? `+₹${invGain.toLocaleString('en-IN')} (+${invGainPct}%)` : `-₹${Math.abs(invGain).toLocaleString('en-IN')} (${invGainPct}%)`})\nHorizon: ${invStart} → ${invTarget}`}
                                   >
-                                    <span className="text-[9px] font-bold text-blue-900 dark:text-blue-200 truncate">
-                                      {inv.name} · Invested: ₹{(inv.amount || 0).toLocaleString('en-IN')} → Val: ₹{(inv.currentValue || inv.amount || 0).toLocaleString('en-IN')}
+                                    <div className="h-full rounded-md bg-blue-500/80 transition-all" style={{ width: `${Math.min(100, valProg)}%` }} />
+                                    <span className="absolute left-1.5 text-[9px] font-bold text-blue-950 dark:text-blue-100 truncate pr-1">
+                                      {inv.name} · ₹{currentVal.toLocaleString('en-IN')} {invGainPct !== 0 ? `(${invGainPct >= 0 ? '+' : ''}${invGainPct}%)` : ''}
                                     </span>
                                   </div>
                                 ) : (
@@ -3516,6 +3550,9 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               const gSkills = indexed?.skills || [];
               const gRoutines = indexed?.routines || [];
               const gTasks = indexed?.tasks || [];
+              const gSavings = indexed?.savingsPlans || [];
+              const gLoans = indexed?.loans || [];
+              const gInvestments = indexed?.investments || [];
               const tier = getGoalTierBadge(goal.level);
 
               return (
@@ -3585,6 +3622,44 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                     </div>
                   )}
 
+                  {/* Financial Stream in Operating Plan */}
+                  {(gSavings.length > 0 || gLoans.length > 0 || gInvestments.length > 0) && (
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                        Finance ({gSavings.length + gLoans.length + gInvestments.length})
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {gSavings.map(s => (
+                          <div key={s.id} className="rounded-xl border border-emerald-200/60 bg-emerald-50/30 p-2 text-xs flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <Landmark className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">💰 {s.name}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-600 font-mono shrink-0 ml-1">{s.progress}%</span>
+                          </div>
+                        ))}
+                        {gLoans.map(l => (
+                          <div key={l.id} className="rounded-xl border border-rose-200/60 bg-rose-50/30 p-2 text-xs flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <ShieldAlert className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">💳 {(l as any).lender || l.name}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-rose-600 font-mono shrink-0 ml-1">{l.progress}% paid</span>
+                          </div>
+                        ))}
+                        {gInvestments.map(inv => (
+                          <div key={inv.id} className="rounded-xl border border-blue-200/60 bg-blue-50/30 p-2 text-xs flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <TrendingUp className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">📈 {inv.name}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-600 font-mono shrink-0 ml-1">₹{(inv.currentVal || 0).toLocaleString('en-IN')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Tasks */}
                   {gTasks.length > 0 && (
                     <div className="space-y-1.5">
@@ -3644,6 +3719,52 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Standalone Financial Commitments in Operating Plan */}
+            {(standaloneSavings.length > 0 || standaloneLoans.length > 0 || standaloneInvestments.length > 0) && (
+              <div className="rounded-2xl border border-emerald-200/90 bg-white p-4 shadow-2xs dark:border-emerald-950 dark:bg-slate-900 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 pb-2.5 dark:border-emerald-900/60">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      💰 Portfolio
+                    </span>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                      Standalone Finance
+                    </h4>
+                    <span className="text-xs text-emerald-600 font-mono font-bold">({standaloneSavings.length} savings · {standaloneLoans.length} loans · {standaloneInvestments.length} inv)</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {standaloneSavings.map(s => (
+                    <div key={s.id} className="rounded-xl border border-emerald-200/60 bg-emerald-50/30 p-2 text-xs flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Landmark className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">💰 {s.name}</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-600 font-mono shrink-0 ml-1">{s.progress}%</span>
+                    </div>
+                  ))}
+                  {standaloneLoans.map(l => (
+                    <div key={l.id} className="rounded-xl border border-rose-200/60 bg-rose-50/30 p-2 text-xs flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <ShieldAlert className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">💳 {(l as any).lender || l.name}</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-rose-600 font-mono shrink-0 ml-1">{l.progress}% paid</span>
+                    </div>
+                  ))}
+                  {standaloneInvestments.map(inv => (
+                    <div key={inv.id} className="rounded-xl border border-blue-200/60 bg-blue-50/30 p-2 text-xs flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <TrendingUp className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">📈 {inv.name}</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-blue-600 font-mono shrink-0 ml-1">₹{(inv.currentVal || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3659,7 +3780,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                   <span>Full Cross-System Delay Radar & Bottleneck Audit</span>
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-                  Active bottlenecks across Milestones ({delayedMilestones.length}), Projects ({delayedProjects.length}), Learning ({delayedLearning.length}), Skills ({delayedSkills.length}), Routines ({delayedRoutines.length}), and Tasks ({delayedTasks.length}).
+                  Active bottlenecks across Milestones ({delayedMilestones.length}), Projects ({delayedProjects.length}), Learning ({delayedLearning.length}), Skills ({delayedSkills.length}), Routines ({delayedRoutines.length}), Tasks ({delayedTasks.length}), Savings ({delayedSavings.length}), and Debt ({delayedLoans.length}).
                 </p>
               </div>
 
@@ -3822,6 +3943,70 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                         className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-500 cursor-pointer"
                       >
                         ⚡ Task Genesis
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+              {/* Delayed Savings Targets */}
+              {delayedSavings
+                .filter(s => radarSeverityFilter === 'all' || s.delay.severity === radarSeverityFilter)
+                .map(sp => (
+                  <div key={sp.id} className="rounded-2xl border-2 border-rose-400/80 bg-white p-4 shadow-sm dark:border-rose-900/70 dark:bg-slate-900 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 uppercase">
+                          Savings Target Behind · {sp.delay.label}
+                        </span>
+                        <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                          💰 {sp.name}
+                        </h4>
+                        {sp.goal && <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Goal: {sp.goal.title}</p>}
+                      </div>
+                      <span className="text-xs font-bold text-rose-600 shrink-0">Target: {sp.targetDate}</span>
+                    </div>
+                    <div className="text-xs text-slate-600 dark:text-slate-300">
+                      Progress: ₹{(sp.currentAmount || 0).toLocaleString('en-IN')} / ₹{(sp.targetAmount || 0).toLocaleString('en-IN')} ({sp.progress}%)
+                    </div>
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerAlarmNow(sp.name, `Savings target behind: ${sp.delay.label}`, sp.id)}
+                        className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 cursor-pointer"
+                      >
+                        🚨 Ring Alarm
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+              {/* Delayed / Overdue Loans */}
+              {delayedLoans
+                .filter(l => radarSeverityFilter === 'all' || l.delay.severity === radarSeverityFilter)
+                .map(loan => (
+                  <div key={loan.id} className="rounded-2xl border-2 border-rose-400/80 bg-white p-4 shadow-sm dark:border-rose-900/70 dark:bg-slate-900 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-700 dark:bg-rose-950 dark:text-rose-400 uppercase">
+                          Debt Clearance Overdue · {loan.delay.label}
+                        </span>
+                        <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                          💳 {(loan as any).lender || loan.name}
+                        </h4>
+                        {loan.goal && <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Goal: {loan.goal.title}</p>}
+                      </div>
+                      <span className="text-xs font-bold text-rose-600 shrink-0">Due: {loan.targetDate}</span>
+                    </div>
+                    <div className="text-xs text-slate-600 dark:text-slate-300">
+                      Paid: ₹{(loan.paid || 0).toLocaleString('en-IN')} / ₹{(loan.principal || 0).toLocaleString('en-IN')} ({loan.progress}% · Outstanding: ₹{(loan.outstanding || 0).toLocaleString('en-IN')})
+                    </div>
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerAlarmNow((loan as any).lender || loan.name, `Debt clearance overdue: ${loan.delay.label}`, loan.id)}
+                        className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 cursor-pointer"
+                      >
+                        🚨 Ring Alarm
                       </button>
                     </div>
                   </div>

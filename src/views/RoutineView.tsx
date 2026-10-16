@@ -11,6 +11,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { alarmService } from '../lib/alarmService';
 import { computeItemDelay } from '../components/ProjectTimelinePlan';
 import { BUILTIN_RINGTONES, useRingtoneOptions, getDefaultRingtoneId } from '../lib/alarmAudio';
+import { soundEngine } from '../lib/soundEngine';
 
 interface RoutineViewProps {
   routines: Routine[];
@@ -407,8 +408,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     const existing = habitLogs.find(l => l.key === key);
 
     if (existing) {
+      soundEngine.play('habitUncheck');
       await storage.delete('habitLogs', existing.id);
     } else {
+      soundEngine.play('habitComplete');
       const newLog: HabitLog = {
         id: generateUUID(),
         key,
@@ -435,6 +438,11 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   const handleToggleRoutineBlock = async (r: Routine) => {
     const isDone = r.completedDate === today;
     const nextDone = !isDone;
+    if (nextDone) {
+      soundEngine.play('taskComplete');
+    } else {
+      soundEngine.play('taskUncheck');
+    }
     const updated: Routine = {
       ...r,
       completedDate: nextDone ? today : null,

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Download, Database, Trash2,
-  Palette, ChevronDown, RefreshCw
+  Palette, ChevronDown, RefreshCw,
+  Volume2, VolumeX, Smartphone, Sparkles
 } from 'lucide-react';
 import {
   storage,
@@ -12,6 +13,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { UniversalDataManagerCard } from '../components/UniversalDataManagerCard';
 import { SlideTabs } from '../components/SlideTabs';
 import { RecycleBinView } from './RecycleBinView';
+import { soundEngine } from '../lib/soundEngine';
 
 interface SettingsViewProps {
   settings?: AppState;
@@ -43,6 +45,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isAuditing, setIsAuditing] = useState(false);
   const [accentColor, setAccentColor] = useState<string>(settings?.accentColor || '#6366f1');
   const [isAccentDropdownOpen, setIsAccentDropdownOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() => soundEngine.isSoundEnabled());
+  const [hapticEnabled, setHapticEnabled] = useState(() => soundEngine.isHapticEnabled());
+  const [soundVolume, setSoundVolume] = useState(() => Math.round(soundEngine.getVolume() * 100));
 
   useEffect(() => {
     if (settings?.accentColor) {
@@ -187,14 +192,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Tab: System & Appearance */}
       {activeTab === 'system' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Appearance Card (6 cols) */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-stretch">
+          {/* Left Column: Appearance & Theme + Storage Health & Quota (6 cols) */}
           <div className="lg:col-span-6 flex flex-col">
-            <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-5 flex flex-col justify-between">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <Palette className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Appearance & Theme</h2>
-              </div>
+            <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-6 flex flex-col justify-between h-full">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                  <Palette className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">Appearance & Theme</h2>
+                </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-[140px]">
@@ -404,54 +410,197 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 );
               })()}
             </div>
-
-
           </div>
-        </div>
 
-          {/* Storage Telemetry & Quota (6 cols) */}
-          <div className="lg:col-span-6 flex flex-col">
-            <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-5 flex flex-col justify-between">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Database className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">Storage Health & Quota</h2>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={isAuditing}
-                  onClick={handleRunIntegrityAudit}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer shrink-0 whitespace-nowrap shadow-2xs transition-all active:scale-98"
-                  title="Run database integrity check and storage refresh"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
-                  <span>Run Audit</span>
-                </button>
+          {/* Storage Health & Quota Section (Integrated into Left Column) */}
+          <div className="border-t border-slate-100 pt-5 dark:border-slate-800 space-y-3.5">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2 min-w-0">
+                <Database className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">Storage Health & Quota</h2>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Local Browser Storage Quota</span>
-                  <span className="font-mono font-bold text-slate-900 dark:text-white">
-                    {storageStats.quota > 0 ? `${storageStats.percent.toFixed(2)}% used` : 'Unknown'}
-                  </span>
+              <button
+                type="button"
+                disabled={isAuditing}
+                onClick={handleRunIntegrityAudit}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer shrink-0 whitespace-nowrap shadow-2xs transition-all active:scale-98"
+                title="Run database integrity check and storage refresh"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
+                <span>Run Audit</span>
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Local Browser Storage Quota</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-white">
+                  {storageStats.quota > 0 ? `${storageStats.percent.toFixed(2)}% used` : 'Unknown'}
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  className={`h-full ${storageStats.level === 'critical' ? 'bg-rose-500' : storageStats.level === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${Math.min(100, Math.max(storageStats.quota > 0 ? 0.5 : 0, storageStats.percent))}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[11px] text-slate-400">
+                <span>{(storageStats.usage / (1024 * 1024)).toFixed(2)} MB stored locally</span>
+                <span>
+                  {storageStats.quota > 0
+                    ? storageStats.quota >= 1024 * 1024 * 1024
+                      ? `${(storageStats.quota / (1024 * 1024 * 1024)).toFixed(2)} GB browser quota`
+                      : `${(storageStats.quota / (1024 * 1024)).toFixed(0)} MB browser quota`
+                    : 'Browser quota unavailable'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Tactile Sound & Micro-Interactions Card (6 cols) */}
+      <div className="lg:col-span-6 flex flex-col">
+        <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-5 flex flex-col justify-between h-full">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Volume2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    Tactile Audio & Haptics
+                  </h2>
                 </div>
-                <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div
-                    className={`h-full ${storageStats.level === 'critical' ? 'bg-rose-500' : storageStats.level === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                    style={{ width: `${Math.min(100, Math.max(storageStats.quota > 0 ? 0.5 : 0, storageStats.percent))}%` }}
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                  <Sparkles className="h-3 w-3" /> 0ms Latency
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                {/* Sound Effects Toggle */}
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 dark:text-white">
+                      Auditory Micro-Clicks
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Apple-inspired soft glass/wooden clicks on task ticks and habit rings
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={soundEnabled}
+                    onClick={() => {
+                      const next = !soundEnabled;
+                      setSoundEnabled(next);
+                      soundEngine.setSoundEnabled(next);
+                      if (next) onSuccess('Auditory feedback enabled');
+                    }}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      soundEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Haptic Feedback Toggle */}
+                <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Smartphone className="h-3.5 w-3.5 text-slate-400" />
+                      <span>Haptic Vibration</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Subtle tactile physical pulse on Android, iOS & touchscreen devices
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={hapticEnabled}
+                    onClick={() => {
+                      const next = !hapticEnabled;
+                      setHapticEnabled(next);
+                      soundEngine.setHapticEnabled(next);
+                      if (next) onSuccess('Haptic feedback enabled');
+                    }}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      hapticEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        hapticEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Volume Level Slider */}
+                <div className="space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <span>Sound Volume:</span>
+                    <span className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">{soundVolume}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={soundVolume}
+                    disabled={!soundEnabled}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setSoundVolume(val);
+                      soundEngine.setVolume(val / 100);
+                    }}
+                    onMouseUp={() => soundEngine.play('tap')}
+                    onTouchEnd={() => soundEngine.play('tap')}
+                    className="w-full accent-indigo-600 cursor-pointer disabled:opacity-40"
                   />
                 </div>
-                <div className="flex justify-between text-[11px] text-slate-400">
-                  <span>{(storageStats.usage / (1024 * 1024)).toFixed(2)} MB stored locally</span>
-                  <span>
-                    {storageStats.quota > 0
-                      ? storageStats.quota >= 1024 * 1024 * 1024
-                        ? `${(storageStats.quota / (1024 * 1024 * 1024)).toFixed(2)} GB browser quota`
-                        : `${(storageStats.quota / (1024 * 1024)).toFixed(0)} MB browser quota`
-                      : 'Browser quota unavailable'}
-                  </span>
+
+                {/* Interactive Sound Previews */}
+                <div className="border-t border-slate-100 pt-3 dark:border-slate-800 space-y-2">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Sound Previews (Click to test)
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => soundEngine.play('taskComplete')}
+                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer transition-all active:scale-95 text-center"
+                    >
+                      ✓ Task Tick
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => soundEngine.play('habitComplete')}
+                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer transition-all active:scale-95 text-center"
+                    >
+                      ✦ Habit Ring
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => soundEngine.play('calcKey')}
+                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer transition-all active:scale-95 text-center"
+                    >
+                      ⌨ Key Tap
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => soundEngine.play('successChime')}
+                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer transition-all active:scale-95 text-center"
+                    >
+                      ♫ Success
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

@@ -16,6 +16,7 @@ import { SlideTabs } from '../components/SlideTabs';
 import { globalTextReader, isSpeechSynthesisSupported } from '../lib/voiceService';
 import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
+import { soundEngine } from '../lib/soundEngine';
 
 interface TasksViewProps {
   tasks: Task[];
@@ -339,6 +340,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   const handleToggleTask = async (task: Task) => {
     const nextDone = !task.done;
+    if (nextDone) {
+      soundEngine.play('taskComplete');
+    } else {
+      soundEngine.play('taskUncheck');
+    }
     const updated: Task = {
       ...task,
       done: nextDone,
@@ -364,6 +370,13 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   const handleUpdateTaskStatus = async (task: Task, status: 'open' | 'in-progress' | 'done') => {
     const isDone = status === 'done';
+    if (isDone) {
+      soundEngine.play('taskComplete');
+    } else if (task.done && !isDone) {
+      soundEngine.play('taskUncheck');
+    } else {
+      soundEngine.play('tap');
+    }
     const updated: Task = {
       ...task,
       status,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Delete, Check, Copy, ArrowLeftRight, HelpCircle } from 'lucide-react';
 import { calculatorEngine } from '../lib/calculatorEngine';
+import { soundEngine } from '../lib/soundEngine';
 
 interface InteractiveKeypadProps {
   onComputeResult?: (expr: string, res: string) => void;
@@ -65,6 +66,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
 
   // Insert token at current cursor position or append
   const insertToken = useCallback((token: string) => {
+    soundEngine.play('calcKey');
     setExpression(prev => {
       // If previous was an error or empty
       if (prev === 'Error') return token;
@@ -77,6 +79,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
   }, []);
 
   const handleClear = () => {
+    soundEngine.play('tap');
     setExpression('');
     setLivePreview('');
     setErrorMsg(null);
@@ -84,6 +87,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
   };
 
   const handleBackspace = () => {
+    soundEngine.play('calcKey');
     setExpression(prev => {
       if (!prev || prev === 'Error') return '';
       // Check for multi-char function tokens like 'sqrt(', 'sin(', 'cbrt('
@@ -105,9 +109,11 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
       const calcResult = calculatorEngine.scientific(expression, angleMode);
       const resStr = String(calcResult);
       if (resStr.includes('Invalid') || resStr === 'Undefined / NaN') {
+        soundEngine.play('taskUncheck');
         setErrorMsg('Invalid mathematical expression');
         return;
       }
+      soundEngine.play('calcEquals');
       setLastAnswer(resStr);
       setExpression(resStr);
       setLivePreview('');
@@ -117,12 +123,14 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
         onComputeResult(expression, resStr);
       }
     } catch (err: any) {
+      soundEngine.play('taskUncheck');
       setErrorMsg(err.message || 'Invalid syntax');
     }
     if (inputRef.current) inputRef.current.focus();
   };
 
   const handleToggleSign = () => {
+    soundEngine.play('calcKey');
     setExpression(prev => {
       if (!prev) return '-';
       // Find the last number in expression
@@ -142,6 +150,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
   };
 
   const handleMemoryAdd = () => {
+    soundEngine.play('calcKey');
     try {
       const val = parseFloat(livePreview || expression);
       if (!Number.isNaN(val)) {
@@ -151,6 +160,7 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
   };
 
   const handleMemorySub = () => {
+    soundEngine.play('calcKey');
     try {
       const val = parseFloat(livePreview || expression);
       if (!Number.isNaN(val)) {
@@ -160,12 +170,14 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
   };
 
   const handleMemoryRecall = () => {
+    soundEngine.play('calcKey');
     if (memory !== null) {
       insertToken(String(memory));
     }
   };
 
   const handleMemoryStore = () => {
+    soundEngine.play('calcKey');
     try {
       const val = parseFloat(livePreview || expression);
       if (!Number.isNaN(val)) {

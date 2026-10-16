@@ -3,6 +3,7 @@ import { Search, Plus, Zap, Moon, Sun, Calendar, ChevronDown, Clock } from 'luci
 import { NavModule } from '../types';
 import { adToBs, getTodayIso } from '../lib/nepaliDate';
 import { PWAInstallButton } from './PWAInstallButton';
+import { soundEngine } from '../lib/soundEngine';
 
 interface HeaderProps {
   activeModule: NavModule;
@@ -10,6 +11,7 @@ interface HeaderProps {
   onOpenQuickCapture: (initialType?: string) => void;
   onOpenSearch: () => void;
   onOpenBsModal: () => void;
+  onOpenVoiceStudio: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   onOpenMobileMenu: () => void;
@@ -21,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenQuickCapture,
   onOpenSearch,
   onOpenBsModal,
+  onOpenVoiceStudio,
   theme,
   onToggleTheme,
   onOpenMobileMenu,
@@ -205,24 +208,24 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </button>
 
-        {/* Quick Command Menu Dropdown (Visible on sm+ screens) */}
-        <div className="relative hidden sm:block">
+        {/* Quick Command Menu Dropdown (Actions) */}
+        <div className="relative">
           <button
             type="button"
             onClick={() => setIsActionsOpen(!isActionsOpen)}
-            className="flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 sm:px-2.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer shrink-0"
+            className="flex h-9 items-center gap-1 sm:gap-1.5 rounded-xl border border-slate-200 bg-white px-2 sm:px-2.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer shrink-0"
             aria-label="Quick Actions"
             title="Fast Action Shortcuts"
           >
             <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-            <span className="hidden xl:inline">Actions</span>
+            <span className="hidden sm:inline">Actions</span>
             <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
           </button>
 
           {isActionsOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setIsActionsOpen(false)} />
-              <div className="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-900 animate-in fade-in zoom-in-95">
+              <div className="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-900 animate-in fade-in zoom-in-95">
                 <button
                   type="button"
                   onClick={() => { onOpenQuickCapture(); setIsActionsOpen(false); }}
@@ -258,6 +261,28 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <span className="text-indigo-500">⏱</span> Start Focus Block
                 </button>
+
+                {/* Voice Studio Action inside Dropdown */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.play('tap');
+                    onOpenVoiceStudio();
+                    setIsActionsOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer border-t border-slate-100 dark:border-slate-800/80 mt-1 pt-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-indigo-500">🎙️</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">Voice Studio</span>
+                  </div>
+                  <div className="flex items-center gap-0.5 h-3 px-1" aria-hidden="true">
+                    <span className="w-0.5 rounded-full bg-indigo-500 wave-bar-1" />
+                    <span className="w-0.5 rounded-full bg-indigo-600 dark:bg-indigo-400 wave-bar-2" />
+                    <span className="w-0.5 rounded-full bg-indigo-500 wave-bar-3" />
+                    <span className="w-0.5 rounded-full bg-indigo-600 dark:bg-indigo-400 wave-bar-4" />
+                  </div>
+                </button>
               </div>
             </>
           )}
@@ -266,10 +291,13 @@ export const Header: React.FC<HeaderProps> = ({
         {/* PWA Install Button (Windows & Android instant install, iOS instructions) */}
         <PWAInstallButton />
 
-        {/* Theme Toggle Button */}
+        {/* Theme Toggle Button with Tactile Sound */}
         <button
           type="button"
-          onClick={onToggleTheme}
+          onClick={() => {
+            soundEngine.play('switchToggle');
+            onToggleTheme();
+          }}
           className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 shrink-0 cursor-pointer"
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
           aria-label="Toggle Dark/Light Mode"

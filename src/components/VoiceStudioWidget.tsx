@@ -11,6 +11,8 @@ import {
 } from '../lib/nativeVoiceEngine';
 
 interface VoiceStudioWidgetProps {
+  isOpen: boolean;
+  onClose: () => void;
   onSuccess: (msg: string) => void;
   onRefreshNotes?: () => void;
   onRefreshJournal?: () => void;
@@ -18,12 +20,13 @@ interface VoiceStudioWidgetProps {
 }
 
 export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
+  isOpen,
+  onClose,
   onSuccess,
   onRefreshNotes,
   onRefreshJournal,
   onRefreshTasks
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'reader' | 'matcher'>('reader');
 
 
@@ -232,30 +235,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
 
   return (
     <>
-      {/* ========================================================================= */}
-      {/* FLOATING LAUNCHER PILL (CLEAN, MINIMALIST, HIGH-AESTHETIC)               */}
-      {/* ========================================================================= */}
-      <div className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-2 select-none">
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-full shadow-lg border transition-all cursor-pointer ${
-            isSpeaking
-              ? 'bg-slate-900 text-white border-indigo-500/40 ring-4 ring-indigo-500/10'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xl'
-          }`}
-          title="Open Voice & Audio Studio"
-        >
-          <div className="relative flex items-center justify-center">
-            <Volume2 className="h-4.5 w-4.5 text-indigo-500" />
-          </div>
-          <span className="text-xs font-semibold hidden sm:inline">Voice Studio</span>
-        </button>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* ELEGANT RESPONSIVE STUDIO MODAL (MOBILE, TAB, LAPTOP & DESKTOP)          */}
-      {/* ========================================================================= */}
+      {/* Responsive Voice & Audio Studio Modal */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[92vh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col transition-all">
@@ -280,7 +260,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
 
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={onClose}
                 className="rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
                 title="Close"
               >

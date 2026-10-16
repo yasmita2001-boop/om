@@ -43,6 +43,8 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
   const reminders: any[] = fullData.reminders || [];
   const meetings: any[] = fullData.meetings || [];
   const appointments: any[] = fullData.healthAppointments || [];
+  const savingsPlans: any[] = fullData.savingsPlans || [];
+  const investments: any[] = fullData.investments || [];
 
   // Basic computed totals
   const totalTasks = tasks.length;
@@ -79,7 +81,7 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
 
   interface TimelineExportItem {
     id: string;
-    type: 'project' | 'milestone' | 'task' | 'learning';
+    type: 'project' | 'milestone' | 'task' | 'learning' | 'savings' | 'loan' | 'investment';
     typeLabel: string;
     title: string;
     dueDate?: string;
@@ -151,7 +153,62 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
       goalTitle: l.goalId ? goalsMap.get(l.goalId) : undefined,
       description: l.notes || l.note,
       ...checkDelay(l.targetDate || l.deadline, l.status, Number(l.progress) || 0)
-    }))
+    })),
+    ...savingsPlans.map(s => {
+      const prog = s.targetAmount > 0 ? Math.min(100, Math.round(((Number(s.currentAmount) || 0) / Number(s.targetAmount)) * 100)) : 0;
+      const targetDate = s.targetDate || (s.durationMonths && s.createdAt ? new Date(new Date(s.createdAt).getTime() + s.durationMonths * 30 * 86400000).toISOString().slice(0, 10) : undefined);
+      return {
+        id: s.id || '',
+        type: 'savings' as const,
+        typeLabel: 'Savings Target',
+        title: `💰 ${s.name || 'Savings Plan'}`,
+        dueDate: targetDate,
+        status: prog >= 100 ? 'Target Reached' : `${prog}% saved`,
+        progress: prog,
+        goalId: s.goalId,
+        goalTitle: s.goalId ? goalsMap.get(s.goalId) : undefined,
+        description: `Target: ₹${(Number(s.targetAmount) || 0).toLocaleString('en-IN')} · Saved: ₹${(Number(s.currentAmount) || 0).toLocaleString('en-IN')}`,
+        ...checkDelay(targetDate, prog >= 100 ? 'completed' : 'in_progress', prog)
+      };
+    }),
+    ...loans.map(l => {
+      const principal = Number(l.principal ?? l.amount) || 0;
+      const outstanding = Number(l.outstanding) || 0;
+      const paid = Number(l.paidAmount) || (principal ? Math.max(0, principal - outstanding) : 0);
+      const prog = principal > 0 ? Math.min(100, Math.round((paid / principal) * 100)) : 0;
+      const isPaid = prog >= 100;
+      return {
+        id: l.id || '',
+        type: 'loan' as const,
+        typeLabel: 'Debt Clearance',
+        title: `💳 ${l.lender || l.name || 'Loan'}`,
+        dueDate: l.targetDate || l.dueDate,
+        status: isPaid ? 'Cleared' : `${prog}% paid`,
+        progress: prog,
+        goalId: l.goalId,
+        goalTitle: l.goalId ? goalsMap.get(l.goalId) : undefined,
+        description: `Principal: ₹${principal.toLocaleString('en-IN')} · Paid: ₹${paid.toLocaleString('en-IN')} · Outstanding: ₹${outstanding.toLocaleString('en-IN')}`,
+        ...checkDelay(l.targetDate || l.dueDate, isPaid ? 'completed' : 'active', prog)
+      };
+    }),
+    ...investments.map(inv => {
+      const currentVal = Number(inv.currentValue || inv.amount) || 0;
+      const amount = Number(inv.amount) || 0;
+      const gain = currentVal - amount;
+      return {
+        id: inv.id || '',
+        type: 'investment' as const,
+        typeLabel: 'Investment Asset',
+        title: `📈 ${inv.name || 'Investment'}`,
+        dueDate: inv.targetDate || inv.maturityDate || inv.horizonDate,
+        status: gain >= 0 ? `+₹${gain.toLocaleString('en-IN')}` : `-₹${Math.abs(gain).toLocaleString('en-IN')}`,
+        progress: amount > 0 ? Math.min(100, Math.round((currentVal / amount) * 100)) : 100,
+        goalId: inv.goalId,
+        goalTitle: inv.goalId ? goalsMap.get(inv.goalId) : undefined,
+        description: `Invested: ₹${amount.toLocaleString('en-IN')} · Current Value: ₹${currentVal.toLocaleString('en-IN')}`,
+        ...checkDelay(inv.targetDate || inv.maturityDate || inv.horizonDate, 'ongoing', 100)
+      };
+    })
   ];
 
   timelineItems.sort((a, b) => {
@@ -900,6 +957,9 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
             <button type="button" class="timeline-filter-btn" onclick="filterTimeline('milestone', this)">Milestones (${milestones.length})</button>
             <button type="button" class="timeline-filter-btn" onclick="filterTimeline('task', this)">Tasks with Deadlines (${tasks.filter(t => t.dueAt || t.date || t.dueDate).length})</button>
             <button type="button" class="timeline-filter-btn" onclick="filterTimeline('learning', this)">Learning & Skills (${learningItems.length})</button>
+            <button type="button" class="timeline-filter-btn" onclick="filterTimeline('savings', this)">Savings (${savingsPlans.length})</button>
+            <button type="button" class="timeline-filter-btn" onclick="filterTimeline('loan', this)">Loans (${loans.length})</button>
+            <button type="button" class="timeline-filter-btn" onclick="filterTimeline('investment', this)">Investments (${investments.length})</button>
             ${delayedTimelineItems > 0 ? `<button type="button" class="timeline-filter-btn" style="border-color:var(--danger);color:var(--danger);" onclick="filterTimeline('delayed', this)">⚠️ Delayed Only (${delayedTimelineItems})</button>` : ''}
           </div>
 
@@ -918,7 +978,7 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
               ${timelineItems.map(item => `
                 <tr class="timeline-row" data-type="${escapeHtml(item.type)}" data-delayed="${item.isDelayed ? 'true' : 'false'}">
                   <td>
-                    <span class="badge ${item.type === 'project' ? 'badge-low' : item.type === 'milestone' ? 'badge-medium' : 'badge-success'}">
+                    <span class="badge ${item.type === 'project' ? 'badge-low' : item.type === 'milestone' ? 'badge-medium' : item.type === 'savings' ? 'badge-success' : item.type === 'loan' ? 'badge-high' : item.type === 'investment' ? 'badge-low' : 'badge-success'}">
                       ${escapeHtml(item.typeLabel)}
                     </span>
                   </td>

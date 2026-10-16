@@ -27,6 +27,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress, computeGoalAggregateBreakdown } from './lib/goalTaskSync';
+import { soundEngine } from './lib/soundEngine';
 
 // Views
 import { DashboardView } from './views/DashboardView';
@@ -43,6 +44,7 @@ const WorkView = lazyWithRetry(() => import('./views/WorkView').then(m => ({ def
 const PeopleView = lazyWithRetry(() => import('./views/PeopleView').then(m => ({ default: m.PeopleView })));
 const SpiritualView = lazyWithRetry(() => import('./views/SpiritualView').then(m => ({ default: m.SpiritualView })));
 const ThingsView = lazyWithRetry(() => import('./views/ThingsView').then(m => ({ default: m.ThingsView })));
+const RecycleBinView = lazyWithRetry(() => import('./views/RecycleBinView').then(m => ({ default: m.RecycleBinView })));
 const SettingsView = lazyWithRetry(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
 
 
@@ -70,6 +72,7 @@ export default function App() {
   const [quickCaptureType, setQuickCaptureType] = useState<string>('task');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBsModalOpen, setIsBsModalOpen] = useState(false);
+  const [isVoiceStudioOpen, setIsVoiceStudioOpen] = useState(false);
   const [activeTriggeredAlarm, setActiveTriggeredAlarm] = useState<TriggeredAlarmData | null>(null);
 
   // Entities state
@@ -461,6 +464,11 @@ export default function App() {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
     const nextDone = !t.done;
+    if (nextDone) {
+      soundEngine.play('taskComplete');
+    } else {
+      soundEngine.play('taskUncheck');
+    }
     const updated: Task = {
       ...t,
       done: nextDone,
@@ -480,8 +488,10 @@ export default function App() {
     const existing = habitLogs.find(l => l.key === key);
 
     if (existing) {
+      soundEngine.play('habitUncheck');
       await storage.delete('habitLogs', existing.id);
     } else {
+      soundEngine.play('habitComplete');
       const newLog: HabitLog = {
         id: (await import('./lib/storage')).generateUUID(),
         key,
@@ -530,6 +540,7 @@ export default function App() {
         }}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenBsModal={() => setIsBsModalOpen(true)}
+        onOpenVoiceStudio={() => setIsVoiceStudioOpen(true)}
         theme={theme}
         onToggleTheme={toggleTheme}
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
@@ -779,7 +790,16 @@ export default function App() {
               />
             )}
 
-            {((activeModule as string) === 'settings' || (activeModule as string) === 'recycle_bin') && (
+            {activeModule === 'recycle_bin' && (
+              <RecycleBinView
+                profileId={appSettings?.profileId || 'om-master-profile'}
+                onRefresh={loadAllData}
+                onSuccess={showToast}
+                onError={msg => showToast(`⚠️ ${msg}`)}
+              />
+            )}
+
+            {activeModule === 'settings' && (
               <SettingsView
                 settings={appSettings}
                 onRefresh={loadAllData}
@@ -837,6 +857,8 @@ export default function App() {
 
       {/* Global High-Accuracy Voice-to-Text & Text Reading Studio (Hindi & English) */}
       <VoiceStudioWidget
+        isOpen={isVoiceStudioOpen}
+        onClose={() => setIsVoiceStudioOpen(false)}
         onSuccess={showToast}
         onRefreshNotes={loadAllData}
         onRefreshJournal={loadAllData}

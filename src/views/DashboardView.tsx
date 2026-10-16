@@ -91,28 +91,59 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     .sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || '') || (b.createdAt || 0) - (a.createdAt || 0))
     .slice(0, 5);
 
+  const currentHour = new Date().getHours();
+  const timeGreeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
+
   return (
-    <div className="space-y-6">
-      {/* Executive Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 p-5 sm:p-6 lg:p-7 text-white shadow-md border border-indigo-800/30">
-        <div className="relative z-10 max-w-3xl">
-          <div className="flex items-center gap-2 text-indigo-300 text-[11px] font-semibold tracking-wider uppercase">
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/20 text-indigo-300 text-xs font-serif font-bold">ॐ</span>
-            <span>Om-LifeOS Command Center</span>
+    <div className="space-y-4 sm:space-y-5">
+      {/* Executive Cockpit Header (Compact, modern, zero wasted space) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white/80 p-3.5 sm:p-4 backdrop-blur-xl shadow-2xs dark:border-white/[0.08] dark:bg-[#070A12]/80">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-sm font-serif font-bold text-sm shrink-0">
+            ॐ
           </div>
-          <h1 className="mt-2.5 text-base sm:text-lg md:text-xl lg:text-2xl font-bold tracking-tight text-white leading-snug">
-            Life can change your path, but never let it change who you become
-          </h1>
-          {dailyPlanner?.target && (
-            <p className="mt-1.5 text-xs sm:text-sm text-slate-300/80 leading-relaxed">
-              {dailyPlanner.target}
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">
+                {timeGreeting}, Commander
+              </h1>
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
+                System Active
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+              {dailyPlanner?.target ? dailyPlanner.target : `${todayTasks.length} priorities scheduled for today · ${goals.length} active trajectories`}
             </p>
-          )}
+          </div>
         </div>
 
-        {/* Subtle ambient lighting */}
-        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
+        {/* Rapid Action Shortcuts */}
+        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+          <button
+            type="button"
+            onClick={() => onOpenQuickCapture('task')}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+          >
+            <span className="text-emerald-500 font-bold">✓</span>
+            <span>Task</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenQuickCapture('expense')}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+          >
+            <span className="text-emerald-500">💰</span>
+            <span>Expense</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenQuickCapture('note')}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+          >
+            <span className="text-amber-500">📝</span>
+            <span>Note</span>
+          </button>
+        </div>
       </div>
 
       {/* 4 Essential Metric Cards */}

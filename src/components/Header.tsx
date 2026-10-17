@@ -75,6 +75,11 @@ export const Header: React.FC<HeaderProps> = ({
     second: '2-digit',
     hour12: !is24Hour
   });
+  const formattedTimeCompact = currentTime.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: !is24Hour
+  });
 
   return (
     <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full items-center justify-between border-b border-slate-200/80 bg-white px-2 sm:px-3 lg:px-6 dark:border-white/[0.08] dark:bg-[#0B0F19] gap-1 sm:gap-1.5 lg:gap-2">
@@ -194,15 +199,18 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => setIs24Hour(prev => !prev)}
-          className="flex h-9 items-center gap-1.5 sm:gap-2 rounded-xl border border-slate-200/90 bg-slate-50/80 px-2 sm:px-2.5 text-left transition-all hover:border-indigo-400 hover:bg-white dark:border-slate-800 dark:bg-slate-800/80 dark:hover:border-indigo-500 dark:hover:bg-slate-800 shrink-0 cursor-pointer shadow-2xs group"
+          className="flex h-9 items-center gap-1 sm:gap-2 rounded-xl border border-slate-200/90 bg-slate-50/80 px-1.5 sm:px-2.5 text-left transition-all hover:border-indigo-400 hover:bg-white dark:border-slate-800 dark:bg-slate-800/80 dark:hover:border-indigo-500 dark:hover:bg-slate-800 shrink-0 cursor-pointer shadow-2xs group"
           title={`Live System Clock (${is24Hour ? '24h' : '12h'} - Click to toggle)`}
-          aria-label="Toggle 12/24 hour time format"
+          aria-label={`Current time ${formattedTimeFull}. Toggle 12/24 hour time format`}
         >
-          <div className="relative flex h-2 w-2 shrink-0">
+          <div className="relative hidden sm:flex h-2 w-2 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </div>
-          <Clock className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0 hidden sm:inline" />
+          <Clock className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <span className="font-mono text-[10px] sm:hidden font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
+            {formattedTimeCompact}
+          </span>
           <span className="hidden font-mono text-[11px] sm:inline sm:text-xs md:text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
             {formattedTimeFull}
           </span>

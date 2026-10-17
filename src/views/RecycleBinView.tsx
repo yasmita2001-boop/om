@@ -39,7 +39,6 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   const loadRecycleBin = async () => {
-    setLoading(true);
     try {
       const activeProf = profileId || storage.getActiveProfileId();
       const binItems = await storage.getRecycleBinItems(activeProf);

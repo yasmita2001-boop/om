@@ -983,8 +983,6 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
         }
       }
     });
-    maxYear = Math.max(maxYear, 2041);
-
     if (timelineGranularity === 'single_day') {
       const targetDate = new Date(now);
       targetDate.setDate(now.getDate() + timelineOffset);

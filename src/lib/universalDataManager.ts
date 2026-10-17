@@ -18,6 +18,7 @@ import { isRecordActive, filterActiveRecords } from './recycleBin';
 import { generateCompleteStandaloneHtml } from './exportHtml';
 import { createLightweightEntities } from './thumbnailService';
 import { storage } from './storage';
+import { getLocalDateString, getLocalMonthString } from './dateUtils';
 import {
   ManualUpdateBundle,
   BundleDiffInspection,
@@ -485,11 +486,11 @@ export function isDateInFilterRange(
   if (!dateStr) return true;
   const itemDate = dateStr.slice(0, 10);
   if (filter.mode === 'this_month') {
-    const currentYearMonth = new Date().toISOString().slice(0, 7);
+    const currentYearMonth = getLocalMonthString();
     return itemDate.startsWith(currentYearMonth);
   }
   if (filter.mode === 'last_30_days') {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const thirtyDaysAgo = getLocalDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
     return itemDate >= thirtyDaysAgo;
   }
   if (filter.mode === 'custom') {
@@ -786,7 +787,7 @@ export class UniversalDataManager {
     let blob: Blob;
     let filename: string;
     let recordCount = 0;
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = getLocalDateString();
     const safeTitle = customTitle.toLowerCase().replace(/[^a-z0-9]/g, '-');
     const suffix = formatScopeSuffix(dateRangeFilter);
 

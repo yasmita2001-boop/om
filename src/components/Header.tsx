@@ -203,7 +203,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </div>
           <Clock className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0 hidden sm:inline" />
-          <span className="font-mono text-[11px] sm:text-xs md:text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
+          <span className="hidden font-mono text-[11px] sm:inline sm:text-xs md:text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
             {formattedTimeFull}
           </span>
         </button>

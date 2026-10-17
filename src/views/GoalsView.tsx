@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import {
   Target, Plus, TrendingUp, ShieldCheck, Flame, Trash2,
   Zap, Check, GitBranch, Layers, ChevronRight, ChevronDown,
@@ -20,6 +20,7 @@ import { storage, generateUUID } from '../lib/storage';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ProjectTimelinePlan, computeItemDelay } from '../components/ProjectTimelinePlan';
 import { SlideTabs } from '../components/SlideTabs';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 import {
   computeGoalAggregateBreakdown,
   GoalProgressBreakdown,
@@ -88,7 +89,7 @@ function GoalLinkedBreakdownWidget({
         </div>
 
         {/* Right: Actions (Manual Stepper or Breakdown Toggle) */}
-        <div className="flex items-center gap-1 shrink-0 ml-auto">
+        <div className="flex flex-wrap items-center gap-1 shrink-0 ml-auto">
           {!hasItems && onAdjustManualProgress && (
             <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
               <button
@@ -159,7 +160,7 @@ function GoalLinkedBreakdownWidget({
           </div>
 
           {/* Category Summary Badges */}
-          <div className="flex flex-wrap gap-1.5 text-[11px]">
+          <div className="goal-category-badges flex flex-wrap gap-1.5 text-[11px]">
             {breakdown.categories.tasks?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Tasks: {breakdown.categories.tasks.completedCount}/{breakdown.categories.tasks.count}
@@ -212,102 +213,102 @@ function GoalLinkedBreakdownWidget({
             )}
             {breakdown.categories.savingsPlans?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-emerald-700 shadow-2xs border border-emerald-200/70 dark:bg-slate-800 dark:text-emerald-400 dark:border-emerald-800/60">
-                💰 Savings: {breakdown.categories.savingsPlans.completedCount}/{breakdown.categories.savingsPlans.count}
+                Savings: {breakdown.categories.savingsPlans.completedCount}/{breakdown.categories.savingsPlans.count}
               </span>
             )}
             {breakdown.categories.loans?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-700 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
-                💳 Loans: {breakdown.categories.loans.completedCount}/{breakdown.categories.loans.count}
+                Loans: {breakdown.categories.loans.completedCount}/{breakdown.categories.loans.count}
               </span>
             )}
             {breakdown.categories.investments?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-blue-700 shadow-2xs border border-blue-200/70 dark:bg-slate-800 dark:text-blue-400 dark:border-blue-800/60">
-                📈 Investments: {breakdown.categories.investments.completedCount}/{breakdown.categories.investments.count}
+                Investments: {breakdown.categories.investments.completedCount}/{breakdown.categories.investments.count}
               </span>
             )}
             {breakdown.categories.assets?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-700 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
-                🏛️ Assets: {breakdown.categories.assets.completedCount}/{breakdown.categories.assets.count}
+                Assets: {breakdown.categories.assets.completedCount}/{breakdown.categories.assets.count}
               </span>
             )}
             {breakdown.categories.liabilities?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-orange-700 shadow-2xs border border-orange-200/70 dark:bg-slate-800 dark:text-orange-400 dark:border-orange-800/60">
-                ⚖️ Liabilities: {breakdown.categories.liabilities.completedCount}/{breakdown.categories.liabilities.count}
+                Liabilities: {breakdown.categories.liabilities.completedCount}/{breakdown.categories.liabilities.count}
               </span>
             )}
             {breakdown.categories.transactions?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-teal-700 shadow-2xs border border-teal-200/70 dark:bg-slate-800 dark:text-teal-400 dark:border-teal-800/60">
-                💵 Ledger: {breakdown.categories.transactions.completedCount}/{breakdown.categories.transactions.count}
+                Ledger: {breakdown.categories.transactions.completedCount}/{breakdown.categories.transactions.count}
               </span>
             )}
             {breakdown.categories.healthMeasurements?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-600 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
-                🏃 Vitals/Movement: {breakdown.categories.healthMeasurements.completedCount}/{breakdown.categories.healthMeasurements.count}
+                Vitals/Movement: {breakdown.categories.healthMeasurements.completedCount}/{breakdown.categories.healthMeasurements.count}
               </span>
             )}
             {breakdown.categories.sleepRecords?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-indigo-700 shadow-2xs border border-indigo-200/70 dark:bg-slate-800 dark:text-indigo-400 dark:border-indigo-800/60">
-                💤 Sleep: {breakdown.categories.sleepRecords.completedCount}/{breakdown.categories.sleepRecords.count}
+                Sleep: {breakdown.categories.sleepRecords.completedCount}/{breakdown.categories.sleepRecords.count}
               </span>
             )}
             {breakdown.categories.waterRecords?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-cyan-700 shadow-2xs border border-cyan-200/70 dark:bg-slate-800 dark:text-cyan-400 dark:border-cyan-800/60">
-                💧 Hydration: {breakdown.categories.waterRecords.completedCount}/{breakdown.categories.waterRecords.count}
+                Hydration: {breakdown.categories.waterRecords.completedCount}/{breakdown.categories.waterRecords.count}
               </span>
             )}
             {breakdown.categories.nutritionRecords?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-green-700 shadow-2xs border border-green-200/70 dark:bg-slate-800 dark:text-green-400 dark:border-green-800/60">
-                🥗 Nutrition: {breakdown.categories.nutritionRecords.completedCount}/{breakdown.categories.nutritionRecords.count}
+                Nutrition: {breakdown.categories.nutritionRecords.completedCount}/{breakdown.categories.nutritionRecords.count}
               </span>
             )}
             {breakdown.categories.appointments?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-pink-700 shadow-2xs border border-pink-200/70 dark:bg-slate-800 dark:text-pink-400 dark:border-pink-800/60">
-                🩺 Appointments: {breakdown.categories.appointments.completedCount}/{breakdown.categories.appointments.count}
+                Appointments: {breakdown.categories.appointments.completedCount}/{breakdown.categories.appointments.count}
               </span>
             )}
             {breakdown.categories.healthNotes?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-700 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                📋 Health Notes: {breakdown.categories.healthNotes.completedCount}/{breakdown.categories.healthNotes.count}
+                Health Notes: {breakdown.categories.healthNotes.completedCount}/{breakdown.categories.healthNotes.count}
               </span>
             )}
             {breakdown.categories.meetings?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-violet-700 shadow-2xs border border-violet-200/70 dark:bg-slate-800 dark:text-violet-400 dark:border-violet-800/60">
-                🤝 Meetings: {breakdown.categories.meetings.completedCount}/{breakdown.categories.meetings.count}
+                Meetings: {breakdown.categories.meetings.completedCount}/{breakdown.categories.meetings.count}
               </span>
             )}
             {breakdown.categories.people?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-sky-700 shadow-2xs border border-sky-200/70 dark:bg-slate-800 dark:text-sky-400 dark:border-sky-800/60">
-                👤 Network: {breakdown.categories.people.completedCount}/{breakdown.categories.people.count}
+                Network: {breakdown.categories.people.completedCount}/{breakdown.categories.people.count}
               </span>
             )}
             {breakdown.categories.interactions?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-purple-700 shadow-2xs border border-purple-200/70 dark:bg-slate-800 dark:text-purple-400 dark:border-purple-800/60">
-                💬 Interactions: {breakdown.categories.interactions.completedCount}/{breakdown.categories.interactions.count}
+                Interactions: {breakdown.categories.interactions.completedCount}/{breakdown.categories.interactions.count}
               </span>
             )}
             {breakdown.categories.values?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-600 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
-                💎 Values: {breakdown.categories.values.completedCount}/{breakdown.categories.values.count}
+                Values: {breakdown.categories.values.completedCount}/{breakdown.categories.values.count}
               </span>
             )}
             {breakdown.categories.practices?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-emerald-600 shadow-2xs border border-emerald-200/70 dark:bg-slate-800 dark:text-emerald-400 dark:border-emerald-800/60">
-                🧘 Practices: {breakdown.categories.practices.completedCount}/{breakdown.categories.practices.count}
+                Practices: {breakdown.categories.practices.completedCount}/{breakdown.categories.practices.count}
               </span>
             )}
             {breakdown.categories.commitments?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-indigo-600 shadow-2xs border border-indigo-200/70 dark:bg-slate-800 dark:text-indigo-400 dark:border-indigo-800/60">
-                📜 Commitments: {breakdown.categories.commitments.completedCount}/{breakdown.categories.commitments.count}
+                Commitments: {breakdown.categories.commitments.completedCount}/{breakdown.categories.commitments.count}
               </span>
             )}
             {breakdown.categories.focusSessions?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-500 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
-                ⚡ Focus: {breakdown.categories.focusSessions.completedCount}/{breakdown.categories.focusSessions.count}
+                Focus: {breakdown.categories.focusSessions.completedCount}/{breakdown.categories.focusSessions.count}
               </span>
             )}
             {breakdown.categories.reminders?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-500 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
-                ⏰ Reminders: {breakdown.categories.reminders.completedCount}/{breakdown.categories.reminders.count}
+                Reminders: {breakdown.categories.reminders.completedCount}/{breakdown.categories.reminders.count}
               </span>
             )}
           </div>
@@ -1246,13 +1247,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     const g = goals.find(goal => goal.id === id);
     if (!g) return 'Strategic Objective';
     const lvl = getGoalLevel(g);
-    const prefix =
-      lvl === 1 ? '🎯 ' :
-      lvl === 2 ? '  ↳ 🔹 ' :
-      lvl === 3 ? '    ↳ ▫️ ' :
-      lvl === 4 ? '      ↳ 🔸 ' :
-      '        ↳ ⚡ ';
-    return `${prefix}${g.title}`;
+    const levelLabel = ['Main', 'Sub', 'Micro', 'Nano', 'Atomic'][lvl - 1] || 'Goal';
+    return `Level ${lvl} ${levelLabel}: ${g.title}`;
   };
 
   return (
@@ -1269,7 +1265,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Liquid Capital</span>
-            <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
+            <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             ₹{liquidCash.toLocaleString('en-IN')}
@@ -1283,9 +1279,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Survival Runway</span>
-            <Flame className="h-4 w-4 text-amber-500 shrink-0" />
+            <Flame className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-amber-600 dark:text-amber-400 tabular-nums truncate">
+          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             {runwayDays} Days
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
@@ -1297,7 +1293,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Reserves Goal</span>
-            <Target className="h-4 w-4 text-indigo-500 shrink-0" />
+            <Target className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             ₹{totalReserves.toLocaleString('en-IN')}
@@ -1311,9 +1307,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Daily Burn Rate</span>
-            <TrendingUp className="h-4 w-4 text-rose-500 shrink-0" />
+            <TrendingUp className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-rose-600 dark:text-rose-400 tabular-nums truncate">
+          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             ₹{Number(dailyBurn).toLocaleString('en-IN')}/d
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
@@ -1379,14 +1375,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             return [
               {
                 id: 'timeline',
-                label: totalDelays > 0 ? `📅 Timeline (⚠️ ${totalDelays})` : '📅 Timeline & Plan',
-                shortLabel: '📅 Timeline'
+                label: 'Timeline & Plan',
+                shortLabel: 'Timeline',
+                delayed: totalDelays
               },
-              { id: 'goals', label: `Strategic Goals (${goals.length})`, shortLabel: `Goals (${goals.length})` },
-              { id: 'strategies', label: `Strategies (${strategies.length})`, shortLabel: `Strategies (${strategies.length})` },
-              { id: 'milestones', label: `Milestones (${milestones.length})`, shortLabel: `Milestones (${milestones.length})` },
-              { id: 'kpis', label: `KPIs (${kpis.length})`, shortLabel: `KPIs (${kpis.length})` },
-              { id: 'missions', label: `Missions (${missions.length})`, shortLabel: `Missions (${missions.length})` },
+              { id: 'goals', label: 'Strategic Goals', shortLabel: 'Goals', badge: goals.length },
+              { id: 'strategies', label: 'Strategies', badge: strategies.length },
+              { id: 'milestones', label: 'Milestones', badge: milestones.length },
+              { id: 'kpis', label: 'KPIs', badge: kpis.length },
+              { id: 'missions', label: 'Missions', badge: missions.length },
               { id: 'mentor', label: 'Mentor & Reserves', shortLabel: 'Mentor' }
             ];
           })()}
@@ -1473,7 +1470,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         }`}
                         title="Main Goal (Level 1)"
                       >
-                        🎯 Main
+                        Main
                       </button>
 
                       <button
@@ -1486,12 +1483,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         }}
                         className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           goalLevel === 2
-                            ? 'bg-emerald-600 text-white shadow-xs'
+                            ? 'bg-indigo-600 text-white shadow-xs'
                             : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                         }`}
                         title="Sub Goal (Level 2)"
                       >
-                        🔹 Sub
+                        Sub
                       </button>
 
                       <button
@@ -1506,12 +1503,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         }}
                         className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           goalLevel === 3
-                            ? 'bg-amber-600 text-white shadow-xs'
+                            ? 'bg-indigo-600 text-white shadow-xs'
                             : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                         }`}
                         title="Micro Goal (Level 3)"
                       >
-                        ▫️ Micro
+                        Micro
                       </button>
 
                       <button
@@ -1526,12 +1523,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         }}
                         className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           goalLevel === 4
-                            ? 'bg-sky-600 text-white shadow-xs'
+                            ? 'bg-indigo-600 text-white shadow-xs'
                             : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                         }`}
                         title="Nano Goal (Level 4)"
                       >
-                        🔸 Nano
+                        Nano
                       </button>
 
                       <button
@@ -1546,12 +1543,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         }}
                         className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           goalLevel === 5
-                            ? 'bg-purple-600 text-white shadow-xs'
+                            ? 'bg-indigo-600 text-white shadow-xs'
                             : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                         }`}
                         title="Atomic Goal (Level 5)"
                       >
-                        ⚡ Atomic
+                        Atomic
                       </button>
                     </div>
                   </div>
@@ -1567,36 +1564,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         ? [...microGoals, ...subGoals, ...mainGoals]
                         : [...nanoGoals, ...microGoals, ...subGoals, ...mainGoals];
 
-                    const themeConfig = ({
-                      2: {
-                        border: 'border-emerald-200/80 dark:border-emerald-900/60',
-                        bg: 'bg-emerald-50/50 dark:bg-emerald-950/20',
-                        text: 'text-emerald-800 dark:text-emerald-300',
-                        input: 'border-emerald-300 dark:border-emerald-700'
-                      },
-                      3: {
-                        border: 'border-amber-200/80 dark:border-amber-900/60',
-                        bg: 'bg-amber-50/50 dark:bg-amber-950/20',
-                        text: 'text-amber-800 dark:text-amber-300',
-                        input: 'border-amber-300 dark:border-amber-700'
-                      },
-                      4: {
-                        border: 'border-sky-200/80 dark:border-sky-900/60',
-                        bg: 'bg-sky-50/50 dark:bg-sky-950/20',
-                        text: 'text-sky-800 dark:text-sky-300',
-                        input: 'border-sky-300 dark:border-sky-700'
-                      },
-                      5: {
-                        border: 'border-purple-200/80 dark:border-purple-900/60',
-                        bg: 'bg-purple-50/50 dark:bg-purple-950/20',
-                        text: 'text-purple-800 dark:text-purple-300',
-                        input: 'border-purple-300 dark:border-purple-700'
-                      }
-                    } as Record<number, { border: string; bg: string; text: string; input: string }>)[goalLevel] || {
-                      border: 'border-slate-200/80 dark:border-slate-800',
-                      bg: 'bg-slate-50/50 dark:bg-slate-900/20',
-                      text: 'text-slate-800 dark:text-slate-300',
-                      input: 'border-slate-300 dark:border-slate-700'
+                    const themeConfig = {
+                      border: 'border-indigo-200/80 dark:border-indigo-900/60',
+                      bg: 'bg-indigo-50/50 dark:bg-indigo-950/20',
+                      text: 'text-indigo-800 dark:text-indigo-300',
+                      input: 'border-indigo-300 dark:border-indigo-700'
                     };
 
                     return (
@@ -1619,11 +1591,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                           ) : (
                             parentChoices.map(p => {
                               const lvl = getGoalLevel(p);
-                              const prefix =
-                                lvl === 1 ? '🎯 L1 Main: ' :
-                                lvl === 2 ? '  ↳ 🔹 L2 Sub: ' :
-                                lvl === 3 ? '    ↳ ▫️ L3 Micro: ' :
-                                '      ↳ 🔸 L4 Nano: ';
+                              const prefix = `L${lvl} ${['Main', 'Sub', 'Micro', 'Nano', 'Atomic'][lvl - 1] || 'Goal'}: `;
                               return (
                                 <option key={p.id} value={p.id}>
                                   {prefix}{p.title} ({p.progress}%)
@@ -1740,30 +1708,14 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         step="5"
                         value={goalProgress}
                         onChange={e => setGoalProgress(Number(e.target.value))}
-                        className={`mt-1.5 h-2 w-full cursor-pointer ${
-                          goalLevel === 3
-                            ? 'accent-amber-600'
-                            : goalLevel === 4
-                            ? 'accent-sky-600'
-                            : 'accent-purple-600'
-                        }`}
+                        className="mt-1.5 h-2 w-full cursor-pointer accent-indigo-600"
                       />
                     </div>
                   )}
 
                   <button
                     type="submit"
-                    className={`w-full rounded-xl py-2.5 text-xs font-semibold text-white shadow-sm transition-all cursor-pointer ${
-                      goalLevel === 1
-                        ? 'bg-indigo-600 hover:bg-indigo-500'
-                        : goalLevel === 2
-                        ? 'bg-emerald-600 hover:bg-emerald-500'
-                        : goalLevel === 3
-                        ? 'bg-amber-600 hover:bg-amber-500'
-                        : goalLevel === 4
-                        ? 'bg-sky-600 hover:bg-sky-500'
-                        : 'bg-purple-600 hover:bg-purple-500'
-                    }`}
+                    className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-indigo-500 cursor-pointer"
                   >
                     {goalLevel === 1
                       ? 'Save Main Goal (Level 1)'
@@ -1793,15 +1745,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 rounded-xl bg-slate-50 px-2.5 sm:px-3 py-1 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 text-[11px] sm:text-xs">
-                      <span className="font-semibold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{mainGoals.length} Main</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{mainGoals.length} Main</span>
                       <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{subGoals.length} Sub</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{subGoals.length} Sub</span>
                       <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <span className="font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap">{microGoals.length} Micro</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{microGoals.length} Micro</span>
                       <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <span className="font-semibold text-sky-600 dark:text-sky-400 whitespace-nowrap">{nanoGoals.length} Nano</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{nanoGoals.length} Nano</span>
                       <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <span className="font-semibold text-purple-600 dark:text-purple-400 whitespace-nowrap">{atomicGoals.length} Atomic</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{atomicGoals.length} Atomic</span>
                     </div>
                   </div>
 
@@ -1930,6 +1882,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                     <Plus className="h-3 w-3 shrink-0" />
                                     <span>Sub Goal</span>
                                   </button>
+                                  <ProgressiveActions label={`More actions for ${mainGoal.title}`}>
                                   <button
                                     type="button"
                                     onClick={() => handleMoveGoalOrder(mainGoal, 'up')}
@@ -1962,7 +1915,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   >
                                     <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                   </button>
-                                </div>
+                                  </ProgressiveActions>
                               </div>
 
                               <h3 className="w-full text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug break-words">
@@ -2011,7 +1964,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                             {/* LEVEL 2: SUB GOALS CONTAINER */}
                             {!isMainCollapsed && childSubGoals.length > 0 && (
-                              <div className="ml-0.5 sm:ml-3 pl-1 sm:pl-3.5 border-l sm:border-l-2 border-indigo-200 dark:border-indigo-900/50 space-y-2 pt-1 min-w-0">
+                              <div className="ml-0.5 sm:ml-3 pl-1 sm:pl-3.5 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-2 pt-1 min-w-0">
                                 {childSubGoals.map((subGoal, subIndex) => {
                                   const childMicroGoals = getMicroGoalsOf(subGoal.id);
                                   const isSubCollapsed = Boolean(collapsedGoalIds[subGoal.id]);
@@ -2021,16 +1974,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   return (
                                     <div
                                       key={subGoal.id}
-                                      className="rounded-xl border border-emerald-200/70 bg-emerald-50/20 p-2 sm:p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/15 space-y-2 sm:space-y-2.5 transition-all min-w-0 shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-800"
+                                      className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-2 sm:p-3.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-2 sm:space-y-2.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                     >
                                       {/* Sub Goal Header */}
                                       <div className="space-y-1 min-w-0">
                                         <div className="flex flex-wrap items-center justify-between gap-y-1.5 gap-x-2 min-w-0">
                                           <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">
-                                            <span className="inline-flex items-center rounded-md bg-emerald-100/90 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/60 shrink-0 whitespace-nowrap">
+                                            <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
                                               {subSeqBadge}
                                             </span>
-                                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50 shrink-0 whitespace-nowrap">
+                                            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
                                               Sub Goal
                                             </span>
                                             {subGoal.targetDate && (
@@ -2041,16 +1994,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                             )}
                                           </div>
 
-                                          <div className="flex items-center gap-1 shrink-0 ml-auto">
+                                          <div className="flex flex-wrap items-center justify-end gap-1 min-w-0 ml-auto">
                                             <button
                                               type="button"
                                               onClick={() => startAddNestedGoal(subGoal)}
-                                              className="inline-flex items-center gap-1 rounded-md border border-emerald-200/80 bg-emerald-50/70 px-2 py-0.5 text-[11px] sm:text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800/80 dark:bg-emerald-950/50 dark:text-emerald-300 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
+                                              className="inline-flex items-center gap-1 rounded-md border border-indigo-200/80 bg-indigo-50/70 px-2 py-0.5 text-[11px] sm:text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800/80 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
                                               title="Add Level 3 Micro Goal"
                                             >
                                               <Plus className="h-3 w-3 shrink-0" />
                                               <span>Micro Goal</span>
                                             </button>
+                                            <ProgressiveActions label={`More actions for ${subGoal.title}`}>
                                             <button
                                               type="button"
                                               onClick={() => handleMoveGoalOrder(subGoal, 'up')}
@@ -2091,6 +2045,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                             >
                                               <Trash2 className="h-3 w-3 shrink-0" />
                                             </button>
+                                            </ProgressiveActions>
                                           </div>
                                         </div>
 
@@ -2114,7 +2069,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                                       {/* LEVEL 3: MICRO GOALS ACCORDION TRIGGER */}
                                       {childMicroGoals.length > 0 && (
-                                        <div className="flex flex-wrap items-center justify-between gap-1 pt-2 pb-0.5 border-t border-emerald-200/50 dark:border-emerald-900/30 min-w-0">
+                                        <div className="flex flex-wrap items-center justify-between gap-1 pt-2 pb-0.5 border-t border-slate-200 dark:border-slate-800 min-w-0">
                                           <button
                                             type="button"
                                             onClick={() => toggleCollapse(subGoal.id)}
@@ -2131,7 +2086,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                                       {/* LEVEL 3: MICRO GOALS CONTAINER */}
                                       {!isSubCollapsed && childMicroGoals.length > 0 && (
-                                        <div className="ml-0.5 sm:ml-2.5 pl-1 sm:pl-3 border-l sm:border-l-2 border-emerald-200 dark:border-emerald-900/50 space-y-1.5 sm:space-y-2 pt-1 min-w-0">
+                                        <div className="ml-0.5 sm:ml-2.5 pl-1 sm:pl-3 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1.5 sm:space-y-2 pt-1 min-w-0">
 
                                           {childMicroGoals.map((microGoal, microIndex) => {
                                             const microSeqNum = extractGoalSequenceNumber(microGoal.title) ?? (microGoal.order !== undefined && microGoal.order !== null ? microGoal.order : microIndex + 1);
@@ -2143,16 +2098,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                             return (
                                               <div
                                                 key={microGoal.id}
-                                                className="rounded-lg border border-amber-200/70 bg-amber-50/20 p-2 sm:p-3 dark:border-amber-900/40 dark:bg-amber-950/15 space-y-1.5 sm:space-y-2 transition-all min-w-0 shadow-2xs hover:border-amber-300 dark:hover:border-amber-800"
+                                                className="rounded-lg border border-slate-200/80 bg-slate-50/50 p-2 sm:p-3 dark:border-slate-800 dark:bg-slate-800/30 space-y-1.5 sm:space-y-2 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                               >
                                                 {/* Micro Goal Header */}
                                                 <div className="space-y-1 min-w-0">
                                                   <div className="flex flex-wrap items-center justify-between gap-y-1.5 gap-x-2 min-w-0">
                                                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">
-                                                      <span className="inline-flex items-center rounded-md bg-amber-100/90 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-amber-800 dark:bg-amber-950/80 dark:text-amber-200 border border-amber-200 dark:border-amber-800/60 shrink-0 whitespace-nowrap">
+                                                      <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
                                                         {microSeqBadge}
                                                       </span>
-                                                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/50 shrink-0 whitespace-nowrap">
+                                                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
                                                         Micro Goal
                                                       </span>
                                                       {microGoal.targetDate && (
@@ -2163,16 +2118,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                       )}
                                                     </div>
 
-                                                    <div className="flex items-center gap-1 shrink-0 ml-auto">
+                                                    <div className="flex flex-wrap items-center justify-end gap-1 min-w-0 ml-auto">
                                                       <button
                                                         type="button"
                                                         onClick={() => startAddChildGoal(microGoal, 4)}
-                                                        className="inline-flex items-center gap-1 rounded-md border border-sky-200/80 bg-sky-50/70 px-2 py-0.5 text-[11px] sm:text-xs font-semibold text-sky-700 hover:bg-sky-100 dark:border-sky-800/80 dark:bg-sky-950/50 dark:text-sky-300 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
+                                                        className="inline-flex items-center gap-1 rounded-md border border-indigo-200/80 bg-indigo-50/70 px-2 py-0.5 text-[11px] sm:text-xs font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800/80 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
                                                         title="Add Level 4 Nano Goal"
                                                       >
                                                         <Plus className="h-3 w-3 shrink-0" />
                                                         <span>Nano Goal</span>
                                                       </button>
+                                                      <ProgressiveActions label={`More actions for ${microGoal.title}`}>
                                                       <button
                                                         type="button"
                                                         onClick={() => handleMoveGoalOrder(microGoal, 'up')}
@@ -2213,6 +2169,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                       >
                                                         <Trash2 className="h-3 w-3 shrink-0" />
                                                       </button>
+                                                      </ProgressiveActions>
                                                     </div>
                                                   </div>
 
@@ -2236,7 +2193,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                                                 {/* LEVEL 4: NANO GOALS ACCORDION */}
                                                 {childNanoGoals.length > 0 && (
-                                                  <div className="pt-1 border-t border-amber-200/50 dark:border-amber-900/30">
+                                                  <div className="pt-1 border-t border-slate-200 dark:border-slate-800">
                                                     <button
                                                       type="button"
                                                       onClick={() => toggleCollapse(microGoal.id)}
@@ -2247,7 +2204,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                     </button>
 
                                                     {!isMicroCollapsed && (
-                                                      <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2.5 border-l sm:border-l-2 border-amber-200 dark:border-amber-900/50 space-y-1 sm:space-y-1.5 pt-1 min-w-0">
+                                                      <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2.5 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 sm:space-y-1.5 pt-1 min-w-0">
                                                         {childNanoGoals.map((nanoGoal, nanoIndex) => {
                                                           const nanoSeqNum = extractGoalSequenceNumber(nanoGoal.title) ?? (nanoGoal.order !== undefined && nanoGoal.order !== null ? nanoGoal.order : nanoIndex + 1);
                                                           const nanoSeqBadge = formatOrdinalBadge(nanoSeqNum);
@@ -2258,16 +2215,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                           return (
                                                             <div
                                                               key={nanoGoal.id}
-                                                              className="rounded-lg border border-sky-200/70 bg-sky-50/20 p-1.5 sm:p-2.5 dark:border-sky-900/40 dark:bg-sky-950/15 space-y-1 sm:space-y-1.5 transition-all min-w-0 shadow-2xs hover:border-sky-300 dark:hover:border-sky-800"
+                                                              className="rounded-lg border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-1 sm:space-y-1.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                                             >
                                                               {/* Nano Goal Header */}
                                                               <div className="space-y-1 min-w-0">
                                                                 <div className="flex flex-wrap items-center justify-between gap-y-1.5 gap-x-2 min-w-0">
                                                                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">
-                                                                    <span className="inline-flex items-center rounded-md bg-sky-100/90 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-sky-800 dark:bg-sky-950/80 dark:text-sky-200 border border-sky-200 dark:border-sky-800/60 shrink-0 whitespace-nowrap">
+                                                                    <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
                                                                       {nanoSeqBadge}
                                                                     </span>
-                                                                    <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-sky-700 dark:bg-sky-950/50 dark:text-sky-300 border border-sky-200/60 dark:border-sky-800/50 shrink-0 whitespace-nowrap">
+                                                                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
                                                                       Nano Goal
                                                                     </span>
                                                                     {nanoGoal.targetDate && (
@@ -2278,16 +2235,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                     )}
                                                                   </div>
 
-                                                                  <div className="flex items-center gap-1 shrink-0 ml-auto">
+                                                                  <div className="flex flex-wrap items-center justify-end gap-1 min-w-0 ml-auto">
                                                                     <button
                                                                       type="button"
                                                                       onClick={() => startAddChildGoal(nanoGoal, 5)}
-                                                                      className="inline-flex items-center gap-1 rounded-md border border-purple-200/80 bg-purple-50/70 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold text-purple-700 hover:bg-purple-100 dark:border-purple-800/80 dark:bg-purple-950/50 dark:text-purple-300 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
+                                                                      className="inline-flex items-center gap-1 rounded-md border border-indigo-200/80 bg-indigo-50/70 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800/80 dark:bg-indigo-950/50 dark:text-indigo-300 cursor-pointer transition-colors shrink-0 whitespace-nowrap"
                                                                       title="Add Level 5 Atomic Goal"
                                                                     >
                                                                       <Plus className="h-3 w-3 shrink-0" />
                                                                       <span>Atomic Goal</span>
                                                                     </button>
+                                                                    <ProgressiveActions label={`More actions for ${nanoGoal.title}`}>
                                                                     <button
                                                                       type="button"
                                                                       onClick={() => handleMoveGoalOrder(nanoGoal, 'up')}
@@ -2328,6 +2286,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                     >
                                                                       <Trash2 className="h-3 w-3 shrink-0" />
                                                                     </button>
+                                                                    </ProgressiveActions>
                                                                   </div>
                                                                 </div>
 
@@ -2351,7 +2310,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                                                               {/* LEVEL 5: ATOMIC GOALS CONTAINER */}
                                                               {childAtomicGoals.length > 0 && (
-                                                                <div className="pt-1 border-t border-sky-200/50 dark:border-sky-900/30">
+                                                                <div className="pt-1 border-t border-slate-200 dark:border-slate-800">
                                                                   <button
                                                                     type="button"
                                                                     onClick={() => toggleCollapse(nanoGoal.id)}
@@ -2362,7 +2321,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                   </button>
 
                                                                   {!isNanoCollapsed && (
-                                                                    <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2 border-l sm:border-l-2 border-sky-200 dark:border-sky-900/50 space-y-1 pt-1 min-w-0">
+                                                                    <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 pt-1 min-w-0">
                                                                       {childAtomicGoals.map((atomicGoal, atomicIndex) => {
                                                                         const atomicSeqNum = extractGoalSequenceNumber(atomicGoal.title) ?? (atomicGoal.order !== undefined && atomicGoal.order !== null ? atomicGoal.order : atomicIndex + 1);
                                                                         const atomicSeqBadge = formatOrdinalBadge(atomicSeqNum);
@@ -2371,7 +2330,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                         return (
                                                                           <div
                                                                             key={atomicGoal.id}
-                                                                            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 rounded-md border border-purple-200/70 bg-purple-50/20 p-1.5 sm:p-2.5 text-xs dark:border-purple-900/40 dark:bg-purple-950/15 shadow-2xs hover:border-purple-300 dark:hover:border-purple-700 transition-all min-w-0"
+                                                                            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 rounded-md border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/30 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all min-w-0"
                                                                           >
                                                                             <div className="flex items-start sm:items-center gap-2 min-w-0 w-full sm:flex-1">
                                                                               <button
@@ -2385,8 +2344,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                                 }
                                                                                 className={`mt-0.5 sm:mt-0 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
                                                                                   atomicGoal.progress >= 100
-                                                                                    ? 'border-purple-600 bg-purple-600 text-white'
-                                                                                    : 'border-slate-300 bg-white text-transparent hover:border-purple-500 dark:border-slate-600 dark:bg-slate-800'
+                                                                                    ? 'border-indigo-600 bg-indigo-600 text-white'
+                                                                                    : 'border-slate-300 bg-white text-transparent hover:border-indigo-500 dark:border-slate-600 dark:bg-slate-800'
                                                                                 }`}
                                                                                 title={atomicGoal.progress >= 100 ? 'Mark Incomplete' : 'Mark Complete (100%)'}
                                                                               >
@@ -2400,10 +2359,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                                       : 'text-slate-900 dark:text-slate-100'
                                                                                   }`}
                                                                                 >
-                                                                                  <span className="inline-flex items-center rounded bg-purple-100/80 px-1 py-0.5 text-[9px] font-bold text-purple-700 dark:bg-purple-950/70 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 mr-1 shrink-0">
+                                                                                  <span className="inline-flex items-center rounded bg-slate-100 px-1 py-0.5 text-[9px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 mr-1 shrink-0">
                                                                                     {atomicSeqBadge}
                                                                                   </span>
-                                                                                  <span className="text-purple-600 dark:text-purple-400 font-bold mr-1 shrink-0">⚡</span>
                                                                                   {atomicGoal.title}
                                                                                 </div>
                                                                                 {atomicGoal.targetDate && (
@@ -2414,9 +2372,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                               </div>
                                                                             </div>
 
-                                                                            <div className="flex items-center justify-between sm:justify-end gap-1.5 shrink-0 w-full sm:w-auto pt-1.5 sm:pt-0 border-t border-purple-200/50 sm:border-t-0 dark:border-purple-900/40">
+                                                                            <div className="flex items-center justify-between sm:justify-end gap-1.5 shrink-0 w-full sm:w-auto pt-1.5 sm:pt-0 border-t border-slate-200 sm:border-t-0 dark:border-slate-800">
                                                                               {atomicBreakdown.hasLinkedItems ? (
-                                                                                <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-purple-600 dark:text-purple-400 shrink-0 whitespace-nowrap">
+                                                                                <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-slate-600 dark:text-slate-400 shrink-0 whitespace-nowrap">
                                                                                   <span>{atomicGoal.progress}%</span>
                                                                                 </span>
                                                                               ) : (
@@ -2442,11 +2400,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                                   </button>
                                                                                 </div>
                                                                               )}
-                                                                              <div className="flex items-center gap-1 shrink-0 ml-auto sm:ml-0">
+                                                                              <ProgressiveActions label={`More actions for ${atomicGoal.title}`} className="shrink-0 ml-auto sm:ml-0">
                                                                                 <button
                                                                                   type="button"
                                                                                   onClick={() => setEditingGoal(atomicGoal)}
-                                                                                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md cursor-pointer shrink-0 hover:bg-purple-100/60 dark:hover:bg-purple-900/40"
+                                                                                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md cursor-pointer shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800"
                                                                                   title="Edit Atomic Goal"
                                                                                 >
                                                                                   <Edit2 className="h-3 w-3 shrink-0" />
@@ -2461,7 +2419,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                                 >
                                                                                   <Trash2 className="h-3 w-3 shrink-0" />
                                                                                 </button>
-                                                                              </div>
+                                                                              </ProgressiveActions>
                                                                             </div>
                                                                           </div>
                                                                         );
@@ -2488,6 +2446,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                               </div>
                             )}
                           </div>
+                          </div>
                         );
                       })
                   ) : (
@@ -2511,27 +2470,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                     {flatSeqBadge}
                                   </span>
                                   <span
-                                    className={`text-[11px] font-bold uppercase tracking-wider ${
-                                      lvl === 1
-                                        ? 'text-indigo-600 dark:text-indigo-400'
-                                        : lvl === 2
-                                        ? 'text-emerald-600 dark:text-emerald-400'
-                                        : lvl === 3
-                                        ? 'text-amber-600 dark:text-amber-400'
-                                        : lvl === 4
-                                        ? 'text-sky-600 dark:text-sky-400'
-                                        : 'text-purple-600 dark:text-purple-400'
-                                    }`}
+                                    className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400"
                                   >
-                                    {lvl === 1
-                                      ? '🎯 Main Goal'
-                                      : lvl === 2
-                                      ? '🔹 Sub Goal'
-                                      : lvl === 3
-                                      ? '▫️ Micro Goal'
-                                      : lvl === 4
-                                      ? '🔸 Nano Goal'
-                                      : '⚡ Atomic Goal'}
+                                    {['Main', 'Sub', 'Micro', 'Nano', 'Atomic'][lvl - 1] || 'Goal'}
                                   </span>
                                   {parent && (
                                     <>
@@ -2553,7 +2494,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   )}
                                 </div>
 
-                                <div className="flex items-center gap-1 shrink-0 ml-auto">
+                                <ProgressiveActions label={`More actions for ${g.title}`} className="shrink-0 ml-auto">
                                   <button
                                     type="button"
                                     onClick={() => setEditingGoal(g)}
@@ -2570,7 +2511,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
-                                </div>
+                                </ProgressiveActions>
                               </div>
 
                               <div className="w-full text-sm font-semibold text-slate-900 dark:text-white leading-snug">
@@ -3261,7 +3202,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       .filter(g => g.id !== editingGoal.id)
                       .map(g => (
                         <option key={g.id} value={g.id}>
-                          {g.level === 1 ? '🎯 ' : g.level === 2 ? '🔹 ' : g.level === 3 ? '▫️ ' : '🔸 '}{g.title}
+                          {g.title}
                         </option>
                       ))}
                   </select>

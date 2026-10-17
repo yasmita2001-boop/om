@@ -15,6 +15,7 @@ import {
   SpiritualPractice, Commitment, Person, Interaction
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString } from '../lib/dateUtils';
 import { SlideTabs } from './SlideTabs';
 import { alarmService } from '../lib/alarmService';
 import { useRingtoneOptions, getDefaultRingtoneId } from '../lib/alarmAudio';
@@ -647,8 +648,8 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   const annotatedSavings = useMemo(() => {
     return savingsPlans.map(sp => {
       const prog = sp.targetAmount > 0 ? Math.min(100, Math.round(((Number(sp.currentAmount) || 0) / Number(sp.targetAmount)) * 100)) : 0;
-      const spStart = (sp as any).startDate || (sp.createdAt ? new Date(sp.createdAt).toISOString().slice(0, 10) : today);
-      const spTarget = (sp as any).targetDate || (sp.durationMonths && sp.createdAt ? addDaysToDateStr(new Date(sp.createdAt).toISOString().slice(0, 10), sp.durationMonths * 30) : addDaysToDateStr(spStart, 90));
+      const spStart = (sp as any).startDate || (sp.createdAt ? getLocalDateString(new Date(sp.createdAt)) : today);
+      const spTarget = (sp as any).targetDate || (sp.durationMonths && sp.createdAt ? addDaysToDateStr(getLocalDateString(new Date(sp.createdAt)), sp.durationMonths * 30) : addDaysToDateStr(spStart, 90));
       return {
         ...sp,
         streamType: 'savings' as const,
@@ -670,7 +671,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
       const loanPaid = Number((loan as any).paidAmount) || (loanPrincipal ? Math.max(0, loanPrincipal - loanOutstanding) : 0);
       const prog = loanPrincipal > 0 ? Math.min(100, Math.round((loanPaid / loanPrincipal) * 100)) : 0;
       const isPaid = prog >= 100;
-      const loanStart = (loan as any).startDate || (loan.createdAt ? new Date(loan.createdAt).toISOString().slice(0, 10) : today);
+      const loanStart = (loan as any).startDate || (loan.createdAt ? getLocalDateString(new Date(loan.createdAt)) : today);
       const loanTarget = (loan as any).targetDate || ((loan as any).tenure ? addDaysToDateStr(loanStart, (loan as any).tenure * 30) : addDaysToDateStr(loanStart, 365));
       return {
         ...loan,
@@ -692,7 +693,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
 
   const annotatedInvestments = useMemo(() => {
     return investments.map(inv => {
-      const invStart = (inv as any).startDate || inv.date || (inv.createdAt ? new Date(inv.createdAt).toISOString().slice(0, 10) : today);
+      const invStart = (inv as any).startDate || inv.date || (inv.createdAt ? getLocalDateString(new Date(inv.createdAt)) : today);
       const invTarget = (inv as any).targetDate || (inv as any).maturityDate || (inv as any).horizonDate || addDaysToDateStr(invStart, 180);
       const currentVal = Number(inv.currentValue || inv.amount) || 0;
       const initialAmt = Number(inv.amount) || 0;
@@ -1677,7 +1678,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">
               {periodMetrics.periodLabel}
             </span>
-            <Target className="h-4 w-4 text-indigo-500 shrink-0" />
+            <Target className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             {periodMetrics.periodRate}%
@@ -1695,9 +1696,9 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">
               {timelineGranularity === 'daily' ? 'This Week Overdue' : timelineGranularity === 'single_day' ? 'Today Overdue' : 'Period Overdue'}
             </span>
-            <AlertTriangle className={`h-4 w-4 shrink-0 ${periodMetrics.delayedPeriodItems > 0 ? 'text-rose-500' : 'text-slate-400'}`} />
+            <AlertTriangle className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
-          <div className={`mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums truncate ${periodMetrics.delayedPeriodItems > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             {periodMetrics.delayedPeriodItems}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
@@ -1711,7 +1712,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Deliverables & Skills</span>
-            <Briefcase className="h-4 w-4 text-emerald-500 shrink-0" />
+            <Briefcase className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             {workProjects.length + skills.length + learningItems.length}
@@ -1725,7 +1726,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Armed Alarms</span>
-            <BellRing className="h-4 w-4 text-amber-500 shrink-0" />
+            <BellRing className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             {reminderMap.size}
@@ -1815,17 +1816,17 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
         </div>
 
         {/* View Mode & Sub-filters + Task Genesis + Mobile Compact Toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-t border-slate-100 pt-3 dark:border-slate-800 w-full">
+        <div className="flex min-w-0 w-full flex-wrap items-center gap-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
           {/* Left Actions: Task Genesis & Mobile Sidebar Toggle */}
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => handleOpenTaskGenesis({ type: 'manual', title: '' })}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:opacity-95 active:scale-95 transition-all cursor-pointer shrink-0 whitespace-nowrap"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-500 active:scale-95 transition-all cursor-pointer shrink-0 whitespace-nowrap"
               title="Deploy Task Genesis Unit"
             >
-              <Zap className="h-3.5 w-3.5 text-amber-200 shrink-0" />
-              <span>⚡ Task Genesis</span>
+              <Zap className="h-3.5 w-3.5 shrink-0" />
+              <span>Task Genesis</span>
             </button>
 
             {/* Mobile Column Compact Toggle */}
@@ -1841,7 +1842,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
           </div>
 
           {/* View Mode Switcher (Gantt, Operating Plan, Delay Radar) */}
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl dark:bg-slate-800 overflow-x-auto no-scrollbar shrink-0">
+          <div className="flex min-w-0 max-w-full flex-1 basis-[20rem] items-center gap-1 overflow-x-auto no-scrollbar rounded-xl bg-slate-100 p-0.5 dark:bg-slate-800">
             <button
               type="button"
               onClick={() => setViewMode('gantt')}
@@ -1850,7 +1851,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               }`}
             >
               <Calendar className="h-3 w-3" />
-              <span>Gantt Roadmap</span>
+              <span>Timeline</span>
             </button>
             <button
               type="button"
@@ -1860,7 +1861,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               }`}
             >
               <Layers className="h-3 w-3" />
-              <span>Operating Plan</span>
+              <span>Plan</span>
             </button>
             <button
               type="button"
@@ -1870,20 +1871,20 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               }`}
             >
               <ShieldAlert className="h-3 w-3" />
-              <span>Delay Radar ({totalDelayedAllCount})</span>
+              <span>Delays ({totalDelayedAllCount})</span>
             </button>
           </div>
 
           {/* Search & Filters */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-wrap sm:flex-nowrap">
-            <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex min-w-0 flex-1 basis-[22rem] flex-wrap items-center gap-2">
+          <div className="flex min-w-28 flex-1 basis-36 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs dark:border-slate-700 dark:bg-slate-800">
               <Search className="h-3.5 w-3.5 text-slate-400 shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search plan..."
-                className="w-24 sm:w-32 bg-transparent text-xs text-slate-900 dark:text-white outline-none placeholder:text-slate-400"
+                className="w-24 min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-400 dark:text-white sm:flex-none sm:w-32"
               />
               {searchQuery && (
                 <button type="button" onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600">
@@ -1895,9 +1896,9 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <select
               value={selectedGoalId}
               onChange={e => setSelectedGoalId(e.target.value)}
-              className="h-8 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer max-w-[140px] truncate"
+              className="h-8 min-w-28 max-w-full flex-1 basis-28 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
             >
-              <option value="all">All Goals ({goals.length})</option>
+              <option value="all">Goals ({goals.length})</option>
               {hierarchicalGoals.map(g => (
                 <option key={g.id} value={g.id}>
                   {g.level === 2 ? '  ↳ 🔹 ' : g.level === 3 ? '    ↳ ▫️ ' : g.level === 4 ? '      ↳ 🔸 ' : g.level === 5 ? '        ↳ ⚡ ' : '🎯 '}{g.title}
@@ -1908,11 +1909,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
-              className="h-8 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+              className="h-8 min-w-28 max-w-full flex-1 basis-28 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
             >
-              <option value="all">All Statuses</option>
-              <option value="delayed">⚠️ Overdue Only ({totalDelayedAllCount})</option>
-              <option value="pending">In Progress / Pending</option>
+              <option value="all">Status</option>
+              <option value="delayed">Overdue ({totalDelayedAllCount})</option>
+              <option value="pending">In progress</option>
               <option value="completed">Completed</option>
             </select>
           </div>
@@ -1984,7 +1985,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
           {/* Granularity Switcher & Period Controls */}
           <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-200/80 bg-slate-100/60 px-3 sm:px-4 py-2 dark:border-slate-800/80 dark:bg-slate-800/30">
             {/* 5 Granularities */}
-            <div className="flex items-center gap-1 bg-white p-1 rounded-xl shadow-2xs border border-slate-200/80 dark:bg-slate-900 dark:border-slate-700/80 overflow-x-auto no-scrollbar shrink-0">
+            <div className="flex max-w-full min-w-0 flex-1 flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-white p-1 shadow-2xs dark:border-slate-700/80 dark:bg-slate-900">
               <button
                 type="button"
                 onClick={() => { setTimelineGranularity('single_day'); setTimelineOffset(0); }}
@@ -1994,7 +1995,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                     : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
                 }`}
               >
-                📅 Single Day (Aaj)
+                📅 Day
               </button>
               <button
                 type="button"
@@ -2005,7 +2006,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                     : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
                 }`}
               >
-                📆 Weekly Sprint (7 Days)
+                📆 Week
               </button>
               <button
                 type="button"
@@ -2038,12 +2039,12 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                     : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
                 }`}
               >
-                🚀 Lifecycle (2024–2041)
+                🚀 Lifecycle
               </button>
             </div>
 
             {/* Previous / Current / Next Controls */}
-            <div className="flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0 flex-wrap">
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 sm:ml-auto">
               <button
                 type="button"
                 onClick={() => setTimelineOffset(prev => prev - 1)}
@@ -2071,7 +2072,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               >
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
-              <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200 ml-1">
+              <span className="min-w-0 flex-1 basis-24 truncate text-right font-mono text-xs font-bold text-slate-800 dark:text-slate-200 sm:ml-1">
                 {timelineData.title}
               </span>
             </div>
@@ -2239,7 +2240,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                       ? Math.round((periodGoalDone / periodGoalItems) * 100)
                       : null;
 
-                    const goalStart = goal.createdAt ? new Date(goal.createdAt).toISOString().slice(0, 10) : undefined;
+                    const goalStart = goal.createdAt ? getLocalDateString(new Date(goal.createdAt)) : undefined;
                     const goalSpan = computeSpan(goalStart, goal.targetDate, timelineData.cols);
                     const tierMeta = getGoalTierBadge(goal.level);
                     const indentPx = (goal.level ? (goal.level - 1) : 0) * 12;
@@ -2464,7 +2465,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                               goalProjects.map(proj => {
                                 const isDelayed = proj.delay.isDelayed && proj.status !== 'Completed';
                                 const isComp = proj.status === 'Completed';
-                                const projStart = proj.createdAt ? new Date(proj.createdAt).toISOString().slice(0, 10) : undefined;
+                                const projStart = proj.createdAt ? getLocalDateString(new Date(proj.createdAt)) : undefined;
                                 const projSpan = computeSpan(projStart, proj.due, timelineData.cols);
 
                                 return (
@@ -2946,8 +2947,8 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                             {(activeStream === 'all' || activeStream === 'finance') &&
                               goalSavings.map(sp => {
                                 const prog = sp.progress ?? (sp.targetAmount > 0 ? Math.min(100, Math.round(((Number(sp.currentAmount) || 0) / Number(sp.targetAmount)) * 100)) : 0);
-                                const spStart = sp.startDate || (sp as any).startDate || (sp.createdAt ? new Date(sp.createdAt).toISOString().slice(0, 10) : today);
-                                const spTarget = sp.targetDate || (sp as any).targetDate || (sp.durationMonths && sp.createdAt ? addDaysToDateStr(new Date(sp.createdAt).toISOString().slice(0, 10), sp.durationMonths * 30) : addDaysToDateStr(spStart, 90));
+                                const spStart = sp.startDate || (sp as any).startDate || (sp.createdAt ? getLocalDateString(new Date(sp.createdAt)) : today);
+                                const spTarget = sp.targetDate || (sp as any).targetDate || (sp.durationMonths && sp.createdAt ? addDaysToDateStr(getLocalDateString(new Date(sp.createdAt)), sp.durationMonths * 30) : addDaysToDateStr(spStart, 90));
                                 const spSpan = computeSpan(spStart, spTarget, timelineData.cols);
                                 const isDelayed = sp.delay?.isDelayed && prog < 100;
 
@@ -3003,7 +3004,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                 const loanPaid = loan.paid ?? (Number((loan as any).paidAmount) || (loanPrincipal ? Math.max(0, loanPrincipal - loanOutstanding) : 0));
                                 const prog = loan.progress ?? (loanPrincipal > 0 ? Math.min(100, Math.round((loanPaid / loanPrincipal) * 100)) : 0);
                                 const isPaid = loan.isPaid ?? (prog >= 100);
-                                const loanStart = loan.startDate || (loan as any).startDate || (loan.createdAt ? new Date(loan.createdAt).toISOString().slice(0, 10) : today);
+                                const loanStart = loan.startDate || (loan as any).startDate || (loan.createdAt ? getLocalDateString(new Date(loan.createdAt)) : today);
                                 const loanTarget = loan.targetDate || (loan as any).targetDate || ((loan as any).tenure ? addDaysToDateStr(loanStart, (loan as any).tenure * 30) : addDaysToDateStr(loanStart, 365));
                                 const loanSpan = computeSpan(loanStart, loanTarget, timelineData.cols);
                                 const isDelayed = loan.delay?.isDelayed && !isPaid;
@@ -3052,7 +3053,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                             {/* 11. INVESTMENTS STREAM */}
                             {(activeStream === 'all' || activeStream === 'finance') &&
                               goalInvestments.map(inv => {
-                                const invStart = inv.startDate || (inv as any).startDate || inv.date || (inv.createdAt ? new Date(inv.createdAt).toISOString().slice(0, 10) : today);
+                                const invStart = inv.startDate || (inv as any).startDate || inv.date || (inv.createdAt ? getLocalDateString(new Date(inv.createdAt)) : today);
                                 const invTarget = inv.targetDate || (inv as any).targetDate || (inv as any).maturityDate || (inv as any).horizonDate || addDaysToDateStr(invStart, 180);
                                 const currentVal = inv.currentVal ?? (Number(inv.currentValue || inv.amount) || 0);
                                 const initialAmt = inv.initialAmt ?? (Number(inv.amount) || 0);
@@ -3281,8 +3282,8 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                         {/* Standalone Savings */}
                         {standaloneSavings.map(sp => {
                           const prog = sp.progress ?? (sp.targetAmount > 0 ? Math.min(100, Math.round(((Number(sp.currentAmount) || 0) / Number(sp.targetAmount)) * 100)) : 0);
-                          const spStart = sp.startDate || (sp as any).startDate || (sp.createdAt ? new Date(sp.createdAt).toISOString().slice(0, 10) : today);
-                          const spTarget = sp.targetDate || (sp as any).targetDate || (sp.durationMonths && sp.createdAt ? addDaysToDateStr(new Date(sp.createdAt).toISOString().slice(0, 10), sp.durationMonths * 30) : addDaysToDateStr(spStart, 90));
+                          const spStart = sp.startDate || (sp as any).startDate || (sp.createdAt ? getLocalDateString(new Date(sp.createdAt)) : today);
+                          const spTarget = sp.targetDate || (sp as any).targetDate || (sp.durationMonths && sp.createdAt ? addDaysToDateStr(getLocalDateString(new Date(sp.createdAt)), sp.durationMonths * 30) : addDaysToDateStr(spStart, 90));
                           const spSpan = computeSpan(spStart, spTarget, timelineData.cols);
                           const isDelayed = sp.delay?.isDelayed && prog < 100;
                           return (
@@ -3329,7 +3330,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                           const loanPaid = loan.paid ?? (Number((loan as any).paidAmount) || (loanPrincipal ? Math.max(0, loanPrincipal - loanOutstanding) : 0));
                           const prog = loan.progress ?? (loanPrincipal > 0 ? Math.min(100, Math.round((loanPaid / loanPrincipal) * 100)) : 0);
                           const isPaid = loan.isPaid ?? (prog >= 100);
-                          const loanStart = loan.startDate || (loan as any).startDate || (loan.createdAt ? new Date(loan.createdAt).toISOString().slice(0, 10) : today);
+                          const loanStart = loan.startDate || (loan as any).startDate || (loan.createdAt ? getLocalDateString(new Date(loan.createdAt)) : today);
                           const loanTarget = loan.targetDate || (loan as any).targetDate || ((loan as any).tenure ? addDaysToDateStr(loanStart, (loan as any).tenure * 30) : addDaysToDateStr(loanStart, 365));
                           const loanSpan = computeSpan(loanStart, loanTarget, timelineData.cols);
                           const isDelayed = loan.delay?.isDelayed && !isPaid;
@@ -3372,7 +3373,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
 
                         {/* Standalone Investments */}
                         {standaloneInvestments.map(inv => {
-                          const invStart = inv.startDate || (inv as any).startDate || inv.date || (inv.createdAt ? new Date(inv.createdAt).toISOString().slice(0, 10) : today);
+                          const invStart = inv.startDate || (inv as any).startDate || inv.date || (inv.createdAt ? getLocalDateString(new Date(inv.createdAt)) : today);
                           const invTarget = inv.targetDate || (inv as any).targetDate || (inv as any).maturityDate || (inv as any).horizonDate || addDaysToDateStr(invStart, 180);
                           const currentVal = inv.currentVal ?? (Number(inv.currentValue || inv.amount) || 0);
                           const initialAmt = inv.initialAmt ?? (Number(inv.amount) || 0);

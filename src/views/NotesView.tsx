@@ -8,12 +8,14 @@ import {
 } from 'lucide-react';
 import { Note, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString } from '../lib/dateUtils';
 import { syncGoalProgressFromNotes } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AttachmentUploader, AttachmentViewer, StoredAttachmentMeta } from '../components/AttachmentUploader';
 import { NoteRichEditor } from '../components/NoteRichEditor';
 import { globalTextReader } from '../lib/voiceService';
 import { sanitizeHtml } from '../lib/sanitizeHtml';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface NotesViewProps {
   notes: Note[];
@@ -317,7 +319,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         pinned: isPinned,
         goalId: effectiveGoalId,
         attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
-        date: new Date().toISOString().slice(0, 10),
+        date: getLocalDateString(),
         createdAt: now,
         updatedAt: now
       };
@@ -919,7 +921,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   <div
                     key={n.id}
                     onClick={() => setViewingNote(n)}
-                    className={`group relative rounded-2xl border p-4 shadow-xs transition-all card-hover flex flex-col justify-between cursor-pointer overflow-hidden ${theme.cardClass}`}
+                    className={`group progressive-row relative rounded-2xl border p-4 shadow-xs transition-all card-hover flex flex-col justify-between cursor-pointer overflow-hidden ${theme.cardClass}`}
                   >
                     {/* Top Spine Stripe for tactile notebook feel */}
                     <div className={`absolute top-0 left-0 right-0 h-1 ${theme.spineClass}`} />
@@ -955,10 +957,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                         </div>
 
                         {/* Action buttons (Pin, Copy, Export, Read Aloud, Edit, Delete) */}
-                        <div
-                          className="flex items-center gap-0.5 shrink-0"
-                          onClick={e => e.stopPropagation()}
-                        >
+                        <ProgressiveActions label={`More actions for ${n.title}`} className="shrink-0">
                           <button
                             type="button"
                             onClick={(e) => handleTogglePin(n, e)}
@@ -1023,7 +1022,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                           >
                             <Trash2 className="h-3.5 w-3.5 text-rose-500" />
                           </button>
-                        </div>
+                        </ProgressiveActions>
                       </div>
 
                       {/* Content Preview */}

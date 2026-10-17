@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Download, Database, Trash2,
   Palette, ChevronDown, RefreshCw,
-  Volume2, VolumeX, Smartphone, Sparkles
+  Volume2, VolumeX, Smartphone
 } from 'lucide-react';
 import {
   storage,
@@ -471,9 +471,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     Tactile Audio & Haptics
                   </h2>
                 </div>
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
-                  <Sparkles className="h-3 w-3" /> 0ms Latency
-                </span>
               </div>
 
               <div className="space-y-4">
@@ -483,9 +480,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div className="text-xs font-bold text-slate-900 dark:text-white">
                       Auditory Micro-Clicks
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Apple-inspired soft glass/wooden clicks on task ticks and habit rings
-                    </p>
                   </div>
                   <button
                     type="button"
@@ -516,9 +510,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       <Smartphone className="h-3.5 w-3.5 text-slate-400" />
                       <span>Haptic Vibration</span>
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Subtle tactile physical pulse on Android, iOS & touchscreen devices
-                    </p>
                   </div>
                   <button
                     type="button"

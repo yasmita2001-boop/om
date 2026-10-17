@@ -53,27 +53,30 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
 
     el.addEventListener('scroll', checkScroll, { passive: true });
     window.addEventListener('resize', checkScroll);
+    const resizeObserver = new ResizeObserver(checkScroll);
+    resizeObserver.observe(el);
+    Array.from(el.children).forEach(child => resizeObserver.observe(child));
 
     return () => {
       el.removeEventListener('scroll', checkScroll);
       window.removeEventListener('resize', checkScroll);
+      resizeObserver.disconnect();
     };
-  }, [checkScroll, tabs]);
+  }, [checkScroll, tabs.length]);
 
   // Auto-scroll active tab into view smoothly
   useEffect(() => {
     if (activeTabRef.current && scrollRef.current) {
       const container = scrollRef.current;
       const target = activeTabRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const leftOverflow = targetRect.left - containerRect.left;
+      const rightOverflow = targetRect.right - containerRect.right;
 
-      const targetLeft = target.offsetLeft;
-      const targetWidth = target.offsetWidth;
-      const containerWidth = container.clientWidth;
-      const currentScroll = container.scrollLeft;
-
-      if (targetLeft < currentScroll || targetLeft + targetWidth > currentScroll + containerWidth) {
+      if (leftOverflow < 0 || rightOverflow > 0) {
         container.scrollTo({
-          left: targetLeft - (containerWidth / 2) + (targetWidth / 2),
+          left: container.scrollLeft + (leftOverflow < 0 ? leftOverflow : rightOverflow),
           behavior: 'smooth'
         });
       }
@@ -90,14 +93,14 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
   const isSmall = size === 'sm';
 
   return (
-    <div className={`relative flex items-center w-full gap-1.5 ${containerClassName}`}>
+    <div className={`flex min-w-0 w-full items-center gap-1.5 ${containerClassName}`}>
       {/* Left Scroll Trigger Button */}
       {showArrows && canScrollLeft && (
         <button
           type="button"
           onClick={() => handleScroll('left')}
           aria-label="Slide tabs left"
-          className="absolute left-0 z-10 flex h-8 w-8 items-center justify-center rounded-xl bg-white/95 text-slate-700 shadow-md ring-1 ring-slate-200 backdrop-blur-sm transition-all hover:bg-slate-100 hover:scale-105 active:scale-95 dark:bg-slate-900/95 dark:text-slate-200 dark:ring-slate-700 cursor-pointer shrink-0"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs transition-colors hover:bg-slate-50 hover:text-slate-900 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -106,9 +109,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
       {/* Main Horizontal Slide Scroll Area */}
       <div
         ref={scrollRef}
-        className={`flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth w-full py-1 transition-all ${
-          showArrows && canScrollLeft ? 'pl-9' : ''
-        } ${showArrows && canScrollRight ? 'pr-9' : ''} ${className}`}
+        className={`flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-1 ${className}`}
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {tabs.map(tab => {
@@ -132,13 +133,14 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
               ref={isSelected ? activeTabRef : null}
               type="button"
               onClick={() => onChange(tab.id)}
-              className={`flex shrink-0 items-center justify-center gap-1.5 sm:gap-2 rounded-xl font-semibold tracking-normal transition-all cursor-pointer whitespace-nowrap min-w-fit select-none ${
+              aria-current={isSelected ? 'page' : undefined}
+              className={`flex shrink-0 items-center justify-center gap-1.5 sm:gap-2 rounded-lg font-semibold tracking-normal transition-colors cursor-pointer whitespace-nowrap min-w-fit select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 ${
                 isSmall
                   ? 'px-2.5 sm:px-3 py-1.5 text-xs'
-                  : 'px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm'
+                  : 'px-3 sm:px-3.5 py-2 text-xs sm:text-sm'
               } ${
                 isSelected
-                  ? 'bg-amber-500 text-white shadow-xs font-bold ring-1 ring-amber-400'
+                  ? 'bg-indigo-600 text-white shadow-sm font-bold hover:bg-indigo-700'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/80'
               }`}
             >
@@ -170,7 +172,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
                 <span
                   className={`rounded-full px-1.5 py-0.2 text-[9px] sm:text-[10px] font-bold shrink-0 ${
                     isSelected
-                      ? 'bg-amber-600/60 text-white'
+                      ? 'bg-white/20 text-white'
                       : tab.badgeColor || 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
                   }`}
                 >
@@ -188,14 +190,14 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
           type="button"
           onClick={() => handleScroll('right')}
           aria-label="Slide tabs right"
-          className="absolute right-0 z-10 flex h-8 w-8 items-center justify-center rounded-xl bg-white/95 text-slate-700 shadow-md ring-1 ring-slate-200 backdrop-blur-sm transition-all hover:bg-slate-100 hover:scale-105 active:scale-95 dark:bg-slate-900/95 dark:text-slate-200 dark:ring-slate-700 cursor-pointer shrink-0"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs transition-colors hover:bg-slate-50 hover:text-slate-900 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
       )}
 
       {/* Optional Extra Right Element (e.g. Action Button) */}
-      {extraRight && <div className="shrink-0 ml-1">{extraRight}</div>}
+      {extraRight && <div className="ml-1 shrink-0">{extraRight}</div>}
     </div>
   );
 };

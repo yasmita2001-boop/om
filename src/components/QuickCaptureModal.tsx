@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, CheckSquare, FileText, BookOpen, DollarSign, Target, Bell, User, Volume2, Clock } from 'lucide-react';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString } from '../lib/dateUtils';
 import { Task, Note, JournalEntry, FinanceTransaction, FinanceAccount, Goal, ReminderItem, Person } from '../types';
 import { AttachmentUploader, StoredAttachmentMeta } from './AttachmentUploader';
 import { alarmAudio, BUILTIN_RINGTONES } from '../lib/alarmAudio';
@@ -26,7 +27,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => getLocalDateString());
   const [reminderTime, setReminderTime] = useState(() => {
     const d = new Date(Date.now() + 30 * 60 * 1000);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;

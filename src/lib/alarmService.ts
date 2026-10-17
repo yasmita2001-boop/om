@@ -1,6 +1,7 @@
 import { storage, generateUUID } from './storage';
 import { ReminderItem } from '../types';
 import { alarmAudio } from './alarmAudio';
+import { getLocalDateString } from './dateUtils';
 
 export interface FocusAlarm {
   id: string;
@@ -145,7 +146,7 @@ class AlarmManagerService {
 
     if (!target) return;
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getLocalDateString();
 
     if (target.type === 'focus_alarm') {
       const alarms = this.getFocusAlarms();
@@ -229,7 +230,7 @@ class AlarmManagerService {
 
     const now = new Date();
     const currentDay = now.getDay(); // 0 to 6
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = getLocalDateString(now);
     const currentH = String(now.getHours()).padStart(2, '0');
     const currentM = String(now.getMinutes()).padStart(2, '0');
     const currentTimeStr = `${currentH}:${currentM}`; // "HH:mm"

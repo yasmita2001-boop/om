@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   CheckSquare, Target, Repeat, DollarSign,
   ArrowUpRight, ArrowDownRight, Sparkles,
@@ -9,6 +9,7 @@ import {
   FinanceAccount, Note, JournalEntry, NavModule, DailyPlanner,
   ReminderItem, AchievementItem
 } from '../types';
+import { getLocalDateString } from '../lib/dateUtils';
 
 interface DashboardViewProps {
   tasks: Task[];
@@ -29,7 +30,56 @@ interface DashboardViewProps {
   onOpenQuickCapture: (type?: string) => void;
 }
 
-export const DashboardView: React.FC<DashboardViewProps> = ({
+const sortTasks = (tasks: Task[], today: string) => {
+  const priorityWeight: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
+  return [...tasks]
+    .filter(t => !t.done)
+    .sort((a, b) => {
+      if (a.dueAt && b.dueAt) {
+        const d = a.dueAt.localeCompare(b.dueAt);
+        if (d !== 0) return d;
+      } else if (a.dueAt) return -1;
+      else if (b.dueAt) return 1;
+      const pA = priorityWeight[a.priority] || 0;
+      const pB = priorityWeight[b.priority] || 0;
+      if (pA !== pB) return pB - pA;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+};
+
+const calculateFinances = (finance: FinanceTransaction[]) => {
+  let income = 0;
+  let expense = 0;
+  let investment = 0;
+  let savingsFlow = 0;
+  let loanRepay = 0;
+  let loanReceived = 0;
+  finance.forEach(f => {
+    const amt = Number(f.amount) || 0;
+    if (f.type === 'income') income += amt;
+    else if (f.type === 'expense') expense += amt;
+    else if (f.type === 'investment') investment += amt;
+    else if (f.type === 'savings') savingsFlow += amt;
+    else if (f.type === 'repayment') loanRepay += amt;
+    else if (f.type === 'loan') loanReceived += amt;
+  });
+  const operatingCashFlow = income - expense;
+  const netCashFlow = operatingCashFlow - investment - savingsFlow - loanRepay + loanReceived;
+  return { income, expense, investment, savingsFlow, loanRepay, loanReceived, operatingCashFlow, netCashFlow };
+};
+
+const getTodayHabitLogs = (habitLogs: HabitLog[], today: string) => {
+  return habitLogs.filter(l => l.date === today);
+};
+
+const getActiveReminders = (reminders: ReminderItem[]) => {
+  return [...reminders]
+    .filter(r => r.status !== 'done')
+    .sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || '') || (b.createdAt || 0) - (a.createdAt || 0))
+    .slice(0, 5);
+};
+
+const DashboardView: React.FC<DashboardViewProps> = ({
   tasks,
   goals,
   routines,
@@ -47,49 +97,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onLogHabit,
   onOpenQuickCapture,
 }) => {
-  const today = new Date().toISOString().slice(0, 10);
-  const priorityWeight: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
-  const sortedTasks = [...tasks]
-    .filter(t => !t.done)
-    .sort((a, b) => {
-      if (a.dueAt && b.dueAt) {
-        const d = a.dueAt.localeCompare(b.dueAt);
-        if (d !== 0) return d;
-      } else if (a.dueAt) return -1;
-      else if (b.dueAt) return 1;
-      const pA = priorityWeight[a.priority] || 0;
-      const pB = priorityWeight[b.priority] || 0;
-      if (pA !== pB) return pB - pA;
-      return (b.createdAt || 0) - (a.createdAt || 0);
-    });
+  const today = getLocalDateString();
+
+  const sortedTasks = useMemo(() => sortTasks(tasks, today), [tasks, today]);
   const openTasks = sortedTasks;
   const todayTasks = sortedTasks.filter(t => (t.dueAt === today || t.date === today));
+  const activeGoals = goals.filter(goal => !goal.status || goal.status === 'active');
 
-  // Financial calculations
-  let income = 0;
-  let expense = 0;
-  let investment = 0;
-  let savingsFlow = 0;
-  let loanRepay = 0;
-  let loanReceived = 0;
-  finance.forEach(f => {
-    const amt = Number(f.amount) || 0;
-    if (f.type === 'income') income += amt;
-    else if (f.type === 'expense') expense += amt;
-    else if (f.type === 'investment') investment += amt;
-    else if (f.type === 'savings') savingsFlow += amt;
-    else if (f.type === 'repayment') loanRepay += amt;
-    else if (f.type === 'loan') loanReceived += amt;
-  });
+  const { income, expense, investment, savingsFlow, loanRepay, loanReceived, operatingCashFlow, netCashFlow } = useMemo(() => calculateFinances(finance), [finance]);
 
-  const operatingCashFlow = income - expense;
-  const netCashFlow = operatingCashFlow - investment - savingsFlow - loanRepay + loanReceived;
-  const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
-  const todayHabitLogs = habitLogs.filter(l => l.date === today);
-  const activeReminders = [...reminders]
-    .filter(r => r.status !== 'done')
-    .sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || '') || (b.createdAt || 0) - (a.createdAt || 0))
-    .slice(0, 5);
+  const liquidCash = useMemo(() => accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0), [accounts]);
+
+  const todayHabitLogs = useMemo(() => getTodayHabitLogs(habitLogs, today), [habitLogs, today]);
+  const loggedHabitIds = useMemo(() => new Set(todayHabitLogs.map(log => log.habitId)), [todayHabitLogs]);
+  const completedHabitCount = habits.filter(habit => loggedHabitIds.has(habit.id)).length;
+
+  const activeReminders = useMemo(() => getActiveReminders(reminders), [reminders]);
 
   const currentHour = new Date().getHours();
   const timeGreeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
@@ -112,7 +135,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-              {dailyPlanner?.target ? dailyPlanner.target : `${todayTasks.length} priorities scheduled for today · ${goals.length} active trajectories`}
+              {dailyPlanner?.target ? dailyPlanner.target : `${todayTasks.length} priorities scheduled for today · ${activeGoals.length} active trajectories`}
             </p>
           </div>
         </div>
@@ -167,7 +190,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Target className="h-4 w-4 text-indigo-500 shrink-0" />
           </div>
           <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {goals.length}
+            {activeGoals.length}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
             Active trajectories
@@ -180,7 +203,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Repeat className="h-4 w-4 text-amber-500 shrink-0" />
           </div>
           <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {todayHabitLogs.length}/{habits.length || 0}
+            {completedHabitCount}/{habits.length}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
             Logged for today
@@ -232,7 +255,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="mt-4 space-y-2.5">
             {todayTasks.length === 0 && openTasks.length === 0 ? (
               <div className="py-12 text-center text-xs text-slate-400">
-                All scheduled tasks completed. Capture new priorities anytime.
+                No pending tasks for today. Capture a priority anytime.
               </div>
             ) : (
               [...todayTasks, ...openTasks.filter(t => !todayTasks.some(tt => tt.id === t.id))].slice(0, 5).map(task => (
@@ -305,7 +328,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ) : (
               habits.slice(0, 5).map(habit => {
-                const isDone = todayHabitLogs.some(l => l.habitId === habit.id);
+                const isDone = loggedHabitIds.has(habit.id);
                 return (
                   <div
                     key={habit.id}
@@ -361,7 +384,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="mt-4 space-y-4">
-            {goals.slice(0, 4).map(goal => (
+            {activeGoals.length === 0 ? (
+              <div className="py-12 text-center text-xs text-slate-400">
+                No active goals yet. Create or activate a goal to track progress here.
+              </div>
+            ) : activeGoals.slice(0, 4).map(goal => (
               <div key={goal.id} className="space-y-1.5">
                 <div className="flex justify-between text-xs sm:text-sm">
                   <span className="font-semibold text-slate-900 dark:text-white truncate pr-2">{goal.title}</span>
@@ -428,7 +455,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
               Recent Activity
             </div>
-            {[...finance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3).map(tx => (
+            {finance.length === 0 ? (
+              <div className="py-5 text-center text-xs text-slate-400">
+                No transactions yet. Recent ledger activity will appear here.
+              </div>
+            ) : [...finance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3).map(tx => {
+              const isInflow = tx.type === 'income' || tx.type === 'loan';
+              const isTransfer = tx.type === 'transfer';
+              return (
               <div
                 key={tx.id}
                 className="flex items-center justify-between gap-2 min-w-0 text-xs sm:text-sm py-1.5 border-b border-slate-50 dark:border-slate-800/40 last:border-0"
@@ -437,11 +471,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <span className="font-semibold text-slate-800 dark:text-slate-200">{tx.category}</span>
                   {tx.note && <span className="ml-1.5 text-slate-400">({tx.note})</span>}
                 </div>
-                <span className={`shrink-0 font-mono font-bold tabular-nums ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900 dark:text-white'}`}>
-                  {tx.type === 'income' ? '+' : '-'}₹{Number(tx.amount || 0).toLocaleString('en-IN')}
+                <span className={`shrink-0 font-mono font-bold tabular-nums ${isInflow ? (tx.type === 'loan' ? 'text-teal-600 dark:text-teal-400' : 'text-emerald-600') : 'text-slate-900 dark:text-white'}`}>
+                  {isInflow ? '+' : isTransfer ? '⇄ ' : '-'}₹{Number(tx.amount || 0).toLocaleString('en-IN')}
                 </span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </div>
@@ -556,3 +591,5 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     </div>
   );
 };
+
+export default DashboardView;

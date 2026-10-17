@@ -5,12 +5,14 @@ import {
 } from 'lucide-react';
 import { JournalEntry, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString } from '../lib/dateUtils';
 import { syncGoalProgressFromJournal } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AttachmentUploader, AttachmentViewer, StoredAttachmentMeta } from '../components/AttachmentUploader';
 import { globalTextReader } from '../lib/voiceService';
 import { NoteRichEditor } from '../components/NoteRichEditor';
 import { sanitizeHtml } from '../lib/sanitizeHtml';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface JournalViewProps {
   journal: JournalEntry[];
@@ -25,7 +27,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
   onRefresh,
   onSuccess
 }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   const [title, setTitle] = useState('');
   const [journalInputMode, setJournalInputMode] = useState<'manual' | 'link'>('manual');
   const [journalGoalId, setJournalGoalId] = useState<string>('');
@@ -575,7 +577,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 return (
                   <div
                     key={j.id}
-                    className={`relative rounded-2xl border p-4 sm:p-5 shadow-xs transition-all card-hover ${theme.cardClass}`}
+                    className={`progressive-row relative rounded-2xl border p-4 sm:p-5 shadow-xs transition-all card-hover ${theme.cardClass}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -603,7 +605,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-0.5 shrink-0">
+                      <ProgressiveActions label={`More actions for ${j.title}`} className="shrink-0">
                         <button
                           type="button"
                           onClick={() => toggleSpeakEntry(j)}
@@ -640,7 +642,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      </div>
+                      </ProgressiveActions>
                     </div>
 
                     <div

@@ -8,10 +8,12 @@ import {
   NutritionRecord, HealthAppointment, HealthNote, Goal
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
 import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
 import { syncGoalProgressFromHealth, syncGoalProgressFromAppointments } from '../lib/goalTaskSync';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface HealthViewProps {
   profile?: HealthProfile;
@@ -51,7 +53,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
   onRefresh,
   onSuccess
 }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   const [activeTab, setActiveTab] = useState<HealthTab>('movement');
 
   // Goal linking state for appointments
@@ -534,7 +536,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       {m.duration && <div className="text-indigo-600 dark:text-indigo-400">{m.duration} min</div>}
                     </div>
                     {/* EDIT & DELETE BUTTONS */}
-                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                    <ProgressiveActions label={`More actions for ${m.exercise || 'Activity record'}`} className="shrink-0 ml-2">
                       <button
                         type="button"
                         onClick={() => handleOpenEdit('healthMeasurements', m)}
@@ -551,7 +553,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    </div>
+                    </ProgressiveActions>
                   </div>
                 ))
               )}
@@ -692,7 +694,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     </div>
 
                     {/* EDIT & DELETE BUTTONS */}
-                    <div className="flex items-center gap-1 shrink-0">
+                    <ProgressiveActions label={`More actions for ${item.text}`} className="shrink-0">
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(item.store, item.raw)}
@@ -709,7 +711,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    </div>
+                    </ProgressiveActions>
                   </div>
                 ))
               )}
@@ -838,7 +840,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                           {a.doctor && <span>· Dr: {a.doctor}</span>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <ProgressiveActions label="More actions for observation note" className="shrink-0">
                         <button
                           type="button"
                           onClick={() => handleOpenEdit('healthAppointments', a)}
@@ -855,7 +857,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      </div>
+                      </ProgressiveActions>
                     </div>
                   ))
                 )}
@@ -880,7 +882,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                           <GoalBadge goalId={n.goalId} goals={goals} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <ProgressiveActions label={`More actions for ${n.text}`} className="shrink-0">
                         <button
                           type="button"
                           onClick={() => handleOpenEdit('healthNotes', n)}
@@ -897,7 +899,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      </div>
+                      </ProgressiveActions>
                     </div>
                   ))
                 )}

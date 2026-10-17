@@ -5,6 +5,8 @@
  * with zero server or runtime dependencies.
  */
 
+import { getLocalDateString } from './dateUtils';
+
 function escapeHtml(str: any): string {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -54,7 +56,7 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
   const totalNotes = notes.length;
   const totalJournal = journal.length;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateString();
 
   const checkDelay = (dueDate?: string, status?: string, progress?: number) => {
     const isDone = status === 'completed' || status === 'done' || status === 'Completed' || (progress !== undefined && progress >= 100);
@@ -156,7 +158,7 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
     })),
     ...savingsPlans.map(s => {
       const prog = s.targetAmount > 0 ? Math.min(100, Math.round(((Number(s.currentAmount) || 0) / Number(s.targetAmount)) * 100)) : 0;
-      const targetDate = s.targetDate || (s.durationMonths && s.createdAt ? new Date(new Date(s.createdAt).getTime() + s.durationMonths * 30 * 86400000).toISOString().slice(0, 10) : undefined);
+      const targetDate = s.targetDate || (s.durationMonths && s.createdAt ? getLocalDateString(new Date(new Date(s.createdAt).getTime() + s.durationMonths * 30 * 86400000)) : undefined);
       return {
         id: s.id || '',
         type: 'savings' as const,
@@ -1384,7 +1386,7 @@ ${safeDataJson}
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'Om-LifeOS-Backup-' + new Date().toISOString().slice(0, 10) + '.omlifeos';
+      a.download = 'Om-LifeOS-Backup-' + getLocalDateString() + '.omlifeos';
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     }

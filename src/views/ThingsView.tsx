@@ -9,8 +9,10 @@ import {
   FinanceAccount, FinanceTransaction, NavModule
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface ThingsViewProps {
   things: ThingItem[];
@@ -55,7 +57,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<SubMenuTab>('things');
   const [searchQuery, setSearchQuery] = useState('');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
 
   // File import input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -183,7 +185,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
         const war: WarrantyItem = {
           id: generateUUID(),
           title: cleanName,
-          expiry: nextYear.toISOString().slice(0, 10),
+          expiry: getLocalDateString(nextYear),
           note: `Imported warranty card: ${file.name}`,
           fileName: file.name,
           fileSize: formattedSize,
@@ -887,6 +889,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                             + Task
                           </button>
 
+                          <ProgressiveActions label={`More actions for ${t.name}`}>
                           {/* EDIT KEY / BUTTON */}
                           <button
                             type="button"
@@ -906,6 +909,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
+                          </ProgressiveActions>
                         </div>
                       </div>
                     </div>
@@ -1053,7 +1057,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         </div>
 
                         {/* EDIT KEY & DELETE KEY */}
-                        <div className="flex items-center gap-1 shrink-0">
+                        <ProgressiveActions label={`More actions for ${d.title}`} className="shrink-0">
                           <button
                             type="button"
                             onClick={() => handleOpenEdit('documents', d)}
@@ -1070,7 +1074,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                        </div>
+                        </ProgressiveActions>
                       </div>
                     </div>
                   ))
@@ -1191,7 +1195,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         </div>
 
                         {/* EDIT KEY & DELETE KEY */}
-                        <div className="flex items-center gap-1 shrink-0">
+                        <ProgressiveActions label={`More actions for ${w.title}`} className="shrink-0">
                           <button
                             type="button"
                             onClick={() => handleOpenEdit('warranties', w)}
@@ -1208,7 +1212,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                        </div>
+                        </ProgressiveActions>
                       </div>
                     </div>
                   ))
@@ -1344,13 +1348,16 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               {/* Sync with Finance & Ledger (Custom Switch Panel) */}
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3.5 space-y-3 transition-colors">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
                       <Landmark className="h-4 w-4" />
                     </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                        Record in Finance & Ledger as Transaction
+                    <div className="min-w-0">
+                      <span className="block text-[13px] font-semibold leading-5 text-slate-900 dark:text-white">
+                        Link to Finance ledger
+                      </span>
+                      <span className="block text-[11px] leading-4 text-slate-500 dark:text-slate-400">
+                        Choose an existing expense
                       </span>
                     </div>
                   </div>
@@ -1359,6 +1366,8 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   <button
                     type="button"
                     role="switch"
+                    aria-label="Link receipt to an existing Finance transaction"
+                    title="Link receipt to an existing Finance transaction"
                     aria-checked={recLinkToFinance}
                     onClick={() => { setRecLinkToFinance(!recLinkToFinance); if (!recLinkToFinance) setRecFinanceMode('link_existing'); }}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
@@ -1504,7 +1513,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                             ₹{Number(r.amount).toLocaleString('en-IN')}
                           </span>
 
-                          <div className="flex items-center gap-1">
+                          <ProgressiveActions label={`More actions for ${r.title}`}>
                             <button
                               type="button"
                               onClick={() => handleOpenEdit('receipts', r)}
@@ -1521,7 +1530,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
-                          </div>
+                          </ProgressiveActions>
                         </div>
                       </div>
                     );
@@ -1654,7 +1663,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         </div>
 
                         {/* EDIT KEY & DELETE KEY */}
-                        <div className="flex items-center gap-1 shrink-0">
+                        <ProgressiveActions label={`More actions for ${c.title}`} className="shrink-0">
                           <button
                             type="button"
                             onClick={() => handleOpenEdit('certificates', c)}
@@ -1671,7 +1680,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                        </div>
+                        </ProgressiveActions>
                       </div>
                     </div>
                   ))
@@ -1788,7 +1797,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         </div>
 
                         {/* EDIT KEY & DELETE KEY */}
-                        <div className="flex items-center gap-1 shrink-0">
+                        <ProgressiveActions label={`More actions for ${ir.title}`} className="shrink-0">
                           <button
                             type="button"
                             onClick={() => handleOpenEdit('importantRecords', ir)}
@@ -1805,7 +1814,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                        </div>
+                        </ProgressiveActions>
                       </div>
                     </div>
                   ))

@@ -1,6 +1,8 @@
 // 108-tool Comprehensive Calculator & Computational Engine
 // Fully restored, thoroughly verified mathematical formulas and conversion factors
 
+import { getLocalDateString } from './dateUtils';
+
 export const CALCULATOR_CATALOG: Record<string, string[]> = Object.freeze({
   quick: ['Basic', 'Scientific', 'Percentage', 'Fraction', 'Ratio', 'Average', 'Discount', 'Tip', 'Bill Split', 'Tax'],
   money: ['EMI / Loan', 'Simple Interest', 'Compound Interest', 'SIP / Investment', 'Savings', 'ROI', 'Profit & Loss', 'Inflation', 'Salary', 'Markup', 'Margin', 'Break-even', 'CAGR', 'Growth', 'Pricing'],
@@ -802,7 +804,7 @@ export class CalculatorEngine {
     const delta = n(days);
     const mult = op === '-' ? -1 : 1;
     d.setDate(d.getDate() + mult * delta);
-    return `Result Date: ${d.toISOString().slice(0, 10)} (${d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })})`;
+    return `Result Date: ${getLocalDateString(d)} (${d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })})`;
   }
 
   timeDifference(startTime: string, endTime: string): string {

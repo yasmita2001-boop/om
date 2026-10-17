@@ -1,4 +1,5 @@
 import { storage } from './storage';
+import { getLocalDateString } from './dateUtils';
 import {
   Goal,
   Task,
@@ -197,7 +198,7 @@ export function computeGoalAggregateBreakdown(
 ): GoalProgressBreakdown {
   const goal = data.goals.find(g => g.id === goalId);
   const goalTitle = goal?.title || 'Goal';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
 
   const milestones = data.milestones || [];
   const habits = data.habits || [];
@@ -329,7 +330,7 @@ export function computeGoalAggregateBreakdown(
   linkedHabits.forEach(h => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysAgoIso = thirtyDaysAgo.toISOString().slice(0, 10);
+    const thirtyDaysAgoIso = getLocalDateString(thirtyDaysAgo);
     const recentLogs = habitLogs.filter(l => l.habitId === h.id && l.date >= thirtyDaysAgoIso);
     const uniqueDays = new Set(recentLogs.map(l => l.date)).size;
     const isDoneToday = habitLogs.some(l => l.habitId === h.id && l.date === today);
@@ -351,7 +352,7 @@ export function computeGoalAggregateBreakdown(
     const dates = Array.from(new Set([...(r.completedDates || []), ...(r.completedDate ? [r.completedDate] : [])]));
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysAgoIso = thirtyDaysAgo.toISOString().slice(0, 10);
+    const thirtyDaysAgoIso = getLocalDateString(thirtyDaysAgo);
     const recentDays = dates.filter(d => d >= thirtyDaysAgoIso).length;
     const effectiveDays = isDoneToday && recentDays === 0 ? 1 : recentDays;
     const prog = Math.min(100, Math.round((effectiveDays / 30) * 100));
@@ -912,7 +913,7 @@ export async function recalculateGoalAggregateProgress(
     }
 
     if (overrides.updatedRoutineId) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getLocalDateString();
       allRoutines = allRoutines.map(r => {
         if (r.id !== overrides.updatedRoutineId) return r;
         const prevDates = r.completedDates || [];

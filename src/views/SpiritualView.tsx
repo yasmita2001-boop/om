@@ -4,6 +4,7 @@ import { ValueItem, SpiritualPractice, Commitment, Habit, NavModule, Goal } from
 import { storage, generateUUID } from '../lib/storage';
 import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
 import { syncGoalProgressFromSpiritual } from '../lib/goalTaskSync';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface SpiritualViewProps {
   values: ValueItem[];
@@ -285,15 +286,17 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                     <span className="font-bold text-slate-900 dark:text-white">{v.title}</span>
                     <GoalBadge goalId={v.goalId} goals={goals} />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteValue(v.id)}
-                    title="Delete value"
-                    aria-label={`Delete ${v.title}`}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <ProgressiveActions label={`More actions for ${v.title}`}>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteValue(v.id)}
+                      title="Delete value"
+                      aria-label={`Delete ${v.title}`}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </ProgressiveActions>
                 </div>
                 {v.description && (
                   <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
@@ -308,7 +311,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         {/* Spiritual Practices */}
         <section className="rounded-3xl border border-slate-200 bg-white p-4.5 sm:p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-            <Heart className="h-4 w-4 text-rose-500" />
+            <Heart className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Daily Practices ({practices.length})</h2>
           </div>
 
@@ -359,7 +362,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                       handleDeletePractice(p);
                     }
                   }}
-                  className="group rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center gap-2 hover:border-slate-200 dark:hover:border-slate-700 transition-colors focus:outline-none focus:ring-1 focus:ring-rose-400/50"
+                  className="group rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center gap-2 hover:border-slate-200 dark:hover:border-slate-700 transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-400/50"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -376,6 +379,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                     >
                       View Habit →
                     </button>
+                    <ProgressiveActions label={`More actions for ${p.name}`}>
                     <button
                       type="button"
                       onClick={() => handleStartEditPractice(p)}
@@ -394,6 +398,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                    </ProgressiveActions>
                   </div>
                 </div>
               ))
@@ -404,7 +409,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         {/* Personal Commitments */}
         <section className="rounded-3xl border border-slate-200 bg-white p-4.5 sm:p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-            <Shield className="h-4 w-4 text-amber-500" />
+            <Shield className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Commitments & Vows ({commitments.length})</h2>
           </div>
 
@@ -439,15 +444,17 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteCommitment(c.id)}
-                    title="Delete commitment"
-                    aria-label="Delete commitment"
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors ml-2 cursor-pointer shrink-0"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <ProgressiveActions label="More actions for commitment" className="ml-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCommitment(c.id)}
+                      title="Delete commitment"
+                      aria-label="Delete commitment"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </ProgressiveActions>
                 </div>
               </div>
             ))}
@@ -541,7 +548,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                   value={editPracName}
                   onChange={e => setEditPracName(e.target.value)}
                   placeholder="Practice (e.g. Breathwork, Meditation)"
-                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
@@ -554,7 +561,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                   value={editPracFreq}
                   onChange={e => setEditPracFreq(e.target.value)}
                   placeholder="Frequency (Daily, Sunrise, Evening)"
-                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 

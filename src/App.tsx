@@ -13,6 +13,7 @@ import {
 import {
   storage, seedInitialDataIfEmpty
 } from './lib/storage';
+import { getLocalDateString } from './lib/dateUtils';
 
 // Components
 import { Header } from './components/Header';
@@ -24,13 +25,14 @@ import { BsDateModal } from './components/BsDateModal';
 import { AlarmTriggerModal } from './components/AlarmTriggerModal';
 import { VoiceStudioWidget } from './components/VoiceStudioWidget';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { GoogleAccountLock } from './components/GoogleAccountLock';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress, computeGoalAggregateBreakdown } from './lib/goalTaskSync';
 import { soundEngine } from './lib/soundEngine';
 
 // Views
-import { DashboardView } from './views/DashboardView';
+import DashboardView from './views/DashboardView';
 const TasksView = lazyWithRetry(() => import('./views/TasksView').then(m => ({ default: m.TasksView })));
 const RoutineView = lazyWithRetry(() => import('./views/RoutineView').then(m => ({ default: m.RoutineView })));
 const GoalsView = lazyWithRetry(() => import('./views/GoalsView').then(m => ({ default: m.GoalsView })));
@@ -56,6 +58,16 @@ const ViewFallback: React.FC = () => (
 );
 
 export default function App() {
+  const [isUnlocked, setIsUnlocked] = useState(false);
+
+  if (!isUnlocked) {
+    return <GoogleAccountLock onUnlock={() => setIsUnlocked(true)} />;
+  }
+
+  return <LifeOSApp />;
+}
+
+function LifeOSApp() {
   const [activeModule, setActiveModule] = useState<NavModule>('dashboard');
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
@@ -483,7 +495,7 @@ export default function App() {
   };
 
   const handleLogHabit = async (habitId: string, occurrence = 0) => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString();
     const key = `${habitId}|${today}|${occurrence}`;
     const existing = habitLogs.find(l => l.key === key);
 

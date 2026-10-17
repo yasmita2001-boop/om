@@ -12,6 +12,8 @@ import { alarmService } from '../lib/alarmService';
 import { computeItemDelay } from '../components/ProjectTimelinePlan';
 import { BUILTIN_RINGTONES, useRingtoneOptions, getDefaultRingtoneId } from '../lib/alarmAudio';
 import { soundEngine } from '../lib/soundEngine';
+import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface RoutineViewProps {
   routines: Routine[];
@@ -51,7 +53,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   onRefresh,
   onSuccess
 }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   const { ringtoneOptions, defaultRingtone } = useRingtoneOptions();
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'routine' | 'habit'; id: string; name: string } | null>(null);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
@@ -142,7 +144,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
     return {
-      iso: d.toISOString().slice(0, 10),
+      iso: getLocalDateString(d),
       label: d.toLocaleDateString('en-US', { weekday: 'narrow' })
     };
   });
@@ -370,19 +372,19 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     const now = new Date();
 
     if (alarmPresetChoice === '5m') {
-      targetDueAt = new Date(now.getTime() + 5 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 5 * 60 * 1000));
     } else if (alarmPresetChoice === '15m') {
-      targetDueAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 15 * 60 * 1000));
     } else if (alarmPresetChoice === '30m') {
-      targetDueAt = new Date(now.getTime() + 30 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 30 * 60 * 1000));
     } else if (alarmPresetChoice === '1h') {
-      targetDueAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 60 * 60 * 1000));
     } else if (alarmPresetChoice === 'tonight') {
       targetDueAt = `${today}T20:00`;
     } else if (alarmPresetChoice === 'tomorrow') {
       const tm = new Date();
       tm.setDate(tm.getDate() + 1);
-      targetDueAt = `${tm.toISOString().slice(0, 10)}T08:00`;
+      targetDueAt = `${getLocalDateString(tm)}T08:00`;
     }
 
     await storage.put('reminders', {
@@ -674,7 +676,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     const checkDate = new Date();
     // Check backwards from today
     for (let i = 0; i < 60; i++) {
-      const dateStr = checkDate.toISOString().slice(0, 10);
+      const dateStr = getLocalDateString(checkDate);
       const hasLog = habitLogs.some(l => l.habitId === habitId && l.date === dateStr);
       if (hasLog) {
         streak++;
@@ -848,20 +850,17 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 Routine Genesis
               </h2>
             </div>
-            <span className="text-[11px] font-semibold text-slate-400">
-              Macro Container
-            </span>
           </div>
 
           <form onSubmit={handleAddRoutine} className="mt-4 space-y-3.5">
             {/* BLOCK TITLE WITH INTEGRATED LINK GOAL / MANUAL TOGGLE (As in image.png) */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+                <label className="block min-w-0 basis-36 flex-1 text-xs leading-4 font-semibold text-slate-700 dark:text-slate-300">
                   Block Title / Purpose
                 </label>
                 {/* Mode Selector: Link Goal vs Manual */}
-                <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
+                <div className="flex shrink-0 items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
                   <button
                     type="button"
                     onClick={() => {
@@ -870,7 +869,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         handleSelectGoalForRoutine(goals[0].id);
                       }
                     }}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
                       routineInputMode === 'link'
                         ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
                         : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -885,7 +884,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       setRoutineInputMode('manual');
                       setRoutineGoalId('');
                     }}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
                       routineInputMode === 'manual'
                         ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
                         : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -1078,25 +1077,22 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 Habit Genesis
               </h2>
             </div>
-            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-              Atomic Behavior
-            </span>
           </div>
 
           <form onSubmit={handleAddHabit} className="mt-4 space-y-3.5">
             {/* HABIT TITLE WITH INTEGRATED LINK & MANUAL OPTIONS (As in image.png) */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+                <label className="block min-w-0 basis-36 flex-1 text-xs leading-4 font-semibold text-slate-700 dark:text-slate-300">
                   Habit Title / Purpose
                 </label>
 
                 {/* Mode Selector above Habit Name: Link Goal vs Link Routine vs Manual */}
-                <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
+                <div className="flex shrink-0 items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
                   <button
                     type="button"
                     onClick={switchToGoalMode}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
                       habitInputMode === 'linkGoal'
                         ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
                         : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -1109,7 +1105,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   <button
                     type="button"
                     onClick={switchToLinkMode}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
                       habitInputMode === 'linkRoutine'
                         ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
                         : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -1122,7 +1118,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   <button
                     type="button"
                     onClick={switchToManualMode}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
                       habitInputMode === 'manual'
                         ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
                         : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -1289,7 +1285,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-1">
                 Time Slots ({timesPerDay} {timesPerDay === 1 ? 'Slot' : 'Slots'}):
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {Array.from({ length: Math.min(timesPerDay, 6) }).map((_, idx) => (
                   <div key={idx}>
                     <label className="block text-[10px] text-slate-500 dark:text-slate-400">Slot {idx + 1}</label>
@@ -1367,11 +1363,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-2">
           <div>
             <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-              Daily Routine Timeline ({routines.length} Blocks)
+              Daily Routine Timeline ({routines.length} {routines.length === 1 ? 'Block' : 'Blocks'})
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Each routine block hosts its assigned linked habits and audio alarms.
-            </p>
           </div>
           <span className="text-[11px] font-medium text-slate-400">
             {habits.filter(h => h.linkedRoutineId || h.routineId).length} Habits assigned to routines
@@ -1392,13 +1385,13 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               return (
                 <div
                   key={r.id}
-                  className="relative rounded-2xl border border-slate-200/80 p-4 transition-all hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700 flex flex-col justify-between bg-slate-50/40 dark:bg-slate-800/20"
+                  className="progressive-row group relative rounded-2xl border border-slate-200/80 p-4 transition-all hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700 flex flex-col justify-between bg-slate-50/40 dark:bg-slate-800/20"
                 >
                   <div>
                     {/* Header info */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-200/50 dark:border-indigo-800/50">
+                    <div className="flex items-start justify-between gap-2 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                        <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-200/50 dark:border-indigo-800/50 whitespace-nowrap shrink-0">
                           {r.startTime || r.time} {r.endTime ? `→ ${r.endTime}` : ''}
                         </span>
                         {computeItemDelay(r).isDelayed && r.completedDate !== today && (
@@ -1407,12 +1400,12 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1">
+                      <ProgressiveActions label={`More actions for ${r.name}`} className="min-w-0">
                         {computeItemDelay(r).isDelayed && r.completedDate !== today && (
                           <button
                             type="button"
                             onClick={() => handleTriggerUrgentAlarm(r.name, `Scheduled for ${r.startTime || r.time} — past time!`)}
-                            className="h-6 px-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-2xs"
+                            className="h-6 px-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-2xs whitespace-nowrap shrink-0"
                             title="Ring Urgent Alarm"
                           >
                             <BellRing className="h-3 w-3 animate-bounce" />
@@ -1422,7 +1415,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setQuickAlarmItem({ id: r.id, title: r.name, type: 'routine', scheduledTime: r.startTime || r.time })}
-                          className="h-6 px-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                          className="h-6 px-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold whitespace-nowrap shrink-0"
                           title="Schedule Reminder Alarm"
                         >
                           <Bell className="h-3 w-3" />
@@ -1431,7 +1424,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleOpenGenesisForRoutine(r)}
-                          className="h-6 rounded-lg bg-indigo-50 px-1.5 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1"
+                          className="h-6 rounded-lg bg-indigo-50 px-1.5 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
                           title="Task Genesis with Reminder Alarm"
                         >
                           <Zap className="h-3 w-3 text-amber-500" />
@@ -1453,10 +1446,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      </div>
+                      </ProgressiveActions>
                     </div>
 
-                    <div className="mt-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                    <div className="mt-2 min-w-0 break-words text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
                       {r.name}
                     </div>
 
@@ -1471,9 +1464,9 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       if (!g) return null;
                       const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
                       return (
-                        <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/80 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                        <div className="mt-2 inline-flex max-w-full min-w-0 items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/80 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
                           <Target className="h-3 w-3 shrink-0 text-indigo-500" />
-                          <span>{lvl}: {g.title} ({g.progress}%)</span>
+                          <span className="min-w-0 break-words">{lvl}: {g.title} ({g.progress}%)</span>
                         </div>
                       );
                     })()}
@@ -1500,7 +1493,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
                     {/* NESTED LINKED HABITS SECTION */}
                     <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-                      <div className="flex items-center justify-between text-[11px] mb-2">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] mb-2">
                         <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                           <Repeat className="h-3 w-3 text-amber-500" />
                           <span>Linked Habits ({linkedHabits.length})</span>
@@ -1643,7 +1636,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               return (
                 <div
                   key={h.id}
-                  className="flex flex-col md:flex-row md:items-center md:justify-between py-3.5 gap-3"
+                  className="progressive-row flex flex-col md:flex-row md:items-center md:justify-between py-3.5 gap-3"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1686,25 +1679,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       })()}
                     </div>
 
-                    <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
+                    <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-2">
                       <span>{formatCadenceLabel(h.frequency)} · {occCount}x per day</span>
-                      <span>·</span>
-                      {/* Routine Link Selector directly on row */}
-                      <div className="inline-flex items-center gap-1">
-                        <Link2 className="h-3 w-3 text-slate-400" />
-                        <select
-                          value={h.linkedRoutineId || h.routineId || ''}
-                          onChange={e => handleUpdateHabitRoutine(h, e.target.value)}
-                          className="text-[10px] font-medium bg-transparent border-0 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 focus:outline-none cursor-pointer"
-                        >
-                          <option value="">No Routine (Standalone)</option>
-                          {routines.map(r => (
-                            <option key={r.id} value={r.id}>
-                              Link to: {r.name} ({r.startTime || r.time})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
                     </div>
                   </div>
 
@@ -1739,7 +1715,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     </div>
 
                     {/* Today's log buttons */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5">
                       {Array.from({ length: occCount }).map((_, idx) => {
                         const key = `${h.id}|${today}|${idx}`;
                         const isDone = habitLogs.some(l => l.key === key);
@@ -1748,7 +1724,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                             key={idx}
                             type="button"
                             onClick={() => handleLogHabit(h.id, idx)}
-                            className={`flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
+                            className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
                               isDone
                                 ? 'bg-emerald-600 text-white shadow-xs'
                                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
@@ -1760,11 +1736,28 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         );
                       })}
 
+                      <ProgressiveActions label={`More actions for ${h.name}`} className="min-w-0 ml-auto">
+                        <div className="inline-flex items-center gap-1">
+                          <Link2 className="h-3 w-3 text-slate-400" />
+                          <select
+                            value={h.linkedRoutineId || h.routineId || ''}
+                            onChange={e => handleUpdateHabitRoutine(h, e.target.value)}
+                            aria-label={`Link ${h.name} to a routine`}
+                            className="max-w-[180px] truncate border-0 bg-transparent text-[10px] font-medium text-slate-500 focus:outline-none dark:text-slate-400"
+                          >
+                            <option value="">No Routine</option>
+                            {routines.map(r => (
+                              <option key={r.id} value={r.id}>
+                                {r.name} ({r.startTime || r.time})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       {isHabitOverdue && (
                         <button
                           type="button"
                           onClick={() => handleTriggerUrgentAlarm(h.name, 'Habit slot overdue today!')}
-                          className="h-7 px-2 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-2xs"
+                          className="h-7 px-2 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-2xs whitespace-nowrap shrink-0"
                           title="Ring Urgent Alarm"
                         >
                           <BellRing className="h-3 w-3 animate-bounce" />
@@ -1775,7 +1768,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setQuickAlarmItem({ id: h.id, title: h.name, type: 'habit', scheduledTime: h.times?.[0] })}
-                        className="h-7 px-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                        className="h-7 px-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold whitespace-nowrap shrink-0"
                         title="Schedule Reminder Alarm"
                       >
                         <Bell className="h-3 w-3" />
@@ -1785,7 +1778,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       <button
                         type="button"
                         onClick={() => handleOpenGenesisForHabit(h)}
-                        className="h-7 rounded-lg bg-indigo-50 px-2 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1"
+                        className="h-7 rounded-lg bg-indigo-50 px-2 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
                         title="Task Genesis with Reminder Alarm"
                       >
                         <Zap className="h-3 w-3 text-amber-500" />
@@ -1809,6 +1802,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
+                      </ProgressiveActions>
                     </div>
                   </div>
                 </div>

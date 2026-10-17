@@ -7,9 +7,12 @@ import {
 } from 'lucide-react';
 import { FocusSession, Task, Goal, Routine } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString } from '../lib/dateUtils';
 import { alarmAudio, BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { alarmService, FocusAlarm } from '../lib/alarmService';
 import { syncGoalProgressFromFocus } from '../lib/goalTaskSync';
+import { SlideTabs } from '../components/SlideTabs';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface FocusViewProps {
   sessions: FocusSession[];
@@ -20,6 +23,8 @@ interface FocusViewProps {
   onSuccess: (msg: string) => void;
 }
 
+type FocusMenuTab = 'timer' | 'alarms' | 'ringtones';
+
 export const FocusView: React.FC<FocusViewProps> = ({
   sessions,
   tasks,
@@ -29,7 +34,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
   onSuccess
 }) => {
   // Navigation Tabs in Focus Menu
-  const [activeMenuTab, setActiveMenuTab] = useState<'timer' | 'alarms' | 'ringtones'>('timer');
+  const [activeMenuTab, setActiveMenuTab] = useState<FocusMenuTab>('timer');
 
   // Focus Timer States
   const [totalSeconds, setTotalSeconds] = useState(25 * 60);
@@ -143,7 +148,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
       label: sessionLabel || 'Focus Session',
       durationSeconds: elapsed,
       minutes: Number((elapsed / 60).toFixed(1)),
-      date: new Date().toISOString().slice(0, 10),
+      date: getLocalDateString(),
       startedAt: now - elapsed * 1000,
       endedAt: now,
       createdAt: now,
@@ -309,7 +314,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
 
   const totalFocusSeconds = sessions.reduce((sum, s) => sum + (Number(s.durationSeconds) || 0), 0);
   const totalFocusHours = (totalFocusSeconds / 3600).toFixed(1);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   const todaySessions = sessions.filter(s => s.date === today);
   const todayMinutes = Math.round(todaySessions.reduce((sum, s) => sum + (Number(s.durationSeconds) || 0), 0) / 60);
 
@@ -350,46 +355,19 @@ export const FocusView: React.FC<FocusViewProps> = ({
         </div>
       </div>
 
-      {/* Focus Menu Navigation Tabs */}
-      <div className="grid grid-cols-3 gap-2 p-1.5 w-full rounded-2xl bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/70 shadow-2xs">
-        <button
-          type="button"
-          onClick={() => setActiveMenuTab('timer')}
-          className={`min-w-0 flex items-center justify-center gap-2 rounded-xl px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-            activeMenuTab === 'timer'
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white ring-1 ring-slate-200/60 dark:ring-slate-700/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <Sparkles className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
-          <span className="whitespace-nowrap truncate">Deep Work Sprint</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveMenuTab('alarms')}
-          className={`min-w-0 flex items-center justify-center gap-2 rounded-xl px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-            activeMenuTab === 'alarms'
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white ring-1 ring-slate-200/60 dark:ring-slate-700/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <Bell className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
-          <span className="whitespace-nowrap truncate">Alarm Clock ({alarmsList.filter(a => a.enabled).length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveMenuTab('ringtones')}
-          className={`min-w-0 flex items-center justify-center gap-2 rounded-xl px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-            activeMenuTab === 'ringtones'
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white ring-1 ring-slate-200/60 dark:ring-slate-700/60'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <Music className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          <span className="whitespace-nowrap truncate">Ringtone Studio</span>
-        </button>
+      <div className="w-full border-b border-slate-200 pb-2 dark:border-slate-800">
+        <SlideTabs
+          activeId={activeMenuTab}
+          onChange={id => {
+            if (id === 'timer' || id === 'alarms' || id === 'ringtones') setActiveMenuTab(id);
+          }}
+          size="sm"
+          tabs={[
+            { id: 'timer', label: 'Deep Work Sprint', shortLabel: 'Timer', icon: Sparkles },
+            { id: 'alarms', label: 'Alarm Clock', shortLabel: 'Alarms', icon: Bell, badge: alarmsList.filter(a => a.enabled).length },
+            { id: 'ringtones', label: 'Ringtone Studio', shortLabel: 'Ringtones', icon: Music }
+          ]}
+        />
       </div>
 
       {/* ============================================================== */}
@@ -902,14 +880,24 @@ export const FocusView: React.FC<FocusViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => handlePreview(alarm.ringtone)}
-                          className="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
-                          title="Test Alarm Sound"
-                        >
-                          <Volume2 className="h-4 w-4" />
-                        </button>
+                        <ProgressiveActions label={`More actions for ${alarm.label}`} className="shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handlePreview(alarm.ringtone)}
+                            className="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
+                            title="Test Alarm Sound"
+                          >
+                            <Volume2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteAlarm(alarm.id)}
+                            className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer"
+                            title="Delete Alarm"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </ProgressiveActions>
 
                         {/* ON/OFF Switch */}
                         <button
@@ -926,14 +914,6 @@ export const FocusView: React.FC<FocusViewProps> = ({
                           />
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => deleteAlarm(alarm.id)}
-                          className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer"
-                          title="Delete Alarm"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     </div>
                   );

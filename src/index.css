@@ -67,7 +67,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    letter-spacing: -0.011em;
+    letter-spacing: normal;
   }
 
   /* Universal typography baseline */
@@ -194,8 +194,7 @@ input.calc-display-input:focus-visible,
 button[role="switch"] {
   flex-shrink: 0;
 }
-.flex.justify-between > button:not(.w-full):not(.flex-col):not(.text-left),
-.flex.justify-between > label:not(.w-full):not(.flex-col):not(.text-left) {
+.flex.justify-between > button:not(.w-full):not(.flex-col):not(.text-left) {
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -359,6 +358,18 @@ button[role="switch"] {
 html {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Keep primary form actions consistent across every module and submenu. */
+form button[type="submit"] {
+  background-color: var(--color-brand, #6366f1) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 12%) !important;
+}
+
+form button[type="submit"]:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--color-brand, #6366f1) 85%, white) !important;
+}
 a, button, input, select, textarea, label, [role="button"], summary {
   touch-action: manipulation;
 }
@@ -395,4 +406,75 @@ a, button, input, select, textarea, label, [role="button"], summary {
 /* Printing: drop the dark background so exports/prints are legible */
 @media print {
   html, body, #root { background: #fff !important; color: #000 !important; }
+}
+.progressive-actions {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.progressive-actions__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  border-radius: 0.5rem;
+  color: #64748b;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.progressive-actions__trigger:hover {
+  background: rgb(148 163 184 / 0.12);
+  color: #334155;
+}
+
+.progressive-actions__content {
+  display: inline-flex;
+  flex-wrap: wrap;
+  width: auto;
+  max-width: 0;
+  max-height: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(0.25rem);
+  transition: max-width 180ms ease, max-height 180ms ease, opacity 150ms ease, transform 150ms ease;
+}
+
+.progressive-actions__content button,
+.progressive-actions__content select {
+  flex-shrink: 0;
+}
+
+.goal-category-badges > span {
+  background-color: #fff;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.dark .goal-category-badges > span {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+.progressive-actions[data-open='true'] .progressive-actions__content {
+  max-width: min(18rem, calc(100vw - 4rem));
+  max-height: 8rem;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressive-actions__content {
+    transition: none;
+  }
 }

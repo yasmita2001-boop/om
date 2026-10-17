@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Plus, Phone, Calendar, Trash2, Edit2, Bell, ChevronDown, ChevronUp, Check, X } from 'lucide-react';
 import { Person, Interaction, Goal, ReminderItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString } from '../lib/dateUtils';
 import { GoalBadge } from '../components/GoalLinkSelector';
 import { syncGoalProgressFromPeople } from '../lib/goalTaskSync';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface PeopleViewProps {
   people: Person[];
@@ -71,7 +73,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
       const inter: Interaction = {
         id: generateUUID(),
         personId: selectedPersonId,
-        date: new Date().toISOString().slice(0, 10),
+        date: getLocalDateString(),
         text: interactionText.trim(),
         createdAt: Date.now()
       };
@@ -148,7 +150,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
 
   const getImportantDateCountdown = (dateStr?: string) => {
     if (!dateStr) return null;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString();
     const tD = new Date(`${today}T00:00:00`).getTime();
     const target = new Date(`${dateStr.slice(0, 10)}T00:00:00`).getTime();
     if (isNaN(target)) return null;
@@ -350,14 +352,16 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                               {p.relationship}
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePerson(p.id)}
-                            className="text-slate-300 hover:text-rose-500 cursor-pointer p-1"
-                            title="Delete contact"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <ProgressiveActions label={`More actions for ${p.name}`} className="shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePerson(p.id)}
+                              className="text-slate-300 hover:text-rose-500 cursor-pointer p-1"
+                              title="Delete contact"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </ProgressiveActions>
                         </div>
 
                         {p.contact && (
@@ -434,7 +438,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                   </div>
                                   <p className="italic leading-relaxed break-words">"{i.text}"</p>
                                 </div>
-                                <div className="flex items-center gap-0.5 shrink-0">
+                                <ProgressiveActions label={`More actions for touchpoint on ${i.date}`} className="shrink-0">
                                   <button
                                     type="button"
                                     onClick={() => handleStartEditInteraction(i)}
@@ -451,7 +455,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                   >
                                     <Trash2 className="h-3 w-3" />
                                   </button>
-                                </div>
+                                </ProgressiveActions>
                               </div>
                             ))}
                           </div>

@@ -9,6 +9,7 @@ import {
   Task, TaskPriority, ReminderItem
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 import {
   syncGoalProgressFromProjects,
   syncGoalProgressFromLearning,
@@ -24,6 +25,7 @@ import { computeItemDelay } from '../components/ProjectTimelinePlan';
 import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface WorkViewProps {
   projects: WorkProject[];
@@ -66,7 +68,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   onRefresh,
   onSuccess
 }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   const [activeTab, setActiveTab] = useState<WorkTab>('projects');
 
   // Task Genesis Modal State
@@ -739,19 +741,19 @@ export const WorkView: React.FC<WorkViewProps> = ({
     const now = new Date();
 
     if (alarmPresetChoice === '5m') {
-      targetDueAt = new Date(now.getTime() + 5 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 5 * 60 * 1000));
     } else if (alarmPresetChoice === '15m') {
-      targetDueAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 15 * 60 * 1000));
     } else if (alarmPresetChoice === '30m') {
-      targetDueAt = new Date(now.getTime() + 30 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 30 * 60 * 1000));
     } else if (alarmPresetChoice === '1h') {
-      targetDueAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 60 * 60 * 1000));
     } else if (alarmPresetChoice === 'tonight') {
       targetDueAt = `${today}T20:00`;
     } else if (alarmPresetChoice === 'tomorrow') {
       const tm = new Date();
       tm.setDate(tm.getDate() + 1);
-      targetDueAt = `${tm.toISOString().slice(0, 10)}T09:00`;
+      targetDueAt = `${getLocalDateString(tm)}T09:00`;
     } else {
       targetDueAt = `${quickCustomDate}T${quickCustomTime}`;
     }
@@ -1239,6 +1241,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                             <span>{isDone ? 'Done' : 'Complete'}</span>
                           </button>
 
+                          <ProgressiveActions label={`More actions for ${p.name}`}>
                           {/* DELAY ALARM TRIGGER */}
                           {delayInfo.isDelayed && !isDone && (
                             <button
@@ -1293,6 +1296,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
+                          </ProgressiveActions>
                         </div>
                       </div>
 
@@ -1529,7 +1533,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                           {l.targetDate && <span>Target Date: {l.targetDate}</span>}
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
+                        <ProgressiveActions label={`More actions for ${l.title}`} className="shrink-0">
                           {isLearningDelayed && (
                             <button
                               type="button"
@@ -1580,7 +1584,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                        </div>
+                        </ProgressiveActions>
                       </div>
 
                       <div className="w-full font-bold text-slate-900 dark:text-white text-sm leading-snug">
@@ -1866,7 +1870,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                             {s.targetDate && <span>Mastery Target: {s.targetDate}</span>}
                           </div>
 
-                          <div className="flex items-center gap-1 shrink-0">
+                          <ProgressiveActions label={`More actions for ${s.name}`} className="shrink-0">
                             {isSkillDelayed && (
                               <button
                                 type="button"
@@ -1917,7 +1921,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
-                          </div>
+                          </ProgressiveActions>
                         </div>
 
                         <div className="w-full font-bold text-slate-900 dark:text-white text-sm leading-snug">
@@ -2074,7 +2078,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <ProgressiveActions label={`More actions for ${m.title}`} className="shrink-0">
                       {/* EDIT BUTTON */}
                       <button
                         type="button"
@@ -2093,7 +2097,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    </div>
+                    </ProgressiveActions>
                   </div>
                 ))
               )}

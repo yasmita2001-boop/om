@@ -12,6 +12,7 @@ import {
   ReceiptItem, NavModule, Goal
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getLocalDateString, getLocalMonthString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
 import { syncGoalProgressFromFinance } from '../lib/goalTaskSync';
@@ -79,7 +80,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   onSuccess,
   onNavigate
 }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'accounts' | 'loans' | 'investments' | 'savings' | 'balanceSheet'>('overview');
 
   // New Transaction Form state
@@ -258,8 +259,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [dateFilterMode, setDateFilterMode] = useState<'all' | 'this_month' | 'last_30_days' | 'custom'>('all');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-  const currentYearMonth = new Date().toISOString().slice(0, 7);
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const currentYearMonth = getLocalMonthString();
+  const thirtyDaysAgo = getLocalDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -479,17 +480,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     onSelectGoal?: (g: Goal) => void,
     label = 'Strategic Goal Link'
   ) => (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
-          {label}
-        </label>
-        {/* Mode Selector: Link Goal vs Manual */}
-        <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <div
+          role="group"
+          aria-label={label}
+          className="flex shrink-0 items-center rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800"
+        >
           <button
             type="button"
             onClick={() => setMode('link')}
-            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+            className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-all cursor-pointer ${
               mode === 'link'
                 ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
                 : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -501,7 +502,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           <button
             type="button"
             onClick={() => { setMode('manual'); setSelectedGoalId(''); }}
-            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
+            className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-all cursor-pointer ${
               mode === 'manual'
                 ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
                 : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -514,9 +515,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
       {mode === 'link' && (
         <div className="space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30 animate-in fade-in duration-150">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-              Select Target Goal (5 Branches) *
+              Target goal *
             </span>
             {selectedGoalId && (
               <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
@@ -534,7 +535,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             }}
             className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
           >
-            <option value="">-- Choose Goal (🎯 Main, 🔹 Sub, ▫️ Micro, 🔸 Nano, ⚡ Atomic) --</option>
+            <option value="">Choose a goal</option>
             {goals.map(g => {
               const meta = getGoalLevelLabel(g.level);
               return (
@@ -546,7 +547,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </select>
           {selectedGoalId && (
             <span className="block text-[10px] text-indigo-700 dark:text-indigo-300">
-              ⚡ This financial entry is allocated directly to this goal's cash flow, debt & asset tracking!
+              This entry is linked to the selected goal.
             </span>
           )}
         </div>
@@ -1697,7 +1698,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white">Record Transaction</h2>
-                  <p className="text-[11px] text-slate-400">Direct ledger entry with optional vault receipt & strategic goal sync</p>
                 </div>
               </div>
             </div>
@@ -1747,7 +1747,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 txGoalId,
                 setTxGoalId,
                 g => { if (!txCategory) setTxCategory(g.category || g.title); },
-                'Strategic Goal Link'
+                'Strategic goal link options'
               )}
 
               {/* Amount & Date Grid */}
@@ -1825,7 +1825,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                         Category {txType === 'income' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-rose-500">*</span>}
                       </label>
-                      <span className="text-[10px] text-slate-400 font-normal">Dropdown / Type</span>
                     </div>
                     <div className="relative">
                       <input
@@ -1926,25 +1925,31 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       </div>
                     )}
                   </div>
-                  <div className="space-y-1">
+                  <div className="min-w-0 space-y-1">
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                      {txType === 'income' ? 'Deposit Into Account (+ Inflow)' : 'Payment / Funding Account (- Outflow)'}
+                      {txType === 'income' ? 'Deposit account' : 'Payment account'}
                     </label>
-                    <select
-                      value={txAccount || accounts[0]?.id || ''}
-                      onChange={e => setTxAccount(e.target.value)}
-                      className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
-                    >
-                      {accounts.length === 0 ? (
-                        <option value="">Default Account (will be auto-created)</option>
-                      ) : (
-                        accounts.map(a => (
-                          <option key={a.id} value={a.id}>
-                            {a.name} (₹{Number(a.balance).toLocaleString('en-IN')})
-                          </option>
-                        ))
-                      )}
-                    </select>
+                    <div className="relative min-w-0">
+                      <select
+                        value={txAccount || accounts[0]?.id || ''}
+                        onChange={e => setTxAccount(e.target.value)}
+                        className="h-10 sm:h-10.5 min-w-0 w-full appearance-none truncate rounded-xl border border-slate-200 py-0 pl-2.5 pr-8 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
+                      >
+                        {accounts.length === 0 ? (
+                          <option value="">Default Account (will be auto-created)</option>
+                        ) : (
+                          accounts.map(a => (
+                            <option key={a.id} value={a.id}>
+                              {a.name} (₹{Number(a.balance).toLocaleString('en-IN')})
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      <ChevronDown
+                        aria-hidden="true"
+                        className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -1952,7 +1957,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               {/* Note / Memo */}
               <div className="space-y-1">
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Note / Reference (Optional)
+                  Note (optional)
                 </label>
                 <input
                   type="text"
@@ -2286,7 +2291,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center justify-between">
                 <span>Record Loan EMI / Payment</span>
-                <span className="text-[10px] text-slate-400 font-normal">Auto-amortizes balance</span>
               </h2>
               <form onSubmit={handleRecordLoanPayment} className="mt-4 space-y-3">
                 <div>
@@ -2359,7 +2363,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   loanGoalId,
                   setLoanGoalId,
                   undefined,
-                  'Link Loan to Strategic Goal'
+                  'Loan goal link options'
                 )}
 
                 <div>
@@ -2407,24 +2411,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Deposit Loan Disbursal into Bank / Cash Account (Optional / Recommended)
+                  <label className="block text-xs leading-4 font-semibold text-slate-600 dark:text-slate-300">
+                    Deposit to account (optional)
                   </label>
                   <select
                     value={loanDepositAccountId}
                     onChange={e => setLoanDepositAccountId(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   >
-                    <option value="">-- No Account Deposit (External / Direct-to-Vendor Loan) --</option>
+                    <option value="">No account deposit</option>
                     {accounts.map(a => (
                       <option key={a.id} value={a.id}>
                         {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-[10px] text-slate-400">
-                    Depositing into your account adds the borrowed principal into your bank balance and prevents ledger calculation drift when paying EMIs.
-                  </p>
                 </div>
                 <button
                   type="submit"
@@ -2438,7 +2439,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             {/* Add Other Liabilities & Payables Form */}
             <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-                Add Other Liability / Payable
+                Add Liability
               </h2>
               <form onSubmit={handleAddLiability} className="mt-4 space-y-3">
                 {/* Strategic Goal Link Mode Selector */}
@@ -2448,7 +2449,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   liabGoalId,
                   setLiabGoalId,
                   undefined,
-                  'Link Liability to Strategic Goal'
+                  'Liability goal link options'
                 )}
 
                 <div>
@@ -2503,12 +2504,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           <div className="lg:col-span-7 space-y-6">
             {/* Active Loans List with Amortization */}
             <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Active Loans & Amortization ({loans.length})
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <h2 className="min-w-0 text-sm font-bold text-slate-900 dark:text-white">
+                  Loans ({loans.length})
                 </h2>
-                <span className="font-mono text-xs font-bold text-rose-600 dark:text-rose-400">
-                  Total Debt: ₹{totalLoanLiabilities.toLocaleString('en-IN')}
+                <span className="shrink-0 font-mono text-xs font-bold text-rose-600 dark:text-rose-400">
+                  Debt ₹{totalLoanLiabilities.toLocaleString('en-IN')}
                 </span>
               </div>
 
@@ -2617,12 +2618,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
             {/* Other Liabilities List */}
             <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Other Liabilities & Short-term Payables ({liabilities.length})
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <h2 className="min-w-0 text-sm font-bold text-slate-900 dark:text-white">
+                  Other liabilities ({liabilities.length})
                 </h2>
-                <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
-                  Total: ₹{manualLiabilitiesVal.toLocaleString('en-IN')}
+                <span className="shrink-0 font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
+                  Total ₹{manualLiabilitiesVal.toLocaleString('en-IN')}
                 </span>
               </div>
 
@@ -2702,7 +2703,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 invGoalId,
                 setInvGoalId,
                 undefined,
-                'Link Investment to Strategic Goal'
+                'Investment goal link options'
               )}
 
               <div>
@@ -2742,23 +2743,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Fund From Bank / Cash Account (Optional)
+                  Fund from account (optional)
                 </label>
                 <select
                   value={invAccountId}
                   onChange={e => setInvAccountId(e.target.value)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
-                  <option value="">-- No Account Deduction (External / Existing Asset) --</option>
+                  <option value="">No account deduction</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
                       {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-[10px] text-slate-400">
-                  Selecting an account will automatically deduct the invested capital and record a linked transaction in your ledger.
-                </p>
               </div>
               <button
                 type="submit"
@@ -2865,7 +2863,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 saveGoalId,
                 setSaveGoalId,
                 undefined,
-                'Link Savings to Strategic Goal'
+                'Savings goal link options'
               )}
 
               <div>
@@ -2905,23 +2903,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Fund Opening Savings from Bank / Cash Account (Optional)
+                  Fund from account (optional)
                 </label>
                 <select
                   value={saveAccountId}
                   onChange={e => setSaveAccountId(e.target.value)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
-                  <option value="">-- No Account Deduction (Pre-existing Cash / External Reserve) --</option>
+                  <option value="">No account deduction</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
                       {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-[10px] text-slate-400">
-                  If selected and current amount &gt; 0, capital is transferred from your bank balance into this savings reserve.
-                </p>
               </div>
               <button
                 type="submit"
@@ -3009,7 +3004,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 assetGoalId,
                 setAssetGoalId,
                 undefined,
-                'Link Asset to Strategic Goal'
+                'Asset goal link options'
               )}
 
               <div>

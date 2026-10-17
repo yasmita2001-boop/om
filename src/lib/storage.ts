@@ -191,12 +191,6 @@ class StorageEngine {
         }
 
         this.db = db;
-        if (db.objectStoreNames.contains('tombstones')) {
-          try {
-            const clrTx = db.transaction('tombstones', 'readwrite');
-            clrTx.objectStore('tombstones').clear();
-          } catch {}
-        }
         db.onversionchange = () => {
           try { db.close(); } catch {}
           this.db = null;

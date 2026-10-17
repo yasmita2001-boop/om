@@ -16,7 +16,9 @@ import { SlideTabs } from '../components/SlideTabs';
 import { globalTextReader, isSpeechSynthesisSupported } from '../lib/voiceService';
 import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 import { soundEngine } from '../lib/soundEngine';
+import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 
 interface TasksViewProps {
   tasks: Task[];
@@ -58,7 +60,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   onRefresh,
   onSuccess
 }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString();
   const [activeSubMenu, setActiveSubMenu] = useState<'roster' | 'dailyCommand' | 'kanban'>('roster');
 
   // Quick preset alarm modal
@@ -96,19 +98,19 @@ export const TasksView: React.FC<TasksViewProps> = ({
     let targetDueAt = '';
     const now = new Date();
     if (alarmPresetChoice === '5m') {
-      targetDueAt = new Date(now.getTime() + 5 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 5 * 60 * 1000));
     } else if (alarmPresetChoice === '15m') {
-      targetDueAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 15 * 60 * 1000));
     } else if (alarmPresetChoice === '30m') {
-      targetDueAt = new Date(now.getTime() + 30 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 30 * 60 * 1000));
     } else if (alarmPresetChoice === '1h') {
-      targetDueAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString().slice(0, 16);
+      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 60 * 60 * 1000));
     } else if (alarmPresetChoice === 'tonight') {
       targetDueAt = `${today}T20:00`;
     } else if (alarmPresetChoice === 'tomorrow') {
       const tm = new Date();
       tm.setDate(tm.getDate() + 1);
-      targetDueAt = `${tm.toISOString().slice(0, 10)}T09:00`;
+      targetDueAt = `${getLocalDateString(tm)}T09:00`;
     } else {
       targetDueAt = `${quickCustomDate}T${quickCustomTime}`;
     }
@@ -1052,7 +1054,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 filteredTasks.map(task => (
                   <div
                     key={task.id}
-                    className="flex items-center justify-between py-3 px-2 rounded-xl transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                    className="progressive-row flex items-center justify-between py-3 px-2 rounded-xl transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
                   >
                     <div className="flex items-center gap-3 min-w-0 pr-2">
                       <button
@@ -1110,7 +1112,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
+                    <ProgressiveActions label={`More actions for ${task.title}`} className="shrink-0">
                       {/* DELAY ALARM TRIGGER BUTTON */}
                       {!task.done && task.dueAt && task.dueAt < today && (
                         <button
@@ -1163,7 +1165,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    </div>
+                    </ProgressiveActions>
                   </div>
                 ))
               )}

@@ -7,6 +7,7 @@ import { storage, cleanOrphanedCacheAndTrash } from '../lib/storage';
 import { RecycleBinItem } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { syncToGoogleDriveAfterPermanentDelete } from '../lib/googleDriveSync';
+import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface RecycleBinViewProps {
   profileId?: string;
@@ -488,15 +489,17 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
                             <span>Restore</span>
                           </button>
 
-                          <button
-                            type="button"
-                            disabled={isProcessing}
-                            onClick={() => setItemToPurge(item)}
-                            className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-rose-500 active:scale-98 cursor-pointer disabled:opacity-50 transition-all"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span>Delete Forever</span>
-                          </button>
+                          <ProgressiveActions label={`More actions for ${item.title}`} className="shrink-0">
+                            <button
+                              type="button"
+                              disabled={isProcessing}
+                              onClick={() => setItemToPurge(item)}
+                              className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-rose-500 active:scale-98 cursor-pointer disabled:opacity-50 transition-all"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>Delete Forever</span>
+                            </button>
+                          </ProgressiveActions>
                         </div>
                       </div>
 

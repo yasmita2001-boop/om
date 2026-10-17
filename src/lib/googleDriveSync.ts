@@ -159,6 +159,30 @@ export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToke
   }
 }
 
+export async function signInWithGoogleAccount(): Promise<GoogleUser> {
+  const accountProvider = new GoogleAuthProvider();
+  accountProvider.setCustomParameters({ prompt: 'select_account' });
+
+  try {
+    const result = await signInWithPopup(getFirebaseAuth(), accountProvider);
+    return {
+      email: result.user.email,
+      displayName: result.user.displayName,
+      photoURL: result.user.photoURL,
+      uid: result.user.uid
+    };
+  } catch (error: any) {
+    console.error('Google account verification failed:', error);
+    if (error.code === 'auth/popup-closed-by-user') {
+      throw new Error('Google Sign-In window was closed.');
+    }
+    if (error.code === 'auth/cancelled-popup-request') {
+      throw new Error('Another sign-in request is in progress.');
+    }
+    throw new Error(error.message || 'Google account verification failed.');
+  }
+}
+
 /**
  * Sign out from Google.
  */
@@ -544,4 +568,3 @@ export async function syncToGoogleDriveAfterPermanentDelete(): Promise<{
 
   return { syncedToDrive: false };
 }
-

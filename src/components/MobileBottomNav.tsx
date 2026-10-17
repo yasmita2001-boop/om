@@ -52,7 +52,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             className="flex-1"
             onClick={() => setIsMoreOpen(false)}
           />
-          <div className="rounded-t-3xl border-t border-slate-200 bg-white p-5 pb-8 shadow-2xl dark:border-white/10 dark:bg-[#111827] animate-in slide-in-from-bottom duration-250 max-h-[80vh] overflow-y-auto">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="All modules and tools"
+            className="rounded-t-3xl border-t border-slate-200 bg-white p-5 pb-8 shadow-2xl dark:border-white/10 dark:bg-[#111827] animate-in slide-in-from-bottom duration-250 max-h-[80vh] overflow-y-auto"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/[0.08]">
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 font-serif font-bold text-white text-xs">
@@ -66,13 +71,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               <button
                 type="button"
                 onClick={() => setIsMoreOpen(false)}
+                aria-label="Close modules menu"
                 className="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 pt-4">
+            <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2.5 pt-4">
               {secondaryModules.map(mod => {
                 const isActive = activeModule === mod.id;
                 return (
@@ -91,7 +97,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold truncate">{mod.label}</div>
-                      <div className="text-[10px] text-slate-400 truncate">{mod.desc}</div>
+                      <div className="text-[10px] text-slate-400 line-clamp-2">{mod.desc}</div>
                     </div>
                   </button>
                 );

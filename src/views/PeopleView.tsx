@@ -108,18 +108,35 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
 
   const handleCreateImportantDateReminder = async (p: Person) => {
     if (!p.importantDate) return;
-    const reminder: ReminderItem = {
-      id: generateUUID(),
+    const matchingReminders = (reminders || [])
+      .filter(r => r.linkedType === 'contact' && r.linkedId === p.id && r.status === 'open')
+      .sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+    const now = Date.now();
+    const reminderData = {
       title: `🎉 ${p.name}'s Milestone (${p.relationship}): ${p.importantDate}`,
       dueAt: p.importantDate,
-      repeatRule: 'none',
-      status: 'open',
+      repeatRule: 'none' as const,
+      status: 'open' as const,
       alarmEnabled: true,
       ringtone: 'gentle_bell',
       linkedType: 'contact',
       linkedId: p.id,
+      updatedAt: now
+    };
+    if (matchingReminders.length > 0) {
+      const [existing, ...duplicates] = matchingReminders;
+      await storage.put('reminders', { ...existing, ...reminderData });
+      await Promise.all(duplicates.map(reminder => storage.delete('reminders', reminder.id)));
+      onSuccess(`🔔 Reminder re-armed for ${p.name}'s important date!`);
+      onRefresh();
+      return;
+    }
+
+    const reminder: ReminderItem = {
+      id: generateUUID(),
+      ...reminderData,
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: now
     };
     await storage.put('reminders', reminder);
     onSuccess(`🔔 Reminder scheduled for ${p.name}'s important date!`);

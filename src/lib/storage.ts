@@ -784,6 +784,15 @@ class StorageEngine {
     const profileId = item.profileId || this.activeProfileId || 'om-master-profile';
     const deletedAt = Date.now();
     const signature = computeRecordSignature(storeName, item);
+    const linkedType = storeName === 'tasks' ? 'task' : storeName === 'people' ? 'contact' : null;
+    const linkedReminders = linkedType
+      ? (await this.getAll<any>('reminders')).filter(
+          reminder => reminder.linkedId === id && (
+            reminder.linkedType === linkedType ||
+            (linkedType === 'task' && !reminder.linkedType)
+          )
+        )
+      : [];
 
     const recycleEntry: RecycleBinItem = {
       id: `${storeName}:${id}`,
@@ -807,15 +816,57 @@ class StorageEngine {
       contentSignature: signature
     };
 
+    const linkedReminderEntries = linkedReminders.map(reminder => {
+      const reminderBinId = `reminders:${reminder.id}`;
+      const description = describeDeletedRecord('reminders', reminder);
+      return {
+        reminder,
+        recycleEntry: {
+          id: reminderBinId,
+          storeName: 'reminders',
+          recordId: reminder.id,
+          profileId: reminder.profileId || profileId,
+          deletedAt,
+          data: reminder,
+          title: description.title,
+          moduleLabel: description.moduleLabel,
+          storeLabel: description.storeLabel
+        } satisfies RecycleBinItem,
+        tombstone: {
+          id: reminderBinId,
+          storeName: 'reminders',
+          recordId: reminder.id,
+          profileId: reminder.profileId || profileId,
+          deletedAt,
+          permanentlyDeleted: false,
+          contentSignature: computeRecordSignature('reminders', reminder)
+        } satisfies DeletionTombstone
+      };
+    });
+
     return new Promise((resolve, reject) => {
       try {
-        const tx = db.transaction([storeName, 'recycleBin', 'tombstones'], 'readwrite');
+        const tx = db.transaction(
+          Array.from(new Set([storeName, 'reminders', 'recycleBin', 'tombstones'])),
+          'readwrite'
+        );
         tx.objectStore(storeName).delete(id);
         tx.objectStore('recycleBin').put(recycleEntry);
         tx.objectStore('tombstones').put(tombstone);
+        for (const linkedReminder of linkedReminderEntries) {
+          tx.objectStore('reminders').delete(linkedReminder.reminder.id);
+          tx.objectStore('recycleBin').put(linkedReminder.recycleEntry);
+          tx.objectStore('tombstones').put(linkedReminder.tombstone);
+        }
         tx.oncomplete = () => {
           this.broadcastChange(storeName, 'recycle', id);
+          for (const linkedReminder of linkedReminderEntries) {
+            this.broadcastChange('reminders', 'recycle', linkedReminder.reminder.id);
+          }
           this.broadcastChange('recycleBin', 'add', recycleEntry.id);
+          for (const linkedReminder of linkedReminderEntries) {
+            this.broadcastChange('recycleBin', 'add', linkedReminder.recycleEntry.id);
+          }
           resolve();
         };
         tx.onerror = () => reject(tx.error);
@@ -954,6 +1005,53 @@ class StorageEngine {
     const raw = await this.getAllRaw<RecycleBinItem>('recycleBin');
     const target = profileId || this.activeProfileId || 'om-master-profile';
     return raw.filter(item => item && this.belongsToProfile(item, target));
+  }
+
+  public async reconcileLinkedReminders(profileId = this.getActiveProfileId()): Promise<void> {
+    const [reminders, tasks, people] = await Promise.all([
+      this.getAll<any>('reminders', profileId),
+      this.getAll<any>('tasks', profileId),
+      this.getAll<any>('people', profileId)
+    ]);
+    const taskIds = new Set(tasks.map(task => task.id));
+    const peopleIds = new Set(people.map(person => person.id));
+    const activeContactReminders = new Map<string, any>();
+    const reminderIdsToRecycle = new Set<string>();
+
+    for (const reminder of reminders) {
+      const isLegacyTaskReminder = !reminder.linkedType &&
+        typeof reminder.title === 'string' &&
+        (reminder.title.startsWith('⏰ Task Reminder:') || reminder.title.startsWith('⏰ Task Genesis Alarm:'));
+      if (
+        (reminder.linkedType === 'task' || isLegacyTaskReminder) &&
+        !taskIds.has(reminder.linkedId)
+      ) {
+        reminderIdsToRecycle.add(reminder.id);
+        continue;
+      }
+      if (reminder.linkedType !== 'contact') continue;
+      if (!peopleIds.has(reminder.linkedId)) {
+        reminderIdsToRecycle.add(reminder.id);
+        continue;
+      }
+      if (reminder.status !== 'open') continue;
+
+      const existing = activeContactReminders.get(reminder.linkedId);
+      if (!existing) {
+        activeContactReminders.set(reminder.linkedId, reminder);
+        continue;
+      }
+      const existingTimestamp = existing.updatedAt || existing.createdAt || 0;
+      const reminderTimestamp = reminder.updatedAt || reminder.createdAt || 0;
+      const keepReminder = reminderTimestamp > existingTimestamp ||
+        (reminderTimestamp === existingTimestamp && reminder.id > existing.id);
+      reminderIdsToRecycle.add(keepReminder ? existing.id : reminder.id);
+      if (keepReminder) activeContactReminders.set(reminder.linkedId, reminder);
+    }
+
+    for (const reminderId of reminderIdsToRecycle) {
+      await this.moveToRecycleBin('reminders', reminderId);
+    }
   }
 
   public async emptyRecycleBin(profileId?: string): Promise<number> {

@@ -173,6 +173,7 @@ function LifeOSApp() {
         loadGeneration === loadGenerationRef.current && activeProfileIdRef.current === activeId;
       const healthProfileData = await storage.getSingleton<HealthProfile>('healthProfile', activeId) || undefined;
       await storage.ensureProfileOwnership(activeId);
+      await storage.reconcileLinkedReminders(activeId);
       const getAllForProfile = <T,>(storeName: string) => storage.getAll<T>(storeName, activeId);
       const [
         tasksData,
@@ -327,7 +328,17 @@ function LifeOSApp() {
       setReceipts([...recData]);
       setCertificates([...certData]);
       setImportantRecords([...irData]);
-      setReminders([...remData]);
+      const activeTaskIds = new Set(tasksData.map(task => task.id));
+      const activePeopleIds = new Set(peopleData.map(person => person.id));
+      setReminders(remData.filter(reminder => {
+        if (reminder.linkedType === 'task') {
+          return Boolean(reminder.linkedId && activeTaskIds.has(reminder.linkedId));
+        }
+        if (reminder.linkedType === 'contact') {
+          return Boolean(reminder.linkedId && activePeopleIds.has(reminder.linkedId));
+        }
+        return true;
+      }));
       setNotifications([...notifData]);
       setAchievements([...achData]);
       setCalcHistory([...calcData]);
@@ -486,9 +497,13 @@ function LifeOSApp() {
   // Multi-tab cross-device broadcast listener & storage event listener
   useEffect(() => {
     const channel = storage.getChannel();
-    const unsub = storage.onStorageChange((store, action) => {
-      if (action === 'purgeDefaultData' && activeProfileIdRef.current) {
-        loadAllData();
+    const refreshActions = new Set([
+      'delete', 'recycle', 'clear', 'empty', 'restore', 'purge',
+      'restoreWorkspaceBackup', 'importFullBackup', 'purgeDefaultData'
+    ]);
+    const unsub = storage.onStorageChange((_store, action) => {
+      if (action && refreshActions.has(action) && activeProfileIdRef.current) {
+        loadAllData(activeProfileIdRef.current);
       }
     });
 

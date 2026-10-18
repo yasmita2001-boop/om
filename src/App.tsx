@@ -85,6 +85,7 @@ function LifeOSApp() {
   // Entities state
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
   const [isGoogleLocked, setIsGoogleLocked] = useState(true);
   const [isUnlockingGoogle, setIsUnlockingGoogle] = useState(false);
   const [googleUnlockError, setGoogleUnlockError] = useState<string | null>(null);
@@ -352,6 +353,7 @@ function LifeOSApp() {
 
   const handleGoogleAccountChange = useCallback(async (user: GoogleUser | null) => {
     if (!user) {
+      setGoogleUser(null);
       alarmService.clearActiveAlarm();
       setActiveTriggeredAlarm(null);
       setAppSettings(undefined);
@@ -364,6 +366,7 @@ function LifeOSApp() {
       return;
     }
 
+    setGoogleUser(user);
     const nextProfileId = getGoogleWorkspaceProfileId(user);
     alarmService.clearActiveAlarm();
     setActiveTriggeredAlarm(null);
@@ -664,6 +667,7 @@ function LifeOSApp() {
           onToast={showToast}
           onDataRestored={loadAllData}
           workspaceProfileId={activeProfileId || 'om-master-profile'}
+          googleUser={googleUser}
           onGoogleAccountChange={handleGoogleAccountChange}
         />
 

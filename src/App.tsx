@@ -10,9 +10,7 @@ import {
   ImportantRecordItem, ReminderItem, NotificationItem, AchievementItem,
   CalcHistoryItem, Skill, Course, WorkResponsibility
 } from './types';
-import {
-  storage, seedInitialDataIfEmpty
-} from './lib/storage';
+import { storage } from './lib/storage';
 import { getGoogleWorkspaceProfileId, GoogleUser, signInWithGoogle } from './lib/googleDriveSync';
 import { getLocalDateString } from './lib/dateUtils';
 import watermarkUrl from './assets/om-lifeos-watermark.png';
@@ -60,8 +58,6 @@ const ViewFallback: React.FC = () => (
   </div>
 );
 
-const GOOGLE_LOGIN_LOCK_KEY = 'om_google_login_required';
-
 export default function App() {
   return <LifeOSApp />;
 }
@@ -89,8 +85,7 @@ function LifeOSApp() {
   // Entities state
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  const [guestProfileId, setGuestProfileId] = useState('om-master-profile');
-  const [isGoogleLocked, setIsGoogleLocked] = useState(false);
+  const [isGoogleLocked, setIsGoogleLocked] = useState(true);
   const [isUnlockingGoogle, setIsUnlockingGoogle] = useState(false);
   const [googleUnlockError, setGoogleUnlockError] = useState<string | null>(null);
   const activeProfileIdRef = useRef<string | null>(null);
@@ -348,80 +343,15 @@ function LifeOSApp() {
     }
   }, []);
 
-  // First turn initialization: run ONCE on mount
+  // Keep global alarm notifications available independently of the login screen.
   useEffect(() => {
-    let active = true;
-    try {
-      if (localStorage.getItem(GOOGLE_LOGIN_LOCK_KEY) === 'true') {
-        setIsGoogleLocked(true);
-        return () => {
-          active = false;
-        };
-      }
-    } catch (err) {
-      console.error('Could not read Google login lock setting:', err);
-      setIsGoogleLocked(true);
-      return () => {
-        active = false;
-      };
-    }
-
-    storage.setActiveProfile('om-master-profile');
-    seedInitialDataIfEmpty().then(async () => {
-      const settingsData = await storage.getSingleton<AppState>('appSettings');
-      if (!active) return;
-      if (settingsData) {
-        setAppSettings(settingsData);
-        if (settingsData.themeMode) setTheme(settingsData.themeMode);
-
-        const savedGuestProfile = settingsData.profiles?.find(
-          profile => profile.id === settingsData.profileId && profile.authType !== 'google'
-        );
-        const activeProfId = savedGuestProfile?.id || 'om-master-profile';
-
-        if (settingsData.profileId !== activeProfId) {
-          settingsData.profileId = activeProfId;
-          settingsData.profiles = (settingsData.profiles || []).map(p => ({ ...p, isCurrent: p.id === activeProfId }));
-          await storage.setSingleton('appSettings', settingsData);
-          setAppSettings({ ...settingsData });
-        }
-
-        storage.setActiveProfile(activeProfId);
-        activeProfileIdRef.current = activeProfId;
-        setGuestProfileId(activeProfId);
-        await storage.ensureProfileOwnership(activeProfId);
-        setActiveProfileId(activeProfId);
-        await loadAllData(activeProfId);
-      }
-    }).catch(err => console.error('Failed to initialize Om-LifeOS', err));
-
-    // Subscribe to scheduled alarms & reminder triggers
-    const unsub = alarmService.onAlarmTrigger((alarmData) => {
+    alarmService.onAlarmTrigger((alarmData) => {
       setActiveTriggeredAlarm(alarmData);
     });
-
-    return () => {
-      active = false;
-    };
   }, []);
 
   const handleGoogleAccountChange = useCallback(async (user: GoogleUser | null) => {
-    let googleLoginRequired = false;
-    try {
-      if (user) {
-        localStorage.setItem(GOOGLE_LOGIN_LOCK_KEY, 'true');
-      } else {
-        googleLoginRequired = localStorage.getItem(GOOGLE_LOGIN_LOCK_KEY) === 'true';
-      }
-    } catch (err) {
-      console.error('Could not update Google login lock setting:', err);
-      if (user) {
-        throw new Error('Could not enable Google login protection. Please allow site storage and try again.');
-      }
-      googleLoginRequired = true;
-    }
-
-    if (!user && googleLoginRequired) {
+    if (!user) {
       alarmService.clearActiveAlarm();
       setActiveTriggeredAlarm(null);
       setAppSettings(undefined);
@@ -430,10 +360,11 @@ function LifeOSApp() {
       setActiveProfileId(null);
       setIsGoogleLocked(true);
       setIsMobileMenuOpen(false);
+      setActiveModule('dashboard');
       return;
     }
 
-    const nextProfileId = user ? getGoogleWorkspaceProfileId(user) : guestProfileId;
+    const nextProfileId = getGoogleWorkspaceProfileId(user);
     alarmService.clearActiveAlarm();
     setActiveTriggeredAlarm(null);
     setAppSettings(undefined);
@@ -444,9 +375,8 @@ function LifeOSApp() {
     setIsMobileMenuOpen(false);
     window.dispatchEvent(new CustomEvent('om_custom_ringtone_changed'));
 
-    if (user) {
-      const now = Date.now();
-      const profile = {
+    const now = Date.now();
+    const profile = {
         id: nextProfileId,
         name: user.displayName || user.email || 'Google Account',
         email: user.email || undefined,
@@ -458,9 +388,9 @@ function LifeOSApp() {
         avatarColor: '#6366f1',
         isCurrent: true,
         createdAt: now
-      };
-      const currentSettings = await storage.getSingleton<AppState>('appSettings');
-      const nextSettings: AppState = currentSettings
+    };
+    const currentSettings = await storage.getSingleton<AppState>('appSettings');
+    const nextSettings: AppState = currentSettings
         ? {
             ...currentSettings,
             profileId: nextProfileId,
@@ -484,20 +414,19 @@ function LifeOSApp() {
             noteCategories: ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
             calcFavorites: ['EMI / Loan', 'SIP / Investment', 'Date Difference']
           };
-      if (currentSettings && !nextSettings.profiles.some(existing => existing.id === nextProfileId)) {
-        nextSettings.profiles = [...nextSettings.profiles, profile];
-      }
-      nextSettings.currentUser = {
-        name: profile.name,
-        email: profile.email,
-        provider: 'google',
-        avatarUrl: profile.avatarUrl
-      };
-      await storage.setSingleton('appSettings', nextSettings);
+    if (currentSettings && !nextSettings.profiles.some(existing => existing.id === nextProfileId)) {
+      nextSettings.profiles = [...nextSettings.profiles, profile];
     }
+    nextSettings.currentUser = {
+      name: profile.name,
+      email: profile.email,
+      provider: 'google',
+      avatarUrl: profile.avatarUrl
+    };
+    await storage.setSingleton('appSettings', nextSettings);
 
     await loadAllData(nextProfileId);
-  }, [guestProfileId, loadAllData]);
+  }, [loadAllData]);
 
   const handleGoogleUnlock = async () => {
     setIsUnlockingGoogle(true);

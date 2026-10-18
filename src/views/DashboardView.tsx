@@ -65,7 +65,9 @@ const calculateFinances = (finance: FinanceTransaction[]) => {
   });
   const operatingCashFlow = income - expense;
   const netCashFlow = operatingCashFlow - investment - savingsFlow - loanRepay + loanReceived;
-  return { income, expense, investment, savingsFlow, loanRepay, loanReceived, operatingCashFlow, netCashFlow };
+  const totalInflow = income + loanReceived;
+  const totalOutflow = expense + investment + savingsFlow + loanRepay;
+  return { totalInflow, totalOutflow, netCashFlow };
 };
 
 const getTodayHabitLogs = (habitLogs: HabitLog[], today: string) => {
@@ -131,9 +133,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   const upcomingTaskCount = openTasks.filter(task => task.dueAt && task.dueAt > today).length;
   const activeGoals = goals.filter(goal => !goal.status || goal.status === 'active');
 
-  const currentMonth = today.slice(0, 7);
-  const monthFinance = useMemo(() => finance.filter(transaction => transaction.date?.slice(0, 7) === currentMonth), [finance, currentMonth]);
-  const { income, expense, netCashFlow } = useMemo(() => calculateFinances(monthFinance), [monthFinance]);
+  const { totalInflow, totalOutflow, netCashFlow } = useMemo(() => calculateFinances(finance), [finance]);
 
   const liquidCash = useMemo(() => accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0), [accounts]);
 
@@ -253,7 +253,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             ₹{netCashFlow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            Month to date · cash ₹{liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            All-time ledger · cash ₹{liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
         </div>
       </div>
@@ -473,20 +473,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-800/60">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
                 <ArrowDownRight className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Inflow · this month</span>
+                <span>Inflow · all time</span>
               </div>
               <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                ₹{income.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                ₹{totalInflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
               </div>
             </div>
 
             <div className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-800/60">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
                 <ArrowUpRight className="h-3.5 w-3.5 text-rose-600" />
-                <span>Outflow · this month</span>
+                <span>Outflow · all time</span>
               </div>
               <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                ₹{expense.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                ₹{totalOutflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
               </div>
             </div>
           </div>

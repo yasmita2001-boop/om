@@ -17,6 +17,7 @@ interface SidebarProps {
   onToast?: (msg: string) => void;
   onDataRestored?: () => void;
   workspaceProfileId: string;
+  googleUser: GoogleDriveSyncDropdownProps['authenticatedUser'];
   onGoogleAccountChange: GoogleDriveSyncDropdownProps['onAccountChanged'];
 }
 
@@ -30,6 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToast,
   onDataRestored,
   workspaceProfileId,
+  googleUser,
   onGoogleAccountChange,
 }) => {
   type NavGroup = 'home' | 'plan' | 'personal' | 'life' | 'system';
@@ -161,6 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="border-t border-slate-100 p-3 dark:border-slate-800/80 space-y-2">
           <GoogleDriveSyncDropdown
             workspaceProfileId={workspaceProfileId}
+            authenticatedUser={googleUser}
             onToast={onToast}
             onAccountChanged={onGoogleAccountChange}
             onDataRestored={() => {

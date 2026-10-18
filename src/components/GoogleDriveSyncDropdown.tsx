@@ -32,6 +32,7 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 export interface GoogleDriveSyncDropdownProps {
   workspaceProfileId: string;
+  authenticatedUser: GoogleUser | null;
   onToast?: (message: string) => void;
   onDataRestored?: () => void;
   onAccountChanged?: (user: GoogleUser | null) => void | Promise<void>;
@@ -39,6 +40,7 @@ export interface GoogleDriveSyncDropdownProps {
 
 export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = ({
   workspaceProfileId,
+  authenticatedUser,
   onToast,
   onDataRestored,
   onAccountChanged
@@ -75,6 +77,12 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
       else localStorage.removeItem(pendingKey(profileId));
     } catch {}
   };
+
+  useEffect(() => {
+    setUser(authenticatedUser);
+    setAccessToken(authenticatedUser ? getGoogleAccessToken() : null);
+    if (!authenticatedUser) setBackupInfo(null);
+  }, [authenticatedUser]);
 
   useEffect(() => {
     setLastSyncedAt(getSavedLastSyncedAt(workspaceProfileId));

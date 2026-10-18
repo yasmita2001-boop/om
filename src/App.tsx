@@ -13,9 +13,10 @@ import {
 import {
   storage, seedInitialDataIfEmpty
 } from './lib/storage';
-import { getGoogleWorkspaceProfileId, GoogleUser } from './lib/googleDriveSync';
+import { getGoogleWorkspaceProfileId, GoogleUser, signInWithGoogle } from './lib/googleDriveSync';
 import { getLocalDateString } from './lib/dateUtils';
 import watermarkUrl from './assets/om-lifeos-watermark.png';
+import { LockKeyhole, ShieldCheck } from 'lucide-react';
 
 // Components
 import { Header } from './components/Header';
@@ -59,6 +60,8 @@ const ViewFallback: React.FC = () => (
   </div>
 );
 
+const GOOGLE_LOGIN_LOCK_KEY = 'om_google_login_required';
+
 export default function App() {
   return <LifeOSApp />;
 }
@@ -87,6 +90,9 @@ function LifeOSApp() {
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [guestProfileId, setGuestProfileId] = useState('om-master-profile');
+  const [isGoogleLocked, setIsGoogleLocked] = useState(false);
+  const [isUnlockingGoogle, setIsUnlockingGoogle] = useState(false);
+  const [googleUnlockError, setGoogleUnlockError] = useState<string | null>(null);
   const activeProfileIdRef = useRef<string | null>(null);
   const loadGenerationRef = useRef(0);
   useEffect(() => {
@@ -345,6 +351,21 @@ function LifeOSApp() {
   // First turn initialization: run ONCE on mount
   useEffect(() => {
     let active = true;
+    try {
+      if (localStorage.getItem(GOOGLE_LOGIN_LOCK_KEY) === 'true') {
+        setIsGoogleLocked(true);
+        return () => {
+          active = false;
+        };
+      }
+    } catch (err) {
+      console.error('Could not read Google login lock setting:', err);
+      setIsGoogleLocked(true);
+      return () => {
+        active = false;
+      };
+    }
+
     storage.setActiveProfile('om-master-profile');
     seedInitialDataIfEmpty().then(async () => {
       const settingsData = await storage.getSingleton<AppState>('appSettings');
@@ -385,6 +406,33 @@ function LifeOSApp() {
   }, []);
 
   const handleGoogleAccountChange = useCallback(async (user: GoogleUser | null) => {
+    let googleLoginRequired = false;
+    try {
+      if (user) {
+        localStorage.setItem(GOOGLE_LOGIN_LOCK_KEY, 'true');
+      } else {
+        googleLoginRequired = localStorage.getItem(GOOGLE_LOGIN_LOCK_KEY) === 'true';
+      }
+    } catch (err) {
+      console.error('Could not update Google login lock setting:', err);
+      if (user) {
+        throw new Error('Could not enable Google login protection. Please allow site storage and try again.');
+      }
+      googleLoginRequired = true;
+    }
+
+    if (!user && googleLoginRequired) {
+      alarmService.clearActiveAlarm();
+      setActiveTriggeredAlarm(null);
+      setAppSettings(undefined);
+      storage.setActiveProfile(null);
+      activeProfileIdRef.current = null;
+      setActiveProfileId(null);
+      setIsGoogleLocked(true);
+      setIsMobileMenuOpen(false);
+      return;
+    }
+
     const nextProfileId = user ? getGoogleWorkspaceProfileId(user) : guestProfileId;
     alarmService.clearActiveAlarm();
     setActiveTriggeredAlarm(null);
@@ -450,6 +498,21 @@ function LifeOSApp() {
 
     await loadAllData(nextProfileId);
   }, [guestProfileId, loadAllData]);
+
+  const handleGoogleUnlock = async () => {
+    setIsUnlockingGoogle(true);
+    setGoogleUnlockError(null);
+    try {
+      const result = await signInWithGoogle();
+      await handleGoogleAccountChange(result.user);
+      setIsGoogleLocked(false);
+    } catch (err) {
+      console.error('Google unlock failed:', err);
+      setGoogleUnlockError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
+    } finally {
+      setIsUnlockingGoogle(false);
+    }
+  };
 
   // Load all data whenever activeProfileId updates
   useEffect(() => {
@@ -591,6 +654,39 @@ function LifeOSApp() {
 
   const openTasksCount = tasks.filter(t => !t.done).length;
   const categoriesList = appSettings?.noteCategories || ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'];
+
+  if (isGoogleLocked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 text-slate-900 dark:bg-[#0B0F19] dark:text-slate-100">
+        <section className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
+            <LockKeyhole className="h-7 w-7" />
+          </div>
+          <h1 className="mt-5 text-xl font-bold">Om-LifeOS is locked</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+            Sign in with your Google account to unlock your workspace.
+          </p>
+          <button
+            type="button"
+            onClick={handleGoogleUnlock}
+            disabled={isUnlockingGoogle}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            {isUnlockingGoogle ? 'Signing in…' : 'Unlock with Google'}
+          </button>
+          {googleUnlockError && (
+            <p role="alert" className="mt-4 text-left text-xs font-medium text-rose-600 dark:text-rose-400">
+              {googleUnlockError}
+            </p>
+          )}
+          <p className="mt-5 text-[11px] text-slate-400">
+            Your workspace remains locked until Google sign-in succeeds.
+          </p>
+        </section>
+      </div>
+    );
+  }
 
   if (!appSettings || !activeProfileId) {
     return (

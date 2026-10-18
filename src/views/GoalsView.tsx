@@ -12,8 +12,7 @@ import {
   Task, Habit, HabitLog, Routine, WorkProject, LearningItem, Skill,
   ReminderItem, Note, JournalEntry,
   FinanceTransaction, Loan, Investment, SavingsPlan, Liability, Asset,
-  HealthMeasurement, SleepRecord, WaterRecord, NutritionRecord,
-  HealthAppointment, HealthNote, Meeting, Person, Interaction,
+  HealthAppointment, HealthNote, Meeting, Person,
   ValueItem, SpiritualPractice, Commitment, FocusSession
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -24,6 +23,7 @@ import { ProgressiveActions } from '../components/ProgressiveActions';
 import {
   computeGoalAggregateBreakdown,
   GoalProgressBreakdown,
+  resolveTaskGoalId,
   syncGoalProgressFromMilestones,
   syncGoalProgressDirect,
   syncGoalProgressFromTasks,
@@ -58,6 +58,8 @@ function GoalLinkedBreakdownWidget({
   onAdjustManualProgress?: (delta: number) => void;
 }) {
   const hasItems = breakdown.hasLinkedItems;
+  const hasProgressItems = breakdown.progressItemCount > 0;
+  const averageItemWeight = breakdown.items.find(item => item.weightPercent > 0)?.weightPercent || 0;
 
   return (
     <div className="space-y-2">
@@ -72,13 +74,14 @@ function GoalLinkedBreakdownWidget({
           {hasItems ? (
             <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
               <span className="hidden sm:inline">
-                {breakdown.completedItems} of {breakdown.totalItems} linked items completed
+                {hasProgressItems
+                  ? `${breakdown.completedItems} of ${breakdown.progressItemCount} progress items complete · ${breakdown.totalItems} linked`
+                  : `${breakdown.totalItems} reference links · manual progress`}
               </span>
               <span className="sm:hidden">
-                {breakdown.completedItems}/{breakdown.totalItems} linked
-              </span>
-              <span className="text-slate-400 dark:text-slate-500 ml-1 hidden md:inline">
-                (~{breakdown.items[0]?.weightPercent || 0}% wt)
+                {hasProgressItems
+                  ? `${breakdown.completedItems}/${breakdown.progressItemCount} progress`
+                  : `${breakdown.totalItems} references`}
               </span>
             </span>
           ) : (
@@ -90,7 +93,7 @@ function GoalLinkedBreakdownWidget({
 
         {/* Right: Actions (Manual Stepper or Breakdown Toggle) */}
         <div className="flex flex-wrap items-center gap-1 shrink-0 ml-auto">
-          {!hasItems && onAdjustManualProgress && (
+          {!hasProgressItems && onAdjustManualProgress && (
             <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
               <button
                 type="button"
@@ -151,11 +154,15 @@ function GoalLinkedBreakdownWidget({
                 Progress Contribution Breakdown
               </h4>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                {breakdown.totalItems} linked items contribute ~{breakdown.items[0]?.weightPercent || 0}% each to real-time progress.
+                {hasProgressItems
+                  ? `${breakdown.progressItemCount} progress-driving links contribute about ${averageItemWeight}% each. ${breakdown.totalItems - breakdown.progressItemCount} reference links do not change progress.`
+                  : `${breakdown.totalItems} linked reference items are visible here but do not change Goal progress.`}
               </p>
             </div>
             <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-              {breakdown.completedItems}/{breakdown.totalItems} Complete
+              {hasProgressItems
+                ? `${breakdown.completedItems}/${breakdown.progressItemCount} Progress`
+                : 'Reference only'}
             </span>
           </div>
 
@@ -241,26 +248,6 @@ function GoalLinkedBreakdownWidget({
                 Ledger: {breakdown.categories.transactions.completedCount}/{breakdown.categories.transactions.count}
               </span>
             )}
-            {breakdown.categories.healthMeasurements?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-600 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
-                Vitals/Movement: {breakdown.categories.healthMeasurements.completedCount}/{breakdown.categories.healthMeasurements.count}
-              </span>
-            )}
-            {breakdown.categories.sleepRecords?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-indigo-700 shadow-2xs border border-indigo-200/70 dark:bg-slate-800 dark:text-indigo-400 dark:border-indigo-800/60">
-                Sleep: {breakdown.categories.sleepRecords.completedCount}/{breakdown.categories.sleepRecords.count}
-              </span>
-            )}
-            {breakdown.categories.waterRecords?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-cyan-700 shadow-2xs border border-cyan-200/70 dark:bg-slate-800 dark:text-cyan-400 dark:border-cyan-800/60">
-                Hydration: {breakdown.categories.waterRecords.completedCount}/{breakdown.categories.waterRecords.count}
-              </span>
-            )}
-            {breakdown.categories.nutritionRecords?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-green-700 shadow-2xs border border-green-200/70 dark:bg-slate-800 dark:text-green-400 dark:border-green-800/60">
-                Nutrition: {breakdown.categories.nutritionRecords.completedCount}/{breakdown.categories.nutritionRecords.count}
-              </span>
-            )}
             {breakdown.categories.appointments?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-pink-700 shadow-2xs border border-pink-200/70 dark:bg-slate-800 dark:text-pink-400 dark:border-pink-800/60">
                 Appointments: {breakdown.categories.appointments.completedCount}/{breakdown.categories.appointments.count}
@@ -274,16 +261,6 @@ function GoalLinkedBreakdownWidget({
             {breakdown.categories.meetings?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-violet-700 shadow-2xs border border-violet-200/70 dark:bg-slate-800 dark:text-violet-400 dark:border-violet-800/60">
                 Meetings: {breakdown.categories.meetings.completedCount}/{breakdown.categories.meetings.count}
-              </span>
-            )}
-            {breakdown.categories.people?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-sky-700 shadow-2xs border border-sky-200/70 dark:bg-slate-800 dark:text-sky-400 dark:border-sky-800/60">
-                Network: {breakdown.categories.people.completedCount}/{breakdown.categories.people.count}
-              </span>
-            )}
-            {breakdown.categories.interactions?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-purple-700 shadow-2xs border border-purple-200/70 dark:bg-slate-800 dark:text-purple-400 dark:border-purple-800/60">
-                Interactions: {breakdown.categories.interactions.completedCount}/{breakdown.categories.interactions.count}
               </span>
             )}
             {breakdown.categories.values?.count > 0 && (
@@ -393,7 +370,7 @@ function GoalLinkedBreakdownWidget({
 
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-[10px] text-slate-400 font-mono">
-                    ~{item.weightPercent}%
+                    {item.weightPercent > 0 ? `~${item.weightPercent}%` : 'Reference'}
                   </span>
                   <span className={`font-mono text-[11px] font-semibold rounded px-1.5 py-0.2 ${
                     item.progress >= 100
@@ -441,15 +418,10 @@ interface GoalsViewProps {
   notes?: Note[];
   journal?: JournalEntry[];
   reminders?: ReminderItem[];
-  healthMeasurements?: HealthMeasurement[];
-  sleepRecords?: SleepRecord[];
-  waterRecords?: WaterRecord[];
-  nutritionRecords?: NutritionRecord[];
   appointments?: HealthAppointment[];
   healthNotes?: HealthNote[];
   meetings?: Meeting[];
   people?: Person[];
-  interactions?: Interaction[];
   values?: ValueItem[];
   practices?: SpiritualPractice[];
   commitments?: Commitment[];
@@ -485,15 +457,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   notes = [],
   journal = [],
   reminders = [],
-  healthMeasurements = [],
-  sleepRecords = [],
-  waterRecords = [],
-  nutritionRecords = [],
   appointments = [],
   healthNotes = [],
   meetings = [],
   people = [],
-  interactions = [],
   values = [],
   practices = [],
   commitments = [],
@@ -520,15 +487,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       assets,
       liabilities,
       transactions,
-      healthMeasurements,
-      sleepRecords,
-      waterRecords,
-      nutritionRecords,
       appointments,
       healthNotes,
       meetings,
-      people,
-      interactions,
       values,
       practices,
       commitments,
@@ -548,17 +509,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const [goalLevel, setGoalLevel] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [goalParentId, setGoalParentId] = useState<string>('');
   const [goalOrder, setGoalOrder] = useState<string>('');
-
-  // Helper to format clean ordinal badges: 1 -> 1st, 2 -> 2nd, 3 -> 3rd, 4 -> 4th, 5 -> 5th...
-  const formatOrdinalBadge = (num: number): string => {
-    if (num <= 0 || !Number.isFinite(num)) return `#${num}`;
-    const rem10 = num % 10;
-    const rem100 = num % 100;
-    if (rem10 === 1 && rem100 !== 11) return `${num}st`;
-    if (rem10 === 2 && rem100 !== 12) return `${num}nd`;
-    if (rem10 === 3 && rem100 !== 13) return `${num}rd`;
-    return `${num}th`;
-  };
 
   // Hierarchy viewing state
   const [goalViewMode, setGoalViewMode] = useState<'tree' | 'flat'>('tree');
@@ -583,8 +533,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       updatedAt: Date.now()
     };
     await storage.put('tasks', updated);
-    if (task.goalId) {
-      const res = await syncGoalProgressFromTasks(task.goalId, task.id, nextDone);
+    const linkedGoalId = resolveTaskGoalId(task, { workProjects, routines, skills, learningItems });
+    if (linkedGoalId) {
+      const res = await syncGoalProgressFromTasks(linkedGoalId, task.id, nextDone);
       if (res.targetGoal) {
         onSuccess(
           nextDone
@@ -658,21 +609,22 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
   const goalFormRef = useRef<HTMLDivElement>(null);
 
-  // Helper to determine effective level of any goal (5 Branches: Main 1 -> Sub 2 -> Micro 3 -> Nano 4 -> Atomic 5)
+  const goalsById = new Map(goals.map(goal => [goal.id, goal]));
+
+  // Hierarchy depth follows the direct parent relationship, not a potentially stale saved level.
   const getGoalLevel = (g: Goal): 1 | 2 | 3 | 4 | 5 => {
-    if (g.level && g.level >= 1 && g.level <= 5) return g.level as 1 | 2 | 3 | 4 | 5;
-    if (!g.parentId) return 1;
     let depth = 1;
     let currParentId: string | undefined = g.parentId || undefined;
     const visited = new Set<string>([g.id]);
     while (currParentId && !visited.has(currParentId) && depth < 5) {
       visited.add(currParentId);
-      const parent = goals.find(p => p.id === currParentId);
-      if (!parent) break;
+      const parent = goalsById.get(currParentId);
+      if (!parent) return 1;
       depth++;
       currParentId = parent.parentId || undefined;
     }
-    return Math.min(5, Math.max(1, depth)) as 1 | 2 | 3 | 4 | 5;
+    if (currParentId && visited.has(currParentId)) return 1;
+    return depth as 1 | 2 | 3 | 4 | 5;
   };
 
   // Extracts natural sequence index from goal title (supports "01 ...", "1. ...", "1st", "2nd", "[1]", "Goal 1", "Physical 1", "१. ...")
@@ -681,6 +633,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     const raw = title.trim();
     // Normalize Devnagari numerals (०-९) to Latin digits (0-9)
     const normalized = raw.replace(/[०-९]/g, d => String(d.charCodeAt(0) - 2406));
+
+    const hierarchicalPrefix = normalized.match(/^(?:#|no\.?\s*)?(\d+(?:\.\d+)+)[\.\)\:\-\s]/i);
+    if (hierarchicalPrefix) {
+      const parts = hierarchicalPrefix[1].split('.');
+      const num = parseInt(parts[parts.length - 1], 10);
+      if (!Number.isNaN(num)) return num;
+    }
 
     // 1. Ordinals at start: "1st", "2nd", "3rd", "4th", "1st.", "1st -"
     const ordinalMatch = normalized.match(/^(\d+)(?:st|nd|rd|th)\b/i);
@@ -727,21 +686,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     return null;
   };
 
-  // Stable sequence sorter prioritizing natural title numbers (01, 02, 1., 2., 1st, 2nd, etc.), then custom order, then creation time
+  // Stable sibling ordering: explicit order, natural title sequence, then creation time.
   const sortGoals = (list: Goal[]) => {
     return [...list].sort((a, b) => {
-      // 1. Natural title sequence number has highest priority if numbers are in titles
-      const numA = extractGoalSequenceNumber(a.title);
-      const numB = extractGoalSequenceNumber(b.title);
-      if (numA !== null && numB !== null) {
-        if (numA !== numB) return numA - numB;
-      } else if (numA !== null && (b.order === undefined || b.order === null)) {
-        return -1;
-      } else if (numB !== null && (a.order === undefined || a.order === null)) {
-        return 1;
-      }
-
-      // 2. Explicit order property (set via Order field or Move Up / Move Down buttons)
+      // Explicit order is also what Move Up / Move Down updates.
       const ordA = a.order;
       const ordB = b.order;
       if (ordA !== undefined && ordB !== undefined && ordA !== null && ordB !== null) {
@@ -752,10 +700,31 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         return 1;
       }
 
-      // 3. Fallback: Creation timestamp (first created is first in natural 1st, 2nd, 3rd, 4th order)
+      const numA = extractGoalSequenceNumber(a.title);
+      const numB = extractGoalSequenceNumber(b.title);
+      if (numA !== null && numB !== null && numA !== numB) return numA - numB;
+      if (numA !== null && numB === null) return -1;
+      if (numB !== null && numA === null) return 1;
+
       return (a.createdAt || 0) - (b.createdAt || 0);
     });
   };
+
+  const hierarchySequenceById = new Map<string, string>();
+  const flatHierarchyGoals: Goal[] = [];
+  const visitedGoalIds = new Set<string>();
+  const walkGoalTree = (goal: Goal, sequence: string) => {
+    if (visitedGoalIds.has(goal.id)) return;
+    visitedGoalIds.add(goal.id);
+    hierarchySequenceById.set(goal.id, sequence);
+    flatHierarchyGoals.push(goal);
+    sortGoals(goals.filter(child => child.parentId === goal.id))
+      .forEach((child, index) => walkGoalTree(child, `${sequence}.${index + 1}`));
+  };
+  const rootGoals = sortGoals(goals.filter(goal => !goal.parentId || !goalsById.has(goal.parentId)));
+  rootGoals.forEach((goal, index) => walkGoalTree(goal, String(index + 1)));
+  sortGoals(goals.filter(goal => !visitedGoalIds.has(goal.id)))
+    .forEach((goal, index) => walkGoalTree(goal, String(rootGoals.length + index + 1)));
 
   const mainGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 1));
   const subGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 2));
@@ -763,30 +732,58 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const nanoGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 4));
   const atomicGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 5));
 
-  const getChildrenOf = (parentId: string) => {
-    return sortGoals(goals.filter(g => g.parentId === parentId || (g.parentIds && g.parentIds.includes(parentId))));
+  const selectGoalLevel = (level: 1 | 2 | 3 | 4 | 5) => {
+    setGoalLevel(level);
+    if (level === 1) {
+      setGoalParentId('');
+      return;
+    }
+    const eligibleParents = sortGoals(goals.filter(goal => getGoalLevel(goal) === level - 1));
+    setGoalParentId(current => eligibleParents.some(goal => goal.id === current)
+      ? current
+      : eligibleParents[0]?.id || '');
   };
 
+  const getChildrenOf = (parentId: string) => {
+    return sortGoals(goals.filter(g => g.parentId === parentId));
+  };
+
+  const getDescendantIds = (goalId: string) => {
+    const descendants = new Set<string>();
+    const pending = [goalId];
+    while (pending.length > 0) {
+      const parentId = pending.pop()!;
+      for (const child of goals) {
+        if (child.parentId === parentId && !descendants.has(child.id)) {
+          descendants.add(child.id);
+          pending.push(child.id);
+        }
+      }
+    }
+    return descendants;
+  };
+  const editingDescendantIds = editingGoal ? getDescendantIds(editingGoal.id) : new Set<string>();
+
   const getSubGoalsOf = (mainGoalId: string) => {
-    return sortGoals(goals.filter(g => g.parentId === mainGoalId || (g.parentIds && g.parentIds.includes(mainGoalId))));
+    return sortGoals(goals.filter(g => g.parentId === mainGoalId));
   };
 
   const getMicroGoalsOf = (subGoalId: string) => {
-    return sortGoals(goals.filter(g => g.parentId === subGoalId || (g.parentIds && g.parentIds.includes(subGoalId))));
+    return sortGoals(goals.filter(g => g.parentId === subGoalId));
   };
 
   const getNanoGoalsOf = (microGoalId: string) => {
-    return sortGoals(goals.filter(g => g.parentId === microGoalId || (g.parentIds && g.parentIds.includes(microGoalId))));
+    return sortGoals(goals.filter(g => g.parentId === microGoalId));
   };
 
   const getAtomicGoalsOf = (nanoGoalId: string) => {
-    return sortGoals(goals.filter(g => g.parentId === nanoGoalId || (g.parentIds && g.parentIds.includes(nanoGoalId))));
+    return sortGoals(goals.filter(g => g.parentId === nanoGoalId));
   };
 
   const handleMoveGoalOrder = async (targetGoal: Goal, direction: 'up' | 'down') => {
     const siblings = targetGoal.parentId
-      ? goals.filter(g => g.parentId === targetGoal.parentId || (g.parentIds && g.parentIds.includes(targetGoal.parentId!)))
-      : goals.filter(g => (!g.parentId && (!g.parentIds || g.parentIds.length === 0)) || getGoalLevel(g) === 1);
+      ? goals.filter(g => g.parentId === targetGoal.parentId)
+      : goals.filter(g => !g.parentId || !goalsById.has(g.parentId));
 
     const sorted = sortGoals(siblings);
     const index = sorted.findIndex(g => g.id === targetGoal.id);
@@ -794,21 +791,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     if (swapIndex < 0 || swapIndex >= sorted.length) return;
-
-    // Check if both have numbers in their title; if so, swap numeric prefixes as well
-    const numA = extractGoalSequenceNumber(sorted[index].title);
-    const numB = extractGoalSequenceNumber(sorted[swapIndex].title);
-    if (numA !== null && numB !== null && numA !== numB) {
-      const prefixRegex = /^(\s*(?:#|no\.?\s*|step\s*|goal\s*|part\s*|phase\s*)?\[?\(?\d+(?:st|nd|rd|th)?[\.\)\:\-\]\}\s]*)/i;
-      const matchA = sorted[index].title.match(prefixRegex);
-      const matchB = sorted[swapIndex].title.match(prefixRegex);
-      if (matchA && matchB) {
-        const bodyA = sorted[index].title.slice(matchA[1].length);
-        const bodyB = sorted[swapIndex].title.slice(matchB[1].length);
-        sorted[index].title = matchB[1] + bodyA;
-        sorted[swapIndex].title = matchA[1] + bodyB;
-      }
-    }
 
     sorted.forEach((item, idx) => {
       item.order = idx;
@@ -942,7 +924,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     let effectiveLevel: 1 | 2 | 3 | 4 | 5 = goalLevel;
     if (goalParentId && parentGoal) {
       const pLvl = getGoalLevel(parentGoal);
-      effectiveLevel = Math.min(5, Math.max(goalLevel, pLvl + 1)) as 1 | 2 | 3 | 4 | 5;
+      effectiveLevel = Math.min(5, pLvl + 1) as 1 | 2 | 3 | 4 | 5;
     } else {
       effectiveLevel = 1;
     }
@@ -1104,6 +1086,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     const originalGoal = goals.find(g => g.id === editingGoal.id);
     const oldParentId = originalGoal?.parentId;
     const newParentId = editingGoal.parentId;
+    const parentGoal = newParentId ? goalsById.get(newParentId) : null;
+    const effectiveLevel = parentGoal ? Math.min(5, getGoalLevel(parentGoal) + 1) as 1 | 2 | 3 | 4 | 5 : 1;
 
     const parsedOrder = editingGoal.order !== undefined && editingGoal.order !== null && String(editingGoal.order).trim() !== ''
       ? Number(editingGoal.order)
@@ -1112,6 +1096,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     await storage.put('goals', {
       ...editingGoal,
       title: editingGoal.title.trim(),
+      level: effectiveLevel,
+      parentId: parentGoal?.id || null,
       order: parsedOrder,
       updatedAt: Date.now()
     });
@@ -1260,59 +1246,59 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       </div>
 
       {/* Capital Position Dashboard */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
         {/* Card 1: Liquid Capital */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Liquid Capital</span>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider truncate">Liquid Capital</span>
             <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
+          <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             ₹{liquidCash.toLocaleString('en-IN')}
           </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
+          <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
             Across {accounts.length} liquid accounts
           </div>
         </div>
 
         {/* Card 2: Survival Runway */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Survival Runway</span>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider truncate">Survival Runway</span>
             <Flame className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
+          <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             {runwayDays} Days
           </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
+          <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
             ~{runwayMonths} months at current burn
           </div>
         </div>
 
         {/* Card 3: Reserves Goal */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Reserves Goal</span>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider truncate">Reserves Goal</span>
             <Target className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
+          <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             ₹{totalReserves.toLocaleString('en-IN')}
           </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
+          <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
             Survival + Emergency fund
           </div>
         </div>
 
         {/* Card 4: Daily Burn Rate */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Daily Burn Rate</span>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider truncate">Daily Burn Rate</span>
             <TrendingUp className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
+          <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             ₹{Number(dailyBurn).toLocaleString('en-IN')}/d
           </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
+          <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
             ₹{(Number(dailyBurn) * 30).toLocaleString('en-IN')}/mo
           </div>
         </div>
@@ -1415,9 +1401,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           journal={journal}
           practices={practices}
           commitments={commitments}
-          healthMeasurements={healthMeasurements}
           people={people}
-          interactions={interactions}
           onRefresh={onRefresh}
           onSuccess={onSuccess}
         />
@@ -1429,11 +1413,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           <div className="flex flex-col gap-6 w-full">
             {/* Add Goal Form (Single Column - Upper) */}
             <div ref={goalFormRef} className="w-full flex flex-col">
-              <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+              <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                  <div className="flex min-w-0 flex-1 items-start gap-2">
+                    <Plus className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                    <h2 className="min-w-0 text-sm font-bold text-slate-900 dark:text-white">
                       {goalLevel === 1
                         ? 'Add Strategic Main Goal (Level 1)'
                         : goalLevel === 2
@@ -1445,8 +1429,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         : 'Add Atomic Goal (Level 5)'}
                     </h2>
                   </div>
-                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
-                    Tier {goalLevel} of 5
+                  <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+                    <span className="sm:hidden">{goalLevel}/5</span>
+                    <span className="hidden sm:inline">Tier {goalLevel} of 5</span>
                   </span>
                 </div>
 
@@ -1459,10 +1444,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     <div className="grid grid-cols-5 gap-1">
                       <button
                         type="button"
-                        onClick={() => {
-                          setGoalLevel(1);
-                          setGoalParentId('');
-                        }}
+                        onClick={() => selectGoalLevel(1)}
                         className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           goalLevel === 1
                             ? 'bg-indigo-600 text-white shadow-xs'
@@ -1475,12 +1457,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => {
-                          setGoalLevel(2);
-                          if (!goalParentId && mainGoals.length > 0) {
-                            setGoalParentId(mainGoals[0].id);
-                          }
-                        }}
+                        onClick={() => selectGoalLevel(2)}
                         className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           goalLevel === 2
                             ? 'bg-indigo-600 text-white shadow-xs'
@@ -1493,14 +1470,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => {
-                          setGoalLevel(3);
-                          if (subGoals.length > 0 && !subGoals.some(s => s.id === goalParentId)) {
-                            setGoalParentId(subGoals[0].id);
-                          } else if (!goalParentId && mainGoals.length > 0) {
-                            setGoalParentId(mainGoals[0].id);
-                          }
-                        }}
+                        onClick={() => selectGoalLevel(3)}
                         className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           goalLevel === 3
                             ? 'bg-indigo-600 text-white shadow-xs'
@@ -1513,14 +1483,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => {
-                          setGoalLevel(4);
-                          if (microGoals.length > 0 && !microGoals.some(m => m.id === goalParentId)) {
-                            setGoalParentId(microGoals[0].id);
-                          } else if (subGoals.length > 0) {
-                            setGoalParentId(subGoals[0].id);
-                          }
-                        }}
+                        onClick={() => selectGoalLevel(4)}
                         className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           goalLevel === 4
                             ? 'bg-indigo-600 text-white shadow-xs'
@@ -1533,14 +1496,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => {
-                          setGoalLevel(5);
-                          if (nanoGoals.length > 0 && !nanoGoals.some(n => n.id === goalParentId)) {
-                            setGoalParentId(nanoGoals[0].id);
-                          } else if (microGoals.length > 0) {
-                            setGoalParentId(microGoals[0].id);
-                          }
-                        }}
+                        onClick={() => selectGoalLevel(5)}
                         className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           goalLevel === 5
                             ? 'bg-indigo-600 text-white shadow-xs'
@@ -1555,14 +1511,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                   {/* Parent Selector for Levels 2, 3, 4, 5 */}
                   {goalLevel > 1 && (() => {
-                    const parentChoices =
-                      goalLevel === 2
-                        ? mainGoals
-                        : goalLevel === 3
-                        ? [...subGoals, ...mainGoals]
-                        : goalLevel === 4
-                        ? [...microGoals, ...subGoals, ...mainGoals]
-                        : [...nanoGoals, ...microGoals, ...subGoals, ...mainGoals];
+                    const parentChoices = sortGoals(goals.filter(g => getGoalLevel(g) === goalLevel - 1));
 
                     const themeConfig = {
                       border: 'border-indigo-200/80 dark:border-indigo-900/60',
@@ -1574,7 +1523,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     return (
                       <div className={`rounded-xl border ${themeConfig.border} ${themeConfig.bg} p-2.5`}>
                         <label className={`block text-[11px] font-bold ${themeConfig.text}`}>
-                          Link to Parent Goal (Level {goalLevel - 1} or higher) *
+                          Link to Parent Goal (Level {goalLevel - 1}) *
                         </label>
                         <select
                           required
@@ -1594,7 +1543,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                               const prefix = `L${lvl} ${['Main', 'Sub', 'Micro', 'Nano', 'Atomic'][lvl - 1] || 'Goal'}: `;
                               return (
                                 <option key={p.id} value={p.id}>
-                                  {prefix}{p.title} ({p.progress}%)
+                                  {hierarchySequenceById.get(p.id) || ''} {prefix}{p.title} ({p.progress}%)
                                 </option>
                               );
                             })
@@ -1668,16 +1617,18 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                        Sequence Order # (1st, 2nd...)
+                        Sibling Order (optional)
                       </label>
                       <input
                         type="number"
                         min="1"
-                        placeholder="Auto (1, 2, 3...)"
+                        placeholder={`Auto (${goalParentId
+                          ? `${hierarchySequenceById.get(goalParentId) || ''}.${getChildrenOf(goalParentId).length + 1}`
+                          : mainGoals.length + 1})`}
                         value={goalOrder}
                         onChange={e => setGoalOrder(e.target.value)}
                         className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                        title="Custom sequence position (e.g. 1 for 1st, 2 for 2nd)"
+                        title="Optional position among goals at the same hierarchy level"
                       />
                     </div>
                   </div>
@@ -1833,8 +1784,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                           (acc, s) => acc + getMicroGoalsOf(s.id).length,
                           0
                         );
-                        const mainSeqNum = extractGoalSequenceNumber(mainGoal.title) ?? (mainGoal.order !== undefined && mainGoal.order !== null ? mainGoal.order : mainIndex + 1);
-                        const mainSeqBadge = formatOrdinalBadge(mainSeqNum);
+                        const mainSeqBadge = hierarchySequenceById.get(mainGoal.id) || String(mainIndex + 1);
 
                         return (
                           <div
@@ -1968,8 +1918,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                 {childSubGoals.map((subGoal, subIndex) => {
                                   const childMicroGoals = getMicroGoalsOf(subGoal.id);
                                   const isSubCollapsed = Boolean(collapsedGoalIds[subGoal.id]);
-                                  const subSeqNum = extractGoalSequenceNumber(subGoal.title) ?? (subGoal.order !== undefined && subGoal.order !== null ? subGoal.order : subIndex + 1);
-                                  const subSeqBadge = formatOrdinalBadge(subSeqNum);
+                                  const subSeqBadge = hierarchySequenceById.get(subGoal.id) || `${mainSeqBadge}.${subIndex + 1}`;
 
                                   return (
                                     <div
@@ -2089,8 +2038,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                         <div className="ml-0.5 sm:ml-2.5 pl-1 sm:pl-3 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1.5 sm:space-y-2 pt-1 min-w-0">
 
                                           {childMicroGoals.map((microGoal, microIndex) => {
-                                            const microSeqNum = extractGoalSequenceNumber(microGoal.title) ?? (microGoal.order !== undefined && microGoal.order !== null ? microGoal.order : microIndex + 1);
-                                            const microSeqBadge = formatOrdinalBadge(microSeqNum);
+                                            const microSeqBadge = hierarchySequenceById.get(microGoal.id) || `${subSeqBadge}.${microIndex + 1}`;
                                             const childNanoGoals = getNanoGoalsOf(microGoal.id);
                                             const isMicroCollapsed = Boolean(collapsedGoalIds[microGoal.id]);
                                             const microBreakdown = getGoalBreakdown(microGoal.id);
@@ -2206,8 +2154,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                     {!isMicroCollapsed && (
                                                       <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2.5 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 sm:space-y-1.5 pt-1 min-w-0">
                                                         {childNanoGoals.map((nanoGoal, nanoIndex) => {
-                                                          const nanoSeqNum = extractGoalSequenceNumber(nanoGoal.title) ?? (nanoGoal.order !== undefined && nanoGoal.order !== null ? nanoGoal.order : nanoIndex + 1);
-                                                          const nanoSeqBadge = formatOrdinalBadge(nanoSeqNum);
+                                                          const nanoSeqBadge = hierarchySequenceById.get(nanoGoal.id) || `${microSeqBadge}.${nanoIndex + 1}`;
                                                           const childAtomicGoals = getAtomicGoalsOf(nanoGoal.id);
                                                           const isNanoCollapsed = Boolean(collapsedGoalIds[nanoGoal.id]);
                                                           const nanoBreakdown = getGoalBreakdown(nanoGoal.id);
@@ -2323,8 +2270,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                   {!isNanoCollapsed && (
                                                                     <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 pt-1 min-w-0">
                                                                       {childAtomicGoals.map((atomicGoal, atomicIndex) => {
-                                                                        const atomicSeqNum = extractGoalSequenceNumber(atomicGoal.title) ?? (atomicGoal.order !== undefined && atomicGoal.order !== null ? atomicGoal.order : atomicIndex + 1);
-                                                                        const atomicSeqBadge = formatOrdinalBadge(atomicSeqNum);
+                                                                        const atomicSeqBadge = hierarchySequenceById.get(atomicGoal.id) || `${nanoSeqBadge}.${atomicIndex + 1}`;
                                                                         const atomicBreakdown = getGoalBreakdown(atomicGoal.id);
 
                                                                         return (
@@ -2451,12 +2397,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       })
                   ) : (
                     /* FLAT LIST VIEW */
-                    sortGoals(goals.filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter))
-                      .map((g, flatIndex) => {
+                    flatHierarchyGoals
+                      .filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter)
+                      .map(g => {
                         const lvl = getGoalLevel(g);
-                        const flatSeqNum = extractGoalSequenceNumber(g.title) ?? (g.order !== undefined && g.order !== null ? g.order : flatIndex + 1);
-                        const flatSeqBadge = formatOrdinalBadge(flatSeqNum);
-                        const parent = g.parentId ? goals.find(p => p.id === g.parentId) : null;
+                        const flatSeqBadge = hierarchySequenceById.get(g.id) || '';
+                        const parent = g.parentId ? goalsById.get(g.parentId) : null;
 
                         return (
                           <div
@@ -2478,7 +2424,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                     <>
                                       <span className="text-slate-300 dark:text-slate-700">·</span>
                                       <span className="text-slate-400 truncate max-w-[200px]">
-                                        Parent: {parent.title}
+                                        Parent: {hierarchySequenceById.get(parent.id)} {parent.title}
                                       </span>
                                     </>
                                   )}
@@ -3165,13 +3111,20 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     Hierarchy Level
                   </label>
                   <select
-                    value={editingGoal.level || getGoalLevel(editingGoal)}
+                    value={getGoalLevel(editingGoal)}
                     onChange={e => {
                       const lvl = Number(e.target.value) as 1 | 2 | 3 | 4 | 5;
+                      const descendants = getDescendantIds(editingGoal.id);
+                      const validParents = sortGoals(goals.filter(g =>
+                        g.id !== editingGoal.id &&
+                        !descendants.has(g.id) &&
+                        getGoalLevel(g) === lvl - 1
+                      ));
+                      const currentParent = validParents.find(g => g.id === editingGoal.parentId);
                       setEditingGoal({
                         ...editingGoal,
                         level: lvl,
-                        parentId: lvl === 1 ? null : editingGoal.parentId
+                        parentId: lvl === 1 ? null : (currentParent || validParents[0])?.id || null
                       });
                     }}
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -3189,20 +3142,28 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     Parent Goal (Branch)
                   </label>
                   <select
-                    disabled={(editingGoal.level || getGoalLevel(editingGoal)) === 1}
+                    disabled={getGoalLevel(editingGoal) === 1}
+                    required={getGoalLevel(editingGoal) > 1}
                     value={editingGoal.parentId || ''}
                     onChange={e => {
                       const pId = e.target.value || null;
-                      setEditingGoal({ ...editingGoal, parentId: pId });
+                      const parent = pId ? goalsById.get(pId) : null;
+                      setEditingGoal({
+                        ...editingGoal,
+                        parentId: parent?.id || null,
+                        level: parent ? Math.min(5, getGoalLevel(parent) + 1) as 1 | 2 | 3 | 4 | 5 : 1
+                      });
                     }}
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50"
                   >
                     <option value="">None (Independent Main Goal)</option>
-                    {goals
-                      .filter(g => g.id !== editingGoal.id)
-                      .map(g => (
+                    {sortGoals(goals.filter(g =>
+                      g.id !== editingGoal.id &&
+                      !editingDescendantIds.has(g.id) &&
+                      getGoalLevel(g) === getGoalLevel(editingGoal) - 1
+                    )).map(g => (
                         <option key={g.id} value={g.id}>
-                          {g.title}
+                          {hierarchySequenceById.get(g.id)} {g.title}
                         </option>
                       ))}
                   </select>
@@ -3292,7 +3253,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         isOpen={Boolean(deleteTarget)}
         title="Confirm Removal"
         message={deleteTarget ? `Are you sure you want to remove "${deleteTarget.name}"?` : ''}
-        cloudNotice="Google Drive Cloud Sync: Deleting this goal/milestone removes it from your Google Drive backup automatically."
+        cloudNotice="With Google Drive Auto-Sync enabled and online, deleting this goal or milestone updates your Drive backup."
         confirmText="Remove"
         cancelText="Cancel"
         isDanger={true}

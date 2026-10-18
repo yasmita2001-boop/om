@@ -1,6 +1,7 @@
 import React from 'react';
-import { Link2, Target } from 'lucide-react';
+import { Target } from 'lucide-react';
 import { Goal } from '../types';
+import { LinkModeSelector } from './LinkModeSelector';
 
 interface GoalLinkSelectorProps {
   goals?: Goal[];
@@ -31,39 +32,20 @@ export const GoalLinkSelector: React.FC<GoalLinkSelectorProps> = ({
           {label}
         </label>
         {/* Mode Selector: Link Goal vs Manual (Exact TasksView pill styling) */}
-        <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80 shrink-0">
-          <button
-            type="button"
-            onClick={() => {
+        <LinkModeSelector
+          value={mode}
+          ariaLabel={`${label} mode`}
+          options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+          onChange={nextMode => {
+            if (nextMode === 'link') {
               onModeChange('link');
-              if (goals.length > 0 && !goalId) {
-                onGoalChange(goals[0].id);
-              }
-            }}
-            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-              mode === 'link'
-                ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-            }`}
-          >
-            <Link2 className="h-3 w-3" />
-            <span>Link Goal</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onModeChange('manual');
-              onGoalChange('');
-            }}
-            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-              mode === 'manual'
-                ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-            }`}
-          >
-            <span>Manual</span>
-          </button>
-        </div>
+              if (goals.length > 0 && !goalId) onGoalChange(goals[0].id);
+              return;
+            }
+            onModeChange('manual');
+            onGoalChange('');
+          }}
+        />
       </div>
 
       {/* Target Goal Dropdown when Link Goal is active (Matching TasksView) */}

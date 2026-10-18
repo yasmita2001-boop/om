@@ -1,6 +1,7 @@
 // Universal Alarm & Ringtone Engine for Om-LifeOS
 // Supports 6 synthesizer ringtones via Web Audio API + Custom User Uploads (MP3/WAV/OGG/M4A)
 import { useState, useEffect } from 'react';
+import { storage } from './storage';
 
 export interface RingtoneOption {
   id: string;
@@ -52,6 +53,12 @@ const STORAGE_KEY_CUSTOM_RINGTONE = 'om_custom_ringtone_data';
 const STORAGE_KEY_CUSTOM_NAME = 'om_custom_ringtone_name';
 const STORAGE_KEY_VOLUME = 'om_alarm_volume';
 const STORAGE_KEY_DEFAULT_RINGTONE = 'om_default_ringtone';
+const scopedKey = (key: string) => `${key}:${storage.getActiveProfileId()}`;
+const getScopedItem = (key: string) => {
+  const scoped = localStorage.getItem(scopedKey(key));
+  if (scoped !== null) return scoped;
+  return storage.getActiveProfileId() === 'om-master-profile' ? localStorage.getItem(key) : null;
+};
 
 class AlarmAudioEngine {
   private audioCtx: AudioContext | null = null;
@@ -74,7 +81,7 @@ class AlarmAudioEngine {
   // Volume helper (0.0 to 1.0)
   public getVolume(): number {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_VOLUME);
+      const stored = getScopedItem(STORAGE_KEY_VOLUME);
       if (stored !== null) return Math.min(1, Math.max(0, parseFloat(stored)));
     } catch {}
     return 0.85;
@@ -82,13 +89,13 @@ class AlarmAudioEngine {
 
   public setVolume(val: number) {
     try {
-      localStorage.setItem(STORAGE_KEY_VOLUME, String(Math.min(1, Math.max(0, val))));
+      localStorage.setItem(scopedKey(STORAGE_KEY_VOLUME), String(Math.min(1, Math.max(0, val))));
     } catch {}
   }
 
   public getDefaultRingtoneId(): string {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_DEFAULT_RINGTONE);
+      const stored = getScopedItem(STORAGE_KEY_DEFAULT_RINGTONE);
       if (stored) return stored;
       const custom = this.getCustomRingtone();
       if (custom) return 'custom';
@@ -98,15 +105,15 @@ class AlarmAudioEngine {
 
   public setDefaultRingtoneId(id: string) {
     try {
-      localStorage.setItem(STORAGE_KEY_DEFAULT_RINGTONE, id);
+      localStorage.setItem(scopedKey(STORAGE_KEY_DEFAULT_RINGTONE), id);
     } catch {}
   }
 
   // Custom User Ringtone Storage
   public getCustomRingtone(): { name: string; dataUrl: string } | null {
     try {
-      const dataUrl = localStorage.getItem(STORAGE_KEY_CUSTOM_RINGTONE);
-      const name = localStorage.getItem(STORAGE_KEY_CUSTOM_NAME) || 'Custom Audio';
+      const dataUrl = getScopedItem(STORAGE_KEY_CUSTOM_RINGTONE);
+      const name = getScopedItem(STORAGE_KEY_CUSTOM_NAME) || 'Custom Audio';
       if (dataUrl) return { name, dataUrl };
     } catch {}
     return null;
@@ -114,8 +121,8 @@ class AlarmAudioEngine {
 
   public setCustomRingtone(name: string, dataUrl: string): boolean {
     try {
-      localStorage.setItem(STORAGE_KEY_CUSTOM_RINGTONE, dataUrl);
-      localStorage.setItem(STORAGE_KEY_CUSTOM_NAME, name);
+      localStorage.setItem(scopedKey(STORAGE_KEY_CUSTOM_RINGTONE), dataUrl);
+      localStorage.setItem(scopedKey(STORAGE_KEY_CUSTOM_NAME), name);
       this.setDefaultRingtoneId('custom');
       try {
         window.dispatchEvent(new CustomEvent('om_custom_ringtone_changed', { detail: { name, dataUrl } }));
@@ -129,8 +136,8 @@ class AlarmAudioEngine {
 
   public removeCustomRingtone() {
     try {
-      localStorage.removeItem(STORAGE_KEY_CUSTOM_RINGTONE);
-      localStorage.removeItem(STORAGE_KEY_CUSTOM_NAME);
+      localStorage.removeItem(scopedKey(STORAGE_KEY_CUSTOM_RINGTONE));
+      localStorage.removeItem(scopedKey(STORAGE_KEY_CUSTOM_NAME));
       if (this.getDefaultRingtoneId() === 'custom') {
         this.setDefaultRingtoneId('zen_bell');
       }

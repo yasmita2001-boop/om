@@ -3,7 +3,7 @@ import {
   DollarSign, Plus, ArrowUpRight, ArrowUpDown,
   ShieldCheck, Trash2, TrendingUp, Landmark,
   Download, Upload, Paperclip, Receipt, ExternalLink,
-  FileText, X, Eye, Link2, Target, ChevronRight, ChevronDown,
+  FileText, X, Eye, Link2, Target, ChevronRight, ChevronDown, Pencil,
   RefreshCw, AlertCircle, Check
 } from 'lucide-react';
 import {
@@ -15,6 +15,7 @@ import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString, getLocalMonthString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
+import { LinkModeSelector } from '../components/LinkModeSelector';
 import { syncGoalProgressFromFinance } from '../lib/goalTaskSync';
 
 interface FinanceViewProps {
@@ -31,6 +32,7 @@ interface FinanceViewProps {
   goals?: Goal[];
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
+  onError?: (msg: string) => void;
   onNavigate?: (module: NavModule) => void;
 }
 
@@ -78,9 +80,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   goals = [],
   onRefresh,
   onSuccess,
+  onError,
   onNavigate
 }) => {
   const today = getLocalDateString();
+  const reportError = onError || ((message: string) => onSuccess(`⚠️ ${message}`));
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'accounts' | 'loans' | 'investments' | 'savings' | 'balanceSheet'>('overview');
 
   // New Transaction Form state
@@ -231,6 +235,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [invAmount, setInvAmount] = useState('');
   const [invCurrentVal, setInvCurrentVal] = useState('');
   const [invAccountId, setInvAccountId] = useState(accounts[0]?.id || '');
+  const [editingInvestmentId, setEditingInvestmentId] = useState<string | null>(null);
+  const [editingInvestmentValue, setEditingInvestmentValue] = useState('');
 
   // New Loan Form Disbursal Account
   const [loanDepositAccountId, setLoanDepositAccountId] = useState(accounts[0]?.id || '');
@@ -340,7 +346,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const netCashFlow = operatingCashFlow + investingCashFlow - savingsFlow + financingCashFlow;
 
   const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
-  const investmentValue = investments.reduce((sum, i) => sum + (Number(i.currentValue) || Number(i.amount) || 0), 0);
+  const investmentValue = investments.reduce((sum, i) => sum + (Number(i.currentValue ?? i.amount) || 0), 0);
   const totalSavings = savingsPlans.reduce((sum, s) => sum + (Number(s.currentAmount) || 0), 0);
   const manualAssetsVal = assets.reduce((sum, a) => sum + (Number(a.value) || 0), 0);
   const totalAssets = liquidCash + investmentValue + totalSavings + manualAssetsVal;
@@ -380,12 +386,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       }
     });
 
-    if (acct.openingBalance === undefined && credits === 0 && debits === 0) {
-      opening = Number(acct.balance) || 0;
+    const currentBalance = Number(acct.balance) || 0;
+    if (acct.openingBalance === undefined) {
+      opening = currentBalance - credits + debits;
     }
 
     const calculatedBalance = opening + credits - debits;
-    const currentBalance = Number(acct.balance) || 0;
     const isMismatch = Math.abs(currentBalance - calculatedBalance) > 0.01;
     return {
       opening,
@@ -410,6 +416,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       });
     }
     onSuccess(`✓ Reconciled ${accounts.length} accounts! All balances are now 100% synchronized with ledger.`);
+    onRefresh();
+  };
+
+  const handleSaveInvestmentValue = async (investment: Investment) => {
+    const value = Number(editingInvestmentValue);
+    if (!Number.isFinite(value) || value < 0) {
+      reportError('Current market value must be zero or greater.');
+      return;
+    }
+    const updated: Investment = { ...investment, currentValue: value, updatedAt: Date.now() };
+    await storage.put('investments', updated);
+    if (updated.goalId) await syncGoalProgressFromFinance(updated.goalId);
+    setEditingInvestmentId(null);
+    setEditingInvestmentValue('');
+    onSuccess(`Updated "${updated.name}" market value to ₹${value.toLocaleString('en-IN')}.`);
     onRefresh();
   };
 
@@ -482,35 +503,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   ) => (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <div
-          role="group"
-          aria-label={label}
-          className="flex shrink-0 items-center rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800"
-        >
-          <button
-            type="button"
-            onClick={() => setMode('link')}
-            className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-all cursor-pointer ${
-              mode === 'link'
-                ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-            }`}
-          >
-            <Link2 className="h-3 w-3" />
-            <span>Link Goal</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMode('manual'); setSelectedGoalId(''); }}
-            className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-all cursor-pointer ${
-              mode === 'manual'
-                ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-            }`}
-          >
-            <span>Manual</span>
-          </button>
-        </div>
+        <LinkModeSelector
+          value={mode}
+          ariaLabel={label}
+          options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+          onChange={nextMode => {
+            if (nextMode === 'link') setMode('link');
+            else {
+              setMode('manual');
+              setSelectedGoalId('');
+            }
+          }}
+        />
       </div>
 
       {mode === 'link' && (
@@ -569,7 +573,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     });
 
     const goalInvestments = investments.filter(i => i.goalId === goalId);
-    const goalInvestmentsTotal = goalInvestments.reduce((sum, i) => sum + (Number(i.currentValue || i.amount) || 0), 0);
+    const goalInvestmentsTotal = goalInvestments.reduce((sum, i) => sum + (Number(i.currentValue ?? i.amount) || 0), 0);
     const goalInvestedCost = goalInvestments.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
 
     const goalLoans = loans.filter(l => l.goalId === goalId);
@@ -623,15 +627,37 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       onSuccess('Please enter a transaction amount greater than 0.');
       return;
     }
+    if (txType === 'repayment') {
+      const loan = loans.find(item => item.id === (txRepayLoanId || loans[0]?.id));
+      const outstanding = Number(loan?.outstanding) || 0;
+      if (!loan || outstanding <= 0) {
+        reportError('Select a loan with an outstanding balance before recording a repayment.');
+        return;
+      }
+      if (amt > outstanding) {
+        reportError(`Payment exceeds the outstanding balance of ₹${outstanding.toLocaleString('en-IN')}.`);
+        return;
+      }
+    }
 
     let selectedAccount = txAccount || accounts[0]?.id;
     const selectedToAccount = txToAccount || accounts[1]?.id || accounts[0]?.id;
+    if (
+      txType === 'repayment' &&
+      (!selectedAccount || !accounts.some(account => account.id === selectedAccount))
+    ) {
+      reportError('Select an available account to record the repayment debit.');
+      return;
+    }
     if (txType === 'transfer') {
       if (!selectedAccount || !selectedToAccount || selectedAccount === selectedToAccount) {
         onSuccess('Select two different accounts for a transfer.');
         return;
       }
-      if (!accounts.some(a => a.id === selectedAccount) || !accounts.some(a => a.id === selectedToAccount)) return;
+      if (!accounts.some(a => a.id === selectedAccount) || !accounts.some(a => a.id === selectedToAccount)) {
+        reportError('One of the selected transfer accounts is no longer available. Refresh the account list and retry.');
+        return;
+      }
     }
 
     const now = Date.now();
@@ -775,7 +801,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       const targetLoan = loans.find(l => l.id === txRepayLoanId) || loans[0];
       if (targetLoan) {
         const outstanding = Number(targetLoan.outstanding) || 0;
-        const paid = Math.min(amt, outstanding);
+        if (outstanding <= 0) {
+          reportError('This loan is already fully repaid; no additional payment can be recorded.');
+          return;
+        }
+        if (amt > outstanding) {
+          reportError(`Payment exceeds the outstanding balance of ₹${outstanding.toLocaleString('en-IN')}.`);
+          return;
+        }
+        const paid = amt;
         const monthlyRate = (Number(targetLoan.rate) || 0) / 1200;
         const interest = Math.min(paid, outstanding * monthlyRate);
         const principal = Math.max(0, paid - interest);
@@ -808,6 +842,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       }
     }
 
+    const goalIdsToRecalculate = new Set<string>();
+    if (tx.goalId) goalIdsToRecalculate.add(tx.goalId);
+    if (txType === 'repayment') {
+      const targetLoan = loans.find(l => l.id === txRepayLoanId) || loans[0];
+      if (targetLoan?.goalId) goalIdsToRecalculate.add(targetLoan.goalId);
+    }
+
     // If investment is recorded from main transaction form, also auto-register in investments portfolio for 2-way sync
     if (txType === 'investment') {
       const invId = generateUUID();
@@ -830,40 +871,50 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     try {
       await storage.atomicPutMany(operations);
-      if (tx.goalId) {
-        await syncGoalProgressFromFinance(tx.goalId);
-      }
-      if (txType === 'transfer' && nextFromAccount && nextToAccount) {
-        onSuccess(`₹${amt.toLocaleString('en-IN')} transferred from ${nextFromAccount.name} to ${nextToAccount.name}`);
-      } else if (txType === 'income') {
-        onSuccess(`✓ Income of ₹${amt.toLocaleString('en-IN')} added to account${tx.goalId ? ' & linked to Goal' : ''}`);
-      } else if (txType === 'expense') {
-        onSuccess(`✓ Expense of ₹${amt.toLocaleString('en-IN')} recorded & deducted${tx.goalId ? ' & linked to Goal' : ''}`);
-      } else if (txType === 'loan') {
-        onSuccess(`✓ Loan (+₹${amt.toLocaleString('en-IN')}) deposited into ${acct?.name || 'account'} & recorded in ledger!`);
-      } else if (txType === 'repayment') {
-        onSuccess(`✓ Loan payment of ₹${amt.toLocaleString('en-IN')} deducted & outstanding reduced!`);
-      } else if (txType === 'investment') {
-        onSuccess(`✓ Investment of ₹${amt.toLocaleString('en-IN')} logged in ledger & portfolio!`);
-      } else if (createdOrLinkedReceiptId) {
-        onSuccess('✓ Transaction recorded & linked with Things Purchase Receipt Vault!');
-      } else {
-        onSuccess('Transaction committed to ledger');
-      }
-      setTxAmount('');
-      setTxCategory('');
-      setTxNote('');
-      setTxGoalId('');
-      setTxInputMode('manual');
-      setTxAttachedFile(null);
-      setTxLinkToReceipt(false);
-      setTxReceiptMode('link_existing');
-      setTxReceiptTitle('');
-      setTxSelectedReceiptId('');
-      onRefresh();
     } catch (err: any) {
       onSuccess(`Transaction could not be committed: ${err?.message || 'database error'}`);
+      return;
     }
+
+    try {
+      for (const goalId of goalIdsToRecalculate) {
+        await syncGoalProgressFromFinance(goalId);
+      }
+    } catch (err) {
+      console.error('Transaction saved but linked Goal progress could not be recalculated', err);
+      onSuccess('Transaction saved, but linked Goal progress could not be refreshed. Refresh the app; do not submit the transaction again.');
+      onRefresh();
+      return;
+    }
+
+    if (txType === 'transfer' && nextFromAccount && nextToAccount) {
+      onSuccess(`₹${amt.toLocaleString('en-IN')} transferred from ${nextFromAccount.name} to ${nextToAccount.name}`);
+    } else if (txType === 'income') {
+      onSuccess(`✓ Income of ₹${amt.toLocaleString('en-IN')} added to account${tx.goalId ? ' & linked to Goal' : ''}`);
+    } else if (txType === 'expense') {
+      onSuccess(`✓ Expense of ₹${amt.toLocaleString('en-IN')} recorded & deducted${tx.goalId ? ' & linked to Goal' : ''}`);
+    } else if (txType === 'loan') {
+      onSuccess(`✓ Loan (+₹${amt.toLocaleString('en-IN')}) deposited into ${acct?.name || 'account'} & recorded in ledger!`);
+    } else if (txType === 'repayment') {
+      onSuccess(`✓ Loan payment of ₹${amt.toLocaleString('en-IN')} deducted & outstanding reduced!`);
+    } else if (txType === 'investment') {
+      onSuccess(`✓ Investment of ₹${amt.toLocaleString('en-IN')} logged in ledger & portfolio!`);
+    } else if (createdOrLinkedReceiptId) {
+      onSuccess('✓ Transaction recorded & linked with Things Purchase Receipt Vault!');
+    } else {
+      onSuccess('Transaction committed to ledger');
+    }
+    setTxAmount('');
+    setTxCategory('');
+    setTxNote('');
+    setTxGoalId('');
+    setTxInputMode('manual');
+    setTxAttachedFile(null);
+    setTxLinkToReceipt(false);
+    setTxReceiptMode('link_existing');
+    setTxReceiptTitle('');
+    setTxSelectedReceiptId('');
+    onRefresh();
   };
 
   const handleCreateAccount = async (e: React.FormEvent) => {
@@ -1008,7 +1059,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
 
     const outstanding = Number(loan.outstanding) || 0;
-    const paid = Math.min(amt, outstanding);
+    if (outstanding <= 0) {
+      reportError('This loan is already fully repaid; no additional payment can be recorded.');
+      return;
+    }
+    if (amt > outstanding) {
+      reportError(`Payment exceeds the outstanding balance of ₹${outstanding.toLocaleString('en-IN')}.`);
+      return;
+    }
+    const paid = amt;
     const monthlyRate = (Number(loan.rate) || 0) / 1200;
     const interest = Math.min(paid, outstanding * monthlyRate);
     const principal = Math.max(0, paid - interest);
@@ -1016,18 +1075,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const operations: Array<{ storeName: string; item: any }> = [];
 
     const sourceAccountId = payAcctId || accounts[0]?.id;
-    if (sourceAccountId) {
-      const acct = accounts.find(a => a.id === sourceAccountId);
-      if (acct) {
-        operations.push({
-          storeName: 'financeAccounts',
-          item: {
-            ...acct,
-            balance: (Number(acct.balance) || 0) - paid
-          }
-        });
-      }
+    const sourceAccount = accounts.find(account => account.id === sourceAccountId);
+    if (!sourceAccount) {
+      reportError('Select an available account to record the repayment debit.');
+      return;
     }
+    operations.push({
+      storeName: 'financeAccounts',
+      item: {
+        ...sourceAccount,
+        balance: (Number(sourceAccount.balance) || 0) - paid
+      }
+    });
 
     operations.push({
       storeName: 'loans',
@@ -1105,14 +1164,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const handleCreateInvestment = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(invAmount);
-    if (!invName.trim() || amt <= 0) return;
+    if (!invName.trim() || !Number.isFinite(amt) || amt <= 0) {
+      reportError('Enter an investment name and an amount greater than zero.');
+      return;
+    }
+    if (invCurrentVal.trim() !== '' && (!Number.isFinite(Number(invCurrentVal)) || Number(invCurrentVal) < 0)) {
+      reportError('Current market value must be zero or greater.');
+      return;
+    }
 
     const invId = generateUUID();
     const inv: Investment = {
       id: invId,
       name: invName.trim(),
       amount: amt,
-      currentValue: Number(invCurrentVal) || amt,
+      currentValue: invCurrentVal.trim() === '' ? amt : Number(invCurrentVal),
       date: today,
       accountId: invAccountId || null,
       goalId: invInputMode === 'link' && invGoalId ? invGoalId : null,
@@ -1350,6 +1416,39 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+    if (deleteTarget.store === 'financeAccounts') {
+      const account = accounts.find(item => item.id === deleteTarget.id);
+      const hasBalance = Math.abs(Number(account?.balance) || 0) > 0.01;
+      const hasTransactions = transactions.some(tx =>
+        tx.accountId === deleteTarget.id ||
+        tx.fromAccountId === deleteTarget.id ||
+        tx.toAccountId === deleteTarget.id
+      );
+      const hasLoanPayments = loanPayments.some(payment => payment.accountId === deleteTarget.id);
+      if (hasBalance || hasTransactions || hasLoanPayments) {
+        setDeleteTarget(null);
+        reportError('This account still has a balance or ledger history. Transfer/reconcile the balance and remove or reassign its linked transactions and repayments before deleting it.');
+        return;
+      }
+    }
+    if (deleteTarget.store === 'loans') {
+      const hasTransactions = transactions.some(tx => tx.linkedLoanId === deleteTarget.id);
+      const hasPayments = loanPayments.some(payment => payment.loanId === deleteTarget.id);
+      if (hasTransactions || hasPayments) {
+        setDeleteTarget(null);
+        reportError('This loan still has linked disbursement or repayment history. Reverse/remove those ledger entries first; the loan was kept to preserve a correct balance sheet.');
+        return;
+      }
+    }
+    if (deleteTarget.store === 'savingsPlans') {
+      const plan = savingsPlans.find(item => item.id === deleteTarget.id);
+      const hasContributions = transactions.some(tx => tx.linkedSavingsPlanId === deleteTarget.id);
+      if ((Number(plan?.currentAmount) || 0) > 0.01 || hasContributions) {
+        setDeleteTarget(null);
+        reportError('This savings plan still holds funds or has ledger contributions. Reverse its linked contribution entries first so the account balance and savings total stay accurate.');
+        return;
+      }
+    }
     let linkedGoalIdToDelete: string | null | undefined = null;
     if (deleteTarget.store === 'finance') {
       const tx = transactions.find(t => t.id === deleteTarget.id);
@@ -1446,7 +1545,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     lines.push('"ID","Asset Name","Invested Cost (INR)","Current Valuation (INR)","P&L / Gain (INR)","ROI %","Date"');
     investments.forEach(i => {
       const cost = Number(i.amount) || 0;
-      const current = Number(i.currentValue || i.amount) || 0;
+      const current = Number(i.currentValue ?? i.amount) || 0;
       const gain = current - cost;
       const roi = cost > 0 ? ((gain / cost) * 100).toFixed(2) : '0';
       lines.push([
@@ -1604,6 +1703,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
             Finance & Ledger
           </h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Ledger totals update as you record changes. Bank balances and market prices are not fetched live; update them from your statements or provider.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -2783,7 +2885,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               ) : (
                 investments.map(i => {
                   const invested = Number(i.amount) || 0;
-                  const current = Number(i.currentValue || i.amount) || 0;
+                  const current = Number(i.currentValue ?? i.amount) || 0;
                   const gain = current - invested;
                   const roiPct = invested ? (gain / invested) * 100 : 0;
                   const linkedTx = transactions.find(t => t.linkedInvestmentId === i.id && t.type === 'investment');
@@ -2811,6 +2913,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           </div>
                           <button
                             type="button"
+                            onClick={() => {
+                              setEditingInvestmentId(i.id);
+                              setEditingInvestmentValue(String(i.currentValue ?? i.amount));
+                            }}
+                            className="text-slate-400 hover:text-indigo-600 transition-colors p-1 cursor-pointer"
+                            title="Update current market value"
+                            aria-label={`Update market value for ${i.name}`}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setDeleteTarget({ store: 'investments', id: i.id, name: i.name })}
                             className="text-slate-300 hover:text-rose-500 transition-colors p-1 cursor-pointer"
                             title="Delete investment"
@@ -2819,6 +2933,39 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           </button>
                         </div>
                       </div>
+
+                      {editingInvestmentId === i.id && (
+                        <form
+                          className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-900/50 dark:bg-indigo-950/20"
+                          onSubmit={e => {
+                            e.preventDefault();
+                            void handleSaveInvestmentValue(i);
+                          }}
+                        >
+                          <label className="min-w-36 flex-1 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                            Current market value (₹)
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              required
+                              value={editingInvestmentValue}
+                              onChange={e => setEditingInvestmentValue(e.target.value)}
+                              className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                            />
+                          </label>
+                          <button type="submit" className="h-9 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer">
+                            Save value
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingInvestmentId(null)}
+                            className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      )}
 
                       {!hasLinkedTx ? (
                         <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-[11px]">
@@ -3373,10 +3520,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         <span>{tx.date}</span>
                         <span>·</span>
                         <span className="capitalize font-medium">{tx.type}</span>
-                        {tx.accountId && (
+                        {tx.type === 'transfer' ? (
                           <>
                             <span>·</span>
-                            <span className="text-slate-500">{accounts.find(a => a.id === tx.accountId)?.name}</span>
+                            <span>
+                              {accounts.find(account => account.id === tx.fromAccountId)?.name || 'Unknown source'} → {accounts.find(account => account.id === tx.toAccountId)?.name || 'Unknown destination'}
+                            </span>
+                          </>
+                        ) : tx.accountId && (
+                          <>
+                            <span>·</span>
+                            <span className="text-slate-500">{accounts.find(a => a.id === tx.accountId)?.name || 'Unknown account'}</span>
                           </>
                         )}
                       </div>

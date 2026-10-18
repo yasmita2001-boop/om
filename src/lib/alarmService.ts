@@ -29,6 +29,7 @@ export interface TriggeredAlarmData {
 }
 
 const STORAGE_KEY_FOCUS_ALARMS = 'om_focus_alarms_list';
+const getFocusAlarmStorageKey = () => `${STORAGE_KEY_FOCUS_ALARMS}:${storage.getActiveProfileId()}`;
 
 class AlarmManagerService {
   private listenerCallback: ((data: TriggeredAlarmData) => void) | null = null;
@@ -49,10 +50,17 @@ class AlarmManagerService {
     return this.activeTriggered;
   }
 
+  public clearActiveAlarm(): void {
+    alarmAudio.stop();
+    this.activeTriggered = null;
+  }
+
   // Focus Alarms CRUD
   public purgeDefaultAlarms(): void {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS);
+      const key = getFocusAlarmStorageKey();
+      const stored = localStorage.getItem(key) ||
+        (storage.getActiveProfileId() === 'om-master-profile' ? localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS) : null);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
@@ -62,7 +70,7 @@ class AlarmManagerService {
             a.label !== 'Morning Awakening & Routine' &&
             a.label !== 'Evening Reflection & Shutdown'
           );
-          localStorage.setItem(STORAGE_KEY_FOCUS_ALARMS, JSON.stringify(cleaned));
+          localStorage.setItem(key, JSON.stringify(cleaned));
         }
       }
     } catch {}
@@ -70,7 +78,9 @@ class AlarmManagerService {
 
   public getFocusAlarms(): FocusAlarm[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS);
+      const key = getFocusAlarmStorageKey();
+      const stored = localStorage.getItem(key) ||
+        (storage.getActiveProfileId() === 'om-master-profile' ? localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS) : null);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
@@ -88,7 +98,7 @@ class AlarmManagerService {
 
   public saveFocusAlarms(alarms: FocusAlarm[]) {
     try {
-      localStorage.setItem(STORAGE_KEY_FOCUS_ALARMS, JSON.stringify(alarms));
+      localStorage.setItem(getFocusAlarmStorageKey(), JSON.stringify(alarms));
     } catch {}
   }
 

@@ -1,16 +1,13 @@
 import React, { useState } from 'react';
 import { Plus, Phone, Calendar, Trash2, Edit2, Bell, ChevronDown, ChevronUp, Check, X } from 'lucide-react';
-import { Person, Interaction, Goal, ReminderItem } from '../types';
+import { Person, Interaction, ReminderItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
-import { GoalBadge } from '../components/GoalLinkSelector';
-import { syncGoalProgressFromPeople } from '../lib/goalTaskSync';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 
 interface PeopleViewProps {
   people: Person[];
   interactions: Interaction[];
-  goals?: Goal[];
   reminders?: ReminderItem[];
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
@@ -19,7 +16,6 @@ interface PeopleViewProps {
 export const PeopleView: React.FC<PeopleViewProps> = ({
   people,
   interactions,
-  goals = [],
   reminders = [],
   onRefresh,
   onSuccess
@@ -28,7 +24,6 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   const [relationship, setRelationship] = useState('Friend');
   const [contact, setContact] = useState('');
   const [importantDate, setImportantDate] = useState('');
-
   // Interaction logger & editor state
   const [selectedPersonId, setSelectedPersonId] = useState(people[0]?.id || '');
   const [interactionText, setInteractionText] = useState('');
@@ -97,12 +92,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   };
 
   const handleDeleteInteraction = async (interId: string) => {
-    const inter = interactions.find(i => i.id === interId);
-    const linkedGoalId = inter?.goalId;
     await storage.delete('interactions', interId);
-    if (linkedGoalId) {
-      await syncGoalProgressFromPeople(linkedGoalId);
-    }
     if (editingInteraction?.id === interId) {
       handleCancelEditInteraction();
     }
@@ -111,12 +101,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   };
 
   const handleDeletePerson = async (id: string) => {
-    const target = people.find(p => p.id === id);
-    const linkedGoalId = target?.goalId;
     await storage.delete('people', id);
-    if (linkedGoalId) {
-      await syncGoalProgressFromPeople(linkedGoalId);
-    }
     onSuccess('✓ Contact deleted');
     onRefresh();
   };
@@ -346,7 +331,6 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-bold text-slate-900 dark:text-white truncate">{p.name}</span>
-                              <GoalBadge goalId={p.goalId} goals={goals} />
                             </div>
                             <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold mt-0.5">
                               {p.relationship}
@@ -434,7 +418,6 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1 text-[9px] text-slate-400 font-mono mb-0.5">
                                     <span>{i.date}</span>
-                                    {i.goalId && <GoalBadge goalId={i.goalId} goals={goals} />}
                                   </div>
                                   <p className="italic leading-relaxed break-words">"{i.text}"</p>
                                 </div>

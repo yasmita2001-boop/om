@@ -96,98 +96,107 @@ export async function permanentlyEmptyRecycleBin(
   }
 
   const storesToPurge = new Map<string, string[]>();
-  let totalLingeringSoftDeleted = 0;
 
   const storesToScan = (entityStores && entityStores.length > 0)
     ? entityStores
     : Array.from(db.objectStoreNames).filter(
         name => name !== 'recycleBin' && name !== 'tombstones'
       );
+  const belongsToProfile = (item: any) => {
+    if (!profileId) return true;
+    const isGuest = profileId === 'om-master-profile' || profileId === 'default';
+    if (!item?.profileId) return isGuest;
+    return isGuest
+      ? item.profileId === 'om-master-profile' || item.profileId === 'default'
+      : item.profileId === profileId;
+  };
 
   // 1. Scan stores for soft-deleted records
   for (const storeName of storesToScan) {
     if (!db.objectStoreNames.contains(storeName)) continue;
 
-    try {
-      const records = await new Promise<any[]>((resolve) => {
-        const tx = db.transaction(storeName, 'readonly');
-        const req = tx.objectStore(storeName).getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => resolve([]);
-      });
+    const records = await new Promise<any[]>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const req = tx.objectStore(storeName).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error || new Error(`Failed to scan ${storeName} for deleted records.`));
+      tx.onerror = () => reject(tx.error || new Error(`Failed to scan ${storeName} for deleted records.`));
+    });
 
-      const idsToDelete: string[] = [];
-      for (const item of records) {
-        if (!item || !item.id) continue;
-        if (profileId && item.profileId && item.profileId !== profileId) continue;
+    const idsToDelete: string[] = [];
+    for (const item of records) {
+      if (!item || !item.id) continue;
+      if (!belongsToProfile(item)) continue;
 
-        if (isRecordDeleted(item)) {
-          idsToDelete.push(item.id);
-        }
+      if (isRecordDeleted(item)) {
+        idsToDelete.push(item.id);
       }
+    }
 
-      if (idsToDelete.length > 0) {
-        storesToPurge.set(storeName, idsToDelete);
-        totalLingeringSoftDeleted += idsToDelete.length;
-      }
-    } catch {}
+    if (idsToDelete.length > 0) {
+      storesToPurge.set(storeName, idsToDelete);
+    }
   }
 
   // 2. Perform hard delete in readwrite transactions
   let hardDeletedCount = 0;
   for (const [storeName, ids] of storesToPurge.entries()) {
-    try {
-      await new Promise<void>((resolve) => {
-        const tx = db.transaction(storeName, 'readwrite');
-        const os = tx.objectStore(storeName);
-        for (const id of ids) {
-          try {
-            os.delete(id);
-            hardDeletedCount++;
-          } catch {}
-        }
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      });
-    } catch {}
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      const os = tx.objectStore(storeName);
+      for (const id of ids) os.delete(id);
+      tx.oncomplete = () => {
+        hardDeletedCount += ids.length;
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error || new Error(`Failed to permanently delete records from ${storeName}.`));
+      tx.onabort = () => reject(tx.error || new Error(`Permanent deletion from ${storeName} was aborted.`));
+    });
   }
 
-  // 3. Clear recycleBin store
+  // 3. Remove only this workspace's recycle-bin entries
   let recycleBinPurged = 0;
   if (db.objectStoreNames.contains('recycleBin')) {
-    try {
-      recycleBinPurged = await new Promise<number>((resolve) => {
+    recycleBinPurged = await new Promise<number>((resolve, reject) => {
         const tx = db.transaction('recycleBin', 'readwrite');
         const os = tx.objectStore('recycleBin');
-        const cntReq = os.count();
-        cntReq.onsuccess = () => {
-          const count = cntReq.result || 0;
-          os.clear();
-          tx.oncomplete = () => resolve(count);
-          tx.onerror = () => resolve(0);
+        let count = 0;
+        const req = os.openCursor();
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (!cursor) return;
+          if (belongsToProfile(cursor.value)) {
+            cursor.delete();
+            count++;
+          }
+          cursor.continue();
         };
-        cntReq.onerror = () => resolve(0);
+        tx.oncomplete = () => resolve(count);
+        tx.onerror = () => reject(tx.error || new Error('Failed to permanently empty the Recycle Bin.'));
+        tx.onabort = () => reject(tx.error || new Error('Emptying the Recycle Bin was aborted.'));
       });
-    } catch {}
   }
 
   // 4. Mark all tombstones as permanentlyDeleted: true so they can NEVER be re-uploaded or resurrected
   if (db.objectStoreNames.contains('tombstones')) {
-    try {
-      await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
         const tx = db.transaction('tombstones', 'readwrite');
         const os = tx.objectStore('tombstones');
         const req = os.getAll();
         req.onsuccess = () => {
           const tombstones = req.result || [];
           for (const tomb of tombstones) {
-            os.put({ ...tomb, permanentlyDeleted: true, purgedAt: Date.now() });
+            if (belongsToProfile(tomb)) {
+              const { contentSignature: _contentSignature, ...minimalTombstone } = tomb;
+              os.put({ ...minimalTombstone, permanentlyDeleted: true, purgedAt: Date.now() });
+            }
           }
         };
+        req.onerror = () => reject(req.error || new Error('Failed to read permanent-deletion records.'));
         tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('Failed to update permanent-deletion records.'));
+        tx.onabort = () => reject(tx.error || new Error('Updating permanent-deletion records was aborted.'));
       });
-    } catch {}
   }
 
   return {

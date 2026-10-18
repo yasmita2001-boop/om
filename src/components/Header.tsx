@@ -154,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({
           aria-label="Nepal Bikram Sambat Date Converter"
         >
           <Calendar className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-          <span className="rounded bg-indigo-100/90 dark:bg-indigo-950/80 px-1 py-0.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase leading-none">
+          <span className="hidden min-[360px]:inline rounded bg-indigo-100/90 dark:bg-indigo-950/80 px-1 py-0.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase leading-none">
             BS
           </span>
           <span className="font-mono text-[10px] font-semibold text-slate-800 dark:text-slate-200 hidden min-[400px]:inline">
@@ -199,7 +199,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => setIs24Hour(prev => !prev)}
-          className="flex h-9 items-center gap-1 sm:gap-2 rounded-xl border border-slate-200/90 bg-slate-50/80 px-1.5 sm:px-2.5 text-left transition-all hover:border-indigo-400 hover:bg-white dark:border-slate-800 dark:bg-slate-800/80 dark:hover:border-indigo-500 dark:hover:bg-slate-800 shrink-0 cursor-pointer shadow-2xs group"
+          className="flex h-9 items-center gap-1 sm:gap-2 rounded-xl border border-slate-200/90 bg-slate-50/80 px-1 sm:px-2.5 text-left transition-all hover:border-indigo-400 hover:bg-white dark:border-slate-800 dark:bg-slate-800/80 dark:hover:border-indigo-500 dark:hover:bg-slate-800 shrink-0 cursor-pointer shadow-2xs group"
           title={`Live System Clock (${is24Hour ? '24h' : '12h'} - Click to toggle)`}
           aria-label={`Current time ${formattedTimeFull}. Toggle 12/24 hour time format`}
         >
@@ -207,8 +207,8 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </div>
-          <Clock className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-          <span className="font-mono text-[10px] sm:hidden font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
+          <Clock className="hidden min-[360px]:block h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <span className="inline sm:hidden font-mono text-[9px] min-[360px]:text-[10px] font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
             {formattedTimeCompact}
           </span>
           <span className="hidden font-mono text-[11px] sm:inline sm:text-xs md:text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Briefcase, BookOpen, Users, Trash2, Award, Edit3, X, Calendar,
-  Link2, Target, CheckCircle2, Circle, Check, ArrowRight, Layers, TrendingUp,
+  Target, CheckCircle2, Circle, Check, ArrowRight, Layers, TrendingUp,
   BellRing, Bell, Zap, AlertTriangle, Search, Plus
 } from 'lucide-react';
 import {
@@ -16,10 +16,10 @@ import {
   syncGoalProgressFromSkills,
   syncGoalProgressDirect,
   syncGoalProgressFromTasks,
-  syncGoalProgressFromPeople,
   syncGoalProgressFromMeetings
 } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { LinkModeSelector } from '../components/LinkModeSelector';
 import { SlideTabs } from '../components/SlideTabs';
 import { computeItemDelay } from '../components/ProjectTimelinePlan';
 import { alarmService } from '../lib/alarmService';
@@ -317,10 +317,10 @@ export const WorkView: React.FC<WorkViewProps> = ({
       };
       await storage.put('meetings', updated);
       if (updated.goalId) {
-        await syncGoalProgressFromPeople(updated.goalId);
+        await syncGoalProgressFromMeetings(updated.goalId, updated.id, updated.completed, updated.status);
       }
       if (oldGoalId && oldGoalId !== updated.goalId) {
-        await syncGoalProgressFromPeople(oldGoalId);
+        await syncGoalProgressFromMeetings(oldGoalId);
       }
       onSuccess('✓ Meeting agenda updated');
     }
@@ -349,7 +349,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
         if (deleteTarget.store === 'workProjects') await syncGoalProgressFromProjects(linkedGoalId);
         else if (deleteTarget.store === 'learningItems') await syncGoalProgressFromLearning(linkedGoalId);
         else if (deleteTarget.store === 'skills') await syncGoalProgressFromSkills(linkedGoalId);
-        else if (deleteTarget.store === 'meetings') await syncGoalProgressFromPeople(linkedGoalId);
+        else if (deleteTarget.store === 'meetings') await syncGoalProgressFromMeetings(linkedGoalId);
       }
 
       onSuccess(`✓ ${deleteTarget.name} deleted`);
@@ -1005,39 +1005,20 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     Project Title / Purpose
                   </label>
                   {/* Mode Selector: Link Goal vs Manual */}
-                  <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                    <button
-                      type="button"
-                      onClick={() => {
+                  <LinkModeSelector
+                    value={projInputMode}
+                    ariaLabel="Project goal link mode"
+                    options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+                    onChange={mode => {
+                      if (mode === 'link') {
                         setProjInputMode('link');
-                        if (goals.length > 0 && !projGoalId) {
-                          handleSelectGoalForProject(goals[0].id);
-                        }
-                      }}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        projInputMode === 'link'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Link2 className="h-3 w-3" />
-                      <span>Link Goal</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
+                        if (goals.length > 0 && !projGoalId) handleSelectGoalForProject(goals[0].id);
+                      } else {
                         setProjInputMode('manual');
                         setProjGoalId('');
-                      }}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        projInputMode === 'manual'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <span>Manual</span>
-                    </button>
-                  </div>
+                      }
+                    }}
+                  />
                 </div>
 
                 {projInputMode === 'link' && (
@@ -1341,39 +1322,20 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     Course / Curriculum Title
                   </label>
                   {/* Mode Selector: Link Goal vs Manual */}
-                  <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                    <button
-                      type="button"
-                      onClick={() => {
+                  <LinkModeSelector
+                    value={learnInputMode}
+                    ariaLabel="Learning goal link mode"
+                    options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+                    onChange={mode => {
+                      if (mode === 'link') {
                         setLearnInputMode('link');
-                        if (goals.length > 0 && !learnGoalId) {
-                          handleSelectGoalForLearning(goals[0].id);
-                        }
-                      }}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        learnInputMode === 'link'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Link2 className="h-3 w-3" />
-                      <span>Link Goal</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
+                        if (goals.length > 0 && !learnGoalId) handleSelectGoalForLearning(goals[0].id);
+                      } else {
                         setLearnInputMode('manual');
                         setLearnGoalId('');
-                      }}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        learnInputMode === 'manual'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <span>Manual</span>
-                    </button>
-                  </div>
+                      }
+                    }}
+                  />
                 </div>
 
                 {learnInputMode === 'link' && (
@@ -1675,39 +1637,20 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     Skill Title / Purpose
                   </label>
                   {/* Mode Selector: Link Goal vs Manual */}
-                  <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                    <button
-                      type="button"
-                      onClick={() => {
+                  <LinkModeSelector
+                    value={skillInputMode}
+                    ariaLabel="Skill goal link mode"
+                    options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+                    onChange={mode => {
+                      if (mode === 'link') {
                         setSkillInputMode('link');
-                        if (goals.length > 0 && !skillGoalId) {
-                          handleSelectGoalForSkill(goals[0].id);
-                        }
-                      }}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        skillInputMode === 'link'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Link2 className="h-3 w-3" />
-                      <span>Link Goal</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
+                        if (goals.length > 0 && !skillGoalId) handleSelectGoalForSkill(goals[0].id);
+                      } else {
                         setSkillInputMode('manual');
                         setSkillGoalId('');
-                      }}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        skillInputMode === 'manual'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <span>Manual</span>
-                    </button>
-                  </div>
+                      }
+                    }}
+                  />
                 </div>
 
                 {skillInputMode === 'link' && (

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard, CheckSquare, Repeat, Briefcase,
-  Target, MoreHorizontal, FileText, BookOpen, Calculator,
+  Target, Timer, MoreHorizontal, FileText, BookOpen, Calculator,
   DollarSign, Heart, Users, Compass, Folder, Settings,
   X
 } from 'lucide-react';
@@ -17,6 +17,43 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onNavigate,
 }) => {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isMoreOpen) return;
+
+    closeButtonRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMoreOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable?.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      moreButtonRef.current?.focus();
+    };
+  }, [isMoreOpen]);
 
   const primaryTabs: { id: NavModule; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Home', icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -26,16 +63,17 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     { id: 'work', label: 'Work', icon: <Briefcase className="h-4 w-4" /> },
   ];
 
-  const secondaryModules: { id: NavModule; label: string; icon: React.ReactNode; desc: string }[] = [
-    { id: 'notes', label: 'Notes & Wiki', icon: <FileText className="h-4 w-4 text-amber-500" />, desc: 'Rich notes & attachments' },
-    { id: 'journal', label: 'Daily Journal', icon: <BookOpen className="h-4 w-4 text-blue-500" />, desc: 'Reflections & history' },
-    { id: 'finance', label: 'Finance & Ledger', icon: <DollarSign className="h-4 w-4 text-emerald-500" />, desc: 'Accounts, budgets & cash' },
-    { id: 'calculator', label: 'Calculators', icon: <Calculator className="h-4 w-4 text-purple-500" />, desc: 'Financial & date formulas' },
-    { id: 'health', label: 'Health & Vitals', icon: <Heart className="h-4 w-4 text-rose-500" />, desc: 'Sleep, water & biometric logs' },
-    { id: 'people', label: 'People & Relations', icon: <Users className="h-4 w-4 text-cyan-500" />, desc: 'Network & interactions' },
-    { id: 'spiritual', label: 'Values & Mind', icon: <Compass className="h-4 w-4 text-indigo-500" />, desc: 'Core virtues & practices' },
-    { id: 'things', label: 'Things & Assets', icon: <Folder className="h-4 w-4 text-yellow-500" />, desc: 'Warranties & inventory' },
-    { id: 'settings', label: 'Settings & Sync', icon: <Settings className="h-4 w-4 text-slate-500" />, desc: 'Backup, alarms & profiles' },
+  const secondaryModules: { id: NavModule; label: string; icon: React.ReactNode }[] = [
+    { id: 'focus', label: 'Focus', icon: <Timer className="h-4 w-4 text-indigo-500" /> },
+    { id: 'notes', label: 'Notes & Wiki', icon: <FileText className="h-4 w-4 text-amber-500" /> },
+    { id: 'journal', label: 'Daily Journal', icon: <BookOpen className="h-4 w-4 text-blue-500" /> },
+    { id: 'finance', label: 'Finance & Ledger', icon: <DollarSign className="h-4 w-4 text-emerald-500" /> },
+    { id: 'calculator', label: 'Calculators', icon: <Calculator className="h-4 w-4 text-purple-500" /> },
+    { id: 'health', label: 'Health & Vitals', icon: <Heart className="h-4 w-4 text-rose-500" /> },
+    { id: 'people', label: 'People & Relations', icon: <Users className="h-4 w-4 text-cyan-500" /> },
+    { id: 'spiritual', label: 'Values & Mind', icon: <Compass className="h-4 w-4 text-indigo-500" /> },
+    { id: 'things', label: 'Things & Assets', icon: <Folder className="h-4 w-4 text-yellow-500" /> },
+    { id: 'settings', label: 'Settings & Sync', icon: <Settings className="h-4 w-4 text-slate-500" /> },
   ];
 
   const handleSelect = (id: NavModule) => {
@@ -53,6 +91,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             onClick={() => setIsMoreOpen(false)}
           />
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="All modules and tools"
@@ -65,11 +104,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">All Modules & Tools</h3>
-                  <p className="text-[10px] text-slate-400">Quickly switch to any life operating domain</p>
                 </div>
               </div>
               <button
                 type="button"
+                ref={closeButtonRef}
                 onClick={() => setIsMoreOpen(false)}
                 aria-label="Close modules menu"
                 className="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -97,7 +136,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold truncate">{mod.label}</div>
-                      <div className="text-[10px] text-slate-400 line-clamp-2">{mod.desc}</div>
                     </div>
                   </button>
                 );
@@ -133,6 +171,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         {/* More Launcher Button */}
         <button
           type="button"
+          ref={moreButtonRef}
           onClick={() => setIsMoreOpen(true)}
           className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 px-1 transition-all cursor-pointer ${
             secondaryModules.some(m => m.id === activeModule)

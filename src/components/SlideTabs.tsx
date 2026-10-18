@@ -137,7 +137,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
               className={`flex shrink-0 items-center justify-center gap-1.5 sm:gap-2 rounded-lg font-semibold tracking-normal transition-colors cursor-pointer whitespace-nowrap min-w-fit select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 ${
                 isSmall
                   ? 'px-2.5 sm:px-3 py-1.5 text-xs'
-                  : 'px-3 sm:px-3.5 py-2 text-xs sm:text-sm'
+                  : 'px-3 sm:px-3.5 py-2 text-xs'
               } ${
                 isSelected
                   ? 'bg-indigo-600 text-white shadow-sm font-bold hover:bg-indigo-700'
@@ -159,7 +159,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
               {/* Delayed Badge */}
               {hasDelayed && (
                 <span
-                  className={`rounded-full px-1.5 py-0.2 text-[9px] font-black uppercase shrink-0 ${
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-black uppercase shrink-0 ${
                     isSelected ? 'bg-rose-700 text-white animate-pulse' : 'bg-rose-600 text-white animate-pulse'
                   }`}
                 >
@@ -170,7 +170,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
               {/* Regular Badge */}
               {!hasDelayed && tab.badge !== undefined && tab.badge !== null && (
                 <span
-                  className={`rounded-full px-1.5 py-0.2 text-[9px] sm:text-[10px] font-bold shrink-0 ${
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold shrink-0 ${
                     isSelected
                       ? 'bg-white/20 text-white'
                       : tab.badgeColor || 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'

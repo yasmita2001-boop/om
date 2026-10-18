@@ -3,20 +3,21 @@ import {
   CheckSquare, Trash2, Calendar, Target, CheckCircle2,
   Circle, Edit3, Search, Filter, Check,
   Download, Save, History, Layers, ArrowRight,
-  Volume2, Link2, Bell, BellRing, Zap, AlertTriangle, X, Flame, Plus
+  Volume2, Bell, BellRing, Zap, AlertTriangle, X, Flame, Plus
 } from 'lucide-react';
 import {
   Task, TaskDomain, TaskPriority, DailyPlanner, Goal,
   WorkProject, LearningItem, Skill, Routine, Habit, HabitLog, ReminderItem
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
-import { syncGoalProgressFromTasks } from '../lib/goalTaskSync';
+import { resolveTaskGoalId, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
 import { globalTextReader, isSpeechSynthesisSupported } from '../lib/voiceService';
 import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { LinkModeSelector } from '../components/LinkModeSelector';
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 
@@ -228,9 +229,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
   // Load Saved Target Files & Records from local storage
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('om-saved-command-targets');
+      const key = `om-saved-command-targets:${storage.getActiveProfileId()}`;
+      const legacy = storage.getActiveProfileId() === 'om-master-profile'
+        ? localStorage.getItem('om-saved-command-targets')
+        : null;
+      const stored = localStorage.getItem(key) || legacy;
       if (stored) {
         setSavedTargetsArchive(JSON.parse(stored));
+        if (legacy && !localStorage.getItem(key)) localStorage.setItem(key, legacy);
       }
     } catch {}
   }, []);
@@ -243,7 +249,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     if (editingTaskId) {
       const existing = tasks.find(t => t.id === editingTaskId);
       if (existing) {
-        const oldGoalId = existing.goalId;
+        const oldGoalId = resolveTaskGoalId(existing, { workProjects, routines, skills, learningItems });
         const updated: Task = {
           ...existing,
           title: title.trim(),
@@ -356,8 +362,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
     await storage.put('tasks', updated);
 
     // Reflect task completion in linked goal progress & rollup through 3-tier hierarchy!
-    if (task.goalId) {
-      const res = await syncGoalProgressFromTasks(task.goalId, task.id, nextDone);
+    const linkedGoalId = resolveTaskGoalId(task, { workProjects, routines, skills, learningItems });
+    if (linkedGoalId) {
+      const res = await syncGoalProgressFromTasks(linkedGoalId, task.id, nextDone);
       if (res.targetGoal) {
         onSuccess(
           nextDone
@@ -387,8 +394,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
     };
     await storage.put('tasks', updated);
 
-    if (task.goalId) {
-      await syncGoalProgressFromTasks(task.goalId, task.id, isDone);
+    const linkedGoalId = resolveTaskGoalId(task, { workProjects, routines, skills, learningItems });
+    if (linkedGoalId) {
+      await syncGoalProgressFromTasks(linkedGoalId, task.id, isDone, status);
     }
 
     onSuccess(`Task moved to ${status}`);
@@ -402,7 +410,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const handleConfirmDelete = async () => {
     if (!taskToDelete) return;
     try {
-      const targetGoalId = taskToDelete.goalId;
+      const targetGoalId = resolveTaskGoalId(taskToDelete, { workProjects, routines, skills, learningItems });
       await storage.delete('tasks', taskToDelete.id);
       onSuccess('✓ Task deleted');
       setTaskToDelete(null);
@@ -452,7 +460,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     const updatedArchive = [newRecord, ...savedTargetsArchive.filter(r => r.date !== today || r.target !== plannerTarget)].slice(0, 30);
     setSavedTargetsArchive(updatedArchive);
     try {
-      localStorage.setItem('om-saved-command-targets', JSON.stringify(updatedArchive));
+      localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updatedArchive));
     } catch {}
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -751,7 +759,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               editingTaskId
                 ? 'border-indigo-400 bg-indigo-50/20 dark:border-indigo-500/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
                 : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
-            } p-5 sm:p-6 shadow-xs`}
+            } p-3.5 sm:p-6 shadow-xs`}
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
@@ -780,7 +788,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               )}
             </div>
 
-            <form onSubmit={handleCreateOrUpdateTask} className="mt-4 space-y-3.5">
+            <form onSubmit={handleCreateOrUpdateTask} className="mt-3 sm:mt-4 space-y-2.5 sm:space-y-3.5">
               {/* TASK TITLE WITH INTEGRATED LINK GOAL / MANUAL TOGGLE (As in image.png) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -788,31 +796,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     Task Title / Purpose
                   </label>
                   {/* Mode Selector: Link Goal vs Manual */}
-                  <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                    <button
-                      type="button"
-                      onClick={switchToLinkMode}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        taskInputMode === 'link'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Link2 className="h-3 w-3" />
-                      <span>Link Goal</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={switchToManualMode}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        taskInputMode === 'manual'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <span>Manual</span>
-                    </button>
-                  </div>
+                  <LinkModeSelector
+                    value={taskInputMode}
+                    ariaLabel="Task goal link mode"
+                    options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+                    onChange={mode => mode === 'link' ? switchToLinkMode() : switchToManualMode()}
+                  />
                 </div>
 
                 {/* When Link from Goal is active */}
@@ -867,7 +856,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                     Domain
@@ -903,7 +892,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                     Due Date
@@ -1386,7 +1375,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                               const updated = savedTargetsArchive.filter(r => r.id !== rec.id);
                               setSavedTargetsArchive(updated);
                               try {
-                                localStorage.setItem('om-saved-command-targets', JSON.stringify(updated));
+                                localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updated));
                               } catch {}
                             }}
                             className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 p-1"

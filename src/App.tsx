@@ -4,7 +4,7 @@ import {
   Routine, Habit, HabitLog, FinanceAccount, FinanceTransaction, Loan,
   LoanPayment, Investment, SavingsPlan, Asset, Liability, FinancialGoal,
   Note, JournalEntry, FocusSession, SleepRecord, WaterRecord, NutritionRecord,
-  HealthMeasurement, HealthAppointment, HealthNote, WorkProject, LearningItem,
+  HealthMeasurement, HealthAppointment, HealthNote, HealthProfile, WorkProject, LearningItem,
   Meeting, Person, Interaction, ValueItem, SpiritualPractice, Commitment,
   ThingItem, DocumentItem, WarrantyItem, ReceiptItem, CertificateItem,
   ImportantRecordItem, ReminderItem, NotificationItem, AchievementItem,
@@ -13,7 +13,9 @@ import {
 import {
   storage, seedInitialDataIfEmpty
 } from './lib/storage';
+import { getGoogleWorkspaceProfileId, GoogleUser } from './lib/googleDriveSync';
 import { getLocalDateString } from './lib/dateUtils';
+import watermarkUrl from './assets/om-lifeos-watermark.png';
 
 // Components
 import { Header } from './components/Header';
@@ -25,8 +27,8 @@ import { BsDateModal } from './components/BsDateModal';
 import { AlarmTriggerModal } from './components/AlarmTriggerModal';
 import { VoiceStudioWidget } from './components/VoiceStudioWidget';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { GoogleAccountLock } from './components/GoogleAccountLock';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
+import { alarmAudio } from './lib/alarmAudio';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress, computeGoalAggregateBreakdown } from './lib/goalTaskSync';
 import { soundEngine } from './lib/soundEngine';
@@ -58,12 +60,6 @@ const ViewFallback: React.FC = () => (
 );
 
 export default function App() {
-  const [isUnlocked, setIsUnlocked] = useState(false);
-
-  if (!isUnlocked) {
-    return <GoogleAccountLock onUnlock={() => setIsUnlocked(true)} />;
-  }
-
   return <LifeOSApp />;
 }
 
@@ -90,7 +86,9 @@ function LifeOSApp() {
   // Entities state
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [guestProfileId, setGuestProfileId] = useState('om-master-profile');
   const activeProfileIdRef = useRef<string | null>(null);
+  const loadGenerationRef = useRef(0);
   useEffect(() => {
     activeProfileIdRef.current = activeProfileId;
   }, [activeProfileId]);
@@ -120,6 +118,7 @@ function LifeOSApp() {
   const [focusSessions, setFocusSessions] = useState<FocusSession[]>([]);
 
   const [healthMeasurements, setHealthMeasurements] = useState<HealthMeasurement[]>([]);
+  const [healthProfile, setHealthProfile] = useState<HealthProfile | undefined>();
   const [sleepRecords, setSleepRecords] = useState<SleepRecord[]>([]);
   const [waterRecords, setWaterRecords] = useState<WaterRecord[]>([]);
   const [nutritionRecords, setNutritionRecords] = useState<NutritionRecord[]>([]);
@@ -151,7 +150,6 @@ function LifeOSApp() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
   const [calcHistory, setCalcHistory] = useState<CalcHistoryItem[]>([]);
-  const [recycleBinCount, setRecycleBinCount] = useState<number>(0);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -161,16 +159,19 @@ function LifeOSApp() {
   }, []);
 
   const loadAllData = useCallback(async (overrideProfileId?: string) => {
+    const loadGeneration = ++loadGenerationRef.current;
     try {
-      const settingsData = await storage.getSingleton<AppState>('appSettings');
-      const activeId = overrideProfileId || activeProfileIdRef.current || settingsData?.profileId;
+      const requestedProfileId = overrideProfileId || activeProfileIdRef.current || storage.getActiveProfileId();
+      if (requestedProfileId) storage.setActiveProfile(requestedProfileId);
+      const settingsData = await storage.getSingleton<AppState>('appSettings', requestedProfileId || undefined);
+      const activeId = requestedProfileId || settingsData?.profileId;
       if (!activeId) return;
-      if (settingsData) {
-        setAppSettings(settingsData);
-        if (settingsData.themeMode) setTheme(settingsData.themeMode);
-      }
       storage.setActiveProfile(activeId);
+      const isCurrentLoad = () =>
+        loadGeneration === loadGenerationRef.current && activeProfileIdRef.current === activeId;
+      const healthProfileData = await storage.getSingleton<HealthProfile>('healthProfile', activeId) || undefined;
       await storage.ensureProfileOwnership(activeId);
+      const getAllForProfile = <T,>(storeName: string) => storage.getAll<T>(storeName, activeId);
       const [
         tasksData,
         goalsData,
@@ -221,56 +222,57 @@ function LifeOSApp() {
         achData,
         calcData
       ] = await Promise.all([
-        storage.getAll<Task>('tasks'),
-        storage.getAll<Goal>('goals'),
-        storage.getAll<Milestone>('milestones'),
-        storage.getAll<Strategy>('strategies'),
-        storage.getAll<KPI>('kpis'),
-        storage.getAll<Mission>('missions'),
-        storage.getAll<Routine>('routines'),
-        storage.getAll<Habit>('habits'),
-        storage.getAll<HabitLog>('habitLogs'),
-        storage.getAll<FinanceAccount>('financeAccounts'),
-        storage.getAll<FinanceTransaction>('finance'),
-        storage.getAll<Loan>('loans'),
-        storage.getAll<LoanPayment>('loanPayments'),
-        storage.getAll<Investment>('investments'),
-        storage.getAll<SavingsPlan>('savingsPlans'),
-        storage.getAll<Asset>('assets'),
-        storage.getAll<Liability>('liabilities'),
-        storage.getAll<FinancialGoal>('financialGoals'),
-        storage.getAll<Note>('notes'),
-        storage.getAll<JournalEntry>('journal'),
-        storage.getAll<FocusSession>('focus'),
-        storage.getAll<HealthMeasurement>('healthMeasurements'),
-        storage.getAll<SleepRecord>('sleepRecords'),
-        storage.getAll<WaterRecord>('waterRecords'),
-        storage.getAll<NutritionRecord>('nutritionRecords'),
-        storage.getAll<HealthAppointment>('healthAppointments'),
-        storage.getAll<HealthNote>('healthNotes'),
-        storage.getAll<WorkProject>('workProjects'),
-        storage.getAll<WorkResponsibility>('workResponsibilities'),
-        storage.getAll<LearningItem>('learningItems'),
-        storage.getAll<Skill>('skills'),
-        storage.getAll<Course>('courses'),
-        storage.getAll<Meeting>('meetings'),
-        storage.getAll<Person>('people'),
-        storage.getAll<Interaction>('interactions'),
-        storage.getAll<ValueItem>('values'),
-        storage.getAll<SpiritualPractice>('spiritualPractices'),
-        storage.getAll<Commitment>('commitments'),
-        storage.getAll<ThingItem>('things'),
-        storage.getAll<DocumentItem>('documents'),
-        storage.getAll<WarrantyItem>('warranties'),
-        storage.getAll<ReceiptItem>('receipts'),
-        storage.getAll<CertificateItem>('certificates'),
-        storage.getAll<ImportantRecordItem>('importantRecords'),
-        storage.getAll<ReminderItem>('reminders'),
-        storage.getAll<NotificationItem>('notifications'),
-        storage.getAll<AchievementItem>('achievements'),
-        storage.getAll<CalcHistoryItem>('calcHistory')
+        getAllForProfile<Task>('tasks'),
+        getAllForProfile<Goal>('goals'),
+        getAllForProfile<Milestone>('milestones'),
+        getAllForProfile<Strategy>('strategies'),
+        getAllForProfile<KPI>('kpis'),
+        getAllForProfile<Mission>('missions'),
+        getAllForProfile<Routine>('routines'),
+        getAllForProfile<Habit>('habits'),
+        getAllForProfile<HabitLog>('habitLogs'),
+        getAllForProfile<FinanceAccount>('financeAccounts'),
+        getAllForProfile<FinanceTransaction>('finance'),
+        getAllForProfile<Loan>('loans'),
+        getAllForProfile<LoanPayment>('loanPayments'),
+        getAllForProfile<Investment>('investments'),
+        getAllForProfile<SavingsPlan>('savingsPlans'),
+        getAllForProfile<Asset>('assets'),
+        getAllForProfile<Liability>('liabilities'),
+        getAllForProfile<FinancialGoal>('financialGoals'),
+        getAllForProfile<Note>('notes'),
+        getAllForProfile<JournalEntry>('journal'),
+        getAllForProfile<FocusSession>('focus'),
+        getAllForProfile<HealthMeasurement>('healthMeasurements'),
+        getAllForProfile<SleepRecord>('sleepRecords'),
+        getAllForProfile<WaterRecord>('waterRecords'),
+        getAllForProfile<NutritionRecord>('nutritionRecords'),
+        getAllForProfile<HealthAppointment>('healthAppointments'),
+        getAllForProfile<HealthNote>('healthNotes'),
+        getAllForProfile<WorkProject>('workProjects'),
+        getAllForProfile<WorkResponsibility>('workResponsibilities'),
+        getAllForProfile<LearningItem>('learningItems'),
+        getAllForProfile<Skill>('skills'),
+        getAllForProfile<Course>('courses'),
+        getAllForProfile<Meeting>('meetings'),
+        getAllForProfile<Person>('people'),
+        getAllForProfile<Interaction>('interactions'),
+        getAllForProfile<ValueItem>('values'),
+        getAllForProfile<SpiritualPractice>('spiritualPractices'),
+        getAllForProfile<Commitment>('commitments'),
+        getAllForProfile<ThingItem>('things'),
+        getAllForProfile<DocumentItem>('documents'),
+        getAllForProfile<WarrantyItem>('warranties'),
+        getAllForProfile<ReceiptItem>('receipts'),
+        getAllForProfile<CertificateItem>('certificates'),
+        getAllForProfile<ImportantRecordItem>('importantRecords'),
+        getAllForProfile<ReminderItem>('reminders'),
+        getAllForProfile<NotificationItem>('notifications'),
+        getAllForProfile<AchievementItem>('achievements'),
+        getAllForProfile<CalcHistoryItem>('calcHistory')
       ]);
 
+      if (!isCurrentLoad()) return;
       if (settingsData) {
         setAppSettings(settingsData);
         if (settingsData.themeMode) {
@@ -300,6 +302,7 @@ function LifeOSApp() {
       setJournal([...journalData]);
       setFocusSessions([...focusData]);
       setHealthMeasurements([...measData]);
+      setHealthProfile(healthProfileData);
       setSleepRecords([...sleepData]);
       setWaterRecords([...waterData]);
       setNutritionRecords([...nutriData]);
@@ -326,12 +329,9 @@ function LifeOSApp() {
       setNotifications([...notifData]);
       setAchievements([...achData]);
       setCalcHistory([...calcData]);
-      const binData = await storage.getRecycleBinItems(activeId);
-      setRecycleBinCount(binData.length);
-
       // Auto-reconcile goal progress against actual linked items in database to fix stale/legacy 100% false progress
       recalculateAllGoalsProgress().then(freshGoals => {
-        if (freshGoals && freshGoals.length > 0) {
+        if (isCurrentLoad() && freshGoals && freshGoals.length > 0) {
           setGoals([...freshGoals]);
         }
       }).catch(err => {
@@ -345,6 +345,7 @@ function LifeOSApp() {
   // First turn initialization: run ONCE on mount
   useEffect(() => {
     let active = true;
+    storage.setActiveProfile('om-master-profile');
     seedInitialDataIfEmpty().then(async () => {
       const settingsData = await storage.getSingleton<AppState>('appSettings');
       if (!active) return;
@@ -352,24 +353,24 @@ function LifeOSApp() {
         setAppSettings(settingsData);
         if (settingsData.themeMode) setTheme(settingsData.themeMode);
 
-        const targetId = settingsData.profileId || settingsData.profiles?.[0]?.id || 'om-master-profile';
-        if (targetId) {
-          let savedProfile: string | null = null;
-          try { savedProfile = localStorage.getItem('om_active_profile'); } catch {}
-          const isKnownProfile = settingsData.profiles?.some(p => p.id === savedProfile);
-          const activeProfId = (isKnownProfile && savedProfile) ? savedProfile : targetId;
+        const savedGuestProfile = settingsData.profiles?.find(
+          profile => profile.id === settingsData.profileId && profile.authType !== 'google'
+        );
+        const activeProfId = savedGuestProfile?.id || 'om-master-profile';
 
-          if (settingsData.profileId !== activeProfId) {
-            settingsData.profileId = activeProfId;
-            settingsData.profiles = (settingsData.profiles || []).map(p => ({ ...p, isCurrent: p.id === activeProfId }));
-            await storage.setSingleton('appSettings', settingsData);
-            setAppSettings({ ...settingsData });
-          }
-
-          storage.setActiveProfile(activeProfId);
-          setActiveProfileId(activeProfId);
-          await loadAllData(activeProfId);
+        if (settingsData.profileId !== activeProfId) {
+          settingsData.profileId = activeProfId;
+          settingsData.profiles = (settingsData.profiles || []).map(p => ({ ...p, isCurrent: p.id === activeProfId }));
+          await storage.setSingleton('appSettings', settingsData);
+          setAppSettings({ ...settingsData });
         }
+
+        storage.setActiveProfile(activeProfId);
+        activeProfileIdRef.current = activeProfId;
+        setGuestProfileId(activeProfId);
+        await storage.ensureProfileOwnership(activeProfId);
+        setActiveProfileId(activeProfId);
+        await loadAllData(activeProfId);
       }
     }).catch(err => console.error('Failed to initialize Om-LifeOS', err));
 
@@ -382,6 +383,73 @@ function LifeOSApp() {
       active = false;
     };
   }, []);
+
+  const handleGoogleAccountChange = useCallback(async (user: GoogleUser | null) => {
+    const nextProfileId = user ? getGoogleWorkspaceProfileId(user) : guestProfileId;
+    alarmService.clearActiveAlarm();
+    setActiveTriggeredAlarm(null);
+    setAppSettings(undefined);
+    storage.setActiveProfile(nextProfileId);
+    activeProfileIdRef.current = nextProfileId;
+    setActiveProfileId(nextProfileId);
+    setActiveModule('dashboard');
+    setIsMobileMenuOpen(false);
+    window.dispatchEvent(new CustomEvent('om_custom_ringtone_changed'));
+
+    if (user) {
+      const now = Date.now();
+      const profile = {
+        id: nextProfileId,
+        name: user.displayName || user.email || 'Google Account',
+        email: user.email || undefined,
+        googleSub: user.uid,
+        role: 'Personal',
+        authType: 'google' as const,
+        avatarUrl: user.photoURL || undefined,
+        avatarChar: (user.displayName || user.email || 'G').charAt(0).toUpperCase(),
+        avatarColor: '#6366f1',
+        isCurrent: true,
+        createdAt: now
+      };
+      const currentSettings = await storage.getSingleton<AppState>('appSettings');
+      const nextSettings: AppState = currentSettings
+        ? {
+            ...currentSettings,
+            profileId: nextProfileId,
+            profiles: (currentSettings.profiles || []).map(existing => ({
+              ...existing,
+              isCurrent: existing.id === nextProfileId
+            }))
+          }
+        : {
+            profileId: nextProfileId,
+            profiles: [profile],
+            currentUser: {
+              name: profile.name,
+              email: profile.email,
+              provider: 'google',
+              avatarUrl: profile.avatarUrl
+            },
+            themeMode: 'light',
+            accentColor: '#6366f1',
+            notificationsEnabled: true,
+            noteCategories: ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
+            calcFavorites: ['EMI / Loan', 'SIP / Investment', 'Date Difference']
+          };
+      if (currentSettings && !nextSettings.profiles.some(existing => existing.id === nextProfileId)) {
+        nextSettings.profiles = [...nextSettings.profiles, profile];
+      }
+      nextSettings.currentUser = {
+        name: profile.name,
+        email: profile.email,
+        provider: 'google',
+        avatarUrl: profile.avatarUrl
+      };
+      await storage.setSingleton('appSettings', nextSettings);
+    }
+
+    await loadAllData(nextProfileId);
+  }, [guestProfileId, loadAllData]);
 
   // Load all data whenever activeProfileId updates
   useEffect(() => {
@@ -494,7 +562,7 @@ function LifeOSApp() {
     loadAllData();
   };
 
-  const handleLogHabit = async (habitId: string, occurrence = 0) => {
+  const handleLogHabit = async (habitId: string, occurrence: number | 'all' = 0) => {
     const today = getLocalDateString();
     const key = `${habitId}|${today}|${occurrence}`;
     const existing = habitLogs.find(l => l.key === key);
@@ -524,7 +592,7 @@ function LifeOSApp() {
   const openTasksCount = tasks.filter(t => !t.done).length;
   const categoriesList = appSettings?.noteCategories || ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'];
 
-  if (!appSettings) {
+  if (!appSettings || !activeProfileId) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F19] flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm font-medium">
         <div className="flex items-center gap-2.5">
@@ -568,14 +636,21 @@ function LifeOSApp() {
           onCloseMobile={() => setIsMobileMenuOpen(false)}
           openTasksCount={openTasksCount}
           remindersCount={reminders.filter(r => r.status !== 'done').length}
-          recycleBinCount={recycleBinCount}
           onToast={showToast}
           onDataRestored={loadAllData}
+          workspaceProfileId={activeProfileId || 'om-master-profile'}
+          onGoogleAccountChange={handleGoogleAccountChange}
         />
 
         {/* Main Content Viewport - Responsive across Mobile, Tablet, Laptop, and Desktop */}
-        <main className="flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-28 md:pb-12 w-full">
-          <div className="w-full space-y-6">
+        <main className="app-watermark relative isolate flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-28 md:pb-12 w-full">
+          <img
+            className="app-watermark__image"
+            src={watermarkUrl}
+            alt=""
+            aria-hidden="true"
+          />
+          <div className="app-watermark__content w-full space-y-6">
             <Suspense fallback={<ViewFallback />}>
             {activeModule === 'dashboard' && (
               <DashboardView
@@ -656,15 +731,10 @@ function LifeOSApp() {
                 notes={notes}
                 journal={journal}
                 reminders={reminders}
-                healthMeasurements={healthMeasurements}
-                sleepRecords={sleepRecords}
-                waterRecords={waterRecords}
-                nutritionRecords={nutritionRecords}
                 appointments={appointments}
                 healthNotes={healthNotes}
                 meetings={meetings}
                 people={people}
-                interactions={interactions}
                 values={values}
                 practices={practices}
                 commitments={commitments}
@@ -680,6 +750,7 @@ function LifeOSApp() {
                 tasks={tasks}
                 goals={goals}
                 routines={routines}
+                profileId={activeProfileId || 'om-master-profile'}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -729,12 +800,13 @@ function LifeOSApp() {
                 onNavigate={setActiveModule}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
+                onError={msg => showToast(`⚠️ ${msg}`)}
               />
             )}
 
             {activeModule === 'health' && (
               <HealthView
-                profile={undefined}
+                profile={healthProfile}
                 measurements={healthMeasurements}
                 sleepRecords={sleepRecords}
                 waterRecords={waterRecords}
@@ -767,7 +839,6 @@ function LifeOSApp() {
               <PeopleView
                 people={people}
                 interactions={interactions}
-                goals={goals}
                 reminders={reminders}
                 onRefresh={loadAllData}
                 onSuccess={showToast}

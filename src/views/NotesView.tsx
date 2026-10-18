@@ -4,7 +4,7 @@ import {
   Star, Copy, Check, Download, Pin, X,
   Folder, BookOpen, Sparkles, Volume2, Plus,
   ChevronDown, Hash, Calendar, CheckCircle2, Bookmark,
-  Link2, Target
+  Target
 } from 'lucide-react';
 import { Note, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -16,6 +16,7 @@ import { NoteRichEditor } from '../components/NoteRichEditor';
 import { globalTextReader } from '../lib/voiceService';
 import { sanitizeHtml } from '../lib/sanitizeHtml';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { LinkModeSelector } from '../components/LinkModeSelector';
 
 interface NotesViewProps {
   notes: Note[];
@@ -604,39 +605,20 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   Note Title / Purpose
                 </label>
                 {/* Mode Selector: Link Goal vs Manual */}
-                <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                  <button
-                    type="button"
-                    onClick={() => {
+                <LinkModeSelector
+                  value={noteInputMode}
+                  ariaLabel="Note goal link mode"
+                  options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+                  onChange={mode => {
+                    if (mode === 'link') {
                       setNoteInputMode('link');
-                      if (goals.length > 0 && !noteGoalId) {
-                        handleSelectGoalForNote(goals[0].id);
-                      }
-                    }}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                      noteInputMode === 'link'
-                        ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <Link2 className="h-3 w-3" />
-                    <span>Link Goal</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
+                      if (goals.length > 0 && !noteGoalId) handleSelectGoalForNote(goals[0].id);
+                    } else {
                       setNoteInputMode('manual');
                       setNoteGoalId('');
-                    }}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                      noteInputMode === 'manual'
-                        ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <span>Manual</span>
-                  </button>
-                </div>
+                    }
+                  }}
+                />
               </div>
 
               {noteInputMode === 'link' && (
@@ -1100,39 +1082,20 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     Note Title / Purpose
                   </label>
                   {/* Mode Selector: Link Goal vs Manual */}
-                  <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                    <button
-                      type="button"
-                      onClick={() => {
+                  <LinkModeSelector
+                    value={modalInputMode}
+                    ariaLabel="Edit note goal link mode"
+                    options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+                    onChange={mode => {
+                      if (mode === 'link') {
                         setModalInputMode('link');
-                        if (goals.length > 0 && !modalGoalId) {
-                          handleSelectGoalForModalNote(goals[0].id);
-                        }
-                      }}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        modalInputMode === 'link'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Link2 className="h-3 w-3" />
-                      <span>Link Goal</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
+                        if (goals.length > 0 && !modalGoalId) handleSelectGoalForModalNote(goals[0].id);
+                      } else {
                         setModalInputMode('manual');
                         setModalGoalId('');
-                      }}
-                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                        modalInputMode === 'manual'
-                          ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <span>Manual</span>
-                    </button>
-                  </div>
+                      }
+                    }}
+                  />
                 </div>
 
                 {modalInputMode === 'link' && (

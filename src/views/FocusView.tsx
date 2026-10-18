@@ -13,23 +13,86 @@ import { alarmService, FocusAlarm } from '../lib/alarmService';
 import { syncGoalProgressFromFocus } from '../lib/goalTaskSync';
 import { SlideTabs } from '../components/SlideTabs';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { LinkModeSelector } from '../components/LinkModeSelector';
 
 interface FocusViewProps {
   sessions: FocusSession[];
   tasks: Task[];
   goals: Goal[];
   routines?: Routine[];
+  profileId: string;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
 
 type FocusMenuTab = 'timer' | 'alarms' | 'ringtones';
 
+interface FocusTimerState {
+  totalSeconds: number;
+  remainingSeconds: number;
+  isRunning: boolean;
+  endsAt: number | null;
+  customMin: number;
+  selectedTask: string;
+  selectedGoal: string;
+  sessionLabel: string;
+  soundEnabled: boolean;
+}
+
+const DEFAULT_FOCUS_TIMER: FocusTimerState = {
+  totalSeconds: 25 * 60,
+  remainingSeconds: 25 * 60,
+  isRunning: false,
+  endsAt: null,
+  customMin: 25,
+  selectedTask: '',
+  selectedGoal: '',
+  sessionLabel: 'Deep Work Sprint',
+  soundEnabled: true
+};
+
+function getFocusTimerStorageKey(profileId: string): string {
+  return `om_focus_timer_v1_${profileId}`;
+}
+
+function readFocusTimer(profileId: string): FocusTimerState {
+  try {
+    const raw = localStorage.getItem(getFocusTimerStorageKey(profileId));
+    if (!raw) return DEFAULT_FOCUS_TIMER;
+    const saved = JSON.parse(raw) as Partial<FocusTimerState>;
+    const totalSeconds = Number.isFinite(saved.totalSeconds) && saved.totalSeconds! > 0
+      ? saved.totalSeconds!
+      : DEFAULT_FOCUS_TIMER.totalSeconds;
+    const endsAt = Number.isFinite(saved.endsAt) ? saved.endsAt! : null;
+    const isRunning = saved.isRunning === true && endsAt !== null;
+    const remainingSeconds = isRunning
+      ? Math.max(0, Math.ceil((endsAt! - Date.now()) / 1000))
+      : Number.isFinite(saved.remainingSeconds)
+        ? Math.max(0, Math.min(totalSeconds, saved.remainingSeconds!))
+        : totalSeconds;
+
+    return {
+      totalSeconds,
+      remainingSeconds,
+      isRunning,
+      endsAt: isRunning ? endsAt : null,
+      customMin: Number.isFinite(saved.customMin) ? saved.customMin! : 25,
+      selectedTask: typeof saved.selectedTask === 'string' ? saved.selectedTask : '',
+      selectedGoal: typeof saved.selectedGoal === 'string' ? saved.selectedGoal : '',
+      sessionLabel: typeof saved.sessionLabel === 'string' ? saved.sessionLabel : DEFAULT_FOCUS_TIMER.sessionLabel,
+      soundEnabled: typeof saved.soundEnabled === 'boolean' ? saved.soundEnabled : true
+    };
+  } catch {
+    return DEFAULT_FOCUS_TIMER;
+  }
+}
+
 export const FocusView: React.FC<FocusViewProps> = ({
   sessions,
   tasks,
   goals,
   routines = [],
+  profileId,
   onRefresh,
   onSuccess
 }) => {
@@ -37,14 +100,19 @@ export const FocusView: React.FC<FocusViewProps> = ({
   const [activeMenuTab, setActiveMenuTab] = useState<FocusMenuTab>('timer');
 
   // Focus Timer States
-  const [totalSeconds, setTotalSeconds] = useState(25 * 60);
-  const [remainingSeconds, setRemainingSeconds] = useState(25 * 60);
-  const [isRunning, setIsRunning] = useState(false);
-  const [customMin, setCustomMin] = useState(25);
-  const [selectedTask, setSelectedTask] = useState<string>('');
-  const [selectedGoal, setSelectedGoal] = useState<string>('');
-  const [sessionLabel, setSessionLabel] = useState('Deep Work Sprint');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const initialTimerRef = useRef<FocusTimerState | null>(null);
+  if (!initialTimerRef.current) initialTimerRef.current = readFocusTimer(profileId);
+  const initialTimer = initialTimerRef.current;
+  const [totalSeconds, setTotalSeconds] = useState(initialTimer.totalSeconds);
+  const [remainingSeconds, setRemainingSeconds] = useState(initialTimer.remainingSeconds);
+  const [isRunning, setIsRunning] = useState(initialTimer.isRunning);
+  const [endsAt, setEndsAt] = useState<number | null>(initialTimer.endsAt);
+  const [customMin, setCustomMin] = useState(initialTimer.customMin);
+  const [selectedTask, setSelectedTask] = useState(initialTimer.selectedTask);
+  const [selectedGoal, setSelectedGoal] = useState(initialTimer.selectedGoal);
+  const [sessionLabel, setSessionLabel] = useState(initialTimer.sessionLabel);
+  const [soundEnabled, setSoundEnabled] = useState(initialTimer.soundEnabled);
+  const [timerProfileId, setTimerProfileId] = useState(profileId);
 
   // Alarm Clock States
   const [alarmsList, setAlarmsList] = useState<FocusAlarm[]>(() => alarmService.getFocusAlarms());
@@ -63,9 +131,47 @@ export const FocusView: React.FC<FocusViewProps> = ({
   const [customRingtone, setCustomRingtone] = useState(() => alarmAudio.getCustomRingtone());
   const [previewingRingtone, setPreviewingRingtone] = useState<string | null>(null);
 
-  const startTimeRef = useRef<number>(0);
-  const elapsedBeforePauseRef = useRef<number>(0);
+  const completedTimerRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (timerProfileId === profileId) return;
+    const saved = readFocusTimer(profileId);
+    setTotalSeconds(saved.totalSeconds);
+    setRemainingSeconds(saved.remainingSeconds);
+    setIsRunning(saved.isRunning);
+    setEndsAt(saved.endsAt);
+    setCustomMin(saved.customMin);
+    setSelectedTask(saved.selectedTask);
+    setSelectedGoal(saved.selectedGoal);
+    setSessionLabel(saved.sessionLabel);
+    setSoundEnabled(saved.soundEnabled);
+    setTimerProfileId(profileId);
+    completedTimerRef.current = false;
+  }, [profileId, timerProfileId]);
+
+  useEffect(() => {
+    if (timerProfileId !== profileId) return;
+    try {
+      const timerState: FocusTimerState = {
+        totalSeconds,
+        remainingSeconds,
+        isRunning,
+        endsAt,
+        customMin,
+        selectedTask,
+        selectedGoal,
+        sessionLabel,
+        soundEnabled
+      };
+      localStorage.setItem(getFocusTimerStorageKey(profileId), JSON.stringify(timerState));
+    } catch (err) {
+      console.warn('Could not save focus timer state:', err);
+    }
+  }, [
+    profileId, timerProfileId, totalSeconds, remainingSeconds, isRunning, endsAt,
+    customMin, selectedTask, selectedGoal, sessionLabel, soundEnabled
+  ]);
 
   // Sync alarms when updated
   const refreshAlarms = () => {
@@ -74,53 +180,56 @@ export const FocusView: React.FC<FocusViewProps> = ({
 
   // Focus timer countdown
   useEffect(() => {
-    let interval: any = null;
-    if (isRunning) {
-      interval = setInterval(() => {
-        setRemainingSeconds(prev => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            setIsRunning(false);
-            if (soundEnabled) {
-              alarmService.triggerAlarm({
-                id: generateUUID(),
-                type: 'focus_timer',
-                title: '🎯 Deep Work Sprint Complete!',
-                subtitle: sessionLabel || 'Great job staying in deep focus.',
-                timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                ringtone: selectedDefaultRingtone
-              });
-            }
-            handleFinishSession();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
+    if (timerProfileId !== profileId || !isRunning || endsAt === null) return;
+    const tick = () => {
+      const secondsLeft = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      setRemainingSeconds(secondsLeft);
+      if (secondsLeft === 0 && !completedTimerRef.current) {
+        completedTimerRef.current = true;
+        setIsRunning(false);
+        setEndsAt(null);
+        if (soundEnabled) {
+          alarmService.triggerAlarm({
+            id: generateUUID(),
+            type: 'focus_timer',
+            title: '🎯 Deep Work Sprint Complete!',
+            subtitle: sessionLabel || 'Great job staying in deep focus.',
+            timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            ringtone: selectedDefaultRingtone
+          });
+        }
+        void handleFinishSession(totalSeconds);
+      }
     };
-  }, [isRunning, totalSeconds, soundEnabled, sessionLabel, selectedDefaultRingtone]);
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [
+    timerProfileId, profileId, isRunning, endsAt, totalSeconds, soundEnabled,
+    sessionLabel, selectedTask, selectedGoal, selectedDefaultRingtone
+  ]);
 
   const handleStart = () => {
     if (!isRunning) {
-      startTimeRef.current = Date.now();
+      completedTimerRef.current = false;
+      setEndsAt(Date.now() + remainingSeconds * 1000);
       setIsRunning(true);
     }
   };
 
   const handlePause = () => {
-    if (isRunning) {
+    if (isRunning && endsAt !== null) {
+      setRemainingSeconds(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)));
+      setEndsAt(null);
       setIsRunning(false);
-      elapsedBeforePauseRef.current += Math.floor((Date.now() - startTimeRef.current) / 1000);
     }
   };
 
   const handleReset = () => {
     setIsRunning(false);
+    setEndsAt(null);
     setRemainingSeconds(totalSeconds);
-    elapsedBeforePauseRef.current = 0;
+    completedTimerRef.current = false;
   };
 
   const handleSetPreset = (minutes: number) => {
@@ -128,6 +237,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
     const secs = minutes * 60;
     setTotalSeconds(secs);
     setRemainingSeconds(secs);
+    setEndsAt(null);
     setCustomMin(minutes);
   };
 
@@ -136,10 +246,11 @@ export const FocusView: React.FC<FocusViewProps> = ({
     const s = Math.max(1, customMin * 60);
     setTotalSeconds(s);
     setRemainingSeconds(s);
+    setEndsAt(null);
   };
 
-  const handleFinishSession = async () => {
-    const elapsed = totalSeconds - remainingSeconds || totalSeconds;
+  const handleFinishSession = async (elapsedOverride?: number) => {
+    const elapsed = elapsedOverride ?? (totalSeconds - remainingSeconds || totalSeconds);
     const now = Date.now();
     const newSession: FocusSession = {
       id: generateUUID(),
@@ -474,7 +585,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
               {(totalSeconds - remainingSeconds > 60) && (
                 <button
                   type="button"
-                  onClick={handleFinishSession}
+                  onClick={() => void handleFinishSession()}
                   className="flex items-center gap-1.5 rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 cursor-pointer"
                   title="Complete & Log Session Now"
                 >
@@ -670,52 +781,34 @@ export const FocusView: React.FC<FocusViewProps> = ({
                       Alarm Title / Purpose
                     </label>
                     {/* Mode Selector: Link Routine vs Manual */}
-                    <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAlarmTitleMode('routine');
-                          if (!selectedRoutineId && availableRoutines.length > 0) {
-                            const r = availableRoutines[0];
-                            setSelectedRoutineId(r.id);
-                            setNewAlarmLabel(r.name);
-                            const f = (r.frequency || 'daily').toLowerCase();
-                            if (f === 'weekdays') setNewAlarmDays([1, 2, 3, 4, 5]);
-                            else if (f === 'daily') setNewAlarmDays([0, 1, 2, 3, 4, 5, 6]);
-                            else if (f === 'sunday') setNewAlarmDays([0]);
-                            else if (f === 'monday') setNewAlarmDays([1]);
-                            else if (f === 'tuesday') setNewAlarmDays([2]);
-                            else if (f === 'wednesday') setNewAlarmDays([3]);
-                            else if (f === 'thursday') setNewAlarmDays([4]);
-                            else if (f === 'friday') setNewAlarmDays([5]);
-                            else if (f === 'saturday') setNewAlarmDays([6]);
-                            else setNewAlarmDays([new Date().getDay()]);
-                          }
-                        }}
-                        className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                          alarmTitleMode === 'routine'
-                            ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                            : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                        }`}
-                      >
-                        <Link2 className="h-3 w-3" />
-                        <span>Link Routine</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
+                    <LinkModeSelector
+                      value={alarmTitleMode}
+                      ariaLabel="Alarm routine link mode"
+                      options={[{ value: 'routine', label: 'Link Routine' }, { value: 'manual', label: 'Manual' }]}
+                      onChange={mode => {
+                        if (mode === 'manual') {
                           setAlarmTitleMode('manual');
                           setSelectedRoutineId('');
-                        }}
-                        className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                          alarmTitleMode === 'manual'
-                            ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                            : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                        }`}
-                      >
-                        <span>Manual</span>
-                      </button>
-                    </div>
+                          return;
+                        }
+                        setAlarmTitleMode('routine');
+                        if (selectedRoutineId || availableRoutines.length === 0) return;
+                        const routine = availableRoutines[0];
+                        setSelectedRoutineId(routine.id);
+                        setNewAlarmLabel(routine.name);
+                        const frequency = (routine.frequency || 'daily').toLowerCase();
+                        if (frequency === 'weekdays') setNewAlarmDays([1, 2, 3, 4, 5]);
+                        else if (frequency === 'daily') setNewAlarmDays([0, 1, 2, 3, 4, 5, 6]);
+                        else if (frequency === 'sunday') setNewAlarmDays([0]);
+                        else if (frequency === 'monday') setNewAlarmDays([1]);
+                        else if (frequency === 'tuesday') setNewAlarmDays([2]);
+                        else if (frequency === 'wednesday') setNewAlarmDays([3]);
+                        else if (frequency === 'thursday') setNewAlarmDays([4]);
+                        else if (frequency === 'friday') setNewAlarmDays([5]);
+                        else if (frequency === 'saturday') setNewAlarmDays([6]);
+                        else setNewAlarmDays([new Date().getDay()]);
+                      }}
+                    />
                   </div>
 
                   {alarmTitleMode === 'routine' ? (

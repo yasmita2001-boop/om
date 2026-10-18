@@ -15,7 +15,7 @@ import {
 import {
   signInWithGoogle,
   signOutGoogle,
-  initGoogleAuth,
+  clearGoogleSession,
   syncToGoogleDrive,
   restoreFromGoogleDrive,
   findDriveBackupFile,
@@ -28,15 +28,20 @@ import {
 } from '../lib/googleDriveSync';
 import { storage } from '../lib/storage';
 import { AppState } from '../types';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
-interface GoogleDriveSyncDropdownProps {
+export interface GoogleDriveSyncDropdownProps {
+  workspaceProfileId: string;
   onToast?: (message: string) => void;
   onDataRestored?: () => void;
+  onAccountChanged?: (user: GoogleUser | null) => void | Promise<void>;
 }
 
 export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = ({
+  workspaceProfileId,
   onToast,
-  onDataRestored
+  onDataRestored,
+  onAccountChanged
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<GoogleUser | null>(null);
@@ -44,28 +49,139 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(getSavedLastSyncedAt());
-  const [autoSync, setAutoSync] = useState<boolean>(isAutoSyncEnabled());
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(() => getSavedLastSyncedAt(workspaceProfileId));
+  const [autoSync, setAutoSync] = useState<boolean>(() => isAutoSyncEnabled(workspaceProfileId));
   const [backupInfo, setBackupInfo] = useState<GoogleDriveBackupInfo | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const isOnline = useOnlineStatus();
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const syncingRef = useRef(false);
+  const pendingAutoSyncRef = useRef(false);
+  const autoSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleAutoSyncRef = useRef<() => void>(() => {});
+  const pendingKey = (profileId: string) => `om_gdrive_pending:${profileId}`;
+  const hasPendingSync = (profileId: string) => {
+    try {
+      return localStorage.getItem(pendingKey(profileId)) === 'true';
+    } catch {
+      return false;
+    }
+  };
+  const setPendingSync = (profileId: string, pending: boolean) => {
+    try {
+      if (pending) localStorage.setItem(pendingKey(profileId), 'true');
+      else localStorage.removeItem(pendingKey(profileId));
+    } catch {}
+  };
 
-  // Initialize auth listener
   useEffect(() => {
-    const unsubscribe = initGoogleAuth((currentUser, token) => {
-      setUser(currentUser);
-      setAccessToken(token);
-      if (token) {
-        findDriveBackupFile(token).then(setBackupInfo).catch(() => {});
+    setLastSyncedAt(getSavedLastSyncedAt(workspaceProfileId));
+    setAutoSync(isAutoSyncEnabled(workspaceProfileId));
+    setBackupInfo(null);
+    pendingAutoSyncRef.current = hasPendingSync(workspaceProfileId);
+  }, [workspaceProfileId]);
+
+  useEffect(() => {
+    if (isOnline || !user) return;
+    clearGoogleSession();
+    setUser(null);
+    setAccessToken(null);
+    setBackupInfo(null);
+    pendingAutoSyncRef.current = hasPendingSync(workspaceProfileId);
+    onToast?.('Offline mode opened the separate guest workspace.');
+    void onAccountChanged?.(null);
+  }, [isOnline, user, onAccountChanged, onToast]);
+
+  const clearExpiredSession = async (message: string) => {
+    if (message.includes('Google Drive session expired')) {
+      clearGoogleSession();
+      setUser(null);
+      setAccessToken(null);
+      pendingAutoSyncRef.current = false;
+      await onAccountChanged?.(null);
+    }
+  };
+
+  const executeSync = async (token: string, syncUser: GoogleUser | null) => {
+    if (syncingRef.current) return;
+    const syncProfileId = storage.getActiveProfileId();
+    syncingRef.current = true;
+    setIsSyncing(true);
+    setStatusMsg({ type: 'info', text: 'Syncing workspace to Google Drive...' });
+    try {
+      const result = await syncToGoogleDrive(token, syncUser);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to sync with Google Drive.');
       }
+
+      const now = Date.now();
+      pendingAutoSyncRef.current = false;
+      setPendingSync(syncProfileId, false);
+      if (storage.getActiveProfileId() === syncProfileId && workspaceProfileId === syncProfileId) {
+        setLastSyncedAt(now);
+        setBackupInfo(result.backupInfo || null);
+        const successText = `✓ Synced ${result.activeRecordsCount} active records to Google Drive!`;
+        setStatusMsg({ type: 'success', text: successText });
+        onToast?.(successText);
+      }
+    } catch (err) {
+      const errText = err instanceof Error ? err.message : 'Sync error occurred';
+      const stillOnSyncWorkspace =
+        storage.getActiveProfileId() === syncProfileId && workspaceProfileId === syncProfileId;
+      if (stillOnSyncWorkspace) {
+        await clearExpiredSession(errText);
+        setStatusMsg({ type: 'error', text: errText });
+        onToast?.(errText);
+      }
+    } finally {
+      syncingRef.current = false;
+      setIsSyncing(false);
+      if (pendingAutoSyncRef.current && navigator.onLine) {
+        scheduleAutoSyncRef.current();
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!user || !accessToken || !autoSync) return;
+
+    let active = true;
+    const schedule = () => {
+      if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
+      autoSyncTimerRef.current = setTimeout(() => {
+        autoSyncTimerRef.current = null;
+        if (!active || !pendingAutoSyncRef.current || !navigator.onLine || syncingRef.current) return;
+        pendingAutoSyncRef.current = false;
+        void executeSync(accessToken, user);
+      }, 1200);
+    };
+    scheduleAutoSyncRef.current = schedule;
+
+    const unsubscribe = storage.subscribe(() => {
+      pendingAutoSyncRef.current = true;
+      setPendingSync(workspaceProfileId, true);
+      schedule();
     });
 
-    return () => {
-      unsubscribe();
+    const flushPending = () => {
+      pendingAutoSyncRef.current = true;
+      setPendingSync(workspaceProfileId, true);
+      schedule();
     };
-  }, []);
+    window.addEventListener('online', flushPending);
+    if (pendingAutoSyncRef.current) schedule();
+
+    return () => {
+      active = false;
+      unsubscribe();
+      window.removeEventListener('online', flushPending);
+      if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
+      autoSyncTimerRef.current = null;
+      scheduleAutoSyncRef.current = () => {};
+    };
+  }, [user, accessToken, autoSync, workspaceProfileId]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -83,12 +199,21 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
   }, [isOpen]);
 
   const handleSignIn = async () => {
+    if (!isOnline) {
+      setStatusMsg({ type: 'error', text: 'Connect to the internet to sign in to Google Drive.' });
+      return;
+    }
     setIsSigningIn(true);
     setStatusMsg(null);
     try {
       const res = await signInWithGoogle();
       setUser(res.user);
       setAccessToken(res.accessToken);
+      await onAccountChanged?.(res.user);
+      if (autoSync) {
+        pendingAutoSyncRef.current = true;
+        setPendingSync(storage.getActiveProfileId(), true);
+      }
       const msg = `Signed in as ${res.user.email || 'Google User'}`;
       setStatusMsg({ type: 'success', text: msg });
       onToast?.(msg);
@@ -99,6 +224,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
     } catch (err: any) {
       console.error('Sign-in error:', err);
       const errMsg = err?.message || 'Failed to sign in with Google';
+      await clearExpiredSession(errMsg);
       setStatusMsg({ type: 'error', text: errMsg });
       onToast?.(errMsg);
     } finally {
@@ -111,9 +237,11 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
       await signOutGoogle();
       setUser(null);
       setAccessToken(null);
+      pendingAutoSyncRef.current = hasPendingSync(workspaceProfileId);
       setBackupInfo(null);
       setStatusMsg(null);
       setIsOpen(false);
+      await onAccountChanged?.(null);
       onToast?.('Signed out of Google Account');
     } catch (err: any) {
       onToast?.(err?.message || 'Error signing out');
@@ -121,47 +249,38 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
   };
 
   const handleSyncNow = async () => {
+    if (!isOnline) {
+      onToast?.('You are offline. Changes are saved locally and can sync when you reconnect.');
+      return;
+    }
     let token = accessToken || getGoogleAccessToken();
+    let syncUser = user;
     if (!token) {
       try {
         const res = await signInWithGoogle();
         token = res.accessToken;
+        syncUser = res.user;
         setUser(res.user);
         setAccessToken(token);
+        await onAccountChanged?.(res.user);
+        if (autoSync) {
+          pendingAutoSyncRef.current = true;
+          setPendingSync(storage.getActiveProfileId(), true);
+        }
       } catch (err: any) {
         onToast?.('Please sign in to sync with Google Drive.');
         return;
       }
     }
 
-    setIsSyncing(true);
-    setStatusMsg({ type: 'info', text: 'Syncing workspace to Google Drive...' });
-    try {
-      const result = await syncToGoogleDrive(token, user);
-      if (result.success) {
-        const now = Date.now();
-        setLastSyncedAt(now);
-        if (result.backupInfo) {
-          setBackupInfo(result.backupInfo);
-        }
-        const successText = `✓ Synced ${result.activeRecordsCount} active records to Google Drive!`;
-        setStatusMsg({ type: 'success', text: successText });
-        onToast?.(successText);
-      } else {
-        const errText = result.error || 'Failed to sync with Google Drive';
-        setStatusMsg({ type: 'error', text: errText });
-        onToast?.(errText);
-      }
-    } catch (err: any) {
-      const errText = err?.message || 'Sync error occurred';
-      setStatusMsg({ type: 'error', text: errText });
-      onToast?.(errText);
-    } finally {
-      setIsSyncing(false);
-    }
+    await executeSync(token, syncUser);
   };
 
   const handleInitiateRestore = async () => {
+    if (!isOnline) {
+      onToast?.('Connect to the internet to restore from Google Drive.');
+      return;
+    }
     let token = accessToken || getGoogleAccessToken();
     if (!token) {
       try {
@@ -169,6 +288,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
         token = res.accessToken;
         setUser(res.user);
         setAccessToken(token);
+        await onAccountChanged?.(res.user);
       } catch (err: any) {
         onToast?.('Please sign in to access Google Drive backup.');
         return;
@@ -184,7 +304,9 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
       }
       setShowRestoreConfirm(true);
     } catch (err: any) {
-      onToast?.(err?.message || 'Could not check Google Drive backup.');
+      const message = err?.message || 'Could not check Google Drive backup.';
+      await clearExpiredSession(message);
+      onToast?.(message);
     }
   };
 
@@ -204,7 +326,8 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
       const activeProfileId = storage.getActiveProfileId() || settingsData?.profileId || 'default';
       const activeProfileName = settingsData?.profiles?.find(p => p.id === activeProfileId)?.name || 'Om-LifeOS';
 
-      const res = await restoreFromGoogleDrive(token, activeProfileId, activeProfileName);
+      if (!user) throw new Error('Sign in to a Google account before restoring a workspace.');
+      const res = await restoreFromGoogleDrive(token, activeProfileId, activeProfileName, user);
       if (res.success) {
         const successText = `✓ Restored ${res.restoredRecordCount} records from Google Drive!`;
         setStatusMsg({ type: 'success', text: successText });
@@ -213,11 +336,13 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
         onDataRestored?.();
       } else {
         const errText = res.error || 'Failed to restore from Google Drive.';
+        await clearExpiredSession(errText);
         setStatusMsg({ type: 'error', text: errText });
         onToast?.(errText);
       }
     } catch (err: any) {
       const errText = err?.message || 'Failed to restore backup.';
+      await clearExpiredSession(errText);
       setStatusMsg({ type: 'error', text: errText });
       onToast?.(errText);
     } finally {
@@ -227,7 +352,12 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
 
   const handleToggleAutoSync = (enabled: boolean) => {
     setAutoSync(enabled);
-    setAutoSyncEnabled(enabled);
+    setAutoSyncEnabled(enabled, workspaceProfileId);
+    if (enabled) {
+      pendingAutoSyncRef.current = true;
+      setPendingSync(workspaceProfileId, true);
+      scheduleAutoSyncRef.current();
+    }
     onToast?.(enabled ? 'Google Drive Auto-Sync enabled' : 'Google Drive Auto-Sync disabled');
   };
 
@@ -244,7 +374,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
 
   return (
     <div className="relative w-full" ref={dropdownRef}>
-      {/* TRIGGER BUTTON (Sits right above Connect PC Folder in Sidebar) */}
+      {/* Google account workspace and Drive controls */}
       {!user ? (
         <button
           type="button"
@@ -346,14 +476,14 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
           {!user ? (
             <div className="space-y-2.5 py-1">
               <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                Sign in with Google to backup and sync your workspace directly with your Google Drive.
+                Sign in to open the workspace linked to this Google account. Your offline guest workspace stays separate; Drive is its only cloud sync destination.
               </p>
 
               {/* Official Google Material Style Button */}
               <button
                 type="button"
                 onClick={handleSignIn}
-                disabled={isSigningIn}
+                disabled={isSigningIn || !isOnline}
                 className="w-full flex items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white py-2 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:shadow-xs active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 transition-all cursor-pointer disabled:opacity-60"
               >
                 {isSigningIn ? (
@@ -388,7 +518,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
 
               <div className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500 pt-0.5">
                 <ShieldCheck className="h-3 w-3 shrink-0 text-emerald-500" />
-                <span>Zero tracking • Data stored safely in your Google Drive</span>
+                <span>{isOnline ? 'Only this Google account workspace is opened after sign-in' : 'Offline: continue in the separate guest workspace'}</span>
               </div>
             </div>
           ) : (
@@ -433,6 +563,11 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
                     </span>
                   </div>
                 )}
+                {!isOnline && (
+                  <p className="border-t border-indigo-100 pt-1 text-[10px] text-amber-700 dark:border-indigo-900 dark:text-amber-300">
+                    Offline: edits stay on this device and sync when you reconnect.
+                  </p>
+                )}
               </div>
 
               {/* Action Buttons */}
@@ -440,7 +575,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
                 {/* Sync Now */}
                 <button
                   type="button"
-                  disabled={isSyncing}
+                  disabled={isSyncing || !isOnline}
                   onClick={handleSyncNow}
                   className="flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 py-1.5 px-2 text-xs font-semibold text-white hover:bg-indigo-500 active:scale-95 shadow-2xs transition-all cursor-pointer disabled:opacity-60"
                   title="Upload latest active workspace records to Google Drive"
@@ -452,7 +587,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
                 {/* Restore from Drive */}
                 <button
                   type="button"
-                  disabled={isRestoring || isSyncing}
+                  disabled={isRestoring || isSyncing || !isOnline}
                   onClick={handleInitiateRestore}
                   className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-1.5 px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 transition-all cursor-pointer disabled:opacity-60"
                   title="Download and restore backup from Google Drive"
@@ -480,11 +615,12 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
               <div className="border-t border-slate-100 pt-2 dark:border-slate-800 flex items-center justify-between">
                 <button
                   type="button"
+                  disabled={isSyncing || isRestoring}
                   onClick={handleSignOut}
-                  className="w-full flex items-center justify-center gap-1.5 text-[11px] font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 py-1 rounded-md transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-center gap-1.5 text-[11px] font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 py-1 rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <LogOut className="h-3 w-3" />
-                  <span>Sign Out</span>
+                  <span>Sign Out & Switch to Guest</span>
                 </button>
               </div>
             </div>

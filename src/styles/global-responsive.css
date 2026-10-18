@@ -48,6 +48,19 @@
 
 /* Mobile responsive constraints (max-width: 640px) */
 @media (max-width: 640px) {
+  /* Keep repeated view panels compact and consistent on phone-sized screens. */
+  main .rounded-2xl.border.bg-white.p-5,
+  main .rounded-3xl.border.bg-white.p-5,
+  main .rounded-2xl.border.bg-white.p-6,
+  main .rounded-3xl.border.bg-white.p-6 {
+    padding: 1rem;
+  }
+
+  main .rounded-2xl.border.bg-white.p-4,
+  main .rounded-3xl.border.bg-white.p-4 {
+    padding: 0.75rem;
+  }
+
   /* Dynamic padding reduction and minimal indentation margin across nested hierarchy */
   .nested-card-container,
   [data-nested-card],

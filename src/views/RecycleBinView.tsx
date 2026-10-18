@@ -121,7 +121,8 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
       let restored = 0;
       for (const id of Array.from(selectedIds)) {
         const ok = await storage.restoreFromRecycleBin(id);
-        if (ok) restored++;
+        if (!ok) throw new Error(`Could not restore item ${id}. ${restored} earlier item(s) were already restored.`);
+        restored++;
       }
       setSelectedIds(new Set());
       onSuccess(`✓ Restored ${restored} item(s) to their original modules`);
@@ -140,17 +141,20 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
     setItemToPurge(null);
     setIsProcessing(true);
     try {
-      await storage.permanentlyDeleteFromRecycleBin(target.id);
+      const deleted = await storage.permanentlyDeleteFromRecycleBin(target.id);
+      if (!deleted) throw new Error('The item was not found or could not be removed from local storage.');
       const driveSync = await syncToGoogleDriveAfterPermanentDelete();
       if (driveSync.syncedToDrive) {
-        onSuccess(`✓ Permanently deleted "${target.title}" (Local & Google Drive dono se delete ho gaya, dubara kabhi upload nahi hoga).`);
+        onSuccess(`✓ Permanently deleted "${target.title}". Current Google Drive backup was updated; future syncs will keep it excluded.`);
       } else {
-        onSuccess(`✓ Permanently deleted "${target.title}". Dubara kabhi upload ya restore nahi hoga.`);
+        onError?.(`"${target.title}" was deleted locally. ${driveSync.message || 'The Google Drive backup was not updated.'}`);
       }
       await loadRecycleBin();
       onRefresh();
     } catch (err: any) {
       onError?.(`Permanent delete failed: ${err.message}`);
+      await loadRecycleBin();
+      onRefresh();
     } finally {
       setIsProcessing(false);
     }
@@ -163,15 +167,16 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
     try {
       let purged = 0;
       for (const id of Array.from(selectedIds)) {
-        await storage.permanentlyDeleteFromRecycleBin(id);
+        const deleted = await storage.permanentlyDeleteFromRecycleBin(id);
+        if (!deleted) throw new Error(`Could not permanently delete item ${id}. ${purged} earlier item(s) were already deleted.`);
         purged++;
       }
       setSelectedIds(new Set());
       const driveSync = await syncToGoogleDriveAfterPermanentDelete();
       if (driveSync.syncedToDrive) {
-        onSuccess(`✓ Permanently purged ${purged} item(s) from Local & Google Drive. Dubara kabhi upload nahi honge.`);
+        onSuccess(`✓ Permanently purged ${purged} item(s). Current Google Drive backup was updated; future syncs will keep them excluded.`);
       } else {
-        onSuccess(`✓ Permanently purged ${purged} item(s). Dubara kabhi upload ya restore nahi honge.`);
+        onError?.(`${purged} item(s) were permanently deleted locally. ${driveSync.message || 'The Google Drive backup was not updated.'}`);
       }
       await loadRecycleBin();
       onRefresh();
@@ -186,24 +191,42 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
     setIsConfirmEmptyOpen(false);
     if (items.length === 0) return;
     setIsProcessing(true);
+    let deletedCount = 0;
+    let cleanupError: string | undefined;
     try {
       const activeProf = profileId || storage.getActiveProfileId();
-      const count = await storage.emptyRecycleBin(activeProf);
-      // Also clean up any lingering media cache or orphaned blobs
-      try {
-        await cleanOrphanedCacheAndTrash({ emptyRecycleBinFirst: false, profileId: activeProf });
-      } catch {}
+      deletedCount = await storage.emptyRecycleBin(activeProf);
       setSelectedIds(new Set());
+      try {
+        const cleanup = await cleanOrphanedCacheAndTrash({
+          emptyRecycleBinFirst: false,
+          profileId: activeProf,
+          clearBrowserCaches: false
+        });
+        if (cleanup.purgedOrphanedAttachments > 0) {
+          cleanupError = `${cleanup.purgedOrphanedAttachments} associated temporary file(s) removed.`;
+        }
+      } catch (err: any) {
+        cleanupError = `Recycle Bin records were deleted locally, but attachment cleanup failed: ${err?.message || 'unknown storage error'}.`;
+      }
       const driveSync = await syncToGoogleDriveAfterPermanentDelete();
       if (driveSync.syncedToDrive) {
-        onSuccess(`✓ Recycle Bin emptied (${count} item(s)). Google Drive backup updated & deleted records permanently removed.`);
+        if (cleanupError) {
+          onError?.(`Recycle Bin emptied (${deletedCount} item(s)); current Google Drive backup updated. ${cleanupError}`);
+        } else {
+          onSuccess(`✓ Recycle Bin emptied (${deletedCount} item(s)). Current Google Drive backup updated; future syncs will keep them excluded.`);
+        }
       } else {
-        onSuccess(`✓ Recycle Bin emptied (${count} item(s) permanently destroyed and blocked from future uploads).`);
+        onError?.(`Recycle Bin emptied (${deletedCount} item(s) deleted locally). ${cleanupError || ''} ${driveSync.message || 'The Google Drive backup was not updated.'}`);
       }
       await loadRecycleBin();
       onRefresh();
     } catch (err: any) {
-      onError?.(`Failed to empty Recycle Bin: ${err.message}`);
+      onError?.(deletedCount > 0
+        ? `Recycle Bin deletion partially completed (${deletedCount} item(s)). Do not repeat the operation until the bin has refreshed. ${err.message}`
+        : `Could not confirm that the Recycle Bin was emptied completely. Some records may already have been removed; the bin has been refreshed. ${err.message}`);
+      await loadRecycleBin();
+      onRefresh();
     } finally {
       setIsProcessing(false);
     }

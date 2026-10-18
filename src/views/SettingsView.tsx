@@ -87,13 +87,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       for (const f of finance) {
         if (f.accountId && !acctIds.has(f.accountId)) {
           issues++;
+          f.accountId = null;
+          f.updatedAt = Date.now();
+          await storage.put('finance', f);
+          repaired++;
         }
       }
 
       const newStats = await storage.getStorageEstimate();
       setStorageStats(newStats);
 
-      onSuccess(`Integrity check: ${totalChecked} checked, ${issues} anomalies found, ${repaired} repaired`);
+      onSuccess(`Core link check: ${totalChecked} records checked, ${issues} broken links found, ${repaired} repaired`);
     } catch {
       onError('Integrity audit failed');
     } finally {
@@ -107,8 +111,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleConfirmReset = async () => {
     setIsResetConfirmOpen(false);
-    onSuccess('Wiping all IndexedDB databases, Cache Storage, and Service Workers...');
-    await performHardAppReset();
+    try {
+      await performHardAppReset();
+    } catch (e: any) {
+      onError(`Database reset failed: ${e?.message || 'Unexpected storage error.'}`);
+    }
   };
 
   const [isCleanCacheOpen, setIsCleanCacheOpen] = useState(false);
@@ -130,8 +137,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       if (res.clearedCacheKeys > 0) parts.push(`${res.clearedCacheKeys} browser cache buckets`);
       if (res.purgedOrphanedAttachments > 0) parts.push(`${res.purgedOrphanedAttachments} orphaned media files`);
       const msg = parts.length > 0
-        ? `✓ Cleaned ${parts.join(' & ')}. Active data & Recycle Bin are intact!`
-        : '✓ Cache & temporary storage are completely clean. Active data is intact!';
+        ? `✓ Cleaned ${parts.join(' & ')}. Active records & restorable Recycle Bin items are intact.`
+        : '✓ No browser caches or orphaned temporary files remained. Active data is intact.';
       onSuccess(msg);
       const newStats = await storage.getStorageEstimate();
       setStorageStats(newStats);
@@ -425,10 +432,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 disabled={isAuditing}
                 onClick={handleRunIntegrityAudit}
                 className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer shrink-0 whitespace-nowrap shadow-2xs transition-all active:scale-98"
-                title="Run database integrity check and storage refresh"
+                title="Check task goals and finance account links"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
-                <span>Run Audit</span>
+                <span>Check Links</span>
               </button>
             </div>
 

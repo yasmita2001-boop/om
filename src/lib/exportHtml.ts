@@ -6,6 +6,7 @@
  */
 
 import { getLocalDateString } from './dateUtils';
+import watermarkUrl from '../assets/om-lifeos-watermark.png';
 
 function escapeHtml(str: any): string {
   if (str === null || str === undefined) return '';
@@ -17,8 +18,24 @@ function escapeHtml(str: any): string {
     .replace(/'/g, '&#039;');
 }
 
-export function generateCompleteStandaloneHtml(fullData: Record<string, any>): string {
+async function loadWatermarkDataUrl(): Promise<string> {
+  const response = await fetch(watermarkUrl);
+  if (!response.ok) throw new Error(`Could not load the watermark image for HTML export (${response.status}).`);
+
+  const image = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string'
+      ? resolve(reader.result)
+      : reject(new Error('Could not encode the watermark image for HTML export.'));
+    reader.onerror = () => reject(reader.error || new Error('Could not read the watermark image for HTML export.'));
+    reader.readAsDataURL(image);
+  });
+}
+
+export async function generateCompleteStandaloneHtml(fullData: Record<string, any>): Promise<string> {
   const exportedAt = new Date().toLocaleString();
+  const watermarkDataUrl = await loadWatermarkDataUrl();
   const safeDataJson = JSON.stringify(fullData)
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e');
@@ -194,7 +211,7 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
       };
     }),
     ...investments.map(inv => {
-      const currentVal = Number(inv.currentValue || inv.amount) || 0;
+      const currentVal = Number(inv.currentValue ?? inv.amount) || 0;
       const amount = Number(inv.amount) || 0;
       const gain = currentVal - amount;
       return {
@@ -284,11 +301,21 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
+      position: relative;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       background-color: var(--bg-body);
       color: var(--text-main);
       line-height: 1.5;
       transition: background-color 0.2s, color 0.2s;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      z-index: 9999;
+      inset: 0;
+      background: url("${watermarkDataUrl}") center center / min(68vw, 620px) auto no-repeat;
+      opacity: 0.14;
+      pointer-events: none;
     }
     header {
       position: sticky;
@@ -633,6 +660,11 @@ export function generateCompleteStandaloneHtml(fullData: Record<string, any>): s
     }
     @media print {
       @page { size: A4; margin: 8mm; }
+
+      body::after {
+        background-size: min(72vw, 620px) auto;
+        opacity: 0.2;
+      }
 
       html, body {
         width: auto !important;

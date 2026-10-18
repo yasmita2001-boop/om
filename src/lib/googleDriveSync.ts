@@ -10,15 +10,6 @@
  * - Supports manual 1-click sync and auto-sync
  */
 
-import { initializeApp, getApps } from 'firebase/app';
-import {
-  getAuth,
-  signInWithPopup,
-  signOut,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  User as FirebaseUser
-} from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { storage } from './storage';
 import { ENTITY_STORES, DB_VERSION } from './db';
@@ -27,7 +18,7 @@ import {
   calculateChecksum,
   UniversalDataManager
 } from './universalDataManager';
-import { AppState } from '../types';
+import { AppState, HealthProfile } from '../types';
 
 export const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file'
@@ -35,31 +26,47 @@ export const DRIVE_SCOPES = [
 
 export const BACKUP_FILE_NAME = 'om-lifeos-backup.omlifeos';
 
-// Lazy, guarded Firebase init: a failure here (blocked storage, unsupported
-// webview, etc.) must never prevent the rest of the app from opening.
-let cachedAuth: ReturnType<typeof getAuth> | null = null;
-function getFirebaseAuth() {
-  if (!cachedAuth) {
-    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    cachedAuth = getAuth(app);
-  }
-  return cachedAuth;
-}
+type FirebaseServices = {
+  auth: import('firebase/auth').Auth;
+  GoogleAuthProvider: typeof import('firebase/auth').GoogleAuthProvider;
+  signInWithPopup: typeof import('firebase/auth').signInWithPopup;
+  signOut: typeof import('firebase/auth').signOut;
+};
 
-// Provider setup
-const provider = new GoogleAuthProvider();
-for (const scope of DRIVE_SCOPES) {
-  provider.addScope(scope);
+let firebaseServicesPromise: Promise<FirebaseServices> | null = null;
+function getFirebaseServices(): Promise<FirebaseServices> {
+  if (!firebaseServicesPromise) {
+    firebaseServicesPromise = Promise.all([
+      import('firebase/app'),
+      import('firebase/auth')
+    ]).then(([appModule, authModule]) => {
+      const app = appModule.getApps().length === 0
+        ? appModule.initializeApp(firebaseConfig)
+        : appModule.getApps()[0];
+      return {
+        auth: authModule.getAuth(app),
+        GoogleAuthProvider: authModule.GoogleAuthProvider,
+        signInWithPopup: authModule.signInWithPopup,
+        signOut: authModule.signOut
+      };
+    }).catch(err => {
+      firebaseServicesPromise = null;
+      throw err;
+    });
+  }
+  return firebaseServicesPromise;
 }
-provider.setCustomParameters({
-  prompt: 'select_account'
-});
 
 export interface GoogleUser {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
   uid?: string;
+}
+
+export function getGoogleWorkspaceProfileId(user: GoogleUser): string {
+  if (!user.uid) throw new Error('Google account identity is unavailable. Please sign in again.');
+  return `google-${user.uid}`;
 }
 
 export interface GoogleDriveBackupInfo {
@@ -70,62 +77,35 @@ export interface GoogleDriveBackupInfo {
   recordCount?: number;
 }
 
-export interface GoogleSyncState {
-  isSignedIn: boolean;
-  user: GoogleUser | null;
-  lastSyncedAt: number | null;
-  isSyncing: boolean;
-  autoSyncEnabled: boolean;
-  backupInfo: GoogleDriveBackupInfo | null;
-  error: string | null;
-}
-
 const LOCAL_STORAGE_LAST_SYNC_KEY = 'om_gdrive_last_synced_at';
 const LOCAL_STORAGE_AUTO_SYNC_KEY = 'om_gdrive_auto_sync_enabled';
+const getProfileStorageKey = (key: string, profileId = storage.getActiveProfileId()) => `${key}:${profileId}`;
+const getPendingBackupPurgeKey = (profileId = storage.getActiveProfileId()) => `om_gdrive_backup_purge_pending:${profileId}`;
+
+function getPendingBackupPurge(profileId: string): boolean {
+  return localStorage.getItem(getPendingBackupPurgeKey(profileId)) === 'true';
+}
+
+function setPendingBackupPurge(profileId: string, pending: boolean): void {
+  const key = getPendingBackupPurgeKey(profileId);
+  if (pending) localStorage.setItem(key, 'true');
+  else localStorage.removeItem(key);
+}
 
 // In-memory token cache (strictly memory-only as per security guidelines)
 let inMemoryAccessToken: string | null = null;
 let currentGoogleUser: GoogleUser | null = null;
-let isSigningIn = false;
-
-/**
- * Initialize Google Auth State listener.
- */
-export function initGoogleAuth(
-  onStateChange: (user: GoogleUser | null, token: string | null) => void
-): () => void {
-  try {
-    return onAuthStateChanged(getFirebaseAuth(), async (fbUser: FirebaseUser | null) => {
-    if (fbUser && inMemoryAccessToken) {
-      currentGoogleUser = {
-        email: fbUser.email,
-        displayName: fbUser.displayName,
-        photoURL: fbUser.photoURL,
-        uid: fbUser.uid
-      };
-      onStateChange(currentGoogleUser, inMemoryAccessToken);
-    } else {
-      if (!isSigningIn) {
-        inMemoryAccessToken = null;
-        currentGoogleUser = null;
-      }
-      onStateChange(null, null);
-    }
-    });
-  } catch (err) {
-    console.warn('[googleDriveSync] Auth unavailable:', err);
-    onStateChange(null, null);
-    return () => {};
-  }
-}
 
 /**
  * Sign in with Google Popup.
  */
 export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToken: string }> {
   try {
-    isSigningIn = true;
-    const result = await signInWithPopup(getFirebaseAuth(), provider);
+    const { auth, GoogleAuthProvider, signInWithPopup } = await getFirebaseServices();
+    const provider = new GoogleAuthProvider();
+    for (const scope of DRIVE_SCOPES) provider.addScope(scope);
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
 
     if (!credential?.accessToken) {
@@ -154,32 +134,6 @@ export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToke
       throw new Error('Another sign-in request is in progress.');
     }
     throw new Error(error.message || 'Google Sign-In failed.');
-  } finally {
-    isSigningIn = false;
-  }
-}
-
-export async function signInWithGoogleAccount(): Promise<GoogleUser> {
-  const accountProvider = new GoogleAuthProvider();
-  accountProvider.setCustomParameters({ prompt: 'select_account' });
-
-  try {
-    const result = await signInWithPopup(getFirebaseAuth(), accountProvider);
-    return {
-      email: result.user.email,
-      displayName: result.user.displayName,
-      photoURL: result.user.photoURL,
-      uid: result.user.uid
-    };
-  } catch (error: any) {
-    console.error('Google account verification failed:', error);
-    if (error.code === 'auth/popup-closed-by-user') {
-      throw new Error('Google Sign-In window was closed.');
-    }
-    if (error.code === 'auth/cancelled-popup-request') {
-      throw new Error('Another sign-in request is in progress.');
-    }
-    throw new Error(error.message || 'Google account verification failed.');
   }
 }
 
@@ -187,9 +141,8 @@ export async function signInWithGoogleAccount(): Promise<GoogleUser> {
  * Sign out from Google.
  */
 export async function signOutGoogle(): Promise<void> {
-  try {
-    await signOut(getFirebaseAuth());
-  } catch {}
+  const { auth, signOut } = await getFirebaseServices();
+  await signOut(auth);
   inMemoryAccessToken = null;
   currentGoogleUser = null;
 }
@@ -201,55 +154,63 @@ export function getGoogleAccessToken(): string | null {
   return inMemoryAccessToken;
 }
 
-export function getCurrentGoogleUser(): GoogleUser | null {
-  return currentGoogleUser;
+export function clearGoogleSession(): void {
+  inMemoryAccessToken = null;
+  currentGoogleUser = null;
 }
 
 /**
  * Retrieve saved metadata timestamp.
  */
-export function getSavedLastSyncedAt(): number | null {
+export function getSavedLastSyncedAt(profileId = storage.getActiveProfileId()): number | null {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_LAST_SYNC_KEY);
+    const raw = localStorage.getItem(getProfileStorageKey(LOCAL_STORAGE_LAST_SYNC_KEY, profileId)) ||
+      ((profileId === 'om-master-profile' || profileId === 'default')
+        ? localStorage.getItem(LOCAL_STORAGE_LAST_SYNC_KEY)
+        : null);
     return raw ? parseInt(raw, 10) : null;
   } catch {
     return null;
   }
 }
 
-export function setSavedLastSyncedAt(timestamp: number): void {
+export function setSavedLastSyncedAt(timestamp: number, profileId = storage.getActiveProfileId()): void {
   try {
-    localStorage.setItem(LOCAL_STORAGE_LAST_SYNC_KEY, timestamp.toString());
+    localStorage.setItem(getProfileStorageKey(LOCAL_STORAGE_LAST_SYNC_KEY, profileId), timestamp.toString());
   } catch {}
 }
 
-export function isAutoSyncEnabled(): boolean {
+export function isAutoSyncEnabled(profileId = storage.getActiveProfileId()): boolean {
   try {
-    return localStorage.getItem(LOCAL_STORAGE_AUTO_SYNC_KEY) === 'true';
+    const scopedValue = localStorage.getItem(getProfileStorageKey(LOCAL_STORAGE_AUTO_SYNC_KEY, profileId));
+    if (scopedValue !== null) return scopedValue === 'true';
+    return (profileId === 'om-master-profile' || profileId === 'default') &&
+      localStorage.getItem(LOCAL_STORAGE_AUTO_SYNC_KEY) === 'true';
   } catch {
     return false;
   }
 }
 
-export function setAutoSyncEnabled(enabled: boolean): void {
+export function setAutoSyncEnabled(enabled: boolean, profileId = storage.getActiveProfileId()): void {
   try {
-    localStorage.setItem(LOCAL_STORAGE_AUTO_SYNC_KEY, enabled ? 'true' : 'false');
+    localStorage.setItem(getProfileStorageKey(LOCAL_STORAGE_AUTO_SYNC_KEY, profileId), enabled ? 'true' : 'false');
   } catch {}
 }
 
 /**
- * Search Google Drive for existing Om-LifeOS backup file.
+ * Search Google Drive for the most recently modified active Om-LifeOS backup.
  */
 export async function findDriveBackupFile(accessToken: string): Promise<GoogleDriveBackupInfo | null> {
   try {
-    const query = encodeURIComponent(`name = '${BACKUP_FILE_NAME}' and trashed = false`);
-    const fields = encodeURIComponent('files(id, name, modifiedTime, size, description)');
-    const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}&spaces=drive`;
-
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
+    const params = new URLSearchParams({
+      q: `name = '${BACKUP_FILE_NAME}' and trashed = false`,
+      fields: 'files(id,name,modifiedTime,size,description)',
+      spaces: 'drive',
+      orderBy: 'modifiedTime desc',
+      pageSize: '10'
+    });
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
     });
 
     if (!res.ok) {
@@ -257,7 +218,7 @@ export async function findDriveBackupFile(accessToken: string): Promise<GoogleDr
         inMemoryAccessToken = null;
         throw new Error('Google Drive session expired. Please sign in again.');
       }
-      return null;
+      throw new Error(`Could not check Google Drive backup (${res.status}): ${await res.text()}`);
     }
 
     const data = await res.json();
@@ -271,10 +232,57 @@ export async function findDriveBackupFile(accessToken: string): Promise<GoogleDr
       };
     }
     return null;
-  } catch (err: any) {
+  } catch (err) {
     console.warn('Could not locate Google Drive backup file:', err);
-    return null;
+    throw err;
   }
+}
+
+async function deleteAllDriveBackupFiles(accessToken: string): Promise<number> {
+  const files = new Map<string, { id: string }>();
+
+  for (const trashed of [false, true]) {
+    let pageToken: string | undefined;
+    do {
+      const params = new URLSearchParams({
+        q: `name = '${BACKUP_FILE_NAME}' and trashed = ${trashed}`,
+        fields: 'nextPageToken,files(id)',
+        spaces: 'drive',
+        pageSize: '100'
+      });
+      if (pageToken) params.set('pageToken', pageToken);
+
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!response.ok) {
+        if (response.status === 401) {
+          inMemoryAccessToken = null;
+          throw new Error('Google Drive session expired. Please sign in again.');
+        }
+        throw new Error(`Could not list old Google Drive backups (${response.status}): ${await response.text()}`);
+      }
+      const result = await response.json();
+      for (const file of result.files || []) files.set(file.id, file);
+      pageToken = result.nextPageToken;
+    } while (pageToken);
+  }
+
+  for (const file of files.values()) {
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!response.ok && response.status !== 404) {
+      if (response.status === 401) {
+        inMemoryAccessToken = null;
+        throw new Error('Google Drive session expired. Please sign in again.');
+      }
+      throw new Error(`Could not permanently delete old Google Drive backup ${file.id} (${response.status}): ${await response.text()}`);
+    }
+  }
+
+  return files.size;
 }
 
 /**
@@ -282,63 +290,69 @@ export async function findDriveBackupFile(accessToken: string): Promise<GoogleDr
  * Strictly guarantees that any soft-deleted, trashed, or permanently deleted records
  * (tracked in tombstones with permanentlyDeleted: true) are 100% EXCLUDED and NEVER uploaded.
  */
-export async function buildCleanWorkspaceSnapshot(userEmail?: string | null): Promise<{
+export async function buildCleanWorkspaceSnapshot(userEmail?: string | null, accountUid?: string): Promise<{
   payloadJson: string;
   totalActiveCount: number;
   purgedCount: number;
   checksum: string;
 }> {
-  // Read local tombstones to ensure permanently deleted records are blocked forever
+  // Read this workspace's tombstones to ensure permanently deleted records stay excluded.
   const permanentlyDeletedKeys = new Set<string>();
-  try {
-    const db = await storage.open();
-    if (db.objectStoreNames.contains('tombstones')) {
-      await new Promise<void>((resolve) => {
-        const tx = db.transaction('tombstones', 'readonly');
-        const req = tx.objectStore('tombstones').getAll();
-        req.onsuccess = () => {
-          (req.result || []).forEach((t: any) => {
-            if (t.permanentlyDeleted) {
-              if (t.id) permanentlyDeletedKeys.add(t.id);
-              if (t.recordId) permanentlyDeletedKeys.add(t.recordId);
-              if (t.storeName && t.recordId) permanentlyDeletedKeys.add(`${t.storeName}:${t.recordId}`);
-            }
-          });
-          resolve();
-        };
-        req.onerror = () => resolve();
-      });
-    }
-  } catch {}
-
-  const rawData: Record<string, any[]> = {};
-  for (const storeName of ENTITY_STORES) {
-    try {
-      const items = await storage.getAll(storeName as any);
-      if (Array.isArray(items) && items.length > 0) {
-        // Exclude any item that is in tombstones
-        const filteredItems = items.filter((it: any) => {
-          if (!it || !it.id) return false;
-          if (permanentlyDeletedKeys.has(it.id)) return false;
-          if (permanentlyDeletedKeys.has(`${storeName}:${it.id}`)) return false;
-          return true;
+  const db = await storage.open();
+  const activeProfileId = storage.getActiveProfileId();
+  const isGuest = activeProfileId === 'om-master-profile' || activeProfileId === 'default';
+  if (db.objectStoreNames.contains('tombstones')) {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('tombstones', 'readonly');
+      const req = tx.objectStore('tombstones').getAll();
+      req.onsuccess = () => {
+        (req.result || []).forEach((t: any) => {
+        const belongsToProfile = t.profileId === activeProfileId ||
+          (isGuest && (!t.profileId || t.profileId === 'om-master-profile' || t.profileId === 'default'));
+        if (t.permanentlyDeleted && belongsToProfile) {
+            if (t.id) permanentlyDeletedKeys.add(t.id);
+            if (t.recordId) permanentlyDeletedKeys.add(t.recordId);
+            if (t.storeName && t.recordId) permanentlyDeletedKeys.add(`${t.storeName}:${t.recordId}`);
+          }
         });
-        if (filteredItems.length > 0) {
-          rawData[storeName] = filteredItems;
-        }
-      }
-    } catch (err) {
-      console.warn(`Could not read store ${storeName} for Drive sync:`, err);
-    }
+        resolve();
+      };
+      req.onerror = () => reject(req.error || new Error('Failed to read deletion history.'));
+      tx.onerror = () => reject(tx.error || new Error('Failed to read deletion history.'));
+    });
   }
 
-  const { cleanData, totalActiveCount, purgedCount } = sanitizeWorkspacePayload(rawData);
+  const canonical = await UniversalDataManager.getInstance().extractCanonicalWorkspaceData({
+    profileId: activeProfileId,
+    includeFullMedia: true
+  });
+  let tombstoneExcludedCount = 0;
+  const rawData: Record<string, any[]> = Object.fromEntries(
+    ENTITY_STORES.map(storeName => [
+      storeName,
+      (canonical.cleanData[storeName] || []).filter((it: any) => {
+        if (!it || !it.id) return false;
+        if (permanentlyDeletedKeys.has(it.id) || permanentlyDeletedKeys.has(`${storeName}:${it.id}`)) {
+          tombstoneExcludedCount++;
+          return false;
+        }
+        return true;
+      })
+    ])
+  );
+  const healthProfile = await storage.getSingleton<HealthProfile>('healthProfile', activeProfileId);
+  rawData.healthProfile = healthProfile
+    ? [{ id: `root:${activeProfileId}`, value: healthProfile, profileId: activeProfileId }]
+    : [];
 
-  const settingsData = await storage.getSingleton<AppState>('appSettings');
+  const { cleanData, totalActiveCount } = sanitizeWorkspacePayload(rawData);
+  const purgedCount = canonical.purgedGhostCount + tombstoneExcludedCount;
+
+  const settingsData = await storage.getSingleton<AppState>('appSettings', activeProfileId);
   const safeSettings = settingsData ? { ...settingsData } : null;
 
-  const activeProfileId = storage.getActiveProfileId() || settingsData?.profileId || 'default';
-  const activeProfileName = settingsData?.profiles?.find(p => p.id === activeProfileId)?.name || 'Om-LifeOS';
+  const workspaceId = activeProfileId || settingsData?.profileId || 'default';
+  const activeProfileName = settingsData?.profiles?.find(p => p.id === workspaceId)?.name || 'Om-LifeOS';
 
   const timestampIso = new Date().toISOString();
   const payload = {
@@ -348,24 +362,23 @@ export async function buildCleanWorkspaceSnapshot(userEmail?: string | null): Pr
     schemaVersion: DB_VERSION,
     syncedAt: timestampIso,
     syncedBy: userEmail || 'google-user',
-    workspaceId: activeProfileId,
+    workspaceId,
+    accountUid: accountUid || undefined,
     workspaceName: activeProfileName,
     totalActiveRecords: totalActiveCount,
     excludedDeletedRecords: purgedCount,
     data: cleanData,
-    entities: cleanData,
     settings: safeSettings
   };
 
-  const baseJson = JSON.stringify(payload, null, 2);
-  const checksum = calculateChecksum(baseJson);
+  const checksum = calculateChecksum(JSON.stringify(cleanData));
   const fullBundle = {
     ...payload,
     checksum
   };
 
   return {
-    payloadJson: JSON.stringify(fullBundle, null, 2),
+    payloadJson: JSON.stringify(fullBundle),
     totalActiveCount,
     purgedCount,
     checksum
@@ -379,11 +392,21 @@ export async function syncToGoogleDrive(accessToken: string, user?: GoogleUser |
   success: boolean;
   activeRecordsCount: number;
   purgedRecordsCount: number;
+  deletedDriveBackupFiles?: number;
   backupInfo?: GoogleDriveBackupInfo;
   error?: string;
 }> {
   try {
-    const { payloadJson, totalActiveCount, purgedCount } = await buildCleanWorkspaceSnapshot(user?.email);
+    if (!user) throw new Error('Sign in to a Google account before syncing a workspace.');
+    const expectedProfileId = getGoogleWorkspaceProfileId(user);
+    if (storage.getActiveProfileId() !== expectedProfileId) {
+      throw new Error('The active workspace does not belong to this Google account.');
+    }
+    let deletedDriveBackupFiles = 0;
+    if (getPendingBackupPurge(expectedProfileId)) {
+      deletedDriveBackupFiles = await deleteAllDriveBackupFiles(accessToken);
+    }
+    const { payloadJson, totalActiveCount, purgedCount } = await buildCleanWorkspaceSnapshot(user.email, user.uid);
 
     const existingFile = await findDriveBackupFile(accessToken);
 
@@ -436,12 +459,22 @@ export async function syncToGoogleDrive(accessToken: string, user?: GoogleUser |
 
     if (!response.ok) {
       const errText = await response.text();
+      if (response.status === 401) {
+        inMemoryAccessToken = null;
+        throw new Error('Google Drive session expired. Please sign in again.');
+      }
       throw new Error(`Google Drive API error (${response.status}): ${errText}`);
     }
 
     const savedFile = await response.json();
+    if (!savedFile.id || !savedFile.name) {
+      throw new Error('Google Drive did not confirm creation of the clean backup.');
+    }
+    if (getPendingBackupPurge(expectedProfileId)) {
+      setPendingBackupPurge(expectedProfileId, false);
+    }
     const now = Date.now();
-    setSavedLastSyncedAt(now);
+    setSavedLastSyncedAt(now, expectedProfileId);
 
     const backupInfo: GoogleDriveBackupInfo = {
       fileId: savedFile.id,
@@ -454,6 +487,7 @@ export async function syncToGoogleDrive(accessToken: string, user?: GoogleUser |
       success: true,
       activeRecordsCount: totalActiveCount,
       purgedRecordsCount: purgedCount,
+      deletedDriveBackupFiles,
       backupInfo
     };
   } catch (err: any) {
@@ -478,6 +512,10 @@ export async function fetchDriveBackupData(accessToken: string, fileId: string):
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      inMemoryAccessToken = null;
+      throw new Error('Google Drive session expired. Please sign in again.');
+    }
     throw new Error(`Failed to download backup file: ${response.statusText}`);
   }
 
@@ -490,7 +528,8 @@ export async function fetchDriveBackupData(accessToken: string, fileId: string):
 export async function restoreFromGoogleDrive(
   accessToken: string,
   targetProfileId: string,
-  targetProfileName: string
+  targetProfileName: string,
+  user: GoogleUser
 ): Promise<{
   success: boolean;
   restoredRecordCount: number;
@@ -498,12 +537,22 @@ export async function restoreFromGoogleDrive(
   error?: string;
 }> {
   try {
+    if (targetProfileId !== getGoogleWorkspaceProfileId(user)) {
+      throw new Error('The active workspace does not belong to this Google account.');
+    }
     const backupFile = await findDriveBackupFile(accessToken);
     if (!backupFile) {
       throw new Error('No Om-LifeOS backup file found in your Google Drive.');
     }
 
     const backupContent = await fetchDriveBackupData(accessToken, backupFile.fileId);
+    if (backupContent.accountUid) {
+      if (backupContent.accountUid !== user.uid) {
+        throw new Error('This Google Drive backup belongs to a different Google account.');
+      }
+    } else if (!user.email || String(backupContent.syncedBy || '').toLowerCase() !== user.email.toLowerCase()) {
+      throw new Error('This legacy Google Drive backup cannot be verified for the signed-in account.');
+    }
 
     const dataManager = UniversalDataManager.getInstance();
     const validation = await dataManager.validateImport(backupContent, targetProfileId);
@@ -539,32 +588,58 @@ export async function restoreFromGoogleDrive(
 }
 
 /**
- * Automatically syncs the updated clean workspace to Google Drive after a permanent deletion,
- * ensuring the deleted records and files are completely removed from Google Drive as well
- * and can never be re-uploaded.
+ * Pushes a fresh clean workspace to Google Drive after permanent deletion, even if background
+ * Auto-Sync is disabled. Tombstones keep the records excluded from later syncs.
  */
 export async function syncToGoogleDriveAfterPermanentDelete(): Promise<{
   syncedToDrive: boolean;
   activeCount?: number;
   message?: string;
 }> {
-  const token = inMemoryAccessToken || getGoogleAccessToken();
-  if (!token) {
-    return { syncedToDrive: false };
+  const profileId = storage.getActiveProfileId();
+  if (!profileId.startsWith('google-')) {
+    return { syncedToDrive: false, message: 'This guest workspace has no Google Drive backup; the local deletion is permanent.' };
   }
 
   try {
+    setPendingBackupPurge(profileId, true);
+  } catch (err) {
+    return {
+      syncedToDrive: false,
+      message: `Local deletion is complete, but the Drive-revision purge could not be queued: ${err instanceof Error ? err.message : 'browser storage error'}. Keep this workspace open and retry after reconnecting.`
+    };
+  }
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return { syncedToDrive: false, message: 'Offline; the Drive backup and its revisions remain until reconnect. Purge is queued for the next successful sync.' };
+  }
+
+  const token = inMemoryAccessToken || getGoogleAccessToken();
+  if (!token) {
+    return { syncedToDrive: false, message: 'Google Drive is not connected; the old backup revisions remain until reconnect. Purge is queued for the next successful sync.' };
+  }
+
+  try {
+    if (!currentGoogleUser || getGoogleWorkspaceProfileId(currentGoogleUser) !== profileId) {
+      return { syncedToDrive: false, message: 'The signed-in Google account does not match this workspace; Drive purge is queued until the correct account reconnects.' };
+    }
     const res = await syncToGoogleDrive(token, currentGoogleUser);
     if (res.success) {
       return {
         syncedToDrive: true,
         activeCount: res.activeRecordsCount,
-        message: 'Google Drive backup updated (permanently deleted records removed from Drive).'
+        message: `Permanently deleted ${res.deletedDriveBackupFiles || 0} previous backup file(s) and their Drive revisions, then created a clean backup.`
       };
     }
+    return {
+      syncedToDrive: false,
+      message: res.error || 'The local deletion succeeded, but the Google Drive backup was not updated.'
+    };
   } catch (err: any) {
     console.warn('Auto-sync to Google Drive after delete failed:', err);
+    return {
+      syncedToDrive: false,
+      message: err?.message || 'The local deletion succeeded, but the Google Drive backup was not updated.'
+    };
   }
-
-  return { syncedToDrive: false };
 }

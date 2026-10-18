@@ -580,9 +580,19 @@ export class UniversalDataManager {
           const req = os.getAll();
           req.onsuccess = () => {
             const results: any[] = req.result || [];
-            // If scoped to a specific profile, filter entity rows
-            if (profileId && s !== 'appSettings' && s !== 'healthProfile') {
-              rawData[s] = results.filter(r => !r.profileId || r.profileId === profileId);
+            if (profileId && (s === 'appSettings' || s === 'healthProfile')) {
+              const scopedId = `root:${profileId}`;
+              const scoped = results.filter(r => r.id === scopedId);
+              const canUseLegacy = !profileId.startsWith('google-');
+              rawData[s] = scoped.length > 0
+                ? scoped
+                : (canUseLegacy ? results.filter(r => r.id === 'root') : []);
+            } else if (profileId) {
+              const isGuest = profileId === 'om-master-profile' || profileId === 'default';
+              rawData[s] = results.filter(r =>
+                r.profileId === profileId ||
+                (isGuest && (!r.profileId || r.profileId === 'om-master-profile' || r.profileId === 'default'))
+              );
             } else {
               rawData[s] = results;
             }
@@ -838,7 +848,7 @@ export class UniversalDataManager {
           }
         }
         recordCount = Object.values(filteredCleanData).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 1), 0);
-        const htmlString = generateCompleteStandaloneHtml(filteredCleanData);
+        const htmlString = await generateCompleteStandaloneHtml(filteredCleanData);
         blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });
         filename = `${safeTitle}-standalone-app${suffix}-${dateStr}.html`;
         break;
@@ -1134,7 +1144,10 @@ export class UniversalDataManager {
         const req = tx.objectStore('tombstones').getAll();
         req.onsuccess = () => {
           (req.result || []).forEach((t: any) => {
-            if (t.storeName && t.recordId) {
+            const isGuest = targetProfileId === 'om-master-profile' || targetProfileId === 'default';
+            const belongsToTarget = t.profileId === targetProfileId ||
+              (isGuest && (!t.profileId || t.profileId === 'om-master-profile' || t.profileId === 'default'));
+            if (belongsToTarget && t.storeName && t.recordId) {
               localTombstones.add(`${t.storeName}:${t.recordId}`);
             }
           });
@@ -1152,11 +1165,12 @@ export class UniversalDataManager {
     if (targetStores.length === 0) {
       if (validation.settings && typeof validation.settings === 'object') {
         try {
-          const currentSettings = (await storage.getSingleton<AppState>('appSettings')) || ({} as AppState);
+          const currentSettings = (await storage.getSingleton<AppState>('appSettings', targetProfileId)) || ({} as AppState);
           await storage.setSingleton('appSettings', {
             ...currentSettings,
-            ...validation.settings
-          });
+            ...validation.settings,
+            profileId: targetProfileId
+          }, targetProfileId);
         } catch (e) {
           console.warn('Failed restoring singleton settings:', e);
         }
@@ -1193,7 +1207,7 @@ export class UniversalDataManager {
 
         for (const storeName of targetStores) {
           const items = validation.cleanData[storeName];
-          if (!items || items.length === 0) continue;
+          if (!items) continue;
 
           const store = tx.objectStore(storeName);
           const incomingIds = new Set(items.map(it => it.id).filter(Boolean));
@@ -1206,7 +1220,10 @@ export class UniversalDataManager {
               const cursor: IDBCursorWithValue = e.target.result;
               if (cursor) {
                 const row = cursor.value;
-                if ((!row.profileId || row.profileId === targetProfileId) && !incomingIds.has(row.id)) {
+                const isGuest = targetProfileId === 'om-master-profile' || targetProfileId === 'default';
+                const belongsToTarget = row.profileId === targetProfileId ||
+                  (isGuest && (!row.profileId || row.profileId === 'om-master-profile' || row.profileId === 'default'));
+                if (belongsToTarget && !incomingIds.has(row.id)) {
                   cursor.delete();
                 }
                 cursor.continue();
@@ -1229,6 +1246,9 @@ export class UniversalDataManager {
 
             // Scope record to target profile
             if (storeName !== 'appSettings' && storeName !== 'healthProfile') {
+              item.profileId = targetProfileId;
+            } else {
+              item.id = `root:${targetProfileId}`;
               item.profileId = targetProfileId;
             }
 
@@ -1262,14 +1282,19 @@ export class UniversalDataManager {
       }
     });
 
+    if (mode === 'replace_workspace' && validation.cleanData.healthProfile?.length === 0) {
+      await storage.deleteSingleton('healthProfile', targetProfileId);
+    }
+
     // Also restore singleton settings if present
     if (validation.settings && typeof validation.settings === 'object') {
       try {
-        const currentSettings = (await storage.getSingleton<AppState>('appSettings')) || ({} as AppState);
+        const currentSettings = (await storage.getSingleton<AppState>('appSettings', targetProfileId)) || ({} as AppState);
         await storage.setSingleton('appSettings', {
           ...currentSettings,
-          ...validation.settings
-        });
+          ...validation.settings,
+          profileId: targetProfileId
+        }, targetProfileId);
       } catch (err) {
         console.warn('Could not restore appSettings:', err);
       }

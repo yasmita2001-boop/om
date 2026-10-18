@@ -11,8 +11,8 @@ import {
   Goal, Milestone, Task, ReminderItem, TaskPriority,
   WorkProject, LearningItem, Skill, Routine, Habit, HabitLog,
   FinanceTransaction, Loan, Investment, SavingsPlan, Liability, Asset,
-  HealthAppointment, HealthMeasurement, Meeting, Note, JournalEntry,
-  SpiritualPractice, Commitment, Person, Interaction
+  HealthAppointment, Meeting, Note, JournalEntry,
+  SpiritualPractice, Commitment, Person
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
@@ -20,6 +20,10 @@ import { SlideTabs } from './SlideTabs';
 import { alarmService } from '../lib/alarmService';
 import { useRingtoneOptions, getDefaultRingtoneId } from '../lib/alarmAudio';
 import {
+  createHabitGoalResolver,
+  createTaskGoalResolver,
+  resolveTaskGoalId,
+  resolveHabitGoalId,
   syncGoalProgressFromTasks,
   syncGoalProgressFromMilestones,
   syncGoalProgressFromProjects,
@@ -49,14 +53,12 @@ export interface ProjectTimelinePlanProps {
   liabilities?: Liability[];
   assets?: Asset[];
   appointments?: HealthAppointment[];
-  healthMeasurements?: HealthMeasurement[];
   meetings?: Meeting[];
   notes?: Note[];
   journal?: JournalEntry[];
   practices?: SpiritualPractice[];
   commitments?: Commitment[];
   people?: Person[];
-  interactions?: Interaction[];
   initialStream?: TimelineStream;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
@@ -371,14 +373,12 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   liabilities = [],
   assets = [],
   appointments = [],
-  healthMeasurements = [],
   meetings = [],
   notes = [],
   journal = [],
   practices = [],
   commitments = [],
   people = [],
-  interactions = [],
   initialStream,
   onRefresh,
   onSuccess
@@ -518,14 +518,9 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   // ANNOTATED STREAMS (WITH UNIVERSAL DELAY & REMINDER)
   // ----------------------------------------------------
   const annotatedTasks = useMemo(() => {
+    const resolveGoalId = createTaskGoalResolver({ workProjects, routines, skills, learningItems });
     return tasks.map(t => {
-      const resolvedGoalId =
-        t.goalId ||
-        (t.projectId && projectGoalMap.get(t.projectId)) ||
-        (t.routineId && routineGoalMap.get(t.routineId)) ||
-        (t.skillId && skillGoalMap.get(t.skillId)) ||
-        (t.learningId && learningGoalMap.get(t.learningId)) ||
-        undefined;
+      const resolvedGoalId = resolveGoalId(t);
 
       return {
         ...t,
@@ -537,7 +532,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
         reminder: reminderMap.get(t.id)
       };
     });
-  }, [tasks, goalMap, reminderMap, projectGoalMap, routineGoalMap, skillGoalMap, learningGoalMap]);
+  }, [tasks, workProjects, routines, skills, learningItems, goalMap, reminderMap]);
 
   const annotatedMilestones = useMemo(() => {
     return milestones.map(m => ({
@@ -595,9 +590,12 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   }, [routines, goalMap, reminderMap]);
 
   const annotatedHabits = useMemo(() => {
+    const resolveGoalId = createHabitGoalResolver(routines);
     return habits.map(h => {
-      const resolvedGoalId = h.goalId || (h.routineId && routineGoalMap.get(h.routineId)) || undefined;
-      const isDoneToday = h.doneDate === today;
+      const resolvedGoalId = resolveGoalId(h);
+      const todayLogs = habitLogs.filter(log => log.habitId === h.id && log.date === today);
+      const hasQuickLog = todayLogs.some(log => log.key === `${h.id}|${today}|0`);
+      const isDoneToday = h.doneDate === today || todayLogs.length > 0;
       const delay: DelayInfo = isDoneToday
         ? { isDelayed: false, delayDays: 0, delayHours: 0, severity: 'none', label: 'Done Today', isDueToday: true, isUpcoming: false, remainingDays: 0 }
         : { isDelayed: false, delayDays: 0, delayHours: 0, severity: 'none', label: 'Daily Habit', isDueToday: true, isUpcoming: true, remainingDays: 0 };
@@ -607,13 +605,14 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
         streamType: 'habit' as const,
         delay,
         goal: resolvedGoalId ? goalMap.get(resolvedGoalId) : undefined,
-        isDoneToday
+        isDoneToday,
+        hasQuickLog
       };
     });
-  }, [habits, goalMap, routineGoalMap, today]);
+  }, [habits, habitLogs, routines, goalMap, today]);
 
   const annotatedAppointments = useMemo(() => {
-    return appointments.map(a => {
+    return appointments.filter(a => a.status !== 'cancelled').map(a => {
       const isComp = Boolean(a.completed || a.status === 'completed');
       return {
         ...a,
@@ -629,7 +628,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   }, [appointments, goalMap, reminderMap]);
 
   const annotatedMeetings = useMemo(() => {
-    return meetings.map(m => {
+    return meetings.filter(m => m.status !== 'cancelled').map(m => {
       const isComp = Boolean(m.completed || m.status === 'completed');
       return {
         ...m,
@@ -695,7 +694,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
     return investments.map(inv => {
       const invStart = (inv as any).startDate || inv.date || (inv.createdAt ? getLocalDateString(new Date(inv.createdAt)) : today);
       const invTarget = (inv as any).targetDate || (inv as any).maturityDate || (inv as any).horizonDate || addDaysToDateStr(invStart, 180);
-      const currentVal = Number(inv.currentValue || inv.amount) || 0;
+      const currentVal = Number(inv.currentValue ?? inv.amount) || 0;
       const initialAmt = Number(inv.amount) || 0;
       const gain = currentVal - initialAmt;
       const gainPct = initialAmt > 0 ? Math.round((gain / initialAmt) * 100) : 0;
@@ -748,8 +747,8 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
     skills.length +
     routines.length +
     habits.length +
-    appointments.length +
-    meetings.length +
+    annotatedAppointments.length +
+    annotatedMeetings.length +
     savingsPlans.length +
     loans.length +
     investments.length;
@@ -1324,10 +1323,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   // ACTION HANDLERS: COMPLETION, RESCHEDULE, ALARMS
   // ----------------------------------------------------
   const handleToggleTask = async (task: Task) => {
-    const nextDone = !task.done;
+    const nextDone = !(task.done || task.status === 'done');
     const updated: Task = { ...task, done: nextDone, status: nextDone ? 'done' : 'open', updatedAt: Date.now() };
     await storage.put('tasks', updated);
-    if (task.goalId) await syncGoalProgressFromTasks(task.goalId, task.id, nextDone);
+    const linkedGoalId = resolveTaskGoalId(task, { workProjects, routines, skills, learningItems });
+    if (linkedGoalId) await syncGoalProgressFromTasks(linkedGoalId, task.id, nextDone, nextDone ? 'done' : 'open');
     onSuccess(nextDone ? `✓ Completed: "${task.title}"` : `Task set to active: "${task.title}"`);
     onRefresh();
   };
@@ -1371,12 +1371,37 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   };
 
   const handleToggleHabitToday = async (habit: Habit) => {
-    const isDone = habit.doneDate === today;
-    const nextDate = isDone ? null : today;
-    const updated: Habit = { ...habit, doneDate: nextDate, updatedAt: Date.now() };
-    await storage.put('habits', updated);
-    if (habit.goalId) await syncGoalProgressFromHabits(habit.goalId, habit.id);
-    onSuccess(!isDone ? `✓ Habit "${habit.name}" logged for today!` : `Habit reset`);
+    const todayLogs = habitLogs.filter(log => log.habitId === habit.id && log.date === today);
+    const quickLogKey = `${habit.id}|${today}|0`;
+    const quickLog = todayLogs.find(log => log.key === quickLogKey);
+    const updatedHabit = { ...habit, doneDate: null, updatedAt: Date.now() };
+    let removed = false;
+
+    if (quickLog) {
+      await storage.delete('habitLogs', quickLog.id);
+      await storage.put('habits', updatedHabit);
+      removed = true;
+    } else if (todayLogs.length === 0 && habit.doneDate === today) {
+      await storage.put('habits', updatedHabit);
+      removed = true;
+    } else {
+      const newLog: HabitLog = {
+        id: generateUUID(),
+        key: quickLogKey,
+        habitId: habit.id,
+        date: today,
+        occurrence: 0,
+        createdAt: Date.now()
+      };
+      await storage.atomicPutMany([
+        { storeName: 'habits', item: updatedHabit },
+        { storeName: 'habitLogs', item: newLog }
+      ]);
+    }
+
+    const linkedGoalId = resolveHabitGoalId(habit, routines);
+    if (linkedGoalId) await syncGoalProgressFromHabits(linkedGoalId);
+    onSuccess(removed ? `Habit "${habit.name}" reset` : `✓ Habit "${habit.name}" logged for today!`);
     onRefresh();
   };
 
@@ -1613,7 +1638,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
     });
 
     const goalInvestments = investments.filter(i => i.goalId === goalId);
-    const goalInvestmentsTotal = goalInvestments.reduce((sum, i) => sum + (Number(i.currentValue || i.amount) || 0), 0);
+    const goalInvestmentsTotal = goalInvestments.reduce((sum, i) => sum + (Number(i.currentValue ?? i.amount) || 0), 0);
     const goalLoans = loans.filter(l => l.goalId === goalId);
     const goalLoansTotal = goalLoans.reduce((sum, l) => sum + (Number(l.outstanding) || 0), 0);
     const goalLiabilities = liabilities.filter(l => l.goalId === goalId);
@@ -1948,7 +1973,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3.5 shadow-2xs dark:border-blue-900/60 dark:bg-blue-950/20">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments Backing</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-blue-600 dark:text-blue-400">
-                  ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue || i.amount) || 0), 0).toLocaleString('en-IN')}
+                  ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
                 </div>
               </div>
             </div>
@@ -2100,7 +2125,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               <div className="rounded-xl border border-blue-200/60 bg-white p-2 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600">Investments Val</span>
                 <div className="font-mono text-base font-extrabold text-blue-600">
-                  ₹{investments.reduce((s, i) => s + (Number(i.currentValue || i.amount) || 0), 0).toLocaleString('en-IN')}
+                  ₹{investments.reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
                 </div>
               </div>
             </div>
@@ -2724,7 +2749,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                       onClick={() => handleToggleHabitToday(hb)}
                                       className="text-[9px] font-bold text-orange-600 hover:underline cursor-pointer shrink-0"
                                     >
-                                      {hb.isDoneToday ? '✓ Done' : 'Log'}
+                                      {hb.hasQuickLog ? '✓ Done' : hb.isDoneToday ? '+ Log' : 'Log'}
                                     </button>
                                   </div>
                                   <div className="flex-1 px-3 text-[10px] text-slate-400">
@@ -3053,7 +3078,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                               goalInvestments.map(inv => {
                                 const invStart = inv.startDate || (inv as any).startDate || inv.date || (inv.createdAt ? getLocalDateString(new Date(inv.createdAt)) : today);
                                 const invTarget = inv.targetDate || (inv as any).targetDate || (inv as any).maturityDate || (inv as any).horizonDate || addDaysToDateStr(invStart, 180);
-                                const currentVal = inv.currentVal ?? (Number(inv.currentValue || inv.amount) || 0);
+                                const currentVal = inv.currentVal ?? (Number(inv.currentValue ?? inv.amount) || 0);
                                 const initialAmt = inv.initialAmt ?? (Number(inv.amount) || 0);
                                 const invGain = inv.gain ?? (currentVal - initialAmt);
                                 const invGainPct = inv.gainPct ?? (initialAmt > 0 ? Math.round((invGain / initialAmt) * 100) : 0);
@@ -3373,7 +3398,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                         {standaloneInvestments.map(inv => {
                           const invStart = inv.startDate || (inv as any).startDate || inv.date || (inv.createdAt ? getLocalDateString(new Date(inv.createdAt)) : today);
                           const invTarget = inv.targetDate || (inv as any).targetDate || (inv as any).maturityDate || (inv as any).horizonDate || addDaysToDateStr(invStart, 180);
-                          const currentVal = inv.currentVal ?? (Number(inv.currentValue || inv.amount) || 0);
+                          const currentVal = inv.currentVal ?? (Number(inv.currentValue ?? inv.amount) || 0);
                           const initialAmt = inv.initialAmt ?? (Number(inv.amount) || 0);
                           const invGain = inv.gain ?? (currentVal - initialAmt);
                           const invGainPct = inv.gainPct ?? (initialAmt > 0 ? Math.round((invGain / initialAmt) * 100) : 0);
@@ -4043,7 +4068,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3.5 shadow-2xs dark:border-blue-900/60 dark:bg-blue-950/20">
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments Backing</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-blue-600 dark:text-blue-400">
-                ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue || i.amount) || 0), 0).toLocaleString('en-IN')}
+                ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
               </div>
             </div>
           </div>

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Routine, Habit, HabitLog, Goal, Task, TaskPriority, ReminderItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
-import { syncGoalProgressFromHabits, syncGoalProgressFromRoutines, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
+import { resolveHabitGoalId, syncGoalProgressFromHabits, syncGoalProgressFromRoutines, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { alarmService } from '../lib/alarmService';
 import { computeItemDelay } from '../components/ProjectTimelinePlan';
@@ -14,6 +14,7 @@ import { BUILTIN_RINGTONES, useRingtoneOptions, getDefaultRingtoneId } from '../
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { LinkModeSelector } from '../components/LinkModeSelector';
 
 interface RoutineViewProps {
   routines: Routine[];
@@ -427,8 +428,9 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
     // Reflect habit execution in linked Goal progress!
     const targetHabit = habits.find(h => h.id === habitId);
-    if (targetHabit?.goalId) {
-      const res = await syncGoalProgressFromHabits(targetHabit.goalId);
+    const linkedGoalId = targetHabit ? resolveHabitGoalId(targetHabit, routines) : undefined;
+    if (linkedGoalId) {
+      const res = await syncGoalProgressFromHabits(linkedGoalId);
       if (res.targetGoal) {
         onSuccess(`✓ Habit logged! Goal "${res.targetGoal.title}" progress updated to ${res.targetGoal.progress}%`);
       }
@@ -438,7 +440,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   };
 
   const handleToggleRoutineBlock = async (r: Routine) => {
-    const isDone = r.completedDate === today;
+    const isDone = r.completedDate === today || Boolean(r.completedDates?.includes(today));
     const nextDone = !isDone;
     if (nextDone) {
       soundEngine.play('taskComplete');
@@ -448,6 +450,9 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     const updated: Routine = {
       ...r,
       completedDate: nextDone ? today : null,
+      completedDates: nextDone
+        ? Array.from(new Set([...(r.completedDates || []), today]))
+        : (r.completedDates || []).filter(date => date !== today),
       updatedAt: Date.now()
     };
     await storage.put('routines', updated);
@@ -578,6 +583,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     if (!editingHabit) return;
 
     const matchedRoutine = routines.find(r => r.id === editingHabit.linkedRoutineId);
+    const oldHabit = habits.find(h => h.id === editingHabit.id);
+    const oldGoalId = oldHabit ? resolveHabitGoalId(oldHabit, routines) : undefined;
     const updated: Habit = {
       ...editingHabit,
       name: editingHabit.name.trim(),
@@ -588,8 +595,12 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     };
 
     await storage.put('habits', updated);
-    if (updated.goalId) {
-      await syncGoalProgressFromHabits(updated.goalId);
+    const updatedGoalId = resolveHabitGoalId(updated, routines);
+    if (updatedGoalId) {
+      await syncGoalProgressFromHabits(updatedGoalId);
+    }
+    if (oldGoalId && oldGoalId !== updatedGoalId) {
+      await syncGoalProgressFromHabits(oldGoalId);
     }
     onSuccess(`✓ Updated habit "${updated.name}"`);
     setEditingHabit(null);
@@ -628,8 +639,9 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       } else {
         const targetHabit = habits.find(h => h.id === deleteTarget.id);
         await storage.delete('habits', deleteTarget.id);
-        if (targetHabit?.goalId) {
-          await syncGoalProgressFromHabits(targetHabit.goalId);
+        const linkedGoalId = targetHabit ? resolveHabitGoalId(targetHabit, routines) : undefined;
+        if (linkedGoalId) {
+          await syncGoalProgressFromHabits(linkedGoalId);
         }
         onSuccess('✓ Habit deleted');
       }
@@ -792,16 +804,16 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         if (totalRoutineDelays > 0) {
           const firstDelayedTitle = delayedRoutines[0]?.name || delayedHabits[0]?.name || 'Routine Block';
           return (
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border-2 border-rose-500/40 bg-gradient-to-r from-rose-500/15 via-rose-500/10 to-amber-500/15 p-4 dark:border-rose-900/60 dark:bg-rose-950/30">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3 rounded-2xl border border-rose-500/40 bg-gradient-to-r from-rose-500/15 via-rose-500/10 to-amber-500/15 p-3 sm:p-4 dark:border-rose-900/60 dark:bg-rose-950/30">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <span className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white shadow-xs">
                   <span className="h-2.5 w-2.5 rounded-full bg-white animate-ping" />
                 </span>
                 <div>
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
                     <span>Routine & Habit Delays (⚠️ {totalRoutineDelays})</span>
                   </div>
-                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
+                  <h4 className="text-[13px] sm:text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
                     {totalRoutineDelays} items overdue today: {delayedRoutines.length > 0 ? `${delayedRoutines.length} routine time blocks ` : ''}{delayedHabits.length > 0 ? `· ${delayedHabits.length} atomic habits` : ''}
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
@@ -860,39 +872,20 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   Block Title / Purpose
                 </label>
                 {/* Mode Selector: Link Goal vs Manual */}
-                <div className="flex shrink-0 items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                  <button
-                    type="button"
-                    onClick={() => {
+                <LinkModeSelector
+                  value={routineInputMode}
+                  ariaLabel="Routine goal link mode"
+                  options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+                  onChange={mode => {
+                    if (mode === 'link') {
                       setRoutineInputMode('link');
-                      if (goals.length > 0 && !routineGoalId) {
-                        handleSelectGoalForRoutine(goals[0].id);
-                      }
-                    }}
-                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
-                      routineInputMode === 'link'
-                        ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <Link2 className="h-3 w-3" />
-                    <span>Link Goal</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
+                      if (goals.length > 0 && !routineGoalId) handleSelectGoalForRoutine(goals[0].id);
+                    } else {
                       setRoutineInputMode('manual');
                       setRoutineGoalId('');
-                    }}
-                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
-                      routineInputMode === 'manual'
-                        ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <span>Manual</span>
-                  </button>
-                </div>
+                    }
+                  }}
+                />
               </div>
 
               {routineInputMode === 'link' && (
@@ -1088,45 +1081,20 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 </label>
 
                 {/* Mode Selector above Habit Name: Link Goal vs Link Routine vs Manual */}
-                <div className="flex shrink-0 items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                  <button
-                    type="button"
-                    onClick={switchToGoalMode}
-                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
-                      habitInputMode === 'linkGoal'
-                        ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <Link2 className="h-3 w-3" />
-                    <span>Link Goal</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={switchToLinkMode}
-                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
-                      habitInputMode === 'linkRoutine'
-                        ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <Clock className="h-3 w-3" />
-                    <span>Link Routine</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={switchToManualMode}
-                    className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
-                      habitInputMode === 'manual'
-                        ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <span>Manual</span>
-                  </button>
-                </div>
+                <LinkModeSelector
+                  value={habitInputMode}
+                  ariaLabel="Habit goal or routine link mode"
+                  options={[
+                    { value: 'linkGoal', label: 'Link Goal', icon: Target },
+                    { value: 'linkRoutine', label: 'Link Routine', icon: Clock },
+                    { value: 'manual', label: 'Manual' }
+                  ]}
+                  onChange={mode => {
+                    if (mode === 'linkGoal') switchToGoalMode();
+                    else if (mode === 'linkRoutine') switchToLinkMode();
+                    else switchToManualMode();
+                  }}
+                />
               </div>
 
               {habitInputMode === 'linkGoal' && (
@@ -2008,7 +1976,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       {/* TASK GENESIS MODAL WITH AUDIO ALARM SCHEDULING */}
       {genesisModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="w-full max-w-lg max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-2xl space-y-3 sm:space-y-4 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white font-black text-xs">

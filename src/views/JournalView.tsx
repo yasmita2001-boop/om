@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Calendar, Trash2, Edit3,
-  Copy, Check, Search, Volume2, Link2, Target
+  Copy, Check, Search, Volume2, Target
 } from 'lucide-react';
 import { JournalEntry, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -13,6 +13,7 @@ import { globalTextReader } from '../lib/voiceService';
 import { NoteRichEditor } from '../components/NoteRichEditor';
 import { sanitizeHtml } from '../lib/sanitizeHtml';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { LinkModeSelector } from '../components/LinkModeSelector';
 
 interface JournalViewProps {
   journal: JournalEntry[];
@@ -325,39 +326,20 @@ export const JournalView: React.FC<JournalViewProps> = ({
                   Reflection Title / Headline
                 </label>
                 {/* Mode Selector: Link Goal vs Manual */}
-                <div className="flex items-center rounded-lg bg-slate-200/80 p-0.5 dark:bg-slate-700/80">
-                  <button
-                    type="button"
-                    onClick={() => {
+                <LinkModeSelector
+                  value={journalInputMode}
+                  ariaLabel="Journal goal link mode"
+                  options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+                  onChange={mode => {
+                    if (mode === 'link') {
                       setJournalInputMode('link');
-                      if (goals.length > 0 && !journalGoalId) {
-                        handleSelectGoalForJournal(goals[0].id);
-                      }
-                    }}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                      journalInputMode === 'link'
-                        ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <Link2 className="h-3 w-3" />
-                    <span>Link Goal</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
+                      if (goals.length > 0 && !journalGoalId) handleSelectGoalForJournal(goals[0].id);
+                    } else {
                       setJournalInputMode('manual');
                       setJournalGoalId('');
-                    }}
-                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold transition-all cursor-pointer ${
-                      journalInputMode === 'manual'
-                        ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    <span>Manual</span>
-                  </button>
-                </div>
+                    }
+                  }}
+                />
               </div>
 
               {journalInputMode === 'link' && (

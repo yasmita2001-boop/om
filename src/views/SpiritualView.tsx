@@ -28,6 +28,8 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   const [valTitle, setValTitle] = useState('');
   const [valDesc, setValDesc] = useState('');
   const [valType, setValType] = useState<'value' | 'principle'>('value');
+  const [valInputMode, setValInputMode] = useState<'manual' | 'link'>('manual');
+  const [valGoalId, setValGoalId] = useState('');
 
   const [pracName, setPracName] = useState('');
   const [pracFreq, setPracFreq] = useState('Daily');
@@ -35,6 +37,8 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   const [pracGoalId, setPracGoalId] = useState<string>('');
 
   const [commText, setCommText] = useState('');
+  const [commInputMode, setCommInputMode] = useState<'manual' | 'link'>('manual');
+  const [commGoalId, setCommGoalId] = useState('');
 
   // Daily Practice Edit state
   const [editingPractice, setEditingPractice] = useState<SpiritualPractice | null>(null);
@@ -61,13 +65,17 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
       id: generateUUID(),
       title: `${valType === 'principle' ? '[Principle] ' : ''}${valTitle.trim()}`,
       description: valDesc.trim(),
+      goalId: valInputMode === 'link' ? valGoalId || undefined : undefined,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
     await storage.put('values', v);
-    onSuccess(`${valType === 'principle' ? 'Principle' : 'Core Value'} defined`);
+    if (v.goalId) await syncGoalProgressFromSpiritual(v.goalId);
+    onSuccess(`${valType === 'principle' ? 'Principle' : 'Core Value'} defined${v.goalId ? ' & linked to Goal' : ''}`);
     setValTitle('');
     setValDesc('');
+    setValGoalId('');
+    setValInputMode('manual');
     onRefresh();
   };
 
@@ -175,11 +183,15 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     const c: Commitment = {
       id: generateUUID(),
       text: commText.trim(),
+      goalId: commInputMode === 'link' ? commGoalId || undefined : undefined,
       createdAt: Date.now()
     };
     await storage.put('commitments', c);
-    onSuccess('Solemn commitment recorded');
+    if (c.goalId) await syncGoalProgressFromSpiritual(c.goalId);
+    onSuccess(`Solemn commitment recorded${c.goalId ? ' & linked to Goal' : ''}`);
     setCommText('');
+    setCommGoalId('');
+    setCommInputMode('manual');
     onRefresh();
   };
 
@@ -211,9 +223,9 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
       }
       onSuccess('✓ Daily practice deleted');
       onRefresh();
-    } catch {
-      onSuccess('✓ Daily practice deleted');
-      onRefresh();
+    } catch (err) {
+      console.error('Failed to delete daily practice', err);
+      onSuccess('Could not delete daily practice. Please try again.');
     }
   };
 
@@ -245,6 +257,13 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
           </div>
 
           <form onSubmit={handleAddValue} className="mt-4 space-y-2.5">
+            <GoalLinkSelector
+              goals={goals}
+              mode={valInputMode}
+              goalId={valGoalId}
+              onModeChange={setValInputMode}
+              onGoalChange={setValGoalId}
+            />
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -335,7 +354,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               type="text"
               value={pracFreq}
               onChange={e => setPracFreq(e.target.value)}
-              placeholder="Frequency (Daily, Sunrise)"
+              placeholder="Frequency (e.g. Daily, Weekly)"
               className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2.5 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <button
@@ -414,6 +433,13 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
           </div>
 
           <form onSubmit={handleAddCommitment} className="mt-4 space-y-2.5">
+            <GoalLinkSelector
+              goals={goals}
+              mode={commInputMode}
+              goalId={commGoalId}
+              onModeChange={setCommInputMode}
+              onGoalChange={setCommGoalId}
+            />
             <textarea
               rows={2}
               required
@@ -560,7 +586,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                   type="text"
                   value={editPracFreq}
                   onChange={e => setEditPracFreq(e.target.value)}
-                  placeholder="Frequency (Daily, Sunrise, Evening)"
+                  placeholder="Frequency (e.g. Daily, Weekly)"
                   className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>

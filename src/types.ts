@@ -433,7 +433,6 @@ export interface HealthMeasurement {
   steps?: number;
   exercise?: string;
   duration?: number;
-  goalId?: string | null;
   createdAt: number;
 }
 
@@ -442,7 +441,6 @@ export interface SleepRecord {
   date: string;
   hours: number;
   quality?: string;
-  goalId?: string | null;
   createdAt: number;
 }
 
@@ -450,7 +448,6 @@ export interface WaterRecord {
   id: string;
   date: string;
   amount: number; // in ml
-  goalId?: string | null;
   createdAt: number;
 }
 
@@ -459,7 +456,6 @@ export interface NutritionRecord {
   date: string;
   calories?: number;
   note?: string;
-  goalId?: string | null;
   createdAt: number;
 }
 
@@ -526,7 +522,6 @@ export interface Person {
   contact?: string;
   importantDate?: string;
   note?: string;
-  goalId?: string | null;
   createdAt: number;
   updatedAt?: number;
 }
@@ -536,7 +531,6 @@ export interface Interaction {
   personId: string;
   date: string;
   text: string;
-  goalId?: string | null;
   createdAt: number;
 }
 
@@ -988,5 +982,4 @@ export interface RecycleBinItem {
   contentSignature?: string;
   payload?: any;
 }
-
 

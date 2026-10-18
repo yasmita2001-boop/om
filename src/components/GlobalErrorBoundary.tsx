@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, ShieldAlert, RotateCcw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ShieldAlert } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -43,19 +43,6 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     }
   };
 
-  private handleResetCacheAndReload = (): void => {
-    try {
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.clear();
-      }
-      if (typeof window !== 'undefined') {
-        window.location.reload();
-      }
-    } catch {
-      window.location.reload();
-    }
-  };
-
   public render(): ReactNode {
     if (this.state.hasError) {
       return (
@@ -72,7 +59,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                 OM LifeOS - Self Healing Triggered
               </h1>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                An unexpected runtime condition was intercepted by system crash protection. Your application data remains securely preserved in local storage.
+                An unexpected runtime error stopped the app. Your data remains in this browser and has not been cleared.
               </p>
             </div>
 
@@ -98,15 +85,6 @@ export class GlobalErrorBoundary extends Component<Props, State> {
               >
                 <RefreshCw className="h-4 w-4" />
                 <span>Reload System</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={this.handleResetCacheAndReload}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 active:scale-98 px-4 py-3 text-xs font-semibold text-slate-300 transition-all cursor-pointer"
-              >
-                <RotateCcw className="h-4 w-4 text-slate-400" />
-                <span>Reset Cache</span>
               </button>
             </div>
           </div>

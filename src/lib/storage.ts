@@ -39,6 +39,40 @@ import {
 
 import { createLightweightEntities, calculatePayloadBreakdown } from './thumbnailService';
 
+const FOCUS_ALARMS_STORAGE_KEY = 'om_focus_alarms_list';
+
+function getProfileStorageKeys(profileId: string): string[] {
+  const keys = [`${FOCUS_ALARMS_STORAGE_KEY}:${profileId}`];
+  if (profileId === 'om-master-profile' || profileId === 'default') {
+    keys.push(FOCUS_ALARMS_STORAGE_KEY);
+  }
+  return keys;
+}
+
+function removeRoutineAlarmCacheEntries(profileId: string, routineIds: Set<string>): void {
+  if (typeof localStorage === 'undefined' || routineIds.size === 0) return;
+  for (const key of getProfileStorageKeys(profileId)) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    const alarms = JSON.parse(raw);
+    if (!Array.isArray(alarms)) throw new Error(`Invalid focus alarm cache format in ${key}.`);
+    const cleaned = alarms.filter(alarm => !routineIds.has(alarm?.linkedRoutineId));
+    if (cleaned.length !== alarms.length) localStorage.setItem(key, JSON.stringify(cleaned));
+  }
+}
+
+function pruneOrphanedRoutineAlarmCache(profileId: string, activeRoutineIds: Set<string>): void {
+  if (typeof localStorage === 'undefined') return;
+  for (const key of getProfileStorageKeys(profileId)) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    const alarms = JSON.parse(raw);
+    if (!Array.isArray(alarms)) throw new Error(`Invalid focus alarm cache format in ${key}.`);
+    const cleaned = alarms.filter(alarm => !alarm?.linkedRoutineId || activeRoutineIds.has(alarm.linkedRoutineId));
+    if (cleaned.length !== alarms.length) localStorage.setItem(key, JSON.stringify(cleaned));
+  }
+}
+
 // Re-export core constants and types for genuine consumers
 export {
   DB_NAME, DB_VERSION, ENTITY_STORES, SINGLETON_STORES, SYSTEM_STORES,
@@ -59,6 +93,7 @@ class StorageEngine {
   private dbPromise: Promise<IDBDatabase> | null = null;
   private channel: BroadcastChannel | null = null;
   private changeListeners: Set<(store: string, action: string, id?: string) => void> = new Set();
+  private profileOwnershipEnsured = new Set<string>();
   public deviceId: string = generateUUID();
   private activeProfileId: string = 'om-master-profile';
 
@@ -125,6 +160,22 @@ class StorageEngine {
     return this.activeProfileId || 'om-master-profile';
   }
 
+  private belongsToProfile(item: any, profileId: string): boolean {
+    if (!item?.profileId) {
+      return profileId === 'om-master-profile' || profileId === 'default';
+    }
+    if (profileId === 'om-master-profile' || profileId === 'default') {
+      return item.profileId === 'om-master-profile' || item.profileId === 'default';
+    }
+    return item.profileId === profileId;
+  }
+
+  private getScopedSingletonId(storeName: string, profileId = this.getActiveProfileId()): string {
+    return SINGLETON_STORES.includes(storeName)
+      ? `root:${profileId}`
+      : 'root';
+  }
+
   public getAllStoreNames(): string[] {
     if (this.db) {
       return Array.from(this.db.objectStoreNames);
@@ -134,7 +185,11 @@ class StorageEngine {
 
   private withActiveProfile<T extends { id: string }>(storeName: string, item: T): T {
     if (SINGLETON_STORES.includes(storeName) || SYSTEM_STORES.includes(storeName)) return item;
-    const targetProfileId = (item as any).profileId || this.activeProfileId || 'om-master-profile';
+    const activeProfileId = this.getActiveProfileId();
+    if ((item as any).profileId && !this.belongsToProfile(item, activeProfileId)) {
+      throw new Error(`Cannot write a record owned by another workspace into "${storeName}".`);
+    }
+    const targetProfileId = (item as any).profileId || activeProfileId;
     return { ...(item as any), profileId: targetProfileId } as T;
   }
 
@@ -254,7 +309,20 @@ class StorageEngine {
         const tx = db.transaction(storeName, 'readonly');
         const store = tx.objectStore(storeName);
         const req = store.get(id);
-        req.onsuccess = () => resolve(req.result || null);
+        req.onsuccess = () => {
+          const item = req.result;
+          if (!item) return resolve(null);
+          if (SINGLETON_STORES.includes(storeName)) {
+            return resolve(this.belongsToProfile({ profileId: item.profileId }, this.getActiveProfileId()) ? item.value : null);
+          }
+          if (storeName === 'appliedBundles') {
+            return resolve(item);
+          }
+          if (storeName !== 'recycleBin' && storeName !== 'tombstones' && !isRecordActive(item)) return resolve(null);
+          const target = this.activeProfileId || 'om-master-profile';
+          if (!this.belongsToProfile(item, target)) return resolve(null);
+          resolve(item);
+        };
         req.onerror = () => reject(req.error);
       } catch (err) {
         reject(err);
@@ -271,18 +339,21 @@ class StorageEngine {
         const req = store.getAll();
         req.onsuccess = () => {
           const results: T[] = req.result || [];
-          if (SINGLETON_STORES.includes(storeName) || SYSTEM_STORES.includes(storeName)) {
+          if (SINGLETON_STORES.includes(storeName)) {
+            const target = profileId || this.activeProfileId || 'om-master-profile';
+            const scopedId = `root:${target}`;
+            const scoped = results.find((item: any) => item?.id === scopedId);
+            const canUseLegacy = !target.startsWith('google-');
+            return resolve(scoped ? [scoped] : (canUseLegacy ? results.filter((item: any) => item?.id === 'root') : []));
+          }
+          if (storeName === 'appliedBundles') {
             return resolve(results);
           }
           const target = profileId || this.activeProfileId || 'om-master-profile';
           const filtered = results.filter((item: any) => {
             if (!item) return false;
-            if (!isRecordActive(item)) return false;
-            if (!item.profileId || !target) return true;
-            if (target === 'om-master-profile' || target === 'default') {
-              return item.profileId === 'om-master-profile' || item.profileId === 'default' || !item.profileId;
-            }
-            return item.profileId === target;
+            if (storeName !== 'recycleBin' && storeName !== 'tombstones' && !isRecordActive(item)) return false;
+            return this.belongsToProfile(item, target);
           });
           resolve(filtered);
         };
@@ -308,16 +379,54 @@ class StorageEngine {
     });
   }
 
-  public async getSingleton<T>(storeName: string): Promise<T | null> {
+  public async getSingleton<T>(storeName: string, profileId = this.getActiveProfileId()): Promise<T | null> {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       try {
-        const tx = db.transaction(storeName, 'readonly');
+        const canUseLegacy = !profileId.startsWith('google-');
+        const tx = db.transaction(storeName, canUseLegacy ? 'readwrite' : 'readonly');
         const store = tx.objectStore(storeName);
-        const req = store.get('root');
+        const req = store.get(this.getScopedSingletonId(storeName, profileId));
+        let value: T | null = null;
         req.onsuccess = () => {
           const item = req.result;
-          resolve(item ? item.value : null);
+          if (item) {
+            value = item.value;
+          } else if (canUseLegacy) {
+            const legacyReq = store.get('root');
+            legacyReq.onsuccess = () => {
+              const legacy = legacyReq.result;
+              if (legacy) {
+                value = legacy.value;
+                store.put({ id: this.getScopedSingletonId(storeName, profileId), value: legacy.value, profileId });
+                if (profileId !== 'om-master-profile' && profileId !== 'default') {
+                  store.delete('root');
+                }
+              }
+            };
+            legacyReq.onerror = () => reject(legacyReq.error);
+          }
+        };
+        req.onerror = () => reject(req.error);
+        tx.oncomplete = () => resolve(value);
+        tx.onerror = () => reject(tx.error);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  public async setSingleton<T>(storeName: string, value: T, profileId = this.getActiveProfileId()): Promise<void> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const id = this.getScopedSingletonId(storeName, profileId);
+        const req = store.put({ id, value, profileId });
+        req.onsuccess = () => {
+          this.broadcastChange(storeName, 'set', id);
+          resolve();
         };
         req.onerror = () => reject(req.error);
       } catch (err) {
@@ -326,18 +435,18 @@ class StorageEngine {
     });
   }
 
-  public async setSingleton<T>(storeName: string, value: T): Promise<void> {
+  public async deleteSingleton(storeName: string, profileId = this.getActiveProfileId()): Promise<void> {
     const db = await this.open();
+    const id = this.getScopedSingletonId(storeName, profileId);
     return new Promise((resolve, reject) => {
       try {
         const tx = db.transaction(storeName, 'readwrite');
-        const store = tx.objectStore(storeName);
-        const req = store.put({ id: 'root', value });
-        req.onsuccess = () => {
-          this.broadcastChange(storeName, 'set', 'root');
+        tx.objectStore(storeName).delete(id);
+        tx.oncomplete = () => {
+          this.broadcastChange(storeName, 'delete', id);
           resolve();
         };
-        req.onerror = () => reject(req.error);
+        tx.onerror = () => reject(tx.error);
       } catch (err) {
         reject(err);
       }
@@ -365,13 +474,14 @@ class StorageEngine {
 
   public async bulkPut<T extends { id: string }>(storeName: string, items: T[]): Promise<void> {
     if (!items.length) return;
+    const preparedItems = items.map(item => this.withActiveProfile(storeName, item));
     const db = await this.open();
     return new Promise((resolve, reject) => {
       try {
         const tx = db.transaction(storeName, 'readwrite');
         const store = tx.objectStore(storeName);
-        for (const item of items) {
-          store.put(this.withActiveProfile(storeName, item));
+        for (const item of preparedItems) {
+          store.put(item);
         }
         tx.oncomplete = () => {
           this.broadcastChange(storeName, 'bulkPut');
@@ -392,6 +502,7 @@ class StorageEngine {
   }
 
   public async hardDelete(storeName: string, id: string): Promise<void> {
+    if ((ENTITY_STORES.includes(storeName) || storeName === 'recycleBin') && !await this.get(storeName, id)) return;
     const db = await this.open();
     return new Promise((resolve, reject) => {
       try {
@@ -415,12 +526,24 @@ class StorageEngine {
       try {
         const tx = db.transaction(storeName, 'readwrite');
         const store = tx.objectStore(storeName);
-        const req = store.clear();
-        req.onsuccess = () => {
+        if (SINGLETON_STORES.includes(storeName)) {
+          store.delete(this.getScopedSingletonId(storeName));
+        } else if (ENTITY_STORES.includes(storeName) || storeName === 'recycleBin' || storeName === 'tombstones') {
+          const req = store.openCursor();
+          req.onsuccess = () => {
+            const cursor = req.result;
+            if (!cursor) return;
+            if (this.belongsToProfile(cursor.value, this.getActiveProfileId())) cursor.delete();
+            cursor.continue();
+          };
+        } else {
+          store.clear();
+        }
+        tx.oncomplete = () => {
           this.broadcastChange(storeName, 'clear');
           resolve();
         };
-        req.onerror = () => reject(req.error);
+        tx.onerror = () => reject(tx.error);
       } catch (err) {
         reject(err);
       }
@@ -429,14 +552,17 @@ class StorageEngine {
 
   public async atomicPutMany(items: { storeName: string; item: any }[]): Promise<void> {
     if (!items.length) return;
+    const preparedItems = items.map(({ storeName, item }) => ({
+      storeName,
+      item: this.withActiveProfile(storeName, item)
+    }));
     const db = await this.open();
-    const storeNames = Array.from(new Set(items.map(i => i.storeName)));
+    const storeNames = Array.from(new Set(preparedItems.map(i => i.storeName)));
     return new Promise((resolve, reject) => {
       try {
         const tx = db.transaction(storeNames, 'readwrite');
-        for (const { storeName, item } of items) {
-          const prepared = this.withActiveProfile(storeName, item);
-          tx.objectStore(storeName).put(prepared);
+        for (const { storeName, item } of preparedItems) {
+          tx.objectStore(storeName).put(item);
         }
         tx.oncomplete = () => {
           for (const s of storeNames) {
@@ -452,9 +578,9 @@ class StorageEngine {
   }
 
   public async ensureProfileOwnership(profileId: string): Promise<void> {
-    if (!profileId) return;
+    if (!profileId || this.profileOwnershipEnsured.has(profileId)) return;
     const db = await this.open();
-    for (const storeName of ENTITY_STORES) {
+    for (const storeName of [...ENTITY_STORES, 'recycleBin', 'tombstones']) {
       if (!db.objectStoreNames.contains(storeName)) continue;
       const rows = await this.getAllRaw<any>(storeName);
       const unowned = rows.filter(r => r && !r.profileId);
@@ -470,6 +596,7 @@ class StorageEngine {
         });
       }
     }
+    this.profileOwnershipEnsured.add(profileId);
   }
 
   // --------------------------------------------------------------------------
@@ -745,34 +872,75 @@ class StorageEngine {
   }
 
   public async permanentlyDeleteFromRecycleBin(binId: string): Promise<boolean> {
+    const recycleItem = await this.get<RecycleBinItem>('recycleBin', binId);
+    if (!recycleItem) return false;
     const db = await this.open();
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       try {
-        const tx = db.transaction(['recycleBin', 'tombstones'], 'readwrite');
+        const stores = ['recycleBin', 'tombstones'];
+        if (db.objectStoreNames.contains('attachments')) stores.push('attachments');
+        const tx = db.transaction(stores, 'readwrite');
         tx.objectStore('recycleBin').delete(binId);
         const tombStore = tx.objectStore('tombstones');
         const req = tombStore.get(binId);
         req.onsuccess = () => {
           const tomb = req.result;
-          const parts = binId.split(':');
-          const storeName = parts[0];
-          const recordId = parts.slice(1).join(':') || binId;
+          const storeName = recycleItem.storeName;
+          const recordId = recycleItem.recordId;
           if (tomb) {
-            tombStore.put({ ...tomb, permanentlyDeleted: true, purgedAt: Date.now() });
+            const { contentSignature: _contentSignature, ...minimalTombstone } = tomb;
+            tombStore.put({ ...minimalTombstone, permanentlyDeleted: true, purgedAt: Date.now() });
           } else {
             tombStore.put({
               id: binId,
               storeName,
               recordId,
-              profileId: this.activeProfileId || 'default',
+              profileId: recycleItem.profileId,
               deletedAt: Date.now(),
               purgedAt: Date.now(),
               permanentlyDeleted: true
             });
           }
+
+          if (stores.includes('attachments')) {
+            const attachmentIds = new Set(
+              (Array.isArray(recycleItem.data?.attachments) ? recycleItem.data.attachments : [])
+                .map((attachment: any) => {
+                  if (typeof attachment !== 'string') return attachment?.id;
+                  try {
+                    return JSON.parse(attachment)?.id;
+                  } catch {
+                    return undefined;
+                  }
+                })
+                .filter(Boolean)
+            );
+            const attachmentCursor = tx.objectStore('attachments').openCursor();
+            attachmentCursor.onsuccess = () => {
+              const cursor = attachmentCursor.result;
+              if (!cursor) return;
+              const attachment = cursor.value;
+              if (
+                this.belongsToProfile(attachment, recycleItem.profileId) &&
+                (attachment.parentId === recordId || attachmentIds.has(attachment.id))
+              ) {
+                cursor.delete();
+              }
+              cursor.continue();
+            };
+          }
         };
         tx.oncomplete = () => {
           this.broadcastChange('recycleBin', 'delete', binId);
+          this.broadcastChange('attachments', 'purge', binId);
+          try {
+            if (recycleItem.storeName === 'routines') {
+              removeRoutineAlarmCacheEntries(recycleItem.profileId, new Set([recycleItem.recordId]));
+            }
+          } catch (error) {
+            reject(new Error(`The record was deleted, but its linked routine alarm cache could not be cleared: ${error instanceof Error ? error.message : 'storage error'}`));
+            return;
+          }
           resolve(true);
         };
         tx.onerror = () => resolve(false);
@@ -785,19 +953,13 @@ class StorageEngine {
   public async getRecycleBinItems(profileId?: string): Promise<RecycleBinItem[]> {
     const raw = await this.getAllRaw<RecycleBinItem>('recycleBin');
     const target = profileId || this.activeProfileId || 'om-master-profile';
-    return raw.filter(item => {
-      if (!item) return false;
-      if (!item.profileId || !target) return true;
-      if (target === 'om-master-profile' || target === 'default') {
-        return item.profileId === 'om-master-profile' || item.profileId === 'default' || !item.profileId;
-      }
-      return item.profileId === target;
-    });
+    return raw.filter(item => item && this.belongsToProfile(item, target));
   }
 
   public async emptyRecycleBin(profileId?: string): Promise<number> {
     const db = await this.open();
-    const res = await permanentlyEmptyRecycleBin(db, ENTITY_STORES, profileId);
+    const target = profileId || this.activeProfileId || 'om-master-profile';
+    const res = await permanentlyEmptyRecycleBin(db, ENTITY_STORES, target);
     this.broadcastChange('recycleBin', 'empty');
     return res.totalPurged;
   }
@@ -1036,14 +1198,7 @@ class StorageEngine {
 
     for (const storeName of ENTITY_STORES) {
       const allRows = await this.getAllRaw<any>(storeName);
-      const profileRows = allRows.filter(r => {
-        if (!r) return false;
-        if (!r.profileId || !profileId) return true;
-        if (profileId === 'om-master-profile' || profileId === 'default') {
-          return r.profileId === 'om-master-profile' || r.profileId === 'default' || !r.profileId;
-        }
-        return r.profileId === profileId;
-      });
+      const profileRows = allRows.filter(r => r && this.belongsToProfile(r, profileId));
       entities[storeName] = profileRows;
 
       for (const row of profileRows) {
@@ -1193,6 +1348,10 @@ export async function ensureDefaultProfiles(): Promise<AppState> {
 export async function purgeAllDefaultDataPermanently(): Promise<{ success: boolean; purgedCount: number; storesAffected: string[] }> {
   let totalPurged = 0;
   const affectedStores: string[] = [];
+  const profileId = storage.getActiveProfileId();
+  const isGuestProfile = profileId === 'om-master-profile' || profileId === 'default';
+  const belongsToProfile = (item: any) => item?.profileId === profileId ||
+    (isGuestProfile && (!item?.profileId || item.profileId === 'om-master-profile' || item.profileId === 'default'));
 
   const KNOWN_SEED_TITLES = new Set([
     'define quarterly milestones and high-impact strategy',
@@ -1227,62 +1386,55 @@ export async function purgeAllDefaultDataPermanently(): Promise<{ success: boole
     return false;
   };
 
-  try {
-    const db = await storage.open();
-    const allStoreNames = Array.from(db.objectStoreNames);
+  const db = await storage.open();
+  const allStoreNames = Array.from(db.objectStoreNames);
 
-    for (const storeName of allStoreNames) {
-      if (storeName === 'appSettings') {
-        continue;
-      }
+  for (const storeName of allStoreNames) {
+    if (storeName === 'appSettings') continue;
 
-      try {
-        const keysToDelete: IDBValidKey[] = [];
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(storeName, 'readonly');
-          const st = tx.objectStore(storeName);
-          const req = st.openCursor();
-          req.onsuccess = (e: any) => {
-            const cursor = e.target.result;
-            if (cursor) {
-              const val = cursor.value;
-              if (isSeedRecord(val)) {
-                keysToDelete.push(cursor.key);
-              }
-              cursor.continue();
-            } else {
-              resolve();
-            }
-          };
-          req.onerror = () => reject(req.error);
-        });
-
-        if (keysToDelete.length > 0) {
-          await new Promise<void>((resolve, reject) => {
-            const tx = db.transaction(storeName, 'readwrite');
-            const st = tx.objectStore(storeName);
-            for (const key of keysToDelete) {
-              st.delete(key);
-            }
-            tx.oncomplete = () => {
-              totalPurged += keysToDelete.length;
-              affectedStores.push(storeName);
-              resolve();
-            };
-            tx.onerror = () => reject(tx.error);
-          });
+    const keysToDelete: IDBValidKey[] = [];
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const req = tx.objectStore(storeName).openCursor();
+      req.onsuccess = (e: any) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          const val = cursor.value;
+          const isProfileScoped = ENTITY_STORES.includes(storeName) || storeName === 'recycleBin' || storeName === 'tombstones';
+          if ((!isProfileScoped || belongsToProfile(val)) && isSeedRecord(val)) {
+            keysToDelete.push(cursor.key);
+          }
+          cursor.continue();
+        } else {
+          resolve();
         }
-      } catch (err) {
-        console.warn(`[purgeAllDefaultDataPermanently] Error scanning ${storeName}:`, err);
-      }
+      };
+      req.onerror = () => reject(req.error || new Error(`Failed to scan ${storeName}.`));
+      tx.onerror = () => reject(tx.error || new Error(`Failed to scan ${storeName}.`));
+    });
+
+    if (keysToDelete.length > 0) {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        for (const key of keysToDelete) store.delete(key);
+        tx.oncomplete = () => {
+          totalPurged += keysToDelete.length;
+          affectedStores.push(storeName);
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error || new Error(`Failed to remove default records from ${storeName}.`));
+        tx.onabort = () => reject(tx.error || new Error(`Removing default records from ${storeName} was aborted.`));
+      });
     }
-  } catch (err) {
-    console.warn('[purgeAllDefaultDataPermanently] Database connection notice:', err);
   }
 
   // Also clean focus alarms in localStorage
-  try {
-    const rawAlarms = localStorage.getItem('om_focus_alarms_list');
+  if (typeof localStorage !== 'undefined') {
+    const profileId = storage.getActiveProfileId();
+    const key = `om_focus_alarms_list:${profileId}`;
+    const rawAlarms = localStorage.getItem(key) ||
+      (profileId === 'om-master-profile' ? localStorage.getItem('om_focus_alarms_list') : null);
     if (rawAlarms) {
       const parsed = JSON.parse(rawAlarms);
       if (Array.isArray(parsed)) {
@@ -1293,10 +1445,10 @@ export async function purgeAllDefaultDataPermanently(): Promise<{ success: boole
             affectedStores.push('localStorage:focusAlarms');
           }
         }
-        localStorage.setItem('om_focus_alarms_list', JSON.stringify(cleaned));
+        localStorage.setItem(key, JSON.stringify(cleaned));
       }
     }
-  } catch {}
+  }
 
   // Broadcast cross-tab and cross-component update
   storage.broadcastChange('all', 'purgeDefaultData');
@@ -1309,18 +1461,7 @@ export async function seedInitialDataIfEmpty(): Promise<boolean> {
   if (!existingSettings) {
     await ensureDefaultProfiles();
   }
-  // Guarantee zero default or seed records exist in the database or local storage
-  await purgeAllDefaultDataPermanently();
   return false;
-}
-
-export async function restoreDefaultWorkspaceData(
-  _targetProfileId: string = 'om-master-profile'
-): Promise<{ success: boolean; restoredCount: number }> {
-  // All default data sources have been permanently decommissioned.
-  // Performs a clean purge instead of injecting demo data.
-  const purgeResult = await purgeAllDefaultDataPermanently();
-  return { success: true, restoredCount: 0 };
 }
 
 /**
@@ -1332,6 +1473,7 @@ export async function restoreDefaultWorkspaceData(
 export async function cleanOrphanedCacheAndTrash(options?: {
   emptyRecycleBinFirst?: boolean;
   profileId?: string;
+  clearBrowserCaches?: boolean;
 }): Promise<{
   purgedRecycleCount: number;
   purgedOrphanedAttachments: number;
@@ -1340,82 +1482,79 @@ export async function cleanOrphanedCacheAndTrash(options?: {
   let purgedRecycleCount = 0;
   let purgedOrphanedAttachments = 0;
   let clearedCacheKeys = 0;
+  const db = await storage.open();
+  const profileId = options?.profileId || storage.getActiveProfileId();
 
-  try {
-    const db = await storage.open();
+  if (options?.emptyRecycleBinFirst) {
+    const emptyRes = await permanentlyEmptyRecycleBin(db, ENTITY_STORES, profileId);
+    purgedRecycleCount = emptyRes.totalPurged;
+  }
 
-    // 1. If requested, permanently empty Recycle Bin
-    if (options?.emptyRecycleBinFirst) {
-      const emptyRes = await permanentlyEmptyRecycleBin(db, ENTITY_STORES, options?.profileId);
-      purgedRecycleCount = emptyRes.totalPurged;
-    }
+  if (db.objectStoreNames.contains('attachments')) {
+    const isGuest = profileId === 'om-master-profile' || profileId === 'default';
+    const belongsToProfile = (item: any) =>
+      item?.profileId === profileId ||
+      (isGuest && (!item?.profileId || item.profileId === 'om-master-profile' || item.profileId === 'default'));
+    const retainedParentIds = new Set<string>();
 
-    // 2. Scan attachments store for orphaned records (where parent record was permanently deleted)
-    if (db.objectStoreNames.contains('attachments')) {
-      try {
-        const allAttachments = await storage.getAllRaw<any>('attachments');
-        if (allAttachments.length > 0) {
-          // Gather all active record IDs across all entity stores
-          const activeEntityIds = new Set<string>();
-          for (const sName of ['notes', 'journal', 'things', 'receipts', 'documents', 'tasks', 'finance']) {
-            if (db.objectStoreNames.contains(sName)) {
-              try {
-                const records = await storage.getAllRaw<any>(sName);
-                records.forEach(r => {
-                  if (r && r.id && !r.inRecycleBin && !r.isDeleted) {
-                    activeEntityIds.add(r.id);
-                  }
-                });
-              } catch {}
-            }
-          }
-
-          // Orphaned attachments have no living parent entity
-          const orphanedIds = allAttachments
-            .filter(att => att && att.id && att.parentId && !activeEntityIds.has(att.parentId))
-            .map(att => att.id);
-
-          if (orphanedIds.length > 0) {
-            await new Promise<void>((resolve) => {
-              const tx = db.transaction('attachments', 'readwrite');
-              const os = tx.objectStore('attachments');
-              for (const id of orphanedIds) {
-                os.delete(id);
-              }
-              tx.oncomplete = () => {
-                purgedOrphanedAttachments = orphanedIds.length;
-                resolve();
-              };
-              tx.onerror = () => resolve();
-            });
-          }
+    for (const storeName of ENTITY_STORES.filter(name => name !== 'attachments')) {
+      if (!db.objectStoreNames.contains(storeName)) continue;
+      const records = await storage.getAllRaw<any>(storeName);
+      for (const record of records) {
+        if (record?.id && belongsToProfile(record) && isRecordActive(record)) {
+          retainedParentIds.add(record.id);
         }
-      } catch (err) {
-        console.warn('[cleanOrphanedCacheAndTrash] Error checking attachments:', err);
       }
     }
 
-    // 3. Purge browser Cache Storage
-    if (typeof window !== 'undefined' && 'caches' in window) {
-      try {
-        const keys = await caches.keys();
-        for (const k of keys) {
-          await caches.delete(k).catch(() => {});
-          clearedCacheKeys++;
-        }
-      } catch {}
+    if (!options?.emptyRecycleBinFirst && db.objectStoreNames.contains('recycleBin')) {
+      const recycleItems = await storage.getRecycleBinItems(profileId);
+      recycleItems.forEach(item => retainedParentIds.add(item.recordId));
     }
 
-    // 4. Send message to Service Worker to wipe internal caches
-    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      try {
-        navigator.serviceWorker.controller.postMessage({ action: 'CLEAR_ALL_CACHES' });
-      } catch {}
+    const activeRoutineIds = new Set(
+      (await storage.getAllRaw<any>('routines'))
+        .filter(item => belongsToProfile(item) && isRecordActive(item))
+        .map(item => item.id)
+    );
+    if (!options?.emptyRecycleBinFirst && db.objectStoreNames.contains('recycleBin')) {
+      const recycleItems = await storage.getRecycleBinItems(profileId);
+      recycleItems
+        .filter(item => item.storeName === 'routines')
+        .forEach(item => activeRoutineIds.add(item.recordId));
     }
+    pruneOrphanedRoutineAlarmCache(profileId, activeRoutineIds);
 
-    storage.broadcastChange('all', 'cleanCacheAndTrash');
-  } catch (err) {
-    console.warn('[cleanOrphanedCacheAndTrash] Error during cleanup:', err);
+    const attachments = (await storage.getAllRaw<any>('attachments')).filter(belongsToProfile);
+    const orphanedIds = attachments
+      .filter(item => item?.id && (!item.parentId || !retainedParentIds.has(item.parentId)))
+      .map(item => item.id);
+
+    if (orphanedIds.length > 0) {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('attachments', 'readwrite');
+        const store = tx.objectStore('attachments');
+        for (const id of orphanedIds) store.delete(id);
+        tx.oncomplete = () => {
+          purgedOrphanedAttachments = orphanedIds.length;
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error || new Error('Failed to delete orphaned attachment data.'));
+        tx.onabort = () => reject(tx.error || new Error('Orphaned attachment cleanup was aborted.'));
+      });
+    }
+  }
+
+  storage.broadcastChange('all', 'cleanCacheAndTrash');
+
+  if (options?.clearBrowserCaches !== false && typeof window !== 'undefined' && 'caches' in window) {
+    const cacheNames = await caches.keys();
+    for (const cacheName of cacheNames) {
+      if (!await caches.delete(cacheName)) {
+        throw new Error(`Failed to delete browser cache "${cacheName}".`);
+      }
+      clearedCacheKeys++;
+    }
   }
 
   return {
@@ -1426,87 +1565,47 @@ export async function cleanOrphanedCacheAndTrash(options?: {
 }
 
 export async function performHardAppReset(): Promise<void> {
-  try {
-    storage.close();
-  } catch {}
+  storage.close();
 
-  // 1. Notify Service Worker to clear all caches first
-  try {
-    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-      if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ action: 'CLEAR_ALL_CACHES' });
-      }
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      for (const reg of registrations) {
-        await reg.unregister().catch(() => {});
-      }
-    }
-  } catch {}
-
-  // 2. Clear all Cache Storage instances
-  try {
-    if (typeof window !== 'undefined' && 'caches' in window) {
-      const keys = await caches.keys();
-      for (const k of keys) {
-        await caches.delete(k).catch(() => {});
-      }
-    }
-  } catch {}
-
-  // 3. Clear IndexedDB directly by clearing object stores before database deletion
-  try {
-    const dbReq = indexedDB.open(DB_NAME);
-    await new Promise<void>((resolve) => {
-      dbReq.onsuccess = () => {
-        const db = dbReq.result;
-        try {
-          const storeNames = Array.from(db.objectStoreNames);
-          if (storeNames.length > 0) {
-            const tx = db.transaction(storeNames, 'readwrite');
-            storeNames.forEach(name => {
-              try { tx.objectStore(name).clear(); } catch {}
-            });
-            tx.oncomplete = () => {
-              db.close();
-              resolve();
-            };
-            tx.onerror = () => {
-              db.close();
-              resolve();
-            };
-          } else {
-            db.close();
-            resolve();
-          }
-        } catch {
-          db.close();
-          resolve();
-        }
-      };
-      dbReq.onerror = () => resolve();
+  if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(DB_NAME);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error || new Error('Failed to delete the local database.'));
+      req.onblocked = () => reject(new Error('Close other Om LifeOS tabs, then retry the database reset.'));
     });
-  } catch {}
-
-  // 4. Delete the database
-  try {
-    if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
-      await new Promise<void>((resolve) => {
-        const req = indexedDB.deleteDatabase(DB_NAME);
-        req.onsuccess = () => resolve();
-        req.onerror = () => resolve();
-        req.onblocked = () => resolve();
-        setTimeout(resolve, 800);
-      });
-    }
-  } catch {}
-
-  // 5. Clear localStorage & sessionStorage
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.clear();
-    if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
-  } catch {}
-
-  if (typeof window !== 'undefined') {
-    window.location.reload();
   }
+
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    for (const registration of registrations) {
+      if (!await registration.unregister()) {
+        throw new Error('Failed to unregister a service worker during database reset.');
+      }
+    }
+  }
+
+  if (typeof window !== 'undefined' && 'caches' in window) {
+    const cacheNames = await caches.keys();
+    for (const cacheName of cacheNames) {
+      if (!await caches.delete(cacheName)) {
+        throw new Error(`Failed to delete browser cache "${cacheName}" during database reset.`);
+      }
+    }
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    const pendingDrivePurges: Array<[string, string]> = [];
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (key?.startsWith('om_gdrive_backup_purge_pending:')) {
+        const value = localStorage.getItem(key);
+        if (value === 'true') pendingDrivePurges.push([key, value]);
+      }
+    }
+    localStorage.clear();
+    for (const [key, value] of pendingDrivePurges) localStorage.setItem(key, value);
+  }
+  if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
+  if (typeof window !== 'undefined') window.location.reload();
 }

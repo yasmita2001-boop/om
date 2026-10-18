@@ -401,7 +401,16 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   const [isStandaloneExpanded, setIsStandaloneExpanded] = useState<boolean>(true);
   const [isStandaloneFinanceExpanded, setIsStandaloneFinanceExpanded] = useState<boolean>(true);
   const [isStandalonePeopleExpanded, setIsStandalonePeopleExpanded] = useState<boolean>(true);
-  const [isMobileCompactView, setIsMobileCompactView] = useState<boolean>(false);
+  const [isMobileCompactView, setIsMobileCompactView] = useState<boolean>(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+  );
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia('(max-width: 639px)');
+    const updateCompactView = () => setIsMobileCompactView(mobileQuery.matches);
+    mobileQuery.addEventListener('change', updateCompactView);
+    return () => mobileQuery.removeEventListener('change', updateCompactView);
+  }, []);
 
   // Quick Reschedule Popover State
   const [rescheduleTarget, setRescheduleTarget] = useState<{
@@ -2006,9 +2015,9 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
           </div>
 
           {/* Granularity Switcher & Period Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-200/80 bg-slate-100/60 px-3 sm:px-4 py-2 dark:border-slate-800/80 dark:bg-slate-800/30">
+          <div className="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-2.5 border-b border-slate-200/80 bg-slate-100/60 px-3 sm:px-4 py-2 dark:border-slate-800/80 dark:bg-slate-800/30">
             {/* 5 Granularities */}
-            <div className="flex max-w-full min-w-0 flex-1 flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-white p-1 shadow-2xs dark:border-slate-700/80 dark:bg-slate-900">
+            <div className="flex w-full max-w-full min-w-0 flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-white p-1 shadow-2xs dark:border-slate-700/80 dark:bg-slate-900 sm:w-auto sm:flex-1">
               <button
                 type="button"
                 onClick={() => { setTimelineGranularity('single_day'); setTimelineOffset(0); }}
@@ -2067,7 +2076,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             </div>
 
             {/* Previous / Current / Next Controls */}
-            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 sm:ml-auto">
+            <div className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto">
               <button
                 type="button"
                 onClick={() => setTimelineOffset(prev => prev - 1)}
@@ -2133,7 +2142,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
 
           {/* Timeline Table Body */}
           <div className="overflow-x-auto no-scrollbar">
-            <div className="min-w-[850px]">
+            <div className="min-w-[720px] sm:min-w-[850px]">
               {/* Timeline Header Row (Sticky left title column) */}
               <div className="flex border-b border-slate-200 bg-slate-100/70 text-center text-[10px] font-bold text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-400">
                 <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} shrink-0 p-2 text-left pl-3 sm:pl-4 font-semibold text-slate-700 dark:text-slate-300 sticky left-0 z-30 bg-slate-100/95 dark:bg-slate-800/95 backdrop-blur-xs border-r border-slate-200 dark:border-slate-800 transition-all`}>

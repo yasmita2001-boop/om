@@ -52,6 +52,8 @@ const calculateFinances = (finance: FinanceTransaction[]) => {
   let expense = 0;
   let investment = 0;
   let savingsFlow = 0;
+  let savingsDeposits = 0;
+  let savingsWithdrawals = 0;
   let loanRepay = 0;
   let loanReceived = 0;
   finance.forEach(f => {
@@ -59,14 +61,20 @@ const calculateFinances = (finance: FinanceTransaction[]) => {
     if (f.type === 'income') income += amt;
     else if (f.type === 'expense') expense += amt;
     else if (f.type === 'investment') investment += amt;
-    else if (f.type === 'savings') savingsFlow += amt;
+    else if (f.type === 'savings') {
+      savingsFlow += amt;
+      savingsDeposits += amt;
+    } else if (f.type === 'savingsWithdrawal') {
+      savingsFlow -= amt;
+      savingsWithdrawals += amt;
+    }
     else if (f.type === 'repayment') loanRepay += amt;
     else if (f.type === 'loan') loanReceived += amt;
   });
   const operatingCashFlow = income - expense;
   const netCashFlow = operatingCashFlow - investment - savingsFlow - loanRepay + loanReceived;
-  const totalInflow = income + loanReceived;
-  const totalOutflow = expense + investment + savingsFlow + loanRepay;
+  const totalInflow = income + loanReceived + savingsWithdrawals;
+  const totalOutflow = expense + investment + savingsDeposits + loanRepay;
   return { totalInflow, totalOutflow, netCashFlow };
 };
 

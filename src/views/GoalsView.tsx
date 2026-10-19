@@ -874,10 +874,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
   // Mentor Strategy state
   const [mentorMission, setMentorMission] = useState(mentor?.mission || '');
-  const [survivalReserve, setSurvivalReserve] = useState(mentor?.survivalReserve || 100000);
-  const [emergencyReserve, setEmergencyReserve] = useState(mentor?.emergencyReserve || 50000);
-  const [dailyBurn, setDailyBurn] = useState(mentor?.dailyBurn || 800);
-  const [savingGoal, setSavingGoal] = useState(mentor?.savingGoalAmount || 500000);
+  const [survivalReserve, setSurvivalReserve] = useState(mentor?.survivalReserve ?? 100000);
+  const [emergencyReserve, setEmergencyReserve] = useState(mentor?.emergencyReserve ?? 50000);
+  const [dailyBurn, setDailyBurn] = useState(mentor?.dailyBurn ?? 800);
+  const [savingGoal, setSavingGoal] = useState(mentor?.savingGoalAmount ?? 500000);
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<{ store: string; id: string; name: string } | null>(null);
@@ -910,8 +910,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
   const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   const totalReserves = Number(survivalReserve) + Number(emergencyReserve);
-  const runwayDays = dailyBurn > 0 ? Math.floor(liquidCash / dailyBurn) : 0;
+  const flexibleSavings = savingsPlans
+    .filter(plan => plan.productType !== 'fixed_deposit')
+    .reduce((sum, plan) => sum + (Number(plan.currentAmount) || 0), 0);
+  const accessibleReserveCapital = liquidCash + flexibleSavings;
+  const runwayDays = dailyBurn > 0 ? Math.max(0, Math.floor(accessibleReserveCapital / dailyBurn)) : 0;
   const runwayMonths = (runwayDays / 30).toFixed(1);
+  const reserveCoverage = totalReserves > 0
+    ? Math.max(0, Math.min(100, (accessibleReserveCapital / totalReserves) * 100))
+    : 0;
 
   const handleAddGoal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1025,15 +1032,20 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
   const handleAddKPI = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!kpiName.trim()) return;
+    const target = Number(kpiTarget);
+    const current = kpiCurrent.trim() === '' ? 0 : Number(kpiCurrent);
+    if (!kpiName.trim() || !Number.isFinite(target) || target <= 0 || !Number.isFinite(current) || current < 0) {
+      onSuccess('Enter a KPI name, target greater than zero, and current progress of zero or more.');
+      return;
+    }
 
     const targetGoal = kpiGoalId || goals[0]?.id || '';
     const k: KPI = {
       id: generateUUID(),
       goalId: targetGoal || undefined,
       name: kpiName.trim(),
-      target: Number(kpiTarget) || 0,
-      current: Number(kpiCurrent) || 0,
+      target,
+      current,
       unit: kpiUnit.trim() || 'units',
       status: 'tracking',
       createdAt: Date.now(),
@@ -1166,6 +1178,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
   const handleSaveMentor = async (e: React.FormEvent) => {
     e.preventDefault();
+    const reserveValues = [Number(survivalReserve), Number(emergencyReserve), Number(dailyBurn), Number(savingGoal)];
+    if (reserveValues.some(value => !Number.isFinite(value) || value < 0)) {
+      onSuccess('Reserve targets, daily burn, and annual savings goal must be zero or greater.');
+      return;
+    }
     const appSettings = (await storage.getSingleton<any>('appSettings')) || {};
     const updatedMentor: MentorProfile = {
       mission: mentorMission,
@@ -1271,7 +1288,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             {runwayDays} Days
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            ~{runwayMonths} months at current burn
+            ~{runwayMonths} months at entered burn; excludes FDs
           </div>
         </div>
 
@@ -1282,10 +1299,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <Target className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            ₹{totalReserves.toLocaleString('en-IN')}
+            ₹{accessibleReserveCapital.toLocaleString('en-IN')} / ₹{totalReserves.toLocaleString('en-IN')}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            Survival + Emergency fund
+            {reserveCoverage.toFixed(0)}% funded · Survival + Emergency target
           </div>
         </div>
 
@@ -2752,6 +2769,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Register Quantitative KPI
             </h2>
+            <p className="mt-2 text-[10px] text-slate-400">
+              KPI current/target tracks goal progress only; it does not create a deposit or change Finance balances.
+            </p>
             <form onSubmit={handleAddKPI} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">KPI Metric Name</label>
@@ -2783,6 +2803,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Target</label>
                   <input
                     type="number"
+                    min="0"
+                    step="0.01"
+                    required
                     value={kpiTarget}
                     onChange={e => setKpiTarget(e.target.value)}
                     placeholder="10000"
@@ -2793,6 +2816,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Current</label>
                   <input
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={kpiCurrent}
                     onChange={e => setKpiCurrent(e.target.value)}
                     placeholder="6500"
@@ -2996,6 +3021,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
             Mentor Strategy & Capital Preservation
           </h2>
+          <p className="mt-2 text-[10px] text-slate-400">
+            Reserve amounts below are planning targets, not extra assets. Runway uses account cash plus flexible Finance reserves at your entered daily burn; it excludes fixed deposits and is not auto-derived from expenses.
+          </p>
 
           <form onSubmit={handleSaveMentor} className="mt-4 space-y-4">
             <div>
@@ -3018,6 +3046,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 </label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={survivalReserve}
                   onChange={e => setSurvivalReserve(Number(e.target.value))}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -3030,10 +3060,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 </label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={dailyBurn}
                   onChange={e => setDailyBurn(Number(e.target.value))}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
+                <p className="mt-1 text-[10px] text-slate-400">Manually entered estimate used for runway; not auto-calculated from expenses.</p>
               </div>
             </div>
 
@@ -3044,6 +3077,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 </label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={emergencyReserve}
                   onChange={e => setEmergencyReserve(Number(e.target.value))}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -3056,10 +3091,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 </label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={savingGoal}
                   onChange={e => setSavingGoal(Number(e.target.value))}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
+                <p className="mt-1 text-[10px] text-slate-400">Planning target only; track actual contributions in Finance or with a KPI.</p>
               </div>
             </div>
 

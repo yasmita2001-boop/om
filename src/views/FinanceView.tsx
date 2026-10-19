@@ -66,6 +66,44 @@ const STANDARD_INCOME_CATEGORIES = [
   'Other Income'
 ];
 
+const getSavingsMaturityDate = (startDate: string, durationMonths: number) => {
+  const [year, month, day] = startDate.split('-').map(Number);
+  if (!year || !month || !day || !Number.isFinite(durationMonths)) return startDate;
+  const targetMonth = new Date(year, month - 1 + durationMonths, 1);
+  const lastDay = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate();
+  targetMonth.setDate(Math.min(day, lastDay));
+  return getLocalDateString(targetMonth);
+};
+
+const getFixedDepositValue = (plan: SavingsPlan, asOfDate = getLocalDateString()) => {
+  const principal = Math.max(0, Number(plan.currentAmount) || 0);
+  const annualRate = Math.max(0, Number(plan.annualInterestRate) || 0);
+  const compoundingPerYear = Math.max(1, Number(plan.compoundingPerYear) || 4);
+  const durationMonths = Math.max(1, Number(plan.durationMonths) || 1);
+  const startDate = plan.startDate || getLocalDateString(new Date(plan.createdAt || Date.now()));
+  const maturityDate = getSavingsMaturityDate(startDate, durationMonths);
+  const toUtcDay = (value: string) => {
+    const [year, month, day] = value.split('-').map(Number);
+    return year && month && day ? Date.UTC(year, month - 1, day) : Number.NaN;
+  };
+  const start = toUtcDay(startDate);
+  const maturity = toUtcDay(maturityDate);
+  const asOf = toUtcDay(asOfDate);
+  if (![start, maturity, asOf].every(Number.isFinite)) {
+    return { currentValue: principal, maturityValue: principal, maturityDate: startDate };
+  }
+  const termDays = Math.max(1, (maturity - start) / 86_400_000);
+  const elapsedDays = Math.min(termDays, Math.max(0, (asOf - start) / 86_400_000));
+  const elapsedTermFraction = elapsedDays / termDays;
+  const periods = (durationMonths / 12) * compoundingPerYear * elapsedTermFraction;
+  const factor = 1 + annualRate / (100 * compoundingPerYear);
+  return {
+    currentValue: principal * Math.pow(factor, periods),
+    maturityValue: principal * Math.pow(factor, (durationMonths / 12) * compoundingPerYear),
+    maturityDate
+  };
+};
+
 export const FinanceView: React.FC<FinanceViewProps> = ({
   accounts,
   transactions,
@@ -252,12 +290,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [saveTarget, setSaveTarget] = useState('');
   const [saveMonths, setSaveMonths] = useState('12');
   const [saveAccountId, setSaveAccountId] = useState(accounts[0]?.id || '');
+  const [saveFundingMode, setSaveFundingMode] = useState<'account' | 'already_funded'>('account');
+  const [saveProductType, setSaveProductType] = useState<'reserve' | 'fixed_deposit'>('reserve');
+  const [saveAnnualInterestRate, setSaveAnnualInterestRate] = useState('8');
+  const [saveCompoundingPerYear, setSaveCompoundingPerYear] = useState<'1' | '2' | '4' | '12'>('4');
+  const [saveStartDate, setSaveStartDate] = useState(today);
 
   // Savings Deposit / Contribution Modal State
   const [depositTargetPlan, setDepositTargetPlan] = useState<SavingsPlan | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositAccountId, setDepositAccountId] = useState(accounts[0]?.id || '');
   const [depositNote, setDepositNote] = useState('');
+  const [withdrawalTargetPlan, setWithdrawalTargetPlan] = useState<SavingsPlan | null>(null);
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalAccountId, setWithdrawalAccountId] = useState(accounts[0]?.id || '');
 
   // Asset Form
   const [assetName, setAssetName] = useState('');
@@ -265,7 +311,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   // Transactions Filter
   const [txSearch, setTxSearch] = useState('');
-  const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'expense' | 'income' | 'loan' | 'transfer' | 'repayment' | 'investment' | 'savings'>('all');
+  const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'expense' | 'income' | 'loan' | 'transfer' | 'repayment' | 'investment' | 'savings' | 'savingsWithdrawal'>('all');
   const [txSortOrder, setTxSortOrder] = useState<'desc' | 'asc'>('desc');
   const [dateFilterMode, setDateFilterMode] = useState<'all' | 'this_month' | 'last_30_days' | 'custom'>('all');
   const [customStartDate, setCustomStartDate] = useState('');
@@ -310,14 +356,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       if (!loanDepositAccountId || !accounts.some(a => a.id === loanDepositAccountId)) {
         setLoanDepositAccountId(accounts[0].id);
       }
-      if (!saveAccountId || !accounts.some(a => a.id === saveAccountId)) {
+      if (saveFundingMode === 'account' && (!saveAccountId || !accounts.some(a => a.id === saveAccountId))) {
         setSaveAccountId(accounts[0].id);
       }
       if (!depositAccountId || !accounts.some(a => a.id === depositAccountId)) {
         setDepositAccountId(accounts[0].id);
       }
     }
-  }, [accounts, txAccount, txToAccount, payAcctId, invAccountId, loanDepositAccountId, saveAccountId, depositAccountId]);
+  }, [accounts, txAccount, txToAccount, payAcctId, invAccountId, loanDepositAccountId, saveAccountId, saveFundingMode, depositAccountId]);
 
   useEffect(() => {
     if (loans.length > 0) {
@@ -341,6 +387,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     else if (t.type === 'expense') expense += amt;
     else if (t.type === 'investment') investmentFlow += amt;
     else if (t.type === 'savings') savingsFlow += amt;
+    else if (t.type === 'savingsWithdrawal') savingsFlow -= amt;
     else if (t.type === 'loan') loanReceived += amt;
     else if (t.type === 'repayment') repaymentFlow += amt;
   });
@@ -352,7 +399,26 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   const investmentValue = investments.reduce((sum, i) => sum + (Number(i.currentValue ?? i.amount) || 0), 0);
-  const totalSavings = savingsPlans.reduce((sum, s) => sum + (Number(s.currentAmount) || 0), 0);
+  const totalSavings = savingsPlans.reduce((sum, plan) => {
+    const balance = plan.productType === 'fixed_deposit'
+      ? getFixedDepositValue(plan).currentValue
+      : Number(plan.currentAmount) || 0;
+    return sum + balance;
+  }, 0);
+  const fixedDepositPreview = saveProductType === 'fixed_deposit'
+    ? getFixedDepositValue({
+        id: 'preview',
+        name: saveName,
+        currentAmount: Number(saveCurrent) || 0,
+        targetAmount: 0,
+        durationMonths: Number(saveMonths) || 1,
+        productType: 'fixed_deposit',
+        annualInterestRate: Number(saveAnnualInterestRate) || 0,
+        compoundingPerYear: Number(saveCompoundingPerYear) as 1 | 2 | 4 | 12,
+        startDate: saveStartDate,
+        createdAt: Date.now()
+      }, getSavingsMaturityDate(saveStartDate, Number(saveMonths) || 1)).maturityValue
+    : null;
   const manualAssetsVal = assets.reduce((sum, a) => sum + (Number(a.value) || 0), 0);
   const totalAssets = liquidCash + investmentValue + totalSavings + manualAssetsVal;
 
@@ -377,7 +443,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     transactions.forEach(t => {
       const amt = Number(t.amount) || 0;
-      if (t.type === 'income' || t.type === 'loan') {
+      if (t.type === 'income' || t.type === 'loan' || t.type === 'savingsWithdrawal') {
         if (t.accountId === acct.id) {
           credits += amt;
         }
@@ -1386,62 +1452,111 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const handleCreateSavings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!saveName.trim()) return;
+    const initialAmt = saveCurrent.trim() === '' ? 0 : Number(saveCurrent);
+    const targetAmt = saveProductType === 'reserve' ? Number(saveTarget) : 0;
+    const annualRate = Number(saveAnnualInterestRate);
+    const durationMonths = Number(saveMonths);
+    if (!saveName.trim() || !Number.isFinite(initialAmt) || initialAmt < 0) {
+      reportError('Enter a savings name and a starting amount of zero or more.');
+      return;
+    }
+    if (saveProductType === 'reserve' && (!Number.isFinite(targetAmt) || targetAmt <= 0)) {
+      reportError('Enter a target greater than zero for this savings reserve.');
+      return;
+    }
+    if (saveProductType === 'fixed_deposit' &&
+      (!Number.isFinite(annualRate) || annualRate < 0 || annualRate > 100 ||
+        !Number.isInteger(durationMonths) || durationMonths < 1 || !saveStartDate ||
+        saveStartDate > today || !Number.isFinite(initialAmt) || initialAmt <= 0)) {
+      reportError('Enter a positive FD principal, valid interest rate, start date not in the future, and term of at least one month.');
+      return;
+    }
+
+    const fundingAccount = initialAmt > 0 && saveFundingMode === 'account' && saveAccountId
+      ? accounts.find(account => account.id === saveAccountId)
+      : undefined;
+    if (initialAmt > 0 && saveFundingMode === 'account' && !fundingAccount) {
+      reportError('The selected source account is unavailable. Refresh and select a valid account.');
+      return;
+    }
+    if (fundingAccount && initialAmt > (Number(fundingAccount.balance) || 0)) {
+      reportError(`Starting deposit exceeds the selected account balance of ₹${Number(fundingAccount.balance).toLocaleString('en-IN')}.`);
+      return;
+    }
 
     const spId = generateUUID();
     const now = Date.now();
-    const initialAmt = Number(saveCurrent) || 0;
-    const targetAmt = Number(saveTarget) || 0;
-
-    const sp: SavingsPlan = {
+    const basePlan: SavingsPlan = {
       id: spId,
       name: saveName.trim(),
       currentAmount: initialAmt,
       targetAmount: targetAmt,
-      durationMonths: Number(saveMonths) || 12,
+      durationMonths: saveProductType === 'fixed_deposit' ? durationMonths : (Number(saveMonths) || 12),
+      productType: saveProductType,
+      annualInterestRate: saveProductType === 'fixed_deposit' ? annualRate : undefined,
+      compoundingPerYear: saveProductType === 'fixed_deposit' ? Number(saveCompoundingPerYear) as 1 | 2 | 4 | 12 : undefined,
+      startDate: saveProductType === 'fixed_deposit' ? saveStartDate : undefined,
       goalId: saveInputMode === 'link' && saveGoalId ? saveGoalId : null,
       createdAt: now,
       updatedAt: now
+    };
+    const maturityValue = saveProductType === 'fixed_deposit'
+      ? getFixedDepositValue(basePlan, getSavingsMaturityDate(saveStartDate, durationMonths)).maturityValue
+      : undefined;
+
+    const sp: SavingsPlan = {
+      ...basePlan,
+      targetAmount: saveProductType === 'fixed_deposit' ? initialAmt : targetAmt
     };
 
     const operations: Array<{ storeName: string; item: any }> = [
       { storeName: 'savingsPlans', item: sp }
     ];
 
-    if (saveAccountId && initialAmt > 0) {
-      const acct = accounts.find(a => a.id === saveAccountId);
-      if (acct) {
-        operations.push({
+    if (fundingAccount) {
+      operations.push(
+        {
           storeName: 'financeAccounts',
+          item: { ...fundingAccount, balance: (Number(fundingAccount.balance) || 0) - initialAmt }
+        },
+        {
+          storeName: 'finance',
           item: {
-            ...acct,
-            balance: (Number(acct.balance) || 0) - initialAmt
-          }
-        });
-        const tx: FinanceTransaction = {
-          id: generateUUID(),
-          type: 'savings',
-          amount: initialAmt,
-          category: 'Savings Reserve',
-          date: today,
-          note: `Seed deposit for ${sp.name}`,
-          accountId: saveAccountId,
-          goalId: sp.goalId || null,
-          linkedSavingsPlanId: spId,
-          createdAt: now
-        };
-        operations.push({ storeName: 'finance', item: tx });
-      }
+            id: generateUUID(),
+            type: 'savings',
+            amount: initialAmt,
+            category: saveProductType === 'fixed_deposit' ? 'Fixed Deposit' : 'Savings Reserve',
+            date: today,
+            note: `Opening deposit for ${sp.name}`,
+            accountId: fundingAccount.id,
+            goalId: sp.goalId || null,
+            linkedSavingsPlanId: spId,
+            createdAt: now
+          } satisfies FinanceTransaction
+        }
+      );
     }
 
-    await storage.atomicPutMany(operations);
+    try {
+      await storage.atomicPutMany(operations);
+    } catch (err) {
+      console.error('Unable to create savings instrument', err);
+      reportError('Savings instrument could not be created. Please try again.');
+      return;
+    }
     if (sp.goalId) {
       await syncGoalProgressFromFinance(sp.goalId);
     }
-    onSuccess(`Savings goal registered${saveAccountId && initialAmt > 0 ? ' & initial capital allocated' : ''}`);
+    onSuccess(saveProductType === 'fixed_deposit'
+      ? `Fixed deposit recorded. Estimated maturity value: ₹${(maturityValue || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+      : `Savings reserve recorded${fundingAccount ? ' and funded from account' : ' as an existing/imported balance'}`);
     setSaveName('');
     setSaveCurrent('');
     setSaveTarget('');
+    setSaveAnnualInterestRate('8');
+    setSaveCompoundingPerYear('4');
+    setSaveStartDate(today);
+    setSaveFundingMode('account');
     setSaveGoalId('');
     setSaveInputMode('manual');
     onRefresh();
@@ -1452,7 +1567,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     e.preventDefault();
     if (!depositTargetPlan) return;
     const amt = Number(depositAmount);
-    if (!amt || amt <= 0) return;
+    if (!Number.isFinite(amt) || amt <= 0) {
+      reportError('Enter a deposit amount greater than zero.');
+      return;
+    }
+    if (depositTargetPlan.productType === 'fixed_deposit') {
+      reportError('Create a separate fixed-deposit record for each new FD or top-up tranche.');
+      return;
+    }
+    const sourceAccount = accounts.find(account =>
+      account.id === (depositAccountId || accounts[0]?.id)
+    );
+    if (!sourceAccount) {
+      reportError('Select an available source account for this deposit.');
+      return;
+    }
+    if (amt > (Number(sourceAccount.balance) || 0)) {
+      reportError(`Deposit exceeds the selected account balance of ₹${Number(sourceAccount.balance).toLocaleString('en-IN')}.`);
+      return;
+    }
 
     const now = Date.now();
     const updatedPlan: SavingsPlan = {
@@ -1465,18 +1598,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       { storeName: 'savingsPlans', item: updatedPlan }
     ];
 
-    if (depositAccountId) {
-      const acct = accounts.find(a => a.id === depositAccountId);
-      if (acct) {
-        operations.push({
-          storeName: 'financeAccounts',
-          item: {
-            ...acct,
-            balance: (Number(acct.balance) || 0) - amt
-          }
-        });
-      }
-    }
+    operations.push({
+      storeName: 'financeAccounts',
+      item: { ...sourceAccount, balance: (Number(sourceAccount.balance) || 0) - amt }
+    });
 
     const tx: FinanceTransaction = {
       id: generateUUID(),
@@ -1485,21 +1610,89 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       category: 'Savings Contribution',
       date: today,
       note: depositNote.trim() || `Contributed to ${depositTargetPlan.name}`,
-      accountId: depositAccountId || null,
+      accountId: sourceAccount.id,
       goalId: depositTargetPlan.goalId || null,
       linkedSavingsPlanId: depositTargetPlan.id,
       createdAt: now
     };
     operations.push({ storeName: 'finance', item: tx });
 
-    await storage.atomicPutMany(operations);
+    try {
+      await storage.atomicPutMany(operations);
+    } catch (err) {
+      console.error('Unable to record savings deposit', err);
+      reportError('Savings deposit could not be recorded. Please try again.');
+      return;
+    }
     if (depositTargetPlan.goalId) {
       await syncGoalProgressFromFinance(depositTargetPlan.goalId);
     }
-    onSuccess(`✓ ₹${amt.toLocaleString('en-IN')} deposited into "${depositTargetPlan.name}" from account`);
+    onSuccess(`✓ ₹${amt.toLocaleString('en-IN')} moved from "${sourceAccount.name}" into "${depositTargetPlan.name}"`);
     setDepositTargetPlan(null);
     setDepositAmount('');
     setDepositNote('');
+    onRefresh();
+  };
+
+  const handleWithdrawSavings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!withdrawalTargetPlan) return;
+    const plan = withdrawalTargetPlan;
+    const isFixedDeposit = plan.productType === 'fixed_deposit';
+    const principal = Math.max(0, Number(plan.currentAmount) || 0);
+    const currentValue = isFixedDeposit ? getFixedDepositValue(plan).currentValue : principal;
+    const payout = isFixedDeposit ? currentValue : Number(withdrawalAmount);
+    const principalReduction = isFixedDeposit ? principal : payout;
+    const account = accounts.find(item => item.id === (withdrawalAccountId || accounts[0]?.id));
+    if (!Number.isFinite(payout) || payout <= 0 || principal <= 0) {
+      reportError('There is no available savings balance to withdraw.');
+      return;
+    }
+    if (!isFixedDeposit && payout > principal) {
+      reportError(`Withdrawal exceeds the available savings balance of ₹${principal.toLocaleString('en-IN')}.`);
+      return;
+    }
+    if (!account) {
+      reportError('Select an available account to receive the withdrawal.');
+      return;
+    }
+
+    const now = Date.now();
+    const updatedPlan: SavingsPlan = {
+      ...plan,
+      currentAmount: Math.max(0, principal - principalReduction),
+      updatedAt: now
+    };
+    const transaction: FinanceTransaction = {
+      id: generateUUID(),
+      type: 'savingsWithdrawal',
+      amount: payout,
+      principal: principalReduction,
+      category: isFixedDeposit ? 'Fixed Deposit Withdrawal' : 'Savings Withdrawal',
+      date: today,
+      note: plan.name,
+      accountId: account.id,
+      goalId: plan.goalId || null,
+      linkedSavingsPlanId: plan.id,
+      createdAt: now
+    };
+    try {
+      await storage.atomicPutMany([
+        { storeName: 'savingsPlans', item: updatedPlan },
+        { storeName: 'financeAccounts', item: { ...account, balance: (Number(account.balance) || 0) + payout } },
+        { storeName: 'finance', item: transaction }
+      ]);
+    } catch (err) {
+      console.error('Unable to record savings withdrawal', err);
+      reportError('Savings withdrawal could not be recorded. Please try again.');
+      return;
+    }
+    if (plan.goalId) {
+      await syncGoalProgressFromFinance(plan.goalId);
+    }
+    onSuccess(`₹${payout.toLocaleString('en-IN', { maximumFractionDigits: 2 })} moved to "${account.name}"${isFixedDeposit ? ' (estimated before tax or early-withdrawal penalties)' : ''}`);
+    setWithdrawalTargetPlan(null);
+    setWithdrawalAmount('');
     onRefresh();
   };
 
@@ -1571,6 +1764,19 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (deleteTarget.store === 'finance') {
       const tx = transactions.find(t => t.id === deleteTarget.id);
       if (
+        tx?.type === 'savings' &&
+        tx.linkedSavingsPlanId &&
+        transactions.some(item =>
+          item.id !== tx.id &&
+          item.type === 'savingsWithdrawal' &&
+          item.linkedSavingsPlanId === tx.linkedSavingsPlanId
+        )
+      ) {
+        setDeleteTarget(null);
+        reportError('This savings deposit has a linked withdrawal. Remove the withdrawal first so the reserve balance can be reversed correctly.');
+        return;
+      }
+      if (
         tx?.type === 'loan' &&
         tx.linkedLiabilityId &&
         transactions.some(item => item.id !== tx.id && item.linkedLiabilityId === tx.linkedLiabilityId)
@@ -1599,6 +1805,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         onSuccess(`✓ Removed transfer & reversed both account balances`);
       } else if (tx?.type === 'loan') {
         onSuccess(`✓ Removed loan transaction & adjusted its linked debt and account balance`);
+      } else if (tx?.type === 'savingsWithdrawal') {
+        onSuccess(`✓ Removed savings withdrawal & reversed its account credit`);
       } else if (tx?.type === 'income') {
         onSuccess(`✓ Removed "${deleteTarget.name}" & adjusted account balance`);
       } else {
@@ -1654,7 +1862,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     lines.push(`"Operating Expenses Paid","Outflow",-${periodExpense}`);
     lines.push(`"Net Operating Cash Flow","Net",${periodOperatingFlow}`);
     lines.push(`"Investments Capital Deployed","Outflow",-${periodInvestmentFlow}`);
-    lines.push(`"Dedicated Savings Capital Allocated","Outflow",-${periodSavingsFlow}`);
+    lines.push(`"Net Savings Transfers","Net",-${periodSavingsFlow}`);
     lines.push(`"Loans Borrowed / Funds Received","Inflow",${periodLoanReceived}`);
     lines.push(`"Loan Principal & EMI Repayments","Outflow",-${periodRepaymentFlow}`);
     lines.push(`"Net Financing Cash Flow","Net",${periodFinancingFlow}`);
@@ -1699,17 +1907,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 4: SAVINGS PLANS & TARGETS
     lines.push('"=== SAVINGS PLANS & FINANCIAL TARGETS ==="');
-    lines.push('"ID","Plan Name","Current Saved (INR)","Target Amount (INR)","Progress %","Duration Months"');
+    lines.push('"ID","Product Type","Plan Name","Principal / Reserve (INR)","Estimated Current Value (INR)","Target / Maturity Value (INR)","Annual Interest %","Start Date","Maturity Date","Term Months"');
     savingsPlans.forEach(s => {
       const cur = Number(s.currentAmount) || 0;
-      const tgt = Number(s.targetAmount) || 1;
-      const pct = Math.min(100, (cur / tgt) * 100).toFixed(1);
+      const isFixedDeposit = s.productType === 'fixed_deposit';
+      const valuation = isFixedDeposit ? getFixedDepositValue(s) : null;
+      const currentValue = isFixedDeposit ? valuation?.currentValue || 0 : cur;
+      const target = isFixedDeposit ? valuation?.maturityValue || 0 : Number(s.targetAmount) || 0;
       lines.push([
         s.id,
+        isFixedDeposit ? 'Fixed Deposit' : 'Flexible Reserve',
         `"${(s.name || '').replace(/"/g, '""')}"`,
         cur,
-        tgt,
-        `${pct}%`,
+        currentValue.toFixed(2),
+        target.toFixed(2),
+        isFixedDeposit ? Number(s.annualInterestRate) || 0 : '',
+        s.startDate || '',
+        valuation?.maturityDate || '',
         s.durationMonths || 12
       ].join(','));
     });
@@ -1745,7 +1959,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     lines.push('"Asset / Liability Component","Sub-Category","Amount (INR)"');
     lines.push(`"Liquid Checking & Cash","Assets",${liquidCash}`);
     lines.push(`"Investment Portfolio Market Value","Assets",${investmentValue}`);
-    lines.push(`"Dedicated Savings Reserves","Assets",${totalSavings}`);
+    lines.push(`"Savings & Term Deposits (estimated current value)","Assets",${totalSavings}`);
     lines.push(`"Physical & Other Assets","Assets",${manualAssetsVal}`);
     lines.push(`"TOTAL SOVEREIGN ASSETS","Total Assets",${totalAssets}`);
     lines.push(`"Active Loans Debt","Liabilities",${totalLoanLiabilities}`);
@@ -1828,6 +2042,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     else if (t.type === 'expense') periodExpense += amt;
     else if (t.type === 'investment') periodInvestmentFlow += amt;
     else if (t.type === 'savings') periodSavingsFlow += amt;
+    else if (t.type === 'savingsWithdrawal') periodSavingsFlow -= amt;
     else if (t.type === 'loan') periodLoanReceived += amt;
     else if (t.type === 'repayment') periodRepaymentFlow += amt;
   });
@@ -1923,7 +2138,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             { id: 'transactions', label: `Transactions (${transactions.length})`, shortLabel: `Txns (${transactions.length})`, icon: ArrowUpDown },
             { id: 'loans', label: `Loans & Debt (${loans.length + liabilities.length})`, shortLabel: `Loans (${loans.length + liabilities.length})`, icon: DollarSign },
             { id: 'investments', label: `Investments (${investments.length})`, shortLabel: `Invest (${investments.length})`, icon: TrendingUp },
-            { id: 'savings', label: `Savings & Goals (${savingsPlans.length})`, shortLabel: `Savings (${savingsPlans.length})`, icon: ShieldCheck },
+            { id: 'savings', label: `Savings & Deposits (${savingsPlans.length})`, shortLabel: `Savings (${savingsPlans.length})`, icon: ShieldCheck },
             { id: 'balanceSheet', label: `Balance Sheet (${assets.length})`, shortLabel: `Sheet (${assets.length})`, icon: FileText }
           ]}
         />
@@ -2373,11 +2588,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
                 {/* 3. Savings Capital Allocation */}
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-2">
-                  Savings Capital Allocation
+                  Savings & Deposit Transfers
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
-                  <span className="text-slate-500">Dedicated Savings Reserves:</span>
-                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400">-₹{periodSavingsFlow.toLocaleString('en-IN')}</span>
+                  <span className="text-slate-500">Net moved into savings:</span>
+                  <span className={`font-mono font-bold ${periodSavingsFlow > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    {periodSavingsFlow > 0 ? '-' : '+'}₹{Math.abs(periodSavingsFlow).toLocaleString('en-IN')}
+                  </span>
                 </div>
 
                 {/* 4. Financing Activities */}
@@ -3220,9 +3437,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Create Savings Plan
+              Register Savings / Deposit
             </h2>
             <form onSubmit={handleCreateSavings} className="mt-4 space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Instrument type</label>
+                <select
+                  value={saveProductType}
+                  onChange={e => setSaveProductType(e.target.value as 'reserve' | 'fixed_deposit')}
+                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="reserve">Flexible savings reserve</option>
+                  <option value="fixed_deposit">Fixed deposit (FD)</option>
+                </select>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  {saveProductType === 'fixed_deposit'
+                    ? 'FD value compounds at the entered rate until maturity. Each FD/top-up needs its own record.'
+                    : 'Tracks an actual reserve balance. It does not calculate bank interest or replace a Goal KPI.'}
+                </p>
+              </div>
               {/* Strategic Goal Link Mode Selector */}
               {renderGoalModeToggle(
                 saveInputMode,
@@ -3246,66 +3479,148 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Current Amount (₹)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    {saveProductType === 'fixed_deposit' ? 'FD Principal (₹)' : 'Starting Reserve (₹)'}
+                  </label>
                   <input
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={saveCurrent}
                     onChange={e => setSaveCurrent(e.target.value)}
-                    placeholder="25000"
+                    placeholder="e.g. 100000"
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
-                <div>
+                {saveProductType === 'reserve' ? <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Amount (₹)</label>
                   <input
                     type="number"
+                    min="0.01"
+                    step="0.01"
                     required
                     value={saveTarget}
                     onChange={e => setSaveTarget(e.target.value)}
                     placeholder="100000"
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
-                </div>
+                </div> : (
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Annual interest rate (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      required
+                      value={saveAnnualInterestRate}
+                      onChange={e => setSaveAnnualInterestRate(e.target.value)}
+                      placeholder="8"
+                      className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
+                )}
               </div>
+              {saveProductType === 'fixed_deposit' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Term (months)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        required
+                        value={saveMonths}
+                        onChange={e => setSaveMonths(e.target.value)}
+                        placeholder="60"
+                        className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Compounds per year</label>
+                      <select
+                        value={saveCompoundingPerYear}
+                        onChange={e => setSaveCompoundingPerYear(e.target.value as '1' | '2' | '4' | '12')}
+                        className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      >
+                        <option value="1">Annually</option>
+                        <option value="2">Half-yearly</option>
+                        <option value="4">Quarterly</option>
+                        <option value="12">Monthly</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">FD start date</label>
+                    <input
+                      type="date"
+                      required
+                      value={saveStartDate}
+                      onChange={e => setSaveStartDate(e.target.value)}
+                      className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
+                </>
+              )}
+              {saveProductType === 'fixed_deposit' && (
+                <div className="rounded-xl bg-indigo-50 p-3 text-[11px] text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200">
+                  Estimated maturity value: <strong>₹{(fixedDepositPreview || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
+                  {' '}on {getSavingsMaturityDate(saveStartDate, Number(saveMonths) || 1)} (before tax/TDS or bank-specific adjustments).
+                </div>
+              )}
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Fund from account (optional)
+                  {saveCurrent && Number(saveCurrent) > 0 ? 'Source of starting balance' : 'Funding account'}
                 </label>
                 <select
-                  value={saveAccountId}
-                  onChange={e => setSaveAccountId(e.target.value)}
+                  value={saveFundingMode === 'already_funded' ? 'already-funded' : saveAccountId}
+                  onChange={e => {
+                    if (e.target.value === 'already-funded') {
+                      setSaveFundingMode('already_funded');
+                    } else {
+                      setSaveFundingMode('account');
+                      setSaveAccountId(e.target.value);
+                    }
+                  }}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
-                  <option value="">No account deduction</option>
+                  <option value="already-funded">Already funded / imported (do not deduct)</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
                       {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Choose an account only if this form should deduct the opening deposit now. Use “Already funded” only when the money is already outside your tracked account balances.
+                </p>
               </div>
               <button
                 type="submit"
                 className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
               >
-                + Register Savings Plan
+                {saveProductType === 'fixed_deposit' ? '+ Record Fixed Deposit' : '+ Record Savings Reserve'}
               </button>
             </form>
           </div>
 
           <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Active Savings Targets ({savingsPlans.length})
+              Tracked Deposits & Reserves ({savingsPlans.length})
             </h2>
             <div className="mt-4 space-y-4">
               {savingsPlans.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-400">No savings plans registered.</div>
               ) : (
                 savingsPlans.map(sp => {
-                  const target = Number(sp.targetAmount) || 1;
-                  const current = Number(sp.currentAmount) || 0;
-                  const pct = Math.min(100, (current / target) * 100);
+                  const isFixedDeposit = sp.productType === 'fixed_deposit';
+                  const principal = Number(sp.currentAmount) || 0;
+                  const valuation = isFixedDeposit ? getFixedDepositValue(sp) : null;
+                  const target = isFixedDeposit ? (valuation?.maturityValue || 0) : (Number(sp.targetAmount) || 0);
+                  const current = isFixedDeposit ? (valuation?.currentValue || 0) : principal;
+                  const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
                   return (
                     <div key={sp.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 group">
                       <div className="flex justify-between items-center">
@@ -3314,22 +3629,46 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           {renderGoalBadge(sp.goalId)}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                            ₹{current.toLocaleString('en-IN')} / ₹{target.toLocaleString('en-IN')} ({pct.toFixed(0)}%)
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDepositTargetPlan(sp);
-                              setDepositAmount('');
-                              setDepositNote('');
-                            }}
-                            className="rounded-lg bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-1"
-                            title="Contribute / Deposit to this savings target"
-                          >
-                            <Plus className="h-3 w-3" />
-                            <span>Deposit</span>
-                          </button>
+                          <div className="text-right">
+                            <div className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
+                              {isFixedDeposit
+                                ? `₹${current.toLocaleString('en-IN', { maximumFractionDigits: 2 })} est. / ₹${target.toLocaleString('en-IN', { maximumFractionDigits: 2 })} at maturity`
+                                : `₹${current.toLocaleString('en-IN')} reserve${target > 0 ? ` / ₹${target.toLocaleString('en-IN')} target` : ''}`}
+                            </div>
+                            {isFixedDeposit && (
+                              <div className="text-[10px] text-slate-400">
+                                Principal ₹{principal.toLocaleString('en-IN')} · {sp.annualInterestRate}% p.a. · maturity {valuation?.maturityDate}
+                              </div>
+                            )}
+                          </div>
+                          {!isFixedDeposit && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDepositTargetPlan(sp);
+                                setDepositAmount('');
+                                setDepositNote('');
+                              }}
+                              className="rounded-lg bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-1"
+                              title="Move funds from an account into this reserve"
+                            >
+                              <Plus className="h-3 w-3" />
+                              <span>Deposit</span>
+                            </button>
+                          )}
+                          {current > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWithdrawalTargetPlan(sp);
+                                setWithdrawalAmount(isFixedDeposit ? String(current.toFixed(2)) : '');
+                              }}
+                              className="rounded-lg border border-amber-200 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                              title={isFixedDeposit ? 'Withdraw estimated value to an account' : 'Withdraw reserve funds to an account'}
+                            >
+                              Withdraw
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setDeleteTarget({ store: 'savingsPlans', id: sp.id, name: sp.name })}
@@ -3346,6 +3685,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           style={{ width: `${pct}%` }}
                         />
                       </div>
+                      {isFixedDeposit && (
+                        <p className="mt-2 text-[10px] text-slate-400">
+                          Estimate uses the entered nominal rate and compounding frequency; bank day-count rules, taxes, TDS, and premature-closure penalties are excluded.
+                        </p>
+                      )}
                     </div>
                   );
                 })
@@ -3429,7 +3773,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <span className="font-mono font-bold text-slate-900 dark:text-white">₹{investmentValue.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
-                    <span>Dedicated Savings Reserves ({savingsPlans.length} plans):</span>
+                    <span>Savings & Term Deposits ({savingsPlans.length} items):</span>
                     <span className="font-mono font-bold text-slate-900 dark:text-white">₹{totalSavings.toLocaleString('en-IN')}</span>
                   </div>
                   {assets.map(a => (
@@ -3669,7 +4013,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 { id: 'transfer', label: `Transfers (${dateAndSearchFilteredTxs.filter(t => t.type === 'transfer').length})` },
                 { id: 'repayment', label: `Repayments (${dateAndSearchFilteredTxs.filter(t => t.type === 'repayment').length})` },
                 { id: 'investment', label: `Investments (${dateAndSearchFilteredTxs.filter(t => t.type === 'investment').length})` },
-                { id: 'savings', label: `Savings (${dateAndSearchFilteredTxs.filter(t => t.type === 'savings').length})` }
+                { id: 'savings', label: `Savings deposits (${dateAndSearchFilteredTxs.filter(t => t.type === 'savings').length})` },
+                { id: 'savingsWithdrawal', label: `Savings withdrawals (${dateAndSearchFilteredTxs.filter(t => t.type === 'savingsWithdrawal').length})` }
               ].map(f => (
                 <button
                   key={f.id}
@@ -3800,11 +4145,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             ? 'text-blue-600 dark:text-blue-400'
                             : tx.type === 'savings'
                             ? 'text-amber-600 dark:text-amber-400'
+                            : tx.type === 'savingsWithdrawal'
+                            ? 'text-emerald-600 dark:text-emerald-400'
                             : tx.type === 'repayment'
                             ? 'text-purple-600 dark:text-purple-400'
                             : 'text-indigo-600 dark:text-indigo-400'
                         }`}>
-                          {tx.type === 'income' || tx.type === 'loan' ? '+' : tx.type === 'transfer' ? '⇄ ' : '-'}₹{Number(tx.amount || 0).toLocaleString('en-IN')}
+                          {tx.type === 'income' || tx.type === 'loan' || tx.type === 'savingsWithdrawal' ? '+' : tx.type === 'transfer' ? '⇄ ' : '-'}₹{Number(tx.amount || 0).toLocaleString('en-IN')}
                         </span>
                         <div className="text-[10px] font-medium text-slate-400">
                           {tx.type === 'income' && 'Income Inflow'}
@@ -3812,6 +4159,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           {tx.type === 'expense' && 'Expense Outflow'}
                           {tx.type === 'investment' && 'Capital Deployed'}
                           {tx.type === 'savings' && 'Savings Reserve'}
+                          {tx.type === 'savingsWithdrawal' && 'Savings Returned to Account'}
                           {tx.type === 'repayment' && 'Debt Service'}
                           {tx.type === 'transfer' && 'Internal Transfer'}
                         </div>
@@ -3952,11 +4300,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   Deduct from Bank / Cash Account
                 </label>
                 <select
+                  required
                   value={depositAccountId}
                   onChange={e => setDepositAccountId(e.target.value)}
                   className="mt-1 h-9.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                 >
-                  <option value="">-- No Account Deduction (Manual / Cash In Hand) --</option>
+                  <option value="" disabled>Select source account</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
                       {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
@@ -3991,6 +4340,81 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-500 cursor-pointer"
                 >
                   Deposit Funds
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {withdrawalTargetPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Withdraw Savings
+                </h3>
+                <p className="text-xs text-slate-500">{withdrawalTargetPlan.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWithdrawalTargetPlan(null)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form onSubmit={handleWithdrawSavings} className="mt-4 space-y-3.5">
+              {withdrawalTargetPlan.productType === 'fixed_deposit' ? (
+                <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                  Estimated gross payout: <strong>₹{getFixedDepositValue(withdrawalTargetPlan).currentValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>.
+                  This estimate excludes tax/TDS and any bank penalty for premature closure.
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    Amount (available ₹{Number(withdrawalTargetPlan.currentAmount).toLocaleString('en-IN')})
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max={Number(withdrawalTargetPlan.currentAmount)}
+                    step="0.01"
+                    required
+                    value={withdrawalAmount}
+                    onChange={e => setWithdrawalAmount(e.target.value)}
+                    className="mt-1 h-9.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Deposit payout to account</label>
+                <select
+                  required
+                  value={withdrawalAccountId || accounts[0]?.id || ''}
+                  onChange={e => setWithdrawalAccountId(e.target.value)}
+                  className="mt-1 h-9.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="" disabled>{accounts.length ? 'Select destination account' : 'Create an account first'}</option>
+                  {accounts.map(account => (
+                    <option key={account.id} value={account.id}>{account.name}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Withdrawal reduces the tracked savings balance and credits the selected account; it is not recorded as income.
+              </p>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setWithdrawalTargetPlan(null)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-500">
+                  Record withdrawal
                 </button>
               </div>
             </form>

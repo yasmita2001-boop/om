@@ -306,7 +306,7 @@ export interface FinanceAccount {
   sync?: SyncMeta;
 }
 
-export type FinanceType = 'income' | 'expense' | 'transfer' | 'loan' | 'repayment' | 'investment' | 'savings';
+export type FinanceType = 'income' | 'expense' | 'transfer' | 'loan' | 'repayment' | 'investment' | 'savings' | 'savingsWithdrawal';
 
 export interface FinanceTransaction {
   id: string;
@@ -383,6 +383,10 @@ export interface SavingsPlan {
   currentAmount: number;
   targetAmount: number;
   durationMonths: number;
+  productType?: 'reserve' | 'fixed_deposit';
+  annualInterestRate?: number;
+  compoundingPerYear?: 1 | 2 | 4 | 12;
+  startDate?: string;
   goalId?: string | null;
   createdAt: number;
   updatedAt?: number;

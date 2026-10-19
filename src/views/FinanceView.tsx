@@ -1779,14 +1779,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     return txSortOrder === 'desc' ? timeComp : -timeComp;
   });
 
-  // Filter transactions by date range and search/goal (used for dynamic pill counts)
-  const dateAndSearchFilteredTxs = sortedTransactions.filter(t => {
-    if (txGoalFilter !== 'all') {
-      if (txGoalFilter === 'linked' && !t.goalId) return false;
-      if (txGoalFilter === 'unlinked' && t.goalId) return false;
-      if (txGoalFilter !== 'linked' && txGoalFilter !== 'unlinked' && t.goalId !== txGoalFilter) return false;
-    }
-    // Date Range Filtering
+  // The cash flow statement follows its date range, not the ledger's search or goal filters.
+  const dateFilteredTransactions = sortedTransactions.filter(t => {
     if (dateFilterMode === 'this_month') {
       if (!t.date || !t.date.startsWith(currentYearMonth)) return false;
     } else if (dateFilterMode === 'last_30_days') {
@@ -1794,6 +1788,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     } else if (dateFilterMode === 'custom') {
       if (customStartDate && t.date < customStartDate) return false;
       if (customEndDate && t.date > customEndDate) return false;
+    }
+    return true;
+  });
+
+  // Search/goal filters are used for transaction list counts and display only.
+  const dateAndSearchFilteredTxs = dateFilteredTransactions.filter(t => {
+    if (txGoalFilter !== 'all') {
+      if (txGoalFilter === 'linked' && !t.goalId) return false;
+      if (txGoalFilter === 'unlinked' && t.goalId) return false;
+      if (txGoalFilter !== 'linked' && txGoalFilter !== 'unlinked' && t.goalId !== txGoalFilter) return false;
     }
     if (txSearch) {
       const q = txSearch.toLowerCase();
@@ -1810,7 +1814,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     return true;
   });
 
-  // Calculate Scoped Period Cash Flow (matching the active Date Range & search filters)
+  // Calculate period cash flow from all transactions in the selected date range.
   let periodIncome = 0;
   let periodExpense = 0;
   let periodInvestmentFlow = 0;
@@ -1818,7 +1822,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   let periodLoanReceived = 0;
   let periodRepaymentFlow = 0;
 
-  dateAndSearchFilteredTxs.forEach(t => {
+  dateFilteredTransactions.forEach(t => {
     const amt = Number(t.amount) || 0;
     if (t.type === 'income') periodIncome += amt;
     else if (t.type === 'expense') periodExpense += amt;

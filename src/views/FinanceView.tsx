@@ -68,6 +68,20 @@ const STANDARD_INCOME_CATEGORIES = [
   'Other Income'
 ];
 
+type SavingsProductType = NonNullable<SavingsPlan['productType']>;
+
+const getSavingsProductLabel = (productType?: SavingsPlan['productType']) => {
+  switch (productType) {
+    case 'fixed_deposit': return 'Fixed Deposit';
+    case 'recurring_deposit': return 'Recurring Deposit';
+    case 'pension': return 'Pension / Retirement';
+    case 'cooperative': return 'Cooperative Saving';
+    case 'bond': return 'Bond';
+    case 'other': return 'Other Saving';
+    default: return 'Flexible Reserve';
+  }
+};
+
 const getSavingsMaturityDate = (startDate: string, durationMonths: number) => {
   const [year, month, day] = startDate.split('-').map(Number);
   if (!year || !month || !day || !Number.isFinite(durationMonths)) return startDate;
@@ -297,7 +311,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [saveMonths, setSaveMonths] = useState('12');
   const [saveAccountId, setSaveAccountId] = useState(accounts[0]?.id || '');
   const [saveFundingMode, setSaveFundingMode] = useState<'account' | 'already_funded'>('account');
-  const [saveProductType, setSaveProductType] = useState<'reserve' | 'fixed_deposit'>('reserve');
+  const [saveProductType, setSaveProductType] = useState<SavingsProductType>('reserve');
   const [saveAnnualInterestRate, setSaveAnnualInterestRate] = useState('8');
   const [saveCompoundingPerYear, setSaveCompoundingPerYear] = useState<'1' | '2' | '4' | '12'>('4');
   const [saveStartDate, setSaveStartDate] = useState(today);
@@ -310,6 +324,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [withdrawalTargetPlan, setWithdrawalTargetPlan] = useState<SavingsPlan | null>(null);
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [withdrawalAccountId, setWithdrawalAccountId] = useState(accounts[0]?.id || '');
+  const [editingSavingsBalanceId, setEditingSavingsBalanceId] = useState<string | null>(null);
+  const [editingSavingsBalance, setEditingSavingsBalance] = useState('');
 
   // Asset Form
   const [assetName, setAssetName] = useState('');
@@ -399,8 +415,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (t.type === 'income') income += amt;
     else if (t.type === 'expense') expense += amt;
     else if (t.type === 'investment' && !t.ledgerOnly) investmentFlow += amt;
-    else if (t.type === 'savings') savingsFlow += amt;
-    else if (t.type === 'savingsWithdrawal') savingsFlow -= amt;
+    else if (t.type === 'savings' && !t.ledgerOnly) savingsFlow += amt;
+    else if (t.type === 'savingsWithdrawal' && !t.ledgerOnly) savingsFlow -= amt;
     else if (t.type === 'loan') loanReceived += amt;
     else if (t.type === 'repayment') repaymentFlow += amt;
   });
@@ -1686,15 +1702,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const handleCreateSavings = async (e: React.FormEvent) => {
     e.preventDefault();
     const initialAmt = saveCurrent.trim() === '' ? 0 : Number(saveCurrent);
-    const targetAmt = saveProductType === 'reserve' ? Number(saveTarget) : 0;
+    const targetAmt = saveProductType !== 'fixed_deposit' && saveTarget.trim() !== '' ? Number(saveTarget) : 0;
     const annualRate = Number(saveAnnualInterestRate);
     const durationMonths = Number(saveMonths);
     if (!saveName.trim() || !Number.isFinite(initialAmt) || initialAmt < 0) {
       reportError('Enter a savings name and a starting amount of zero or more.');
       return;
     }
-    if (saveProductType === 'reserve' && (!Number.isFinite(targetAmt) || targetAmt <= 0)) {
-      reportError('Enter a target greater than zero for this savings reserve.');
+    if (saveProductType !== 'fixed_deposit' && saveTarget.trim() !== '' &&
+        (!Number.isFinite(targetAmt) || targetAmt < 0)) {
+      reportError('Enter a valid savings target of zero or greater.');
       return;
     }
     if (saveProductType === 'fixed_deposit' &&
@@ -1758,7 +1775,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             id: generateUUID(),
             type: 'savings',
             amount: initialAmt,
-            category: saveProductType === 'fixed_deposit' ? 'Fixed Deposit' : 'Savings Reserve',
+            category: getSavingsProductLabel(saveProductType),
             date: today,
             note: `Opening deposit for ${sp.name}`,
             accountId: fundingAccount.id,
@@ -1781,8 +1798,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       await syncGoalProgressFromFinance(sp.goalId);
     }
     onSuccess(saveProductType === 'fixed_deposit'
-      ? `Fixed deposit recorded. Estimated maturity value: NPR ${(maturityValue || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
-      : `Savings reserve recorded${fundingAccount ? ' and funded from account' : ' as an existing/imported balance'}`);
+      ? 'Fixed deposit recorded.'
+      : `${getSavingsProductLabel(saveProductType)} recorded${fundingAccount ? ' and funded from account' : ' as an existing/imported balance'}`);
     setSaveName('');
     setSaveCurrent('');
     setSaveTarget('');
@@ -1840,7 +1857,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       id: generateUUID(),
       type: 'savings',
       amount: amt,
-      category: 'Savings Contribution',
+      category: `${getSavingsProductLabel(depositTargetPlan.productType)} Contribution`,
       date: today,
       note: depositNote.trim() || `Contributed to ${depositTargetPlan.name}`,
       accountId: sourceAccount.id,
@@ -1874,14 +1891,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const isFixedDeposit = plan.productType === 'fixed_deposit';
     const principal = Math.max(0, Number(plan.currentAmount) || 0);
     const payout = Number(withdrawalAmount);
-    const principalReduction = isFixedDeposit ? principal : payout;
+    const principalReduction = isFixedDeposit || payout >= principal ? principal : payout;
     const account = accounts.find(item => item.id === (withdrawalAccountId || accounts[0]?.id));
     if (!Number.isFinite(payout) || payout <= 0 || principal <= 0) {
       reportError('There is no available savings balance to withdraw.');
-      return;
-    }
-    if (!isFixedDeposit && payout > principal) {
-      reportError(`Withdrawal exceeds the available savings balance of NPR ${principal.toLocaleString('en-IN')}.`);
       return;
     }
     if (!account) {
@@ -1900,7 +1913,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       type: 'savingsWithdrawal',
       amount: payout,
       principal: principalReduction,
-      category: isFixedDeposit ? 'Fixed Deposit Withdrawal' : 'Savings Withdrawal',
+      category: isFixedDeposit ? 'Fixed Deposit Withdrawal' : `${getSavingsProductLabel(plan.productType)} Withdrawal`,
       date: today,
       note: isFixedDeposit ? `${plan.name} actual bank payout recorded` : plan.name,
       accountId: account.id,
@@ -1925,6 +1938,48 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     onSuccess(`NPR ${payout.toLocaleString('en-IN', { maximumFractionDigits: 2 })} payout recorded in "${account.name}"${isFixedDeposit ? ' as the actual bank payout entered' : ''}`);
     setWithdrawalTargetPlan(null);
     setWithdrawalAmount('');
+    onRefresh();
+  };
+
+  const handleSaveSavingsBalance = async (e: React.FormEvent, plan: SavingsPlan) => {
+    e.preventDefault();
+    const newBalance = Number(editingSavingsBalance);
+    if (!Number.isFinite(newBalance) || newBalance < 0) {
+      reportError('Enter an actual savings balance of zero or greater.');
+      return;
+    }
+    const previousBalance = Number(plan.currentAmount) || 0;
+    const difference = newBalance - previousBalance;
+    if (Math.abs(difference) < 0.01) {
+      setEditingSavingsBalanceId(null);
+      return;
+    }
+    const amount = Math.abs(difference);
+    const now = Date.now();
+    const adjustment: FinanceTransaction = {
+      id: generateUUID(),
+      type: difference > 0 ? 'savings' : 'savingsWithdrawal',
+      amount,
+      principal: amount,
+      category: 'Savings Balance Adjustment',
+      date: today,
+      note: `Manual actual balance update for ${plan.name}`,
+      linkedSavingsPlanId: plan.id,
+      ledgerOnly: true,
+      createdAt: now
+    };
+    try {
+      await storage.atomicPutMany([
+        { storeName: 'savingsPlans', item: { ...plan, currentAmount: newBalance, updatedAt: now } },
+        { storeName: 'finance', item: adjustment }
+      ]);
+    } catch (err) {
+      console.error('Unable to update actual savings balance', err);
+      reportError('Savings balance could not be updated. Please try again.');
+      return;
+    }
+    setEditingSavingsBalanceId(null);
+    onSuccess(`"${plan.name}" actual balance updated to NPR ${newBalance.toLocaleString('en-IN')}.`);
     onRefresh();
   };
 
@@ -2156,7 +2211,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       const target = isFixedDeposit ? valuation?.maturityValue || 0 : Number(s.targetAmount) || 0;
       lines.push([
         s.id,
-        isFixedDeposit ? 'Fixed Deposit' : 'Flexible Reserve',
+        getSavingsProductLabel(s.productType),
         `"${(s.name || '').replace(/"/g, '""')}"`,
         cur,
         currentValue.toFixed(2),
@@ -2283,8 +2338,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (t.type === 'income') periodIncome += amt;
     else if (t.type === 'expense') periodExpense += amt;
     else if (t.type === 'investment' && !t.ledgerOnly) periodInvestmentFlow += amt;
-    else if (t.type === 'savings') periodSavingsFlow += amt;
-    else if (t.type === 'savingsWithdrawal') periodSavingsFlow -= amt;
+    else if (t.type === 'savings' && !t.ledgerOnly) periodSavingsFlow += amt;
+    else if (t.type === 'savingsWithdrawal' && !t.ledgerOnly) periodSavingsFlow -= amt;
     else if (t.type === 'loan') periodLoanReceived += amt;
     else if (t.type === 'repayment') {
       periodRepaymentFlow += Number(t.principal) || amt;
@@ -3615,9 +3670,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-[10px] text-slate-400">
-                  Choose an account only when recording a new purchase now; imported holdings do not change cash flow.
-                </p>
               </div>
               <button
                 type="submit"
@@ -3766,17 +3818,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Instrument type</label>
                 <select
                   value={saveProductType}
-                  onChange={e => setSaveProductType(e.target.value as 'reserve' | 'fixed_deposit')}
+                  onChange={e => setSaveProductType(e.target.value as SavingsProductType)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
                   <option value="reserve">Flexible savings reserve</option>
+                  <option value="recurring_deposit">Recurring deposit (RD)</option>
                   <option value="fixed_deposit">Fixed deposit (FD)</option>
+                  <option value="pension">Pension / retirement saving</option>
+                  <option value="cooperative">Cooperative saving</option>
+                  <option value="bond">Government / other bond</option>
+                  <option value="other">Other saving product</option>
                 </select>
-                <p className="mt-1 text-[10px] text-slate-400">
-                  {saveProductType === 'fixed_deposit'
-                    ? 'FD value compounds at the entered rate until maturity. Each FD/top-up needs its own record.'
-                    : 'Tracks an actual reserve balance. It does not calculate bank interest or replace a Goal KPI.'}
-                </p>
               </div>
               {/* Strategic Goal Link Mode Selector */}
               {renderGoalModeToggle(
@@ -3802,7 +3854,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    {saveProductType === 'fixed_deposit' ? 'FD Principal (NPR)' : 'Starting Reserve (NPR)'}
+                    {saveProductType === 'fixed_deposit' ? 'FD Principal (NPR)' : 'Current Balance (NPR)'}
                   </label>
                   <input
                     type="number"
@@ -3814,13 +3866,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
-                {saveProductType === 'reserve' ? <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Amount (NPR)</label>
+                {saveProductType !== 'fixed_deposit' ? <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target (optional, NPR)</label>
                   <input
                     type="number"
-                    min="0.01"
+                    min="0"
                     step="0.01"
-                    required
                     value={saveTarget}
                     onChange={e => setSaveTarget(e.target.value)}
                     placeholder="100000"
@@ -3920,14 +3971,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 type="submit"
                 className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
               >
-                {saveProductType === 'fixed_deposit' ? '+ Record Fixed Deposit' : '+ Record Savings Reserve'}
+                {`+ Record ${getSavingsProductLabel(saveProductType)}`}
               </button>
             </form>
           </div>
 
           <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Tracked Deposits & Reserves ({savingsPlans.length})
+              My Savings ({savingsPlans.length})
             </h2>
             <div className="mt-4 space-y-4">
               {savingsPlans.length === 0 ? (
@@ -3952,7 +4003,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             <div className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
                               {isFixedDeposit
                                 ? `NPR ${current.toLocaleString('en-IN', { maximumFractionDigits: 2 })} est. / NPR ${target.toLocaleString('en-IN', { maximumFractionDigits: 2 })} at maturity`
-                                : `NPR ${current.toLocaleString('en-IN')} reserve${target > 0 ? ` / NPR ${target.toLocaleString('en-IN')} target` : ''}`}
+                                : `NPR ${current.toLocaleString('en-IN')} · ${getSavingsProductLabel(sp.productType)}${target > 0 ? ` / NPR ${target.toLocaleString('en-IN')} target` : ''}`}
                             </div>
                             {isFixedDeposit && (
                               <div className="text-[10px] text-slate-400">
@@ -3969,10 +4020,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                 setDepositNote('');
                               }}
                               className="rounded-lg bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-1"
-                              title="Move funds from an account into this reserve"
+                              title={`Record a manual contribution to this ${getSavingsProductLabel(sp.productType).toLowerCase()}`}
                             >
                               <Plus className="h-3 w-3" />
                               <span>Deposit</span>
+                            </button>
+                          )}
+                          {!isFixedDeposit && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingSavingsBalanceId(editingSavingsBalanceId === sp.id ? null : sp.id);
+                                setEditingSavingsBalance(String(principal));
+                              }}
+                              className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                              title="Enter the latest actual balance from your statement"
+                            >
+                              Update balance
                             </button>
                           )}
                           {current > 0 && (
@@ -3983,7 +4047,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                 setWithdrawalAmount(isFixedDeposit ? String(current.toFixed(2)) : '');
                               }}
                               className="rounded-lg border border-amber-200 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-300 dark:hover:bg-amber-950/40"
-                              title={isFixedDeposit ? 'Withdraw estimated value to an account' : 'Withdraw reserve funds to an account'}
+                              title="Record actual payout to an account"
                             >
                               Withdraw
                             </button>
@@ -4004,6 +4068,31 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           style={{ width: `${pct}%` }}
                         />
                       </div>
+                      {editingSavingsBalanceId === sp.id && !isFixedDeposit && (
+                        <form
+                          className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-900/50 dark:bg-indigo-950/20"
+                          onSubmit={event => void handleSaveSavingsBalance(event, sp)}
+                        >
+                          <label className="min-w-40 flex-1 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                            Actual balance (NPR)
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              required
+                              value={editingSavingsBalance}
+                              onChange={event => setEditingSavingsBalance(event.target.value)}
+                              className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                            />
+                          </label>
+                          <button type="submit" className="h-8 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white">
+                            Save
+                          </button>
+                          <button type="button" onClick={() => setEditingSavingsBalanceId(null)} className="h-8 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                            Cancel
+                          </button>
+                        </form>
+                      )}
                       {isFixedDeposit && (
                         <p className="mt-2 text-[10px] text-slate-400">
                           Estimate uses the entered nominal rate and compounding frequency; bank day-count rules, taxes, TDS, and premature-closure penalties are excluded.
@@ -4475,15 +4564,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             ? 'text-purple-600 dark:text-purple-400'
                             : 'text-indigo-600 dark:text-indigo-400'
                         }`}>
-                          {tx.type === 'income' || tx.type === 'loan' || tx.type === 'savingsWithdrawal' || (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit') ? '+' : tx.type === 'transfer' ? '⇄ ' : '-'}NPR {Number(tx.amount || 0).toLocaleString('en-IN')}
+                          {tx.ledgerOnly ? '' : tx.type === 'income' || tx.type === 'loan' || tx.type === 'savingsWithdrawal' || (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit') ? '+' : tx.type === 'transfer' ? '⇄ ' : '-'}NPR {Number(tx.amount || 0).toLocaleString('en-IN')}
                         </span>
                         <div className="text-[10px] font-medium text-slate-400">
                           {tx.type === 'income' && 'Income Inflow'}
                           {tx.type === 'loan' && 'Borrowing Inflow'}
                           {tx.type === 'expense' && 'Expense Outflow'}
                           {tx.type === 'investment' && 'Capital Deployed'}
-                          {tx.type === 'savings' && 'Savings Reserve'}
-                          {tx.type === 'savingsWithdrawal' && 'Savings Returned to Account'}
+                          {tx.type === 'savings' && (tx.ledgerOnly ? 'Savings balance increase' : 'Savings deposit')}
+                          {tx.type === 'savingsWithdrawal' && (tx.ledgerOnly ? 'Savings balance decrease' : 'Savings Returned to Account')}
                           {tx.type === 'repayment' && 'Debt Service'}
                           {tx.type === 'transfer' && 'Internal Transfer'}
                           {tx.type === 'adjustment' && `Statement ${tx.adjustmentDirection || 'debit'} adjustment`}
@@ -4680,7 +4769,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Contribute to Savings
+                  Record Contribution
                 </h3>
                 <p className="text-xs text-slate-500">
                   {depositTargetPlan.name} (Current: NPR {Number(depositTargetPlan.currentAmount).toLocaleString('en-IN')})
@@ -4698,7 +4787,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <form onSubmit={handleDepositToSavings} className="mt-4 space-y-3.5">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Contribution Amount (NPR) <span className="text-rose-500">*</span>
+                  Deposit Amount (NPR) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -4713,7 +4802,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Deduct from Bank / Cash Account
+                  Pay from Account
                 </label>
                 <select
                   required
@@ -4738,7 +4827,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   type="text"
                   value={depositNote}
                   onChange={e => setDepositNote(e.target.value)}
-                  placeholder="Monthly savings, bonus deposit, etc."
+                  placeholder="Monthly deposit, bonus, etc."
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none"
                 />
               </div>
@@ -4795,7 +4884,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <input
                   type="number"
                   min="0.01"
-                  max={withdrawalTargetPlan.productType !== 'fixed_deposit' ? Number(withdrawalTargetPlan.currentAmount) : undefined}
                   step="0.01"
                   required
                   value={withdrawalAmount}

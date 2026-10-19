@@ -58,6 +58,7 @@ const calculateFinances = (finance: FinanceTransaction[]) => {
   let loanReceived = 0;
   finance.forEach(f => {
     const amt = Number(f.amount) || 0;
+    if (f.ledgerOnly) return;
     if (f.type === 'income') income += amt;
     else if (f.type === 'expense') expense += amt;
     else if (f.type === 'investment') investment += amt;

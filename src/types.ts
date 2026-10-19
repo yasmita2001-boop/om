@@ -322,6 +322,7 @@ export interface FinanceTransaction {
   toAccountId?: string | null;
   goalId?: string | null;
   linkedLoanId?: string | null;
+  linkedLiabilityId?: string | null;
   linkedLoanPaymentId?: string | null;
   linkedInvestmentId?: string | null;
   linkedSavingsPlanId?: string | null;
@@ -982,4 +983,3 @@ export interface RecycleBinItem {
   contentSignature?: string;
   payload?: any;
 }
-

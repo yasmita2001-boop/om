@@ -629,6 +629,16 @@ class StorageEngine {
           }
         }
       }
+      else if (tx.type === 'adjustment' && tx.accountId) {
+        const acct = await this.get<any>('financeAccounts', tx.accountId);
+        if (acct) {
+          const delta = (Number(tx.amount) || 0) * (tx.adjustmentDirection === 'credit' ? -1 : 1);
+          await this.put('financeAccounts', {
+            ...acct,
+            balance: (Number(acct.balance) || 0) + delta
+          });
+        }
+      }
       // 2. Loan Repayment deletion: Refund account, restore loan outstanding principal, clean payment
       else if (tx.type === 'repayment') {
         if (tx.accountId && amt > 0) {
@@ -778,6 +788,15 @@ class StorageEngine {
         if (toAcct) {
           await this.put('financeAccounts', { ...toAcct, balance: (Number(toAcct.balance) || 0) + amt });
         }
+      }
+    } else if (tx.type === 'adjustment' && tx.accountId) {
+      const acct = await this.get<any>('financeAccounts', tx.accountId);
+      if (acct) {
+        const delta = (Number(tx.amount) || 0) * (tx.adjustmentDirection === 'credit' ? 1 : -1);
+        await this.put('financeAccounts', {
+          ...acct,
+          balance: (Number(acct.balance) || 0) + delta
+        });
       }
     } else if (tx.type === 'repayment') {
       if (tx.accountId) {

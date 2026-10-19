@@ -314,6 +314,11 @@ export interface FinanceTransaction {
   amount: number;
   principal?: number;
   interest?: number;
+  tds?: number;
+  serviceCharge?: number;
+  penalty?: number;
+  otherDeduction?: number;
+  settlementVariance?: number;
   category: string;
   date: string;
   note?: string;
@@ -378,16 +383,67 @@ export interface Investment {
   sync?: SyncMeta;
 }
 
+export type SavingsProductType =
+  | 'reserve'
+  | 'per_transaction'
+  | 'daily'
+  | 'weekly'
+  | 'biweekly'
+  | 'monthly'
+  | 'bimonthly'
+  | 'quarterly'
+  | 'half_yearly'
+  | 'yearly'
+  | 'custom_period'
+  | 'goal_based'
+  | 'emergency'
+  | 'round_up'
+  | 'all_time'
+  | 'bank_savings'
+  | 'fixed_deposit'
+  | 'recurring_deposit'
+  | 'remittance'
+  | 'salary_account'
+  | 'pension_account'
+  | 'call_deposit'
+  | 'special_deposit'
+  | 'senior_citizen'
+  | 'children_deposit'
+  | 'student_savings'
+  | 'women_savings'
+  | 'foreign_currency'
+  | 'pension'
+  | 'cooperative'
+  | 'bond'
+  | 'other';
+
 export interface SavingsPlan {
   id: string;
   name: string;
   currentAmount: number;
   targetAmount: number;
   durationMonths: number;
-  productType?: 'reserve' | 'recurring_deposit' | 'fixed_deposit' | 'pension' | 'cooperative' | 'bond' | 'other';
+  productType?: SavingsProductType;
+  category?: 'simple' | 'bank';
+  bankName?: string;
+  branchName?: string;
+  reference?: string;
+  frequency?: string;
+  customPeriodDays?: number;
+  contributionAmount?: number;
   annualInterestRate?: number;
+  interestEffectiveDate?: string;
+  interestMethod?: 'compound' | 'simple' | 'bank_manual';
   compoundingPerYear?: 1 | 2 | 4 | 12;
+  interestPayoutFrequency?: string;
+  tdsRate?: number;
+  serviceCharges?: number;
+  penalty?: number;
+  otherDeductions?: number;
   startDate?: string;
+  maturityDate?: string;
+  notes?: string;
+  status?: 'active' | 'closed';
   goalId?: string | null;
   createdAt: number;
   updatedAt?: number;

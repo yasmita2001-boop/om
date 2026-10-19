@@ -698,6 +698,7 @@ class StorageEngine {
             await this.put('savingsPlans', {
               ...plan,
               currentAmount: (Number(plan.currentAmount) || 0) + principal,
+              ...(tx.category === 'Savings Final Settlement' ? { status: 'active' } : {}),
               updatedAt: Date.now()
             });
           }
@@ -836,6 +837,7 @@ class StorageEngine {
           await this.put('savingsPlans', {
             ...plan,
             currentAmount: Math.max(0, (Number(plan.currentAmount) || 0) - principal),
+            ...(tx.category === 'Savings Final Settlement' ? { status: 'closed' } : {}),
             updatedAt: Date.now()
           });
         }

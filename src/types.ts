@@ -306,7 +306,7 @@ export interface FinanceAccount {
   sync?: SyncMeta;
 }
 
-export type FinanceType = 'income' | 'expense' | 'transfer' | 'loan' | 'repayment' | 'investment' | 'savings' | 'savingsWithdrawal';
+export type FinanceType = 'income' | 'expense' | 'transfer' | 'loan' | 'repayment' | 'investment' | 'savings' | 'savingsWithdrawal' | 'adjustment';
 
 export interface FinanceTransaction {
   id: string;
@@ -326,6 +326,7 @@ export interface FinanceTransaction {
   linkedLoanPaymentId?: string | null;
   linkedInvestmentId?: string | null;
   linkedSavingsPlanId?: string | null;
+  adjustmentDirection?: 'credit' | 'debit';
   linkedReceiptId?: string | null;
   fileName?: string;
   fileData?: string;

@@ -652,6 +652,16 @@ class StorageEngine {
             });
           }
         }
+        if (tx.linkedLiabilityId) {
+          const liability = await this.get<any>('liabilities', tx.linkedLiabilityId);
+          if (liability) {
+            const principal = Number(tx.principal) || amt;
+            await this.put('liabilities', {
+              ...liability,
+              amount: (Number(liability.amount) || 0) + principal
+            });
+          }
+        }
 
         // Clean up linked loan payment record
         if (tx.linkedLoanPaymentId) {
@@ -673,6 +683,12 @@ class StorageEngine {
             }
             await this.put('financeAccounts', { ...acct, balance: newBal });
           }
+        }
+        if (tx.type === 'loan' && tx.linkedLiabilityId) {
+          await this.delete('liabilities', tx.linkedLiabilityId);
+        }
+        if (tx.type === 'loan' && tx.linkedLoanId) {
+          await this.delete('loans', tx.linkedLoanId);
         }
 
         // Clean up linked investment asset if this was an investment transaction
@@ -756,6 +772,16 @@ class StorageEngine {
           await this.put('loans', { ...loan, outstanding: Math.max(0, (Number(loan.outstanding) || 0) - principal) });
         }
       }
+      if (tx.linkedLiabilityId) {
+        const liability = await this.get<any>('liabilities', tx.linkedLiabilityId);
+        if (liability) {
+          const principal = Number(tx.principal) || amt;
+          await this.put('liabilities', {
+            ...liability,
+            amount: Math.max(0, (Number(liability.amount) || 0) - principal)
+          });
+        }
+      }
     } else {
       if (tx.accountId) {
         const acct = await this.get<any>('financeAccounts', tx.accountId);
@@ -767,6 +793,15 @@ class StorageEngine {
             newBal += amt;
           }
           await this.put('financeAccounts', { ...acct, balance: newBal });
+        }
+      }
+      if (tx.type === 'loan' && tx.linkedLiabilityId) {
+        const liability = await this.get<any>('liabilities', tx.linkedLiabilityId);
+        if (liability) {
+          await this.put('liabilities', {
+            ...liability,
+            amount: (Number(liability.amount) || 0) + amt
+          });
         }
       }
     }

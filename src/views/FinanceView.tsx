@@ -41,6 +41,8 @@ const STANDARD_EXPENSE_CATEGORIES = [
   'Groceries',
   'Rent & Housing',
   'Bills & Utilities',
+  'Bank Charges & Fees',
+  'Taxes & TDS',
   'Shopping',
   'Travel & Commute',
   'Entertainment',
@@ -250,6 +252,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [acctName, setAcctName] = useState('');
   const [acctType, setAcctType] = useState<'bank' | 'cash' | 'wallet'>('bank');
   const [acctBalance, setAcctBalance] = useState('');
+  const [statementAccountId, setStatementAccountId] = useState<string | null>(null);
+  const [statementBalance, setStatementBalance] = useState('');
 
   // New Loan Form
   const [loanName, setLoanName] = useState('');
@@ -261,6 +265,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [payLoanId, setPayLoanId] = useState(loans[0]?.id || '');
   const [payAmount, setPayAmount] = useState('');
   const [payAcctId, setPayAcctId] = useState(accounts[0]?.id || '');
+  const [payPrincipalInput, setPayPrincipalInput] = useState('');
+  const [payInterestInput, setPayInterestInput] = useState('');
 
   // New Liability Form (in Loans & Liabilities)
   const [liabName, setLiabName] = useState('');
@@ -308,10 +314,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   // Asset Form
   const [assetName, setAssetName] = useState('');
   const [assetVal, setAssetVal] = useState('');
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+  const [editingTransactionAmount, setEditingTransactionAmount] = useState('');
+  const [editingTransactionDate, setEditingTransactionDate] = useState('');
+  const [editingTransactionCategory, setEditingTransactionCategory] = useState('');
+  const [editingTransactionNote, setEditingTransactionNote] = useState('');
+  const [editingTransactionAccountId, setEditingTransactionAccountId] = useState('');
+  const [editingTransactionToAccountId, setEditingTransactionToAccountId] = useState('');
 
   // Transactions Filter
   const [txSearch, setTxSearch] = useState('');
-  const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'expense' | 'income' | 'loan' | 'transfer' | 'repayment' | 'investment' | 'savings' | 'savingsWithdrawal'>('all');
+  const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'expense' | 'income' | 'loan' | 'transfer' | 'repayment' | 'investment' | 'savings' | 'savingsWithdrawal' | 'adjustment'>('all');
   const [txSortOrder, setTxSortOrder] = useState<'desc' | 'asc'>('desc');
   const [dateFilterMode, setDateFilterMode] = useState<'all' | 'this_month' | 'last_30_days' | 'custom'>('all');
   const [customStartDate, setCustomStartDate] = useState('');
@@ -385,7 +398,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const amt = Number(t.amount) || 0;
     if (t.type === 'income') income += amt;
     else if (t.type === 'expense') expense += amt;
-    else if (t.type === 'investment') investmentFlow += amt;
+    else if (t.type === 'investment' && !t.ledgerOnly) investmentFlow += amt;
     else if (t.type === 'savings') savingsFlow += amt;
     else if (t.type === 'savingsWithdrawal') savingsFlow -= amt;
     else if (t.type === 'loan') loanReceived += amt;
@@ -447,6 +460,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         if (t.accountId === acct.id) {
           credits += amt;
         }
+      } else if (t.type === 'adjustment') {
+        if (t.accountId === acct.id) {
+          if (t.adjustmentDirection === 'credit') credits += amt;
+          else debits += amt;
+        }
       } else if (t.type === 'expense' || t.type === 'investment' || t.type === 'repayment' || t.type === 'savings') {
         if (t.accountId === acct.id) {
           debits += amt;
@@ -490,6 +508,166 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     onRefresh();
   };
 
+  const handleRecordStatementBalance = async (account: FinanceAccount) => {
+    const actualBalance = Number(statementBalance);
+    if (!Number.isFinite(actualBalance) || actualBalance < 0) {
+      reportError('Enter a valid statement balance of zero or greater.');
+      return;
+    }
+    const currentBalance = Number(account.balance) || 0;
+    const difference = actualBalance - currentBalance;
+    if (Math.abs(difference) < 0.01) {
+      setStatementAccountId(null);
+      setStatementBalance('');
+      onSuccess(`"${account.name}" already matches the statement balance.`);
+      return;
+    }
+
+    const now = Date.now();
+    const adjustment: FinanceTransaction = {
+      id: generateUUID(),
+      type: 'adjustment',
+      amount: Math.abs(difference),
+      adjustmentDirection: difference > 0 ? 'credit' : 'debit',
+      category: 'Bank Statement Adjustment',
+      date: today,
+      note: 'Manual statement balance reconciliation',
+      accountId: account.id,
+      createdAt: now
+    };
+    try {
+      await storage.atomicPutMany([
+        {
+          storeName: 'financeAccounts',
+          item: { ...account, balance: actualBalance, updatedAt: now }
+        },
+        { storeName: 'finance', item: adjustment }
+      ]);
+    } catch (err) {
+      console.error('Unable to reconcile statement balance', err);
+      reportError('Statement reconciliation could not be saved. Please try again.');
+      return;
+    }
+    setStatementAccountId(null);
+    setStatementBalance('');
+    onSuccess(`"${account.name}" matched the statement; the difference was logged in the ledger.`);
+    onRefresh();
+  };
+
+  const startEditingTransaction = (transaction: FinanceTransaction) => {
+    setEditingTransactionId(transaction.id);
+    setEditingTransactionAmount(String(transaction.amount));
+    setEditingTransactionDate(transaction.date || today);
+    setEditingTransactionCategory(transaction.category || '');
+    setEditingTransactionNote(transaction.note || '');
+    setEditingTransactionAccountId(transaction.accountId || accounts[0]?.id || '');
+    setEditingTransactionToAccountId(transaction.toAccountId || accounts[1]?.id || accounts[0]?.id || '');
+  };
+
+  const handleSaveTransactionEdit = async (e: React.FormEvent, transaction: FinanceTransaction) => {
+    e.preventDefault();
+    const amount = Number(editingTransactionAmount);
+    if (!Number.isFinite(amount) || amount <= 0 || !editingTransactionDate) {
+      reportError('Enter a valid amount and date for this transaction.');
+      return;
+    }
+    const accountBalances = new Map(accounts.map(account => [account.id, Number(account.balance) || 0]));
+    const adjust = (accountId: string | null | undefined, delta: number) => {
+      if (!accountId || !accountBalances.has(accountId)) return false;
+      accountBalances.set(accountId, (accountBalances.get(accountId) || 0) + delta);
+      return true;
+    };
+
+    if (transaction.type === 'transfer') {
+      if (!adjust(transaction.fromAccountId, Number(transaction.amount) || 0) ||
+          !adjust(transaction.toAccountId, -(Number(transaction.amount) || 0))) {
+        reportError('The original transfer accounts are unavailable; this transaction cannot be edited safely.');
+        return;
+      }
+    } else {
+      const reversal = transaction.type === 'expense' ? Number(transaction.amount) : -Number(transaction.amount);
+      if (!adjust(transaction.accountId, reversal)) {
+        reportError('The original account is unavailable; this transaction cannot be edited safely.');
+        return;
+      }
+    }
+
+    if (transaction.type === 'transfer') {
+      if (!editingTransactionAccountId || !editingTransactionToAccountId ||
+          editingTransactionAccountId === editingTransactionToAccountId ||
+          !accountBalances.has(editingTransactionAccountId) || !accountBalances.has(editingTransactionToAccountId)) {
+        reportError('Select two different available accounts for this transfer.');
+        return;
+      }
+      const sourceBalance = accountBalances.get(editingTransactionAccountId) || 0;
+      if (amount > sourceBalance) {
+        reportError(`Transfer exceeds available balance of NPR ${sourceBalance.toLocaleString('en-IN')}.`);
+        return;
+      }
+      adjust(editingTransactionAccountId, -amount);
+      adjust(editingTransactionToAccountId, amount);
+    } else {
+      if (!editingTransactionAccountId || !accountBalances.has(editingTransactionAccountId)) {
+        reportError('Select an available account for this transaction.');
+        return;
+      }
+      const balance = accountBalances.get(editingTransactionAccountId) || 0;
+      if (transaction.type === 'expense' && amount > balance) {
+        reportError(`Expense exceeds available balance of NPR ${balance.toLocaleString('en-IN')}.`);
+        return;
+      }
+      adjust(editingTransactionAccountId, transaction.type === 'expense' ? -amount : amount);
+    }
+
+    const negativeAccount = [...accountBalances.entries()].find(([, balance]) => balance < -0.001);
+    if (negativeAccount) {
+      const accountName = accounts.find(account => account.id === negativeAccount[0])?.name || 'selected account';
+      reportError(`This correction would make "${accountName}" negative. Record the missing funds or choose a different correction.`);
+      return;
+    }
+
+    const operations: Array<{ storeName: string; item: any }> = [];
+    accountBalances.forEach((balance, accountId) => {
+      const account = accounts.find(item => item.id === accountId);
+      if (account && Math.abs(balance - (Number(account.balance) || 0)) > 0.001) {
+        operations.push({ storeName: 'financeAccounts', item: { ...account, balance } });
+      }
+    });
+    operations.push({
+      storeName: 'finance',
+      item: {
+        ...transaction,
+        amount,
+        date: editingTransactionDate,
+        category: transaction.type === 'transfer' ? transaction.category : editingTransactionCategory.trim() || transaction.category,
+        note: editingTransactionNote.trim() || undefined,
+        accountId: transaction.type === 'transfer' ? undefined : editingTransactionAccountId,
+        fromAccountId: transaction.type === 'transfer' ? editingTransactionAccountId : undefined,
+        toAccountId: transaction.type === 'transfer' ? editingTransactionToAccountId : undefined,
+        updatedAt: Date.now()
+      } satisfies FinanceTransaction
+    });
+
+    try {
+      await storage.atomicPutMany(operations);
+    } catch (err) {
+      console.error('Unable to update finance transaction', err);
+      reportError('Transaction could not be updated. Please try again.');
+      return;
+    }
+    if (transaction.goalId) {
+      try {
+        await syncGoalProgressFromFinance(transaction.goalId);
+      } catch (err) {
+        console.error('Transaction updated but linked Goal progress could not be recalculated', err);
+        reportError('Transaction was updated, but its linked Goal progress could not be refreshed.');
+      }
+    }
+    setEditingTransactionId(null);
+    onSuccess('Transaction updated and account balances adjusted.');
+    onRefresh();
+  };
+
   const handleSaveInvestmentValue = async (investment: Investment) => {
     const value = Number(editingInvestmentValue);
     if (!Number.isFinite(value) || value < 0) {
@@ -501,7 +679,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (updated.goalId) await syncGoalProgressFromFinance(updated.goalId);
     setEditingInvestmentId(null);
     setEditingInvestmentValue('');
-    onSuccess(`Updated "${updated.name}" market value to ₹${value.toLocaleString('en-IN')}.`);
+    onSuccess(`Updated "${updated.name}" market value to NPR ${value.toLocaleString('en-IN')}.`);
     onRefresh();
   };
 
@@ -706,7 +884,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         return;
       }
       if (amt > outstanding) {
-        reportError(`Payment exceeds the outstanding balance of ₹${outstanding.toLocaleString('en-IN')}.`);
+        reportError(`Payment exceeds the outstanding balance of NPR ${outstanding.toLocaleString('en-IN')}.`);
         return;
       }
     }
@@ -785,6 +963,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       if (!fromAcct || !toAcct) return;
       const fromBal = Number(fromAcct.balance) || 0;
       const toBal = Number(toAcct.balance) || 0;
+      if (amt > fromBal) {
+        reportError(`Transfer exceeds the available account balance of NPR ${fromBal.toLocaleString('en-IN')}.`);
+        return;
+      }
       nextFromAccount = { ...fromAcct, balance: fromBal - amt };
       nextToAccount = { ...toAcct, balance: toBal + amt };
       operations.push({ storeName: 'financeAccounts', item: nextFromAccount });
@@ -803,6 +985,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         };
         selectedAccount = fallbackAcct.id;
         acct = fallbackAcct;
+      }
+
+      if (accounts.length > 0 && (!selectedAccount || !accounts.some(account => account.id === selectedAccount))) {
+        reportError('Select an available account before recording this transaction.');
+        return;
+      }
+      if ((txType === 'expense' || txType === 'investment' || txType === 'repayment') &&
+          amt > (Number(acct?.balance) || 0)) {
+        reportError(`This transaction exceeds the available account balance of NPR ${(Number(acct?.balance) || 0).toLocaleString('en-IN')}.`);
+        return;
       }
 
       if (acct) {
@@ -877,7 +1069,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           return;
         }
         if (amt > outstanding) {
-          reportError(`Payment exceeds the outstanding balance of ₹${outstanding.toLocaleString('en-IN')}.`);
+          reportError(`Payment exceeds the outstanding balance of NPR ${outstanding.toLocaleString('en-IN')}.`);
           return;
         }
         const paid = amt;
@@ -959,17 +1151,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
 
     if (txType === 'transfer' && nextFromAccount && nextToAccount) {
-      onSuccess(`₹${amt.toLocaleString('en-IN')} transferred from ${nextFromAccount.name} to ${nextToAccount.name}`);
+      onSuccess(`NPR ${amt.toLocaleString('en-IN')} transferred from ${nextFromAccount.name} to ${nextToAccount.name}`);
     } else if (txType === 'income') {
-      onSuccess(`✓ Income of ₹${amt.toLocaleString('en-IN')} added to account${tx.goalId ? ' & linked to Goal' : ''}`);
+      onSuccess(`✓ Income of NPR ${amt.toLocaleString('en-IN')} added to account${tx.goalId ? ' & linked to Goal' : ''}`);
     } else if (txType === 'expense') {
-      onSuccess(`✓ Expense of ₹${amt.toLocaleString('en-IN')} recorded & deducted${tx.goalId ? ' & linked to Goal' : ''}`);
+      onSuccess(`✓ Expense of NPR ${amt.toLocaleString('en-IN')} recorded & deducted${tx.goalId ? ' & linked to Goal' : ''}`);
     } else if (txType === 'loan') {
-      onSuccess(`✓ Loan (+₹${amt.toLocaleString('en-IN')}) deposited into ${acct?.name || 'account'} & recorded in ledger!`);
+      onSuccess(`✓ Loan (+NPR ${amt.toLocaleString('en-IN')}) deposited into ${acct?.name || 'account'} & recorded in ledger!`);
     } else if (txType === 'repayment') {
-      onSuccess(`✓ Loan payment of ₹${amt.toLocaleString('en-IN')} deducted & outstanding reduced!`);
+      onSuccess(`✓ Loan payment of NPR ${amt.toLocaleString('en-IN')} deducted & outstanding reduced!`);
     } else if (txType === 'investment') {
-      onSuccess(`✓ Investment of ₹${amt.toLocaleString('en-IN')} logged in ledger & portfolio!`);
+      onSuccess(`✓ Investment of NPR ${amt.toLocaleString('en-IN')} logged in ledger & portfolio!`);
     } else if (createdOrLinkedReceiptId) {
       onSuccess('✓ Transaction recorded & linked with Things Purchase Receipt Vault!');
     } else {
@@ -990,8 +1182,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!acctName.trim()) return;
-    const opening = Number(acctBalance) || 0;
+    const opening = acctBalance.trim() === '' ? 0 : Number(acctBalance);
+    if (!acctName.trim() || !Number.isFinite(opening) || opening < 0) {
+      reportError('Enter an account name and a valid opening balance of zero or greater.');
+      return;
+    }
     const newAcct: FinanceAccount = {
       id: generateUUID(),
       name: acctName.trim(),
@@ -1071,6 +1266,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   // Deposit funds for an existing loan into a chosen bank account & log ledger transaction
   const handleDepositExistingLoan = async (loan: Loan, targetAcctId?: string) => {
+    if (transactions.some(transaction => transaction.type === 'loan' && transaction.linkedLoanId === loan.id)) {
+      reportError('This loan already has a recorded deposit. Add a separate disbursement only if the bank paid out additional funds.');
+      return;
+    }
     const acctId = targetAcctId || loanDepositAccountId || accounts[0]?.id;
     if (!acctId) {
       onSuccess('Please create a bank account first.');
@@ -1110,7 +1309,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (loan.goalId) {
       await syncGoalProgressFromFinance(loan.goalId);
     }
-    onSuccess(`✓ ₹${p.toLocaleString('en-IN')} deposited into "${acct.name}" & recorded in Ledger!`);
+    onSuccess(`✓ NPR ${p.toLocaleString('en-IN')} deposited into "${acct.name}" & recorded in Ledger!`);
     onRefresh();
   };
 
@@ -1124,7 +1323,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       onSuccess('Please select a valid loan from the dropdown.');
       return;
     }
-    if (amt <= 0) {
+    if (!Number.isFinite(amt) || amt <= 0) {
       onSuccess('Please enter a payment amount greater than zero.');
       return;
     }
@@ -1134,14 +1333,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       reportError('This loan is already fully repaid; no additional payment can be recorded.');
       return;
     }
-    if (amt > outstanding) {
-      reportError(`Payment exceeds the outstanding balance of ₹${outstanding.toLocaleString('en-IN')}.`);
-      return;
-    }
     const paid = amt;
     const monthlyRate = (Number(loan.rate) || 0) / 1200;
-    const interest = Math.min(paid, outstanding * monthlyRate);
-    const principal = Math.max(0, paid - interest);
+    const hasPrincipal = payPrincipalInput.trim() !== '';
+    const hasInterest = payInterestInput.trim() !== '';
+    const estimatedInterest = Math.min(paid, outstanding * monthlyRate);
+    const principal = hasPrincipal
+      ? Number(payPrincipalInput)
+      : paid - (hasInterest ? Number(payInterestInput) : estimatedInterest);
+    const interest = hasInterest ? Number(payInterestInput) : paid - principal;
+    if (!Number.isFinite(principal) || !Number.isFinite(interest) || principal < 0 || interest < 0 ||
+        principal > outstanding || Math.abs(principal + interest - paid) > 0.01) {
+      reportError(`Enter a valid principal and interest split totaling NPR ${paid.toLocaleString('en-IN')}; principal cannot exceed the outstanding balance.`);
+      return;
+    }
     const now = Date.now();
     const operations: Array<{ storeName: string; item: any }> = [];
 
@@ -1149,6 +1354,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const sourceAccount = accounts.find(account => account.id === sourceAccountId);
     if (!sourceAccount) {
       reportError('Select an available account to record the repayment debit.');
+      return;
+    }
+    if (paid > (Number(sourceAccount.balance) || 0)) {
+      reportError(`Repayment exceeds the available account balance of NPR ${Number(sourceAccount.balance).toLocaleString('en-IN')}.`);
       return;
     }
     operations.push({
@@ -1189,7 +1398,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       interest,
       category: 'Loan Repayment',
       date: today,
-      note: `${loan.name} (Principal: ₹${principal.toFixed(0)}, Interest: ₹${interest.toFixed(0)})`,
+      note: `${loan.name} (Principal: NPR ${principal.toFixed(0)}, Interest: NPR ${interest.toFixed(0)})`,
       accountId: sourceAccountId || null,
       goalId: loan.goalId || null,
       linkedLoanId: loan.id,
@@ -1202,8 +1411,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (loan.goalId) {
       await syncGoalProgressFromFinance(loan.goalId);
     }
-    onSuccess(`✓ Loan payment logged: Principal ₹${principal.toFixed(0)}, Interest ₹${interest.toFixed(0)}`);
+    onSuccess(`✓ Loan payment logged: Principal NPR ${principal.toFixed(0)}, Interest NPR ${interest.toFixed(0)}`);
     setPayAmount('');
+    setPayPrincipalInput('');
+    setPayInterestInput('');
     onRefresh();
   };
 
@@ -1269,7 +1480,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       await syncGoalProgressFromFinance(l.goalId);
     }
     onSuccess(liabRecordMode === 'borrowed'
-      ? `₹${amount.toLocaleString('en-IN')} borrowed into "${depositAccount?.name}" and added to liabilities`
+      ? `NPR ${amount.toLocaleString('en-IN')} borrowed into "${depositAccount?.name}" and added to liabilities`
       : `Existing liability "${liabName}" recorded without changing account balance${l.goalId ? ' & linked to Goal' : ''}`);
     setLiabName('');
     setLiabVal('');
@@ -1291,11 +1502,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (amount > outstanding) {
-      reportError(`Repayment exceeds the outstanding liability of ₹${outstanding.toLocaleString('en-IN')}.`);
+      reportError(`Repayment exceeds the outstanding liability of NPR ${outstanding.toLocaleString('en-IN')}.`);
       return;
     }
     if (!account) {
       reportError('Select an available account to debit for this repayment.');
+      return;
+    }
+    if (amount > (Number(account.balance) || 0)) {
+      reportError(`Repayment exceeds the available account balance of NPR ${Number(account.balance).toLocaleString('en-IN')}.`);
       return;
     }
 
@@ -1331,7 +1546,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (liability.goalId) {
       await syncGoalProgressFromFinance(liability.goalId);
     }
-    onSuccess(`₹${amount.toLocaleString('en-IN')} repayment deducted from "${account.name}" and liability reduced`);
+    onSuccess(`NPR ${amount.toLocaleString('en-IN')} repayment deducted from "${account.name}" and liability reduced`);
     setLiabilityRepaymentId(null);
     setLiabilityRepaymentAmount('');
     onRefresh();
@@ -1368,6 +1583,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     if (invAccountId) {
       const acct = accounts.find(a => a.id === invAccountId);
+      if (!acct) {
+        reportError('The selected source account is unavailable. Refresh and select a valid account.');
+        return;
+      }
+      if (amt > (Number(acct.balance) || 0)) {
+        reportError(`Investment exceeds the available account balance of NPR ${Number(acct.balance).toLocaleString('en-IN')}.`);
+        return;
+      }
       if (acct) {
         operations.push({
           storeName: 'financeAccounts',
@@ -1389,6 +1612,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       date: today,
       note: `${invName.trim()} investment`,
       accountId: invAccountId || null,
+      ledgerOnly: !invAccountId,
       goalId: inv.goalId || null,
       linkedInvestmentId: invId,
       createdAt: Date.now()
@@ -1417,6 +1641,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     if (acctId) {
       const acct = accounts.find(a => a.id === acctId);
+      if (!acct) {
+        reportError('The selected source account is unavailable. Refresh and select a valid account.');
+        return;
+      }
+      if (amt > (Number(acct.balance) || 0)) {
+        reportError(`Investment exceeds the available account balance of NPR ${Number(acct.balance).toLocaleString('en-IN')}.`);
+        return;
+      }
       if (acct) {
         operations.push({
           storeName: 'financeAccounts',
@@ -1436,6 +1668,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       date: inv.date || today,
       note: `${inv.name} investment recorded in ledger`,
       accountId: acctId || null,
+      ledgerOnly: !acctId,
       goalId: inv.goalId || null,
       linkedInvestmentId: inv.id,
       createdAt: now
@@ -1446,7 +1679,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (inv.goalId) {
       await syncGoalProgressFromFinance(inv.goalId);
     }
-    onSuccess(`✓ ₹${amt.toLocaleString('en-IN')} logged in ledger for "${inv.name}"!`);
+    onSuccess(`✓ NPR ${amt.toLocaleString('en-IN')} logged in ledger for "${inv.name}"!`);
     onRefresh();
   };
 
@@ -1480,7 +1713,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (fundingAccount && initialAmt > (Number(fundingAccount.balance) || 0)) {
-      reportError(`Starting deposit exceeds the selected account balance of ₹${Number(fundingAccount.balance).toLocaleString('en-IN')}.`);
+      reportError(`Starting deposit exceeds the selected account balance of NPR ${Number(fundingAccount.balance).toLocaleString('en-IN')}.`);
       return;
     }
 
@@ -1548,7 +1781,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       await syncGoalProgressFromFinance(sp.goalId);
     }
     onSuccess(saveProductType === 'fixed_deposit'
-      ? `Fixed deposit recorded. Estimated maturity value: ₹${(maturityValue || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+      ? `Fixed deposit recorded. Estimated maturity value: NPR ${(maturityValue || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
       : `Savings reserve recorded${fundingAccount ? ' and funded from account' : ' as an existing/imported balance'}`);
     setSaveName('');
     setSaveCurrent('');
@@ -1583,7 +1816,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (amt > (Number(sourceAccount.balance) || 0)) {
-      reportError(`Deposit exceeds the selected account balance of ₹${Number(sourceAccount.balance).toLocaleString('en-IN')}.`);
+      reportError(`Deposit exceeds the selected account balance of NPR ${Number(sourceAccount.balance).toLocaleString('en-IN')}.`);
       return;
     }
 
@@ -1627,7 +1860,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (depositTargetPlan.goalId) {
       await syncGoalProgressFromFinance(depositTargetPlan.goalId);
     }
-    onSuccess(`✓ ₹${amt.toLocaleString('en-IN')} moved from "${sourceAccount.name}" into "${depositTargetPlan.name}"`);
+    onSuccess(`✓ NPR ${amt.toLocaleString('en-IN')} moved from "${sourceAccount.name}" into "${depositTargetPlan.name}"`);
     setDepositTargetPlan(null);
     setDepositAmount('');
     setDepositNote('');
@@ -1640,8 +1873,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const plan = withdrawalTargetPlan;
     const isFixedDeposit = plan.productType === 'fixed_deposit';
     const principal = Math.max(0, Number(plan.currentAmount) || 0);
-    const currentValue = isFixedDeposit ? getFixedDepositValue(plan).currentValue : principal;
-    const payout = isFixedDeposit ? currentValue : Number(withdrawalAmount);
+    const payout = Number(withdrawalAmount);
     const principalReduction = isFixedDeposit ? principal : payout;
     const account = accounts.find(item => item.id === (withdrawalAccountId || accounts[0]?.id));
     if (!Number.isFinite(payout) || payout <= 0 || principal <= 0) {
@@ -1649,7 +1881,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (!isFixedDeposit && payout > principal) {
-      reportError(`Withdrawal exceeds the available savings balance of ₹${principal.toLocaleString('en-IN')}.`);
+      reportError(`Withdrawal exceeds the available savings balance of NPR ${principal.toLocaleString('en-IN')}.`);
       return;
     }
     if (!account) {
@@ -1670,7 +1902,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       principal: principalReduction,
       category: isFixedDeposit ? 'Fixed Deposit Withdrawal' : 'Savings Withdrawal',
       date: today,
-      note: plan.name,
+      note: isFixedDeposit ? `${plan.name} actual bank payout recorded` : plan.name,
       accountId: account.id,
       goalId: plan.goalId || null,
       linkedSavingsPlanId: plan.id,
@@ -1690,7 +1922,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (plan.goalId) {
       await syncGoalProgressFromFinance(plan.goalId);
     }
-    onSuccess(`₹${payout.toLocaleString('en-IN', { maximumFractionDigits: 2 })} moved to "${account.name}"${isFixedDeposit ? ' (estimated before tax or early-withdrawal penalties)' : ''}`);
+    onSuccess(`NPR ${payout.toLocaleString('en-IN', { maximumFractionDigits: 2 })} payout recorded in "${account.name}"${isFixedDeposit ? ' as the actual bank payout entered' : ''}`);
     setWithdrawalTargetPlan(null);
     setWithdrawalAmount('');
     onRefresh();
@@ -1698,11 +1930,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const handleAddAsset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assetName.trim() || !assetVal) return;
+    const value = Number(assetVal);
+    if (!assetName.trim() || !Number.isFinite(value) || value <= 0) {
+      reportError('Enter an asset name and a market value greater than zero.');
+      return;
+    }
     const a: Asset = {
       id: generateUUID(),
       name: assetName.trim(),
-      value: Number(assetVal) || 0,
+      value,
       goalId: assetInputMode === 'link' && assetGoalId ? assetGoalId : null
     };
     await storage.put('assets', a);
@@ -1857,21 +2093,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     lines.push(`"Active Period Scope: ${periodLabel}"`);
     lines.push('');
     lines.push('"=== PERIOD CASH FLOW STATEMENT ==="');
-    lines.push('"Activity","Direction","Amount (INR)"');
+    lines.push('"Activity","Direction","Amount (NPR)"');
     lines.push(`"Gross Income Received","Inflow",${periodIncome}`);
     lines.push(`"Operating Expenses Paid","Outflow",-${periodExpense}`);
+    lines.push(`"Loan Interest Paid","Outflow",-${periodInterestExpense}`);
     lines.push(`"Net Operating Cash Flow","Net",${periodOperatingFlow}`);
     lines.push(`"Investments Capital Deployed","Outflow",-${periodInvestmentFlow}`);
     lines.push(`"Net Savings Transfers","Net",-${periodSavingsFlow}`);
     lines.push(`"Loans Borrowed / Funds Received","Inflow",${periodLoanReceived}`);
-    lines.push(`"Loan Principal & EMI Repayments","Outflow",-${periodRepaymentFlow}`);
+    lines.push(`"Loan Principal Repaid","Outflow",-${periodRepaymentFlow}`);
+    lines.push(`"Statement Adjustments","Net",${periodAdjustmentFlow}`);
     lines.push(`"Net Financing Cash Flow","Net",${periodFinancingFlow}`);
     lines.push(`"Net Period Cash Flow (Ledger Delta)","Total",${periodNetCashFlow}`);
     lines.push('');
 
     // SECTION 2: TRANSACTIONS LEDGER
     lines.push('"=== TRANSACTIONS LEDGER (FILTERED PERIOD) ==="');
-    lines.push('"ID","Date","Type","Category","Amount (INR)","Note","AccountId"');
+    lines.push('"ID","Date","Type","Category","Amount (NPR)","Note","AccountId","Adjustment Direction","Ledger Only"');
     filteredTransactions.forEach(t => {
       lines.push([
         t.id,
@@ -1880,14 +2118,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         `"${(t.category || '').replace(/"/g, '""')}"`,
         t.amount,
         `"${(t.note || '').replace(/"/g, '""')}"`,
-        t.accountId || ''
+        t.accountId || '',
+        t.adjustmentDirection || '',
+        t.ledgerOnly ? 'Yes' : 'No'
       ].join(','));
     });
     lines.push('');
 
     // SECTION 3: INVESTMENT PORTFOLIO
     lines.push('"=== INVESTMENT PORTFOLIO ==="');
-    lines.push('"ID","Asset Name","Invested Cost (INR)","Current Valuation (INR)","P&L / Gain (INR)","ROI %","Date"');
+    lines.push('"ID","Asset Name","Invested Cost (NPR)","Current Valuation (NPR)","P&L / Gain (NPR)","ROI %","Date"');
     investments.forEach(i => {
       const cost = Number(i.amount) || 0;
       const current = Number(i.currentValue ?? i.amount) || 0;
@@ -1907,7 +2147,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 4: SAVINGS PLANS & TARGETS
     lines.push('"=== SAVINGS PLANS & FINANCIAL TARGETS ==="');
-    lines.push('"ID","Product Type","Plan Name","Principal / Reserve (INR)","Estimated Current Value (INR)","Target / Maturity Value (INR)","Annual Interest %","Start Date","Maturity Date","Term Months"');
+    lines.push('"ID","Product Type","Plan Name","Principal / Reserve (NPR)","Estimated Current Value (NPR)","Target / Maturity Value (NPR)","Annual Interest %","Start Date","Maturity Date","Term Months"');
     savingsPlans.forEach(s => {
       const cur = Number(s.currentAmount) || 0;
       const isFixedDeposit = s.productType === 'fixed_deposit';
@@ -1931,7 +2171,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 5: LOANS & LIABILITIES
     lines.push('"=== ACTIVE LOANS & LIABILITIES ==="');
-    lines.push('"ID","Liability Name","Original Principal (INR)","Outstanding Balance (INR)","Interest Rate %","Tenure Months"');
+    lines.push('"ID","Liability Name","Original Principal (NPR)","Outstanding Balance (NPR)","Interest Rate %","Tenure Months"');
     loans.forEach(l => {
       lines.push([
         l.id,
@@ -1956,7 +2196,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 6: SOVEREIGN BALANCE SHEET & NET WORTH
     lines.push('"=== SOVEREIGN BALANCE SHEET & NET WORTH ==="');
-    lines.push('"Asset / Liability Component","Sub-Category","Amount (INR)"');
+    lines.push('"Asset / Liability Component","Sub-Category","Amount (NPR)"');
     lines.push(`"Liquid Checking & Cash","Assets",${liquidCash}`);
     lines.push(`"Investment Portfolio Market Value","Assets",${investmentValue}`);
     lines.push(`"Savings & Term Deposits (estimated current value)","Assets",${totalSavings}`);
@@ -2035,22 +2275,28 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   let periodSavingsFlow = 0;
   let periodLoanReceived = 0;
   let periodRepaymentFlow = 0;
+  let periodInterestExpense = 0;
+  let periodAdjustmentFlow = 0;
 
   dateFilteredTransactions.forEach(t => {
     const amt = Number(t.amount) || 0;
     if (t.type === 'income') periodIncome += amt;
     else if (t.type === 'expense') periodExpense += amt;
-    else if (t.type === 'investment') periodInvestmentFlow += amt;
+    else if (t.type === 'investment' && !t.ledgerOnly) periodInvestmentFlow += amt;
     else if (t.type === 'savings') periodSavingsFlow += amt;
     else if (t.type === 'savingsWithdrawal') periodSavingsFlow -= amt;
     else if (t.type === 'loan') periodLoanReceived += amt;
-    else if (t.type === 'repayment') periodRepaymentFlow += amt;
+    else if (t.type === 'repayment') {
+      periodRepaymentFlow += Number(t.principal) || amt;
+      periodInterestExpense += Number(t.interest) || 0;
+    }
+    else if (t.type === 'adjustment') periodAdjustmentFlow += t.adjustmentDirection === 'credit' ? amt : -amt;
   });
 
-  const periodOperatingFlow = periodIncome - periodExpense;
+  const periodOperatingFlow = periodIncome - periodExpense - periodInterestExpense;
   const periodInvestingFlow = -periodInvestmentFlow;
   const periodFinancingFlow = periodLoanReceived - periodRepaymentFlow;
-  const periodNetCashFlow = periodOperatingFlow + periodInvestingFlow - periodSavingsFlow + periodFinancingFlow;
+  const periodNetCashFlow = periodOperatingFlow + periodInvestingFlow - periodSavingsFlow + periodFinancingFlow + periodAdjustmentFlow;
 
   return (
     <div className="space-y-6">
@@ -2060,7 +2306,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             Finance & Ledger
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Ledger totals update as you record changes. Bank balances and market prices are not fetched live; update them from your statements or provider.
+            Manual NPR bookkeeping. No bank sync; enter statement balances, fees and actual payouts yourself.
           </p>
         </div>
 
@@ -2085,10 +2331,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <ShieldCheck className="h-4 w-4 shrink-0 text-indigo-500" />
           </div>
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            ₹{netWorth.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            NPR {netWorth.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
           <div className="mt-1 text-xs text-slate-400 font-medium truncate">
-            Assets ₹{totalAssets.toLocaleString('en-IN')} - Debt ₹{totalLiabilities.toLocaleString('en-IN')}
+            Assets NPR {totalAssets.toLocaleString('en-IN')} - Debt NPR {totalLiabilities.toLocaleString('en-IN')}
           </div>
         </div>
 
@@ -2098,7 +2344,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <DollarSign className="h-4 w-4 shrink-0 text-emerald-500" />
           </div>
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-emerald-600 dark:text-emerald-400 tabular-nums truncate">
-            ₹{liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            NPR {liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
           <div className="mt-1 text-xs text-slate-400 font-medium truncate">Across {accounts.length} bank & cash accounts</div>
         </div>
@@ -2109,7 +2355,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <TrendingUp className="h-4 w-4 shrink-0 text-blue-500" />
           </div>
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            ₹{investmentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            NPR {investmentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
           <div className="mt-1 text-xs text-slate-400 font-medium truncate">{investments.length} portfolio assets</div>
         </div>
@@ -2120,7 +2366,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <ArrowUpRight className="h-4 w-4 shrink-0 text-rose-500" />
           </div>
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-rose-600 dark:text-rose-400 tabular-nums truncate">
-            ₹{totalLiabilities.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            NPR {totalLiabilities.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
           <div className="mt-1 text-xs text-slate-400 font-medium truncate">
             {loans.length} loans · {liabilities.length} liabilities
@@ -2212,11 +2458,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                    Amount (₹) <span className="text-rose-500">*</span>
+                    Amount (NPR) <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-semibold text-slate-400">
-                      ₹
+                      NPR 
                     </span>
                     <input
                       type="number"
@@ -2257,7 +2503,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
                     >
                       {accounts.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} (₹{Number(a.balance).toLocaleString('en-IN')})</option>
+                        <option key={a.id} value={a.id}>{a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})</option>
                       ))}
                     </select>
                   </div>
@@ -2271,7 +2517,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
                     >
                       {accounts.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} (₹{Number(a.balance).toLocaleString('en-IN')})</option>
+                        <option key={a.id} value={a.id}>{a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})</option>
                       ))}
                     </select>
                   </div>
@@ -2398,7 +2644,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         ) : (
                           accounts.map(a => (
                             <option key={a.id} value={a.id}>
-                              {a.name} (₹{Number(a.balance).toLocaleString('en-IN')})
+                              {a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})
                             </option>
                           ))
                         )}
@@ -2512,7 +2758,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         <option value="">-- Choose Vault Receipt --</option>
                         {receipts?.map(r => (
                           <option key={r.id} value={r.id}>
-                            {r.title} {r.amount ? `(₹${r.amount})` : ''} {r.fileName ? '📎' : ''}
+                            {r.title} {r.amount ? `(NPR ${r.amount})` : ''} {r.fileName ? '📎' : ''}
                           </option>
                         ))}
                       </select>
@@ -2564,16 +2810,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Gross Income Received:</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+₹{periodIncome.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+NPR {periodIncome.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Operating Expenses Paid:</span>
-                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-₹{periodExpense.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-NPR {periodExpense.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
+                  <span className="text-slate-500">Loan Interest Paid:</span>
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-NPR {periodInterestExpense.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
                   <span className="text-slate-700 dark:text-slate-300">Net Operating Flow:</span>
                   <span className={`font-mono font-bold ${periodOperatingFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    ₹{periodOperatingFlow.toLocaleString('en-IN')}
+                    NPR {periodOperatingFlow.toLocaleString('en-IN')}
                   </span>
                 </div>
 
@@ -2583,7 +2833,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
                   <span className="text-slate-500">Investments Capital Deployed:</span>
-                  <span className="font-mono font-bold text-blue-600">-₹{periodInvestmentFlow.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-blue-600">-NPR {periodInvestmentFlow.toLocaleString('en-IN')}</span>
                 </div>
 
                 {/* 3. Savings Capital Allocation */}
@@ -2593,7 +2843,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
                   <span className="text-slate-500">Net moved into savings:</span>
                   <span className={`font-mono font-bold ${periodSavingsFlow > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                    {periodSavingsFlow > 0 ? '-' : '+'}₹{Math.abs(periodSavingsFlow).toLocaleString('en-IN')}
+                    {periodSavingsFlow > 0 ? '-' : '+'}NPR {Math.abs(periodSavingsFlow).toLocaleString('en-IN')}
                   </span>
                 </div>
 
@@ -2603,16 +2853,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Loans Borrowed / Received:</span>
-                  <span className="font-mono font-bold text-teal-600 dark:text-teal-400">+₹{periodLoanReceived.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-teal-600 dark:text-teal-400">+NPR {periodLoanReceived.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
-                  <span className="text-slate-500">Loan Repayments / EMI Paid:</span>
-                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">-₹{periodRepaymentFlow.toLocaleString('en-IN')}</span>
+                  <span className="text-slate-500">Loan Principal Repaid:</span>
+                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">-NPR {periodRepaymentFlow.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
                   <span className="text-slate-700 dark:text-slate-300">Net Financing Flow:</span>
                   <span className={`font-mono font-bold ${periodFinancingFlow >= 0 ? 'text-teal-600' : 'text-purple-600'}`}>
-                    ₹{periodFinancingFlow.toLocaleString('en-IN')}
+                    NPR {periodFinancingFlow.toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-2">
+                  Reconciliation
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
+                  <span className="text-slate-500">Statement adjustments:</span>
+                  <span className={`font-mono font-bold ${periodAdjustmentFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {periodAdjustmentFlow >= 0 ? '+' : '-'}NPR {Math.abs(periodAdjustmentFlow).toLocaleString('en-IN')}
                   </span>
                 </div>
               </div>
@@ -2622,7 +2881,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <div className="mt-4 pt-3 flex justify-between py-1 font-bold text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700">
               <span>Net Ledger Delta ({dateFilterMode === 'all' ? 'All-Time' : 'Selected Period'}):</span>
               <span className={`font-mono text-sm ${periodNetCashFlow >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                ₹{periodNetCashFlow.toLocaleString('en-IN')}
+                NPR {periodNetCashFlow.toLocaleString('en-IN')}
               </span>
             </div>
           </div>
@@ -2645,17 +2904,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-600/50 dark:bg-amber-950/40 dark:text-amber-300'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
-                  title="Synchronize and calculate each account balance directly from your ledger transactions history"
+                  title="Recalculate account balances from all recorded transactions"
                 >
                   <RefreshCw className="h-3 w-3" />
-                  <span>{hasAnyAccountMismatch ? 'Fix Calculations / Reconcile' : 'Reconcile Balances'}</span>
+                  <span>{hasAnyAccountMismatch ? 'Recalculate from ledger' : 'Recheck ledger balances'}</span>
                 </button>
               )}
             </div>
 
             {hasAnyAccountMismatch && (
               <div className="mt-3 rounded-xl bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between">
-                <span>Discrepancy detected: Click to synchronize account balances with ledger records.</span>
+                <span>Account and ledger totals differ. Match each account to its latest statement below, or recalculate from ledger.</span>
                 <button
                   type="button"
                   onClick={handleReconcileAccounts}
@@ -2676,14 +2935,47 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <div className="text-[10px] text-slate-400 capitalize mt-0.5">{a.type} account</div>
                       {recon.isMismatch && (
                         <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-                          Ledger expects: ₹{recon.calculatedBalance.toLocaleString('en-IN')}
+                          Ledger expects: NPR {recon.calculatedBalance.toLocaleString('en-IN')}
                         </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStatementAccountId(statementAccountId === a.id ? null : a.id);
+                          setStatementBalance(String(Number(a.balance) || 0));
+                        }}
+                        className="mt-1 text-[10px] font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+                      >
+                        {statementAccountId === a.id ? 'Cancel statement match' : 'Match statement'}
+                      </button>
+                      {statementAccountId === a.id && (
+                        <form
+                          className="mt-2 flex flex-wrap items-center gap-1.5"
+                          onSubmit={event => {
+                            event.preventDefault();
+                            void handleRecordStatementBalance(a);
+                          }}
+                        >
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            required
+                            aria-label={`Statement balance for ${a.name}`}
+                            value={statementBalance}
+                            onChange={event => setStatementBalance(event.target.value)}
+                            className="h-7 w-28 rounded-md border border-slate-200 bg-white px-2 font-mono text-[10px] dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                          />
+                          <button type="submit" className="h-7 rounded-md bg-indigo-600 px-2 text-[10px] font-semibold text-white">
+                            Save
+                          </button>
+                        </form>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="text-right">
                         <div className="font-mono text-sm font-extrabold text-slate-900 dark:text-white tabular-nums">
-                          ₹{Number(a.balance).toLocaleString('en-IN')}
+                          NPR {Number(a.balance).toLocaleString('en-IN')}
                         </div>
                         {recon.isMismatch && (
                           <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
@@ -2726,7 +3018,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </select>
               <input
                 type="number"
-                placeholder="Opening ₹"
+                placeholder="Opening NPR "
                 value={acctBalance}
                 onChange={e => setAcctBalance(e.target.value)}
                 className="w-28 h-9 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -2768,7 +3060,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     ) : (
                       loans.map(l => (
                         <option key={l.id} value={l.id}>
-                          {l.name} — Outstanding: ₹{Number(l.outstanding).toLocaleString('en-IN')}
+                          {l.name} — Outstanding: NPR {Number(l.outstanding).toLocaleString('en-IN')}
                         </option>
                       ))
                     )}
@@ -2776,7 +3068,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Amount (₹)</label>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Amount (NPR)</label>
                     <input
                       type="number"
                       required
@@ -2795,11 +3087,41 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50"
                     >
                       {accounts.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} (₹{Number(a.balance).toLocaleString('en-IN')})</option>
+                        <option key={a.id} value={a.id}>{a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})</option>
                       ))}
                     </select>
                   </div>
                 </div>
+                <details className="rounded-xl border border-slate-100 px-3 py-2 dark:border-slate-800">
+                  <summary className="cursor-pointer text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                    Enter bank's principal / interest split (optional)
+                  </summary>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <label className="text-[10px] font-medium text-slate-500">
+                      Principal (NPR)
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={payPrincipalInput}
+                        onChange={event => setPayPrincipalInput(event.target.value)}
+                        className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </label>
+                    <label className="text-[10px] font-medium text-slate-500">
+                      Interest (NPR)
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={payInterestInput}
+                        onChange={event => setPayInterestInput(event.target.value)}
+                        className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </label>
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-400">Leave both blank to use the app's estimate.</p>
+                </details>
                 <button
                   type="submit"
                   disabled={loans.length === 0}
@@ -2839,7 +3161,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Principal (₹)</label>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Principal (NPR)</label>
                     <input
                       type="number"
                       required
@@ -2882,7 +3204,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <option value="">No account deposit</option>
                     {accounts.map(a => (
                       <option key={a.id} value={a.id}>
-                        {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                        {a.name} (Balance: NPR {Number(a.balance).toLocaleString('en-IN')})
                       </option>
                     ))}
                   </select>
@@ -2957,7 +3279,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Amount Due (₹)</label>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Amount Due (NPR)</label>
                     <input
                       type="number"
                       min="0.01"
@@ -3003,7 +3325,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   Loans ({loans.length})
                 </h2>
                 <span className="shrink-0 font-mono text-xs font-bold text-rose-600 dark:text-rose-400">
-                  Debt ₹{totalLoanLiabilities.toLocaleString('en-IN')}
+                  Debt NPR {totalLoanLiabilities.toLocaleString('en-IN')}
                 </span>
               </div>
 
@@ -3030,14 +3352,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                               </span>
                             </div>
                             <div className="text-[11px] text-slate-400 mt-1">
-                              Original Principal: ₹{l.principal.toLocaleString('en-IN')}
+                              Original Principal: NPR {l.principal.toLocaleString('en-IN')}
                             </div>
                           </div>
                           <div className="text-right flex items-start gap-2">
                             <div>
                               <div className="text-[10px] uppercase font-bold text-slate-400">Outstanding</div>
                               <div className="font-mono text-base font-extrabold text-rose-600 dark:text-rose-400 tabular-nums">
-                                ₹{Number(l.outstanding).toLocaleString('en-IN')}
+                                NPR {Number(l.outstanding).toLocaleString('en-IN')}
                               </div>
                             </div>
                             <button
@@ -3061,7 +3383,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                   <span>Principal Not Yet Deposited in Account</span>
                                 </div>
                                 <p className="text-[11px] text-amber-700 dark:text-amber-300/90 mt-0.5">
-                                  ₹{Number(l.principal).toLocaleString('en-IN')} is not added to your bank balance or recorded as inflow (+₹{Number(l.principal).toLocaleString('en-IN')}) in Cash Flow.
+                                  NPR {Number(l.principal).toLocaleString('en-IN')} is not added to your bank balance or recorded as inflow (+NPR {Number(l.principal).toLocaleString('en-IN')}) in Cash Flow.
                                 </p>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
@@ -3072,7 +3394,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                 >
                                   {accounts.map(a => (
                                     <option key={a.id} value={a.id}>
-                                      {a.name} (₹{Number(a.balance).toLocaleString('en-IN')})
+                                      {a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})
                                     </option>
                                   ))}
                                 </select>
@@ -3093,14 +3415,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         ) : (
                           <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2.5 py-1 rounded-lg border border-teal-200 dark:border-teal-900/50 w-fit">
                             <Check className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-                            <span>Principal (+₹{Number(l.principal).toLocaleString('en-IN')}) deposited into {depositedAccount?.name || 'Bank Account'} & recorded in ledger</span>
+                            <span>Principal (+NPR {Number(l.principal).toLocaleString('en-IN')}) deposited into {depositedAccount?.name || 'Bank Account'} & recorded in ledger</span>
                           </div>
                         )}
 
                         <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/60 text-[11px]">
                           <span className="text-slate-500">Calculated Monthly EMI:</span>
                           <span className="font-mono font-bold text-slate-900 dark:text-white">
-                            ₹{emi.toFixed(2)}
+                            NPR {emi.toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -3117,7 +3439,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   Other liabilities ({liabilities.length})
                 </h2>
                 <span className="shrink-0 font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
-                  Total ₹{manualLiabilitiesVal.toLocaleString('en-IN')}
+                  Total NPR {manualLiabilitiesVal.toLocaleString('en-IN')}
                 </span>
               </div>
 
@@ -3139,7 +3461,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="font-mono text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums">
-                            ₹{Number(l.amount).toLocaleString('en-IN')}
+                            NPR {Number(l.amount).toLocaleString('en-IN')}
                           </div>
                           {Number(l.amount) > 0 && (
                             <button
@@ -3173,7 +3495,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             required
                             value={liabilityRepaymentAmount}
                             onChange={e => setLiabilityRepaymentAmount(e.target.value)}
-                            placeholder="Repayment ₹"
+                            placeholder="Repayment NPR "
                             aria-label={`Repayment amount for ${l.name}`}
                             className="h-9 rounded-lg border border-slate-200 px-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                           />
@@ -3186,7 +3508,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           >
                             <option value="" disabled>{accounts.length ? 'Select account' : 'Create an account first'}</option>
                             {accounts.map(account => (
-                              <option key={account.id} value={account.id}>{account.name} · ₹{Number(account.balance).toLocaleString('en-IN')}</option>
+                              <option key={account.id} value={account.id}>{account.name} · NPR {Number(account.balance).toLocaleString('en-IN')}</option>
                             ))}
                           </select>
                           <button type="submit" className="h-9 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500">
@@ -3212,11 +3534,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <div>
                         <div className="font-semibold text-slate-900 dark:text-white">{p.loanName}</div>
                         <div className="text-[10px] text-slate-400">
-                          {p.date} · Principal ₹{p.principal.toFixed(0)} + Interest ₹{p.interest.toFixed(0)}
+                          {p.date} · Principal NPR {p.principal.toFixed(0)} + Interest NPR {p.interest.toFixed(0)}
                         </div>
                       </div>
                       <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        ₹{Number(p.amount).toLocaleString('en-IN')}
+                        NPR {Number(p.amount).toLocaleString('en-IN')}
                       </div>
                     </div>
                   ))}
@@ -3258,7 +3580,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Invested Amount (₹)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Invested Amount (NPR)</label>
                   <input
                     type="number"
                     required
@@ -3269,7 +3591,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Current Value (₹)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Current Value (NPR)</label>
                   <input
                     type="number"
                     value={invCurrentVal}
@@ -3282,20 +3604,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Fund from account (optional)
+                  Funding source
                 </label>
                 <select
                   value={invAccountId}
                   onChange={e => setInvAccountId(e.target.value)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
-                  <option value="">No account deduction</option>
+                  <option value="">Already invested / imported</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                      {a.name} (Balance: NPR {Number(a.balance).toLocaleString('en-IN')})
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Choose an account only when recording a new purchase now; imported holdings do not change cash flow.
+                </p>
               </div>
               <button
                 type="submit"
@@ -3312,7 +3637,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 Investment Portfolio ({investments.length})
               </h2>
               <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">
-                Portfolio: ₹{investmentValue.toLocaleString('en-IN')}
+                Portfolio: NPR {investmentValue.toLocaleString('en-IN')}
               </span>
             </div>
 
@@ -3336,16 +3661,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             {renderGoalBadge(i.goalId)}
                           </div>
                           <div className="text-[11px] text-slate-400 mt-0.5">
-                            Invested: ₹{invested.toLocaleString('en-IN')} · Date: {i.date}
+                            Invested: NPR {invested.toLocaleString('en-IN')} · Date: {i.date}
                           </div>
                         </div>
                         <div className="text-right flex items-start gap-3">
                           <div>
                             <div className="font-mono text-sm font-bold text-slate-900 dark:text-white tabular-nums">
-                              ₹{current.toLocaleString('en-IN')}
+                              NPR {current.toLocaleString('en-IN')}
                             </div>
                             <div className={`font-mono text-[11px] font-bold ${gain >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                              {gain >= 0 ? '+' : ''}₹{gain.toLocaleString('en-IN')} ({roiPct.toFixed(1)}%)
+                              {gain >= 0 ? '+' : ''}NPR {gain.toLocaleString('en-IN')} ({roiPct.toFixed(1)}%)
                             </div>
                           </div>
                           <button
@@ -3380,7 +3705,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           }}
                         >
                           <label className="min-w-36 flex-1 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                            Current market value (₹)
+                            Current market value (NPR)
                             <input
                               type="number"
                               min="0"
@@ -3480,7 +3805,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    {saveProductType === 'fixed_deposit' ? 'FD Principal (₹)' : 'Starting Reserve (₹)'}
+                    {saveProductType === 'fixed_deposit' ? 'FD Principal (NPR)' : 'Starting Reserve (NPR)'}
                   </label>
                   <input
                     type="number"
@@ -3493,7 +3818,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   />
                 </div>
                 {saveProductType === 'reserve' ? <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Amount (₹)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Amount (NPR)</label>
                   <input
                     type="number"
                     min="0.01"
@@ -3565,7 +3890,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               )}
               {saveProductType === 'fixed_deposit' && (
                 <div className="rounded-xl bg-indigo-50 p-3 text-[11px] text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200">
-                  Estimated maturity value: <strong>₹{(fixedDepositPreview || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
+                  Estimated maturity value: <strong>NPR {(fixedDepositPreview || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
                   {' '}on {getSavingsMaturityDate(saveStartDate, Number(saveMonths) || 1)} (before tax/TDS or bank-specific adjustments).
                 </div>
               )}
@@ -3589,7 +3914,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <option value="already-funded">Already funded / imported (do not deduct)</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                      {a.name} (Balance: NPR {Number(a.balance).toLocaleString('en-IN')})
                     </option>
                   ))}
                 </select>
@@ -3632,12 +3957,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           <div className="text-right">
                             <div className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
                               {isFixedDeposit
-                                ? `₹${current.toLocaleString('en-IN', { maximumFractionDigits: 2 })} est. / ₹${target.toLocaleString('en-IN', { maximumFractionDigits: 2 })} at maturity`
-                                : `₹${current.toLocaleString('en-IN')} reserve${target > 0 ? ` / ₹${target.toLocaleString('en-IN')} target` : ''}`}
+                                ? `NPR ${current.toLocaleString('en-IN', { maximumFractionDigits: 2 })} est. / NPR ${target.toLocaleString('en-IN', { maximumFractionDigits: 2 })} at maturity`
+                                : `NPR ${current.toLocaleString('en-IN')} reserve${target > 0 ? ` / NPR ${target.toLocaleString('en-IN')} target` : ''}`}
                             </div>
                             {isFixedDeposit && (
                               <div className="text-[10px] text-slate-400">
-                                Principal ₹{principal.toLocaleString('en-IN')} · {sp.annualInterestRate}% p.a. · maturity {valuation?.maturityDate}
+                                Principal NPR {principal.toLocaleString('en-IN')} · {sp.annualInterestRate}% p.a. · maturity {valuation?.maturityDate}
                               </div>
                             )}
                           </div>
@@ -3707,6 +4032,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Add Fixed / Physical Asset
             </h2>
+            <p className="mt-2 text-[10px] text-slate-400">
+              Records a current asset value only; enter any purchase payment separately in the ledger.
+            </p>
             <form onSubmit={handleAddAsset} className="mt-4 space-y-3">
               {/* Strategic Goal Link Mode Selector */}
               {renderGoalModeToggle(
@@ -3730,7 +4058,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Estimated Market Value (₹)</label>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Estimated Market Value (NPR)</label>
                 <input
                   type="number"
                   required
@@ -3754,27 +4082,27 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
               <span>Sovereign Balance Sheet</span>
               <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                Net Worth: ₹{netWorth.toLocaleString('en-IN')}
+                Net Worth: NPR {netWorth.toLocaleString('en-IN')}
               </span>
             </h2>
 
             <div className="space-y-4 text-xs">
               <div>
                 <h3 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px] mb-2">
-                  Total Assets (₹{totalAssets.toLocaleString('en-IN')})
+                  Total Assets (NPR {totalAssets.toLocaleString('en-IN')})
                 </h3>
                 <div className="space-y-1.5 pl-2 border-l-2 border-emerald-500">
                   <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
                     <span>Liquid Bank & Cash ({accounts.length} accounts):</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">₹{liquidCash.toLocaleString('en-IN')}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">NPR {liquidCash.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
                     <span>Investment Portfolio ({investments.length} holdings):</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">₹{investmentValue.toLocaleString('en-IN')}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">NPR {investmentValue.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
                     <span>Savings & Term Deposits ({savingsPlans.length} items):</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">₹{totalSavings.toLocaleString('en-IN')}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">NPR {totalSavings.toLocaleString('en-IN')}</span>
                   </div>
                   {assets.map(a => (
                     <div key={a.id} className="flex justify-between py-1 text-slate-600 dark:text-slate-400 group">
@@ -3789,7 +4117,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           <Trash2 className="h-3 w-3" />
                         </button>
                       </span>
-                      <span className="font-mono font-bold text-slate-900 dark:text-white">₹{Number(a.value).toLocaleString('en-IN')}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">NPR {Number(a.value).toLocaleString('en-IN')}</span>
                     </div>
                   ))}
                 </div>
@@ -3797,16 +4125,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
               <div className="pt-2">
                 <h3 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px] mb-2">
-                  Total Liabilities (₹{totalLiabilities.toLocaleString('en-IN')})
+                  Total Liabilities (NPR {totalLiabilities.toLocaleString('en-IN')})
                 </h3>
                 <div className="space-y-1.5 pl-2 border-l-2 border-rose-500">
                   <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
                     <span>Loan Balances ({loans.length} active):</span>
-                    <span className="font-mono font-bold text-rose-600 dark:text-rose-400">₹{totalLoanLiabilities.toLocaleString('en-IN')}</span>
+                    <span className="font-mono font-bold text-rose-600 dark:text-rose-400">NPR {totalLoanLiabilities.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
                     <span>Other Liabilities ({liabilities.length} items):</span>
-                    <span className="font-mono font-bold text-rose-600 dark:text-rose-400">₹{manualLiabilitiesVal.toLocaleString('en-IN')}</span>
+                    <span className="font-mono font-bold text-rose-600 dark:text-rose-400">NPR {manualLiabilitiesVal.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
@@ -4014,7 +4342,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 { id: 'repayment', label: `Repayments (${dateAndSearchFilteredTxs.filter(t => t.type === 'repayment').length})` },
                 { id: 'investment', label: `Investments (${dateAndSearchFilteredTxs.filter(t => t.type === 'investment').length})` },
                 { id: 'savings', label: `Savings deposits (${dateAndSearchFilteredTxs.filter(t => t.type === 'savings').length})` },
-                { id: 'savingsWithdrawal', label: `Savings withdrawals (${dateAndSearchFilteredTxs.filter(t => t.type === 'savingsWithdrawal').length})` }
+                { id: 'savingsWithdrawal', label: `Savings withdrawals (${dateAndSearchFilteredTxs.filter(t => t.type === 'savingsWithdrawal').length})` },
+                { id: 'adjustment', label: `Adjustments (${dateAndSearchFilteredTxs.filter(t => t.type === 'adjustment').length})` }
               ].map(f => (
                 <button
                   key={f.id}
@@ -4075,7 +4404,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 const attachType = tx.fileType;
 
                 return (
-                  <div key={tx.id} className="flex flex-col sm:flex-row sm:items-center justify-between py-3 text-xs gap-2">
+                  <div key={tx.id} className="py-3 text-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
                         <span>{tx.category}</span>
@@ -4151,7 +4481,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             ? 'text-purple-600 dark:text-purple-400'
                             : 'text-indigo-600 dark:text-indigo-400'
                         }`}>
-                          {tx.type === 'income' || tx.type === 'loan' || tx.type === 'savingsWithdrawal' ? '+' : tx.type === 'transfer' ? '⇄ ' : '-'}₹{Number(tx.amount || 0).toLocaleString('en-IN')}
+                          {tx.type === 'income' || tx.type === 'loan' || tx.type === 'savingsWithdrawal' || (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit') ? '+' : tx.type === 'transfer' ? '⇄ ' : '-'}NPR {Number(tx.amount || 0).toLocaleString('en-IN')}
                         </span>
                         <div className="text-[10px] font-medium text-slate-400">
                           {tx.type === 'income' && 'Income Inflow'}
@@ -4162,17 +4492,109 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           {tx.type === 'savingsWithdrawal' && 'Savings Returned to Account'}
                           {tx.type === 'repayment' && 'Debt Service'}
                           {tx.type === 'transfer' && 'Internal Transfer'}
+                          {tx.type === 'adjustment' && `Statement ${tx.adjustmentDirection || 'debit'} adjustment`}
                         </div>
                       </div>
+                      {(tx.type === 'income' || tx.type === 'expense' || tx.type === 'transfer') && (
+                        <button
+                          type="button"
+                          onClick={() => startEditingTransaction(tx)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
+                          title="Edit transaction"
+                          aria-label={`Edit ${tx.category}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => setDeleteTarget({ store: 'finance', id: tx.id, name: `${tx.category} (₹${tx.amount})` })}
+                        onClick={() => setDeleteTarget({ store: 'finance', id: tx.id, name: `${tx.category} (NPR ${tx.amount})` })}
                         className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors cursor-pointer"
                         title="Delete transaction record"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                    </div>
+                    {editingTransactionId === tx.id && (
+                      <form
+                        className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-900/50 dark:bg-indigo-950/20 sm:grid-cols-4"
+                        onSubmit={event => void handleSaveTransactionEdit(event, tx)}
+                      >
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          required
+                          aria-label="Transaction amount"
+                          value={editingTransactionAmount}
+                          onChange={event => setEditingTransactionAmount(event.target.value)}
+                          className="h-8 rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        />
+                        <input
+                          type="date"
+                          required
+                          aria-label="Transaction date"
+                          value={editingTransactionDate}
+                          onChange={event => setEditingTransactionDate(event.target.value)}
+                          className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        />
+                        {tx.type === 'transfer' ? (
+                          <>
+                            <select
+                              aria-label="Transfer from account"
+                              value={editingTransactionAccountId}
+                              onChange={event => setEditingTransactionAccountId(event.target.value)}
+                              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                            >
+                              {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+                            </select>
+                            <select
+                              aria-label="Transfer to account"
+                              value={editingTransactionToAccountId}
+                              onChange={event => setEditingTransactionToAccountId(event.target.value)}
+                              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                            >
+                              {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+                            </select>
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="text"
+                              aria-label="Transaction category"
+                              value={editingTransactionCategory}
+                              onChange={event => setEditingTransactionCategory(event.target.value)}
+                              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                            />
+                            <select
+                              aria-label="Transaction account"
+                              value={editingTransactionAccountId}
+                              onChange={event => setEditingTransactionAccountId(event.target.value)}
+                              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                            >
+                              {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+                            </select>
+                          </>
+                        )}
+                        <input
+                          type="text"
+                          aria-label="Transaction note"
+                          placeholder="Note (optional)"
+                          value={editingTransactionNote}
+                          onChange={event => setEditingTransactionNote(event.target.value)}
+                          className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        />
+                        <div className="col-span-2 flex justify-end gap-2 sm:col-span-4">
+                          <button type="button" onClick={() => setEditingTransactionId(null)} className="h-8 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                            Cancel
+                          </button>
+                          <button type="submit" className="h-8 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white">
+                            Save
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 );
               })
@@ -4267,7 +4689,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   Contribute to Savings
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {depositTargetPlan.name} (Current: ₹{Number(depositTargetPlan.currentAmount).toLocaleString('en-IN')})
+                  {depositTargetPlan.name} (Current: NPR {Number(depositTargetPlan.currentAmount).toLocaleString('en-IN')})
                 </p>
               </div>
               <button
@@ -4282,7 +4704,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <form onSubmit={handleDepositToSavings} className="mt-4 space-y-3.5">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Contribution Amount (₹) <span className="text-rose-500">*</span>
+                  Contribution Amount (NPR) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -4308,7 +4730,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <option value="" disabled>Select source account</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                      {a.name} (Balance: NPR {Number(a.balance).toLocaleString('en-IN')})
                     </option>
                   ))}
                 </select>
@@ -4366,28 +4788,27 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </button>
             </div>
             <form onSubmit={handleWithdrawSavings} className="mt-4 space-y-3.5">
-              {withdrawalTargetPlan.productType === 'fixed_deposit' ? (
+              {withdrawalTargetPlan.productType === 'fixed_deposit' && (
                 <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                  Estimated gross payout: <strong>₹{getFixedDepositValue(withdrawalTargetPlan).currentValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>.
-                  This estimate excludes tax/TDS and any bank penalty for premature closure.
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                    Amount (available ₹{Number(withdrawalTargetPlan.currentAmount).toLocaleString('en-IN')})
-                  </label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    max={Number(withdrawalTargetPlan.currentAmount)}
-                    step="0.01"
-                    required
-                    value={withdrawalAmount}
-                    onChange={e => setWithdrawalAmount(e.target.value)}
-                    className="mt-1 h-9.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
+                  Estimated gross payout: <strong>NPR {getFixedDepositValue(withdrawalTargetPlan).currentValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>.
+                  Enter the bank's actual payout below, after tax/TDS and any penalty.
                 </div>
               )}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Actual payout amount{withdrawalTargetPlan.productType !== 'fixed_deposit' && ` (available NPR ${Number(withdrawalTargetPlan.currentAmount).toLocaleString('en-IN')})`}
+                </label>
+                <input
+                  type="number"
+                  min="0.01"
+                  max={withdrawalTargetPlan.productType !== 'fixed_deposit' ? Number(withdrawalTargetPlan.currentAmount) : undefined}
+                  step="0.01"
+                  required
+                  value={withdrawalAmount}
+                  onChange={e => setWithdrawalAmount(e.target.value)}
+                  className="mt-1 h-9.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Deposit payout to account</label>
                 <select

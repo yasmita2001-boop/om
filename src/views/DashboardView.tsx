@@ -258,10 +258,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
           </div>
           <div className={`mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums truncate ${netCashFlow >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-            ₹{netCashFlow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            NPR {netCashFlow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            All-time ledger · cash ₹{liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            All-time ledger · cash NPR {liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
         </div>
       </div>
@@ -484,7 +484,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <span>Inflow · all time</span>
               </div>
               <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                ₹{totalInflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                NPR {totalInflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
               </div>
             </div>
 
@@ -494,7 +494,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <span>Outflow · all time</span>
               </div>
               <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                ₹{totalOutflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                NPR {totalOutflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
               </div>
             </div>
           </div>
@@ -509,8 +509,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 No transactions yet. Recent ledger activity will appear here.
               </div>
             ) : [...finance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3).map(tx => {
-              const isInflow = tx.type === 'income' || tx.type === 'loan';
+              const isInflow = tx.type === 'income' || tx.type === 'loan' ||
+                tx.type === 'savingsWithdrawal' ||
+                (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit');
               const isTransfer = tx.type === 'transfer';
+              const isLedgerOnly = Boolean(tx.ledgerOnly);
               return (
               <div
                 key={tx.id}
@@ -520,8 +523,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                   <span className="font-semibold text-slate-800 dark:text-slate-200">{tx.category}</span>
                   {tx.note && <span className="ml-1.5 text-slate-400">({tx.note})</span>}
                 </div>
-                <span className={`shrink-0 font-mono font-bold tabular-nums ${isInflow ? (tx.type === 'loan' ? 'text-teal-600 dark:text-teal-400' : 'text-emerald-600') : 'text-slate-900 dark:text-white'}`}>
-                  {isInflow ? '+' : isTransfer ? '⇄ ' : '-'}₹{Number(tx.amount || 0).toLocaleString('en-IN')}
+                <span className={`shrink-0 font-mono font-bold tabular-nums ${isLedgerOnly ? 'text-slate-500' : isInflow ? (tx.type === 'loan' ? 'text-teal-600 dark:text-teal-400' : 'text-emerald-600') : 'text-slate-900 dark:text-white'}`}>
+                  {isLedgerOnly ? '' : isInflow ? '+' : isTransfer ? '⇄ ' : '-'}NPR {Number(tx.amount || 0).toLocaleString('en-IN')}
                 </span>
               </div>
               );

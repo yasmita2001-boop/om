@@ -229,6 +229,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [liabVal, setLiabVal] = useState('');
   const [liabCategory, setLiabCategory] = useState('Credit Card');
   const [liabDueDate, setLiabDueDate] = useState('');
+  const [liabRecordMode, setLiabRecordMode] = useState<'existing' | 'borrowed'>('existing');
+  const [liabDepositAccountId, setLiabDepositAccountId] = useState(accounts[0]?.id || '');
+  const [liabilityRepaymentId, setLiabilityRepaymentId] = useState<string | null>(null);
+  const [liabilityRepaymentAmount, setLiabilityRepaymentAmount] = useState('');
+  const [liabilityRepaymentAccountId, setLiabilityRepaymentAccountId] = useState(accounts[0]?.id || '');
 
   // New Investment Form
   const [invName, setInvName] = useState('');
@@ -1139,25 +1144,130 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   // Add Liability (Other payables, Credit cards, Personal debts)
   const handleAddLiability = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!liabName.trim() || !liabVal) return;
+    const amount = Number(liabVal);
+    if (!liabName.trim() || !Number.isFinite(amount) || amount <= 0) {
+      reportError('Enter a liability name and an amount greater than zero.');
+      return;
+    }
+    const depositAccount = liabRecordMode === 'borrowed'
+      ? accounts.find(account => account.id === (liabDepositAccountId || accounts[0]?.id))
+      : undefined;
+    if (liabRecordMode === 'borrowed' && !depositAccount) {
+      reportError('Create or select an account to record where the borrowed money was deposited.');
+      return;
+    }
+    const now = Date.now();
     const l: Liability = {
       id: generateUUID(),
       name: liabName.trim(),
-      amount: Number(liabVal) || 0,
+      amount,
       category: liabCategory,
       dueDate: liabDueDate || undefined,
-      goalId: liabInputMode === 'link' && liabGoalId ? liabGoalId : null
+      goalId: liabInputMode === 'link' && liabGoalId ? liabGoalId : null,
+      createdAt: now
     };
-    await storage.put('liabilities', l);
+    const operations: Array<{ storeName: string; item: any }> = [
+      { storeName: 'liabilities', item: l }
+    ];
+    if (depositAccount) {
+      operations.push(
+        {
+          storeName: 'financeAccounts',
+          item: { ...depositAccount, balance: (Number(depositAccount.balance) || 0) + amount }
+        },
+        {
+          storeName: 'finance',
+          item: {
+            id: generateUUID(),
+            type: 'loan',
+            amount,
+            category: 'Liability Borrowing',
+            date: today,
+            note: `${l.name} borrowed`,
+            accountId: depositAccount.id,
+            goalId: l.goalId || null,
+            linkedLiabilityId: l.id,
+            createdAt: now
+          } satisfies FinanceTransaction
+        }
+      );
+    }
+    try {
+      await storage.atomicPutMany(operations);
+    } catch (err) {
+      console.error('Unable to record liability', err);
+      reportError('Liability could not be saved. Please try again.');
+      return;
+    }
     if (l.goalId) {
       await syncGoalProgressFromFinance(l.goalId);
     }
-    onSuccess(`Liability "${liabName}" added${l.goalId ? ' & linked to Goal' : ''}`);
+    onSuccess(liabRecordMode === 'borrowed'
+      ? `₹${amount.toLocaleString('en-IN')} borrowed into "${depositAccount?.name}" and added to liabilities`
+      : `Existing liability "${liabName}" recorded without changing account balance${l.goalId ? ' & linked to Goal' : ''}`);
     setLiabName('');
     setLiabVal('');
     setLiabDueDate('');
     setLiabGoalId('');
     setLiabInputMode('manual');
+    setLiabRecordMode('existing');
+    onRefresh();
+  };
+
+  const handleRepayLiability = async (e: React.FormEvent, liability: Liability) => {
+    e.preventDefault();
+    const amount = Number(liabilityRepaymentAmount);
+    const outstanding = Number(liability.amount) || 0;
+    const accountId = liabilityRepaymentAccountId || accounts[0]?.id;
+    const account = accounts.find(item => item.id === accountId);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      reportError('Enter a repayment amount greater than zero.');
+      return;
+    }
+    if (amount > outstanding) {
+      reportError(`Repayment exceeds the outstanding liability of ₹${outstanding.toLocaleString('en-IN')}.`);
+      return;
+    }
+    if (!account) {
+      reportError('Select an available account to debit for this repayment.');
+      return;
+    }
+
+    const now = Date.now();
+    const payment: FinanceTransaction = {
+      id: generateUUID(),
+      type: 'repayment',
+      amount,
+      principal: amount,
+      interest: 0,
+      category: 'Liability Repayment',
+      date: today,
+      note: liability.name,
+      accountId: account.id,
+      goalId: liability.goalId || null,
+      linkedLiabilityId: liability.id,
+      createdAt: now
+    };
+    try {
+      await storage.atomicPutMany([
+        {
+          storeName: 'financeAccounts',
+          item: { ...account, balance: (Number(account.balance) || 0) - amount }
+        },
+        { storeName: 'liabilities', item: { ...liability, amount: Math.max(0, outstanding - amount) } },
+        { storeName: 'finance', item: payment }
+      ]);
+    } catch (err) {
+      console.error('Unable to record liability repayment', err);
+      reportError('Liability repayment could not be saved. Please try again.');
+      return;
+    }
+    if (liability.goalId) {
+      await syncGoalProgressFromFinance(liability.goalId);
+    }
+    onSuccess(`₹${amount.toLocaleString('en-IN')} repayment deducted from "${account.name}" and liability reduced`);
+    setLiabilityRepaymentId(null);
+    setLiabilityRepaymentAmount('');
     onRefresh();
   };
 
@@ -1440,6 +1550,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         return;
       }
     }
+    if (deleteTarget.store === 'liabilities') {
+      const hasTransactions = transactions.some(tx => tx.linkedLiabilityId === deleteTarget.id);
+      if (hasTransactions) {
+        setDeleteTarget(null);
+        reportError('This liability has borrowing or repayment history. Remove its linked ledger entries first so account balances and outstanding debt remain accurate.');
+        return;
+      }
+    }
     if (deleteTarget.store === 'savingsPlans') {
       const plan = savingsPlans.find(item => item.id === deleteTarget.id);
       const hasContributions = transactions.some(tx => tx.linkedSavingsPlanId === deleteTarget.id);
@@ -1452,6 +1570,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     let linkedGoalIdToDelete: string | null | undefined = null;
     if (deleteTarget.store === 'finance') {
       const tx = transactions.find(t => t.id === deleteTarget.id);
+      if (
+        tx?.type === 'loan' &&
+        tx.linkedLiabilityId &&
+        transactions.some(item => item.id !== tx.id && item.linkedLiabilityId === tx.linkedLiabilityId)
+      ) {
+        setDeleteTarget(null);
+        reportError('Remove this liability’s repayment entries first, then remove the original borrowing entry.');
+        return;
+      }
+      if (
+        tx?.type === 'loan' &&
+        tx.linkedLoanId &&
+        (transactions.some(item => item.id !== tx.id && item.linkedLoanId === tx.linkedLoanId) ||
+          loanPayments.some(payment => payment.loanId === tx.linkedLoanId))
+      ) {
+        setDeleteTarget(null);
+        reportError('This loan has repayment history. Remove its repayments first, then remove the original disbursement.');
+        return;
+      }
       linkedGoalIdToDelete = tx?.goalId;
       await storage.deleteFinanceTransactionWithLink(deleteTarget.id);
       if (tx?.type === 'expense' || tx?.type === 'investment') {
@@ -1461,7 +1598,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       } else if (tx?.type === 'transfer') {
         onSuccess(`✓ Removed transfer & reversed both account balances`);
       } else if (tx?.type === 'loan') {
-        onSuccess(`✓ Removed loan transaction & adjusted account balance`);
+        onSuccess(`✓ Removed loan transaction & adjusted its linked debt and account balance`);
       } else if (tx?.type === 'income') {
         onSuccess(`✓ Removed "${deleteTarget.name}" & adjusted account balance`);
       } else {
@@ -2555,6 +2692,38 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 )}
 
                 <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">How are you recording this debt?</label>
+                  <select
+                    value={liabRecordMode}
+                    onChange={e => setLiabRecordMode(e.target.value as 'existing' | 'borrowed')}
+                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="existing">Already owed (record balance only)</option>
+                    <option value="borrowed">Borrowed now (deposit into account)</option>
+                  </select>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    {liabRecordMode === 'borrowed'
+                      ? 'The account increases and the liability is recorded; this is not income.'
+                      : 'Use this for an old debt or a bill already paid/spent; account balances stay unchanged.'}
+                  </p>
+                </div>
+                {liabRecordMode === 'borrowed' && (
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Deposit to account</label>
+                    <select
+                      required
+                      value={liabDepositAccountId || accounts[0]?.id || ''}
+                      onChange={e => setLiabDepositAccountId(e.target.value)}
+                      className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="" disabled>{accounts.length ? 'Select account' : 'Create an account first'}</option>
+                      {accounts.map(account => (
+                        <option key={account.id} value={account.id}>{account.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Liability Name</label>
                   <input
                     type="text"
@@ -2570,6 +2739,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Amount Due (₹)</label>
                     <input
                       type="number"
+                      min="0.01"
+                      step="0.01"
                       required
                       value={liabVal}
                       onChange={e => setLiabVal(e.target.value)}
@@ -2596,7 +2767,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   type="submit"
                   className="w-full rounded-xl bg-slate-900 dark:bg-slate-800 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 dark:hover:bg-slate-700 cursor-pointer"
                 >
-                  + Register Liability
+                {liabRecordMode === 'borrowed' ? '+ Borrow & Record Liability' : '+ Register Existing Liability'}
                 </button>
               </form>
             </div>
@@ -2736,27 +2907,72 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </div>
                 ) : (
                   liabilities.map(l => (
-                    <div key={l.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center group">
-                      <div>
-                        <div className="font-bold text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
-                          <span>{l.name}</span>
-                          {renderGoalBadge(l.goalId)}
+                    <div key={l.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 group">
+                      <div className="flex justify-between items-center gap-3">
+                        <div>
+                          <div className="font-bold text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
+                            <span>{l.name}</span>
+                            {renderGoalBadge(l.goalId)}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{l.category || 'Payable / Liability'}</div>
                         </div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">{l.category || 'Payable / Liability'}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="font-mono text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums">
-                          ₹{Number(l.amount).toLocaleString('en-IN')}
+                        <div className="flex items-center gap-2">
+                          <div className="font-mono text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+                            ₹{Number(l.amount).toLocaleString('en-IN')}
+                          </div>
+                          {Number(l.amount) > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLiabilityRepaymentId(liabilityRepaymentId === l.id ? null : l.id);
+                                setLiabilityRepaymentAmount('');
+                              }}
+                              className="rounded-lg border border-indigo-200 px-2 py-1 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
+                            >
+                              {liabilityRepaymentId === l.id ? 'Cancel' : 'Repay'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget({ store: 'liabilities', id: l.id, name: l.name })}
+                            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
+                            title="Delete liability"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget({ store: 'liabilities', id: l.id, name: l.name })}
-                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
-                          title="Settle or delete liability"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
                       </div>
+                      {liabilityRepaymentId === l.id && (
+                        <form onSubmit={e => handleRepayLiability(e, l)} className="mt-3 grid grid-cols-1 gap-2 border-t border-slate-100 pt-3 dark:border-slate-800 sm:grid-cols-[1fr_1.5fr_auto]">
+                          <input
+                            type="number"
+                            min="0.01"
+                            max={Number(l.amount)}
+                            step="0.01"
+                            required
+                            value={liabilityRepaymentAmount}
+                            onChange={e => setLiabilityRepaymentAmount(e.target.value)}
+                            placeholder="Repayment ₹"
+                            aria-label={`Repayment amount for ${l.name}`}
+                            className="h-9 rounded-lg border border-slate-200 px-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                          />
+                          <select
+                            required
+                            value={liabilityRepaymentAccountId || accounts[0]?.id || ''}
+                            onChange={e => setLiabilityRepaymentAccountId(e.target.value)}
+                            aria-label={`Pay ${l.name} from account`}
+                            className="h-9 rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                          >
+                            <option value="" disabled>{accounts.length ? 'Select account' : 'Create an account first'}</option>
+                            {accounts.map(account => (
+                              <option key={account.id} value={account.id}>{account.name} · ₹{Number(account.balance).toLocaleString('en-IN')}</option>
+                            ))}
+                          </select>
+                          <button type="submit" className="h-9 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500">
+                            Record payment
+                          </button>
+                        </form>
+                      )}
                     </div>
                   ))
                 )}

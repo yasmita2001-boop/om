@@ -384,7 +384,7 @@ export interface SavingsPlan {
   currentAmount: number;
   targetAmount: number;
   durationMonths: number;
-  productType?: 'reserve' | 'fixed_deposit';
+  productType?: 'reserve' | 'recurring_deposit' | 'fixed_deposit' | 'pension' | 'cooperative' | 'bond' | 'other';
   annualInterestRate?: number;
   compoundingPerYear?: 1 | 2 | 4 | 12;
   startDate?: string;

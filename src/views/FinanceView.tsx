@@ -2461,9 +2461,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     Amount (NPR) <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-semibold text-slate-400">
-                      NPR 
-                    </span>
                     <input
                       type="number"
                       step="0.01"
@@ -2471,7 +2468,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       value={txAmount}
                       onChange={e => setTxAmount(e.target.value)}
                       placeholder="0.00"
-                      className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 pl-7 pr-3 font-mono text-xs sm:text-sm font-semibold text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
+                      className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs sm:text-sm font-semibold text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -3888,10 +3885,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </div>
                 </>
               )}
-              {saveProductType === 'fixed_deposit' && (
+              {saveProductType === 'fixed_deposit' && Number(saveCurrent) > 0 && (
                 <div className="rounded-xl bg-indigo-50 p-3 text-[11px] text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200">
-                  Estimated maturity value: <strong>NPR {(fixedDepositPreview || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
-                  {' '}on {getSavingsMaturityDate(saveStartDate, Number(saveMonths) || 1)} (before tax/TDS or bank-specific adjustments).
+                  Estimated maturity · <strong>NPR {Number(fixedDepositPreview || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
+                  {' '}· {getSavingsMaturityDate(saveStartDate, Number(saveMonths) || 1)}
                 </div>
               )}
 
@@ -3911,16 +3908,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   }}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
-                  <option value="already-funded">Already funded / imported (do not deduct)</option>
+                  <option value="already-funded">Already funded</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.name} (Balance: NPR {Number(a.balance).toLocaleString('en-IN')})
+                      {a.name} · NPR {Number(a.balance).toLocaleString('en-IN')}
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-[10px] text-slate-400">
-                  Choose an account only if this form should deduct the opening deposit now. Use “Already funded” only when the money is already outside your tracked account balances.
-                </p>
               </div>
               <button
                 type="submit"

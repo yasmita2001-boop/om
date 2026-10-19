@@ -670,6 +670,29 @@ class StorageEngine {
           } catch {}
         }
       }
+      // Reverse a savings withdrawal: debit its destination account and restore principal.
+      else if (tx.type === 'savingsWithdrawal') {
+        if (tx.accountId && amt > 0) {
+          const acct = await this.get<any>('financeAccounts', tx.accountId);
+          if (acct) {
+            await this.put('financeAccounts', {
+              ...acct,
+              balance: (Number(acct.balance) || 0) - amt
+            });
+          }
+        }
+        if (tx.linkedSavingsPlanId) {
+          const plan = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
+          if (plan) {
+            const principal = Number(tx.principal) || amt;
+            await this.put('savingsPlans', {
+              ...plan,
+              currentAmount: (Number(plan.currentAmount) || 0) + principal,
+              updatedAt: Date.now()
+            });
+          }
+        }
+      }
       // 3. Regular Expense, Investment, Savings, Income, or Loan Receipt
       else {
         if (tx.accountId && amt > 0) {
@@ -700,16 +723,14 @@ class StorageEngine {
 
         // Adjust linked savings plan current amount if this was a savings contribution
         if (tx.linkedSavingsPlanId) {
-          try {
-            const sp = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
-            if (sp) {
-              await this.put('savingsPlans', {
-                ...sp,
-                currentAmount: Math.max(0, (Number(sp.currentAmount) || 0) - amt),
-                updatedAt: Date.now()
-              });
-            }
-          } catch {}
+          const sp = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
+          if (sp) {
+            await this.put('savingsPlans', {
+              ...sp,
+              currentAmount: Math.max(0, (Number(sp.currentAmount) || 0) - amt),
+              updatedAt: Date.now()
+            });
+          }
         }
       }
 
@@ -782,6 +803,24 @@ class StorageEngine {
           });
         }
       }
+    } else if (tx.type === 'savingsWithdrawal') {
+      if (tx.accountId) {
+        const acct = await this.get<any>('financeAccounts', tx.accountId);
+        if (acct) {
+          await this.put('financeAccounts', { ...acct, balance: (Number(acct.balance) || 0) + amt });
+        }
+      }
+      if (tx.linkedSavingsPlanId) {
+        const plan = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
+        if (plan) {
+          const principal = Number(tx.principal) || amt;
+          await this.put('savingsPlans', {
+            ...plan,
+            currentAmount: Math.max(0, (Number(plan.currentAmount) || 0) - principal),
+            updatedAt: Date.now()
+          });
+        }
+      }
     } else {
       if (tx.accountId) {
         const acct = await this.get<any>('financeAccounts', tx.accountId);
@@ -801,6 +840,16 @@ class StorageEngine {
           await this.put('liabilities', {
             ...liability,
             amount: (Number(liability.amount) || 0) + amt
+          });
+        }
+      }
+      if (tx.type === 'savings' && tx.linkedSavingsPlanId) {
+        const plan = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
+        if (plan) {
+          await this.put('savingsPlans', {
+            ...plan,
+            currentAmount: (Number(plan.currentAmount) || 0) + amt,
+            updatedAt: Date.now()
           });
         }
       }

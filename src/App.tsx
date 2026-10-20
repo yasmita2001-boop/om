@@ -3,6 +3,7 @@ import {
   NavModule, AppState, Task, Goal, Milestone, Strategy, KPI, Mission,
   Routine, Habit, HabitLog, FinanceAccount, FinanceTransaction, Loan,
   LoanPayment, Investment, SavingsPlan, Asset, Liability, FinancialGoal,
+  InvestmentActivity, CashFlowSchedule,
   Note, JournalEntry, FocusSession, SleepRecord, WaterRecord, NutritionRecord,
   HealthMeasurement, HealthAppointment, HealthNote, HealthProfile, WorkProject, LearningItem,
   Meeting, Person, Interaction, ValueItem, SpiritualPractice, Commitment,
@@ -10,11 +11,14 @@ import {
   ImportantRecordItem, ReminderItem, NotificationItem, AchievementItem,
   CalcHistoryItem, Skill, Course, WorkResponsibility
 } from './types';
-import { storage } from './lib/storage';
+import { ensureDefaultProfiles, storage } from './lib/storage';
 import { getGoogleWorkspaceProfileId, GoogleUser, signInWithGoogle } from './lib/googleDriveSync';
 import { getLocalDateString } from './lib/dateUtils';
 import watermarkUrl from './assets/om-lifeos-watermark.png';
 import { LockKeyhole, ShieldCheck } from 'lucide-react';
+
+const IS_LOCAL_TEST_BUILD = import.meta.env.MODE === 'local-test';
+const GUEST_PROFILE_ID = 'om-master-profile';
 
 // Components
 import { Header } from './components/Header';
@@ -84,12 +88,14 @@ function LifeOSApp() {
 
   // Entities state
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
-  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(
+    IS_LOCAL_TEST_BUILD ? GUEST_PROFILE_ID : null
+  );
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
-  const [isGoogleLocked, setIsGoogleLocked] = useState(true);
+  const [isGoogleLocked, setIsGoogleLocked] = useState(!IS_LOCAL_TEST_BUILD);
   const [isUnlockingGoogle, setIsUnlockingGoogle] = useState(false);
   const [googleUnlockError, setGoogleUnlockError] = useState<string | null>(null);
-  const activeProfileIdRef = useRef<string | null>(null);
+  const activeProfileIdRef = useRef<string | null>(activeProfileId);
   const loadGenerationRef = useRef(0);
   useEffect(() => {
     activeProfileIdRef.current = activeProfileId;
@@ -110,6 +116,8 @@ function LifeOSApp() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [investmentActivities, setInvestmentActivities] = useState<InvestmentActivity[]>([]);
+  const [cashFlowSchedules, setCashFlowSchedules] = useState<CashFlowSchedule[]>([]);
   const [savingsPlans, setSavingsPlans] = useState<SavingsPlan[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [liabilities, setLiabilities] = useState<Liability[]>([]);
@@ -165,7 +173,10 @@ function LifeOSApp() {
     try {
       const requestedProfileId = overrideProfileId || activeProfileIdRef.current || storage.getActiveProfileId();
       if (requestedProfileId) storage.setActiveProfile(requestedProfileId);
-      const settingsData = await storage.getSingleton<AppState>('appSettings', requestedProfileId || undefined);
+      let settingsData = await storage.getSingleton<AppState>('appSettings', requestedProfileId || undefined);
+      if (!settingsData && IS_LOCAL_TEST_BUILD && requestedProfileId === GUEST_PROFILE_ID) {
+        settingsData = await ensureDefaultProfiles();
+      }
       const activeId = requestedProfileId || settingsData?.profileId;
       if (!activeId) return;
       storage.setActiveProfile(activeId);
@@ -190,6 +201,8 @@ function LifeOSApp() {
         loansData,
         loanPaymentsData,
         investmentsData,
+        investmentActivitiesData,
+        cashFlowSchedulesData,
         savingsData,
         assetsData,
         liabilitiesData,
@@ -239,6 +252,8 @@ function LifeOSApp() {
         getAllForProfile<Loan>('loans'),
         getAllForProfile<LoanPayment>('loanPayments'),
         getAllForProfile<Investment>('investments'),
+        getAllForProfile<InvestmentActivity>('investmentActivities'),
+        getAllForProfile<CashFlowSchedule>('cashFlowSchedules'),
         getAllForProfile<SavingsPlan>('savingsPlans'),
         getAllForProfile<Asset>('assets'),
         getAllForProfile<Liability>('liabilities'),
@@ -297,6 +312,8 @@ function LifeOSApp() {
       setLoans([...loansData]);
       setLoanPayments([...loanPaymentsData]);
       setInvestments([...investmentsData]);
+      setInvestmentActivities([...investmentActivitiesData]);
+      setCashFlowSchedules([...cashFlowSchedulesData]);
       setSavingsPlans([...savingsData]);
       setAssets([...assetsData]);
       setLiabilities([...liabilitiesData]);
@@ -368,10 +385,11 @@ function LifeOSApp() {
       alarmService.clearActiveAlarm();
       setActiveTriggeredAlarm(null);
       setAppSettings(undefined);
-      storage.setActiveProfile(null);
-      activeProfileIdRef.current = null;
-      setActiveProfileId(null);
-      setIsGoogleLocked(true);
+      const guestProfileId = IS_LOCAL_TEST_BUILD ? GUEST_PROFILE_ID : null;
+      storage.setActiveProfile(guestProfileId);
+      activeProfileIdRef.current = guestProfileId;
+      setActiveProfileId(guestProfileId);
+      setIsGoogleLocked(!IS_LOCAL_TEST_BUILD);
       setIsMobileMenuOpen(false);
       setActiveModule('dashboard');
       return;
@@ -835,6 +853,8 @@ function LifeOSApp() {
                 loans={loans}
                 loanPayments={loanPayments}
                 investments={investments}
+                investmentActivities={investmentActivities}
+                cashFlowSchedules={cashFlowSchedules}
                 savingsPlans={savingsPlans}
                 assets={assets}
                 liabilities={liabilities}
@@ -914,6 +934,7 @@ function LifeOSApp() {
                 importantRecords={importantRecords}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
+                onError={msg => showToast(`⚠️ ${msg}`)}
               />
             )}
 

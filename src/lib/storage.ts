@@ -34,10 +34,12 @@ import {
 
 import {
   AppState, UserProfile, RecycleBinItem, ManualUpdateBundle,
-  BundleDiffInspection, ApplyBundleResult, Task, Routine, Habit, Goal, Note
+  BundleDiffInspection, ApplyBundleResult, Task, Routine, Habit, Goal, Note,
+  CashFlowSchedule, InvestmentActivity, Investment
 } from '../types';
 
 import { createLightweightEntities, calculatePayloadBreakdown } from './thumbnailService';
+import { advanceSchedule, getInvestmentMetrics, restoreScheduleOccurrence } from './financeCalculations';
 
 const FOCUS_ALARMS_STORAGE_KEY = 'om_focus_alarms_list';
 
@@ -222,7 +224,7 @@ class StorageEngine {
           try { db.close(); } catch {}
           const upReq = indexedDB.open(DB_NAME, nextVersion);
           upReq.onupgradeneeded = () => {
-            createDatabaseSchema(upReq.result);
+            createDatabaseSchema(upReq.result, upReq.transaction);
           };
           upReq.onsuccess = () => {
             const upgradedDb = upReq.result;
@@ -265,7 +267,7 @@ class StorageEngine {
       };
 
       req.onupgradeneeded = () => {
-        createDatabaseSchema(req.result);
+        createDatabaseSchema(req.result, req.transaction);
       };
 
       req.onsuccess = () => {
@@ -603,6 +605,25 @@ class StorageEngine {
   // LINKED ENTITY DELETION HELPERS
   // --------------------------------------------------------------------------
 
+  private async refreshInvestmentCostBasis(investmentId: string): Promise<void> {
+    const investment = await this.get<Investment>('investments', investmentId);
+    if (!investment) return;
+    const activities = await this.getAll<InvestmentActivity>('investmentActivities');
+    const base = {
+      ...investment,
+      openingCostBasis: Number(investment.openingCostBasis ?? investment.amount) || 0,
+      openingUnits: Number(investment.openingUnits ?? investment.units) || 0
+    };
+    const metrics = getInvestmentMetrics(base, activities);
+    await this.put('investments', {
+      ...base,
+      amount: metrics.costBasis,
+      units: metrics.units,
+      currentValue: metrics.currentValue,
+      updatedAt: Date.now()
+    });
+  }
+
   public async deleteFinanceTransactionWithLink(id: string): Promise<void> {
     const tx = await this.get<any>('finance', id);
     if (tx) {
@@ -638,6 +659,18 @@ class StorageEngine {
             balance: (Number(acct.balance) || 0) + delta
           });
         }
+        if (tx.category === 'Asset Sale Proceeds' && tx.linkedAssetId) {
+          const asset = await this.get<any>('assets', tx.linkedAssetId);
+          if (asset) {
+            await this.put('assets', {
+              ...asset,
+              status: 'active',
+              salePrice: undefined,
+              saleDate: undefined,
+              updatedAt: Date.now()
+            });
+          }
+        }
       }
       // 2. Loan Repayment deletion: Refund account, restore loan outstanding principal, clean payment
       else if (tx.type === 'repayment') {
@@ -655,17 +688,20 @@ class StorageEngine {
         if (tx.linkedLoanId) {
           const loan = await this.get<any>('loans', tx.linkedLoanId);
           if (loan) {
-            const principal = Number(tx.principal) || amt;
+            const principal = Number(tx.principal ?? amt);
             await this.put('loans', {
               ...loan,
-              outstanding: (Number(loan.outstanding) || 0) + principal
+              outstanding: (Number(loan.outstanding) || 0) + principal,
+              status: 'active',
+              closedDate: undefined,
+              updatedAt: Date.now()
             });
           }
         }
         if (tx.linkedLiabilityId) {
           const liability = await this.get<any>('liabilities', tx.linkedLiabilityId);
           if (liability) {
-            const principal = Number(tx.principal) || amt;
+            const principal = Number(tx.principal ?? amt);
             await this.put('liabilities', {
               ...liability,
               amount: (Number(liability.amount) || 0) + principal
@@ -674,11 +710,34 @@ class StorageEngine {
         }
 
         // Clean up linked loan payment record
-        if (tx.linkedLoanPaymentId) {
-          try {
-            await this.delete('loanPayments', tx.linkedLoanPaymentId);
-          } catch {}
+        if (tx.linkedLoanPaymentId) await this.delete('loanPayments', tx.linkedLoanPaymentId);
+      }
+      else if (tx.type === 'loanReceipt') {
+        if (tx.accountId && amt > 0) {
+          const account = await this.get<any>('financeAccounts', tx.accountId);
+          if (account) await this.put('financeAccounts', { ...account, balance: (Number(account.balance) || 0) - amt });
         }
+        if (tx.linkedLoanId) {
+          const loan = await this.get<any>('loans', tx.linkedLoanId);
+          if (loan) {
+            const principal = Number(tx.principal) || 0;
+            await this.put('loans', {
+              ...loan,
+              outstanding: (Number(loan.outstanding) || 0) + principal,
+              status: 'active',
+              closedDate: undefined,
+              updatedAt: Date.now()
+            });
+          }
+        }
+        if (tx.linkedLoanPaymentId) await this.delete('loanPayments', tx.linkedLoanPaymentId);
+      }
+      else if (tx.type === 'loanGiven') {
+        if (tx.accountId && amt > 0) {
+          const account = await this.get<any>('financeAccounts', tx.accountId);
+          if (account) await this.put('financeAccounts', { ...account, balance: (Number(account.balance) || 0) + amt });
+        }
+        if (tx.linkedLoanId) await this.delete('loans', tx.linkedLoanId);
       }
       // Reverse a savings withdrawal: debit its destination account and restore principal.
       else if (tx.type === 'savingsWithdrawal') {
@@ -694,7 +753,7 @@ class StorageEngine {
         if (tx.linkedSavingsPlanId) {
           const plan = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
           if (plan) {
-            const principal = Number(tx.principal) || amt;
+            const principal = Number(tx.principal ?? amt);
             await this.put('savingsPlans', {
               ...plan,
               currentAmount: (Number(plan.currentAmount) || 0) + principal,
@@ -726,7 +785,7 @@ class StorageEngine {
         }
 
         // Clean up linked investment asset if this was an investment transaction
-        if (tx.linkedInvestmentId) {
+        if (tx.linkedInvestmentId && !tx.linkedInvestmentActivityId) {
           try {
             await this.delete('investments', tx.linkedInvestmentId);
           } catch {}
@@ -743,6 +802,18 @@ class StorageEngine {
             });
           }
         }
+      }
+
+      if (tx.linkedInvestmentActivityId) {
+        const activity = await this.get<InvestmentActivity>('investmentActivities', tx.linkedInvestmentActivityId);
+        if (activity) {
+          await this.put('investmentActivities', { ...activity, reversedAt: Date.now(), updatedAt: Date.now() });
+          await this.refreshInvestmentCostBasis(activity.investmentId);
+        }
+      }
+      if (tx.linkedCashFlowScheduleId && tx.scheduleOccurrenceDate) {
+        const schedule = await this.get<CashFlowSchedule>('cashFlowSchedules', tx.linkedCashFlowScheduleId);
+        if (schedule) await this.put('cashFlowSchedules', restoreScheduleOccurrence(schedule, tx.scheduleOccurrenceDate));
       }
 
       // 4. Unlink receipt if linked
@@ -764,10 +835,17 @@ class StorageEngine {
 
   public async deleteReceiptWithLink(id: string): Promise<void> {
     const receipt = await this.get<any>('receipts', id);
-    if (receipt?.linkedExpenseId) {
-      try {
-        await this.deleteFinanceTransactionWithLink(receipt.linkedExpenseId);
-      } catch {}
+    if (receipt?.linkedTransactionId) {
+      const transaction = await this.get<any>('finance', receipt.linkedTransactionId);
+      if (transaction?.linkedReceiptId === id) {
+        await this.put('finance', {
+          ...transaction,
+          linkedReceiptId: null,
+          updatedAt: Date.now()
+        });
+      }
+    } else if (receipt?.linkedExpenseId) {
+      await this.deleteFinanceTransactionWithLink(receipt.linkedExpenseId);
     }
     await this.delete('receipts', id);
   }
@@ -799,6 +877,18 @@ class StorageEngine {
           balance: (Number(acct.balance) || 0) + delta
         });
       }
+      if (tx.category === 'Asset Sale Proceeds' && tx.linkedAssetId) {
+        const asset = await this.get<any>('assets', tx.linkedAssetId);
+        if (asset) {
+          await this.put('assets', {
+            ...asset,
+            status: 'sold',
+            salePrice: amt,
+            saleDate: tx.date,
+            updatedAt: Date.now()
+          });
+        }
+      }
     } else if (tx.type === 'repayment') {
       if (tx.accountId) {
         const acct = await this.get<any>('financeAccounts', tx.accountId);
@@ -809,18 +899,88 @@ class StorageEngine {
       if (tx.linkedLoanId) {
         const loan = await this.get<any>('loans', tx.linkedLoanId);
         if (loan) {
-          const principal = Number(tx.principal) || amt;
-          await this.put('loans', { ...loan, outstanding: Math.max(0, (Number(loan.outstanding) || 0) - principal) });
+          const principal = Number(tx.principal ?? amt);
+          const outstanding = Math.max(0, (Number(loan.outstanding) || 0) - principal);
+          await this.put('loans', {
+            ...loan,
+            outstanding,
+            status: outstanding <= 0.01 ? 'closed' : 'active',
+            closedDate: outstanding <= 0.01 ? tx.date : loan.closedDate,
+            updatedAt: Date.now()
+          });
+          if (tx.linkedLoanPaymentId) {
+            await this.put('loanPayments', {
+              id: tx.linkedLoanPaymentId,
+              loanId: tx.linkedLoanId,
+              loanName: loan.name,
+              amount: amt,
+              principal,
+              interest: Number(tx.interest) || 0,
+              extraPrincipal: Number(tx.extraPrincipal) || 0,
+              lateFee: Number(tx.lateFee) || 0,
+              penalInterest: Number(tx.penalInterest) || 0,
+              processingFee: Number(tx.processingFee) || 0,
+              administrativeFee: Number(tx.administrativeFee) || 0,
+              applicableTax: Number(tx.applicableTax) || Number(tx.tds) || 0,
+              insuranceCharge: Number(tx.insuranceCharge) || 0,
+              otherFees: Number(tx.otherFees) || 0,
+              isClosure: tx.category === 'Loan Closure Settlement',
+              date: tx.date,
+              accountId: tx.accountId || null,
+              createdAt: tx.createdAt || Date.now()
+            });
+          }
         }
       }
       if (tx.linkedLiabilityId) {
         const liability = await this.get<any>('liabilities', tx.linkedLiabilityId);
         if (liability) {
-          const principal = Number(tx.principal) || amt;
+          const principal = Number(tx.principal ?? amt);
           await this.put('liabilities', {
             ...liability,
             amount: Math.max(0, (Number(liability.amount) || 0) - principal)
           });
+        }
+    } else if (tx.type === 'loanReceipt') {
+        if (tx.accountId) {
+          const account = await this.get<any>('financeAccounts', tx.accountId);
+          if (account) await this.put('financeAccounts', { ...account, balance: (Number(account.balance) || 0) + amt });
+        }
+        if (tx.linkedLoanId) {
+          const loan = await this.get<any>('loans', tx.linkedLoanId);
+          if (loan) {
+            const principal = Number(tx.principal) || 0;
+            const outstanding = Math.max(0, (Number(loan.outstanding) || 0) - principal);
+            await this.put('loans', { ...loan, outstanding, status: outstanding <= 0.01 ? 'closed' : 'active', updatedAt: Date.now() });
+          }
+        }
+        if (tx.linkedLoanPaymentId && tx.linkedLoanId) {
+          const loan = await this.get<any>('loans', tx.linkedLoanId);
+          await this.put('loanPayments', {
+            id: tx.linkedLoanPaymentId,
+            loanId: tx.linkedLoanId,
+            loanName: loan?.name || tx.note || 'Loan receivable',
+            amount: amt,
+            principal: Number(tx.principal) || 0,
+            interest: Number(tx.interest) || 0,
+            extraPrincipal: Number(tx.extraPrincipal) || 0,
+            lateFee: Number(tx.lateFee) || 0,
+            penalInterest: Number(tx.penalInterest) || 0,
+            processingFee: Number(tx.processingFee) || 0,
+            administrativeFee: Number(tx.administrativeFee) || 0,
+            applicableTax: Number(tx.applicableTax) || 0,
+            insuranceCharge: Number(tx.insuranceCharge) || 0,
+            otherFees: Number(tx.otherFees) || 0,
+            isClosure: tx.category === 'Loan Receivable Closed',
+            date: tx.date,
+            accountId: tx.accountId || null,
+            createdAt: tx.createdAt || Date.now()
+          });
+        }
+    } else if (tx.type === 'loanGiven') {
+        if (tx.accountId) {
+          const account = await this.get<any>('financeAccounts', tx.accountId);
+          if (account) await this.put('financeAccounts', { ...account, balance: (Number(account.balance) || 0) - amt });
         }
       }
     } else if (tx.type === 'savingsWithdrawal') {
@@ -833,7 +993,7 @@ class StorageEngine {
       if (tx.linkedSavingsPlanId) {
         const plan = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
         if (plan) {
-          const principal = Number(tx.principal) || amt;
+          const principal = Number(tx.principal ?? amt);
           await this.put('savingsPlans', {
             ...plan,
             currentAmount: Math.max(0, (Number(plan.currentAmount) || 0) - principal),
@@ -874,6 +1034,18 @@ class StorageEngine {
           });
         }
       }
+    }
+    if (tx.linkedInvestmentActivityId) {
+      const activity = await this.get<InvestmentActivity>('investmentActivities', tx.linkedInvestmentActivityId);
+      if (activity) {
+        const { reversedAt: _reversedAt, ...activeActivity } = activity;
+        await this.put('investmentActivities', { ...activeActivity, updatedAt: Date.now() });
+        await this.refreshInvestmentCostBasis(activity.investmentId);
+      }
+    }
+    if (tx.linkedCashFlowScheduleId && tx.scheduleOccurrenceDate) {
+      const schedule = await this.get<CashFlowSchedule>('cashFlowSchedules', tx.linkedCashFlowScheduleId);
+      if (schedule) await this.put('cashFlowSchedules', advanceSchedule(schedule, tx.scheduleOccurrenceDate));
     }
   }
 

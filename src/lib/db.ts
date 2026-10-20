@@ -6,13 +6,14 @@
  */
 
 export const DB_NAME = 'om-lifeos-canonical-v4';
-export const DB_VERSION = 6;
+export const DB_VERSION = 8;
 
 export const ENTITY_STORES = [
   'tasks', 'routines', 'habits', 'habitLogs', 'goals', 'milestones', 'strategies',
   'kpis', 'missions', 'mentorRules', 'mentorQuotes', 'capitalStrategy', 'capital',
   'capitalRecords', 'focus', 'notes', 'journal', 'finance', 'financeAccounts',
-  'loans', 'loanPayments', 'investments', 'savingsPlans', 'assets', 'liabilities',
+  'loans', 'loanPayments', 'investments', 'investmentActivities', 'cashFlowSchedules',
+  'savingsPlans', 'assets', 'liabilities',
   'financialGoals', 'healthMeasurements', 'healthActivities', 'sleepRecords', 'waterRecords',
   'nutritionRecords', 'healthAppointments', 'healthNotes', 'workProjects',
   'workResponsibilities', 'learningItems', 'skills', 'courses', 'learningProgress',
@@ -53,6 +54,8 @@ export const STORE_LABELS: Record<string, { label: string; module: string }> = {
   loans: { label: 'Loan Record', module: 'Finance & Ledger' },
   loanPayments: { label: 'Loan Payment', module: 'Finance & Ledger' },
   investments: { label: 'Investment', module: 'Finance & Ledger' },
+  investmentActivities: { label: 'Investment Activity', module: 'Finance & Ledger' },
+  cashFlowSchedules: { label: 'Cash Flow Schedule', module: 'Finance & Ledger' },
   savingsPlans: { label: 'Savings Plan', module: 'Finance & Ledger' },
   assets: { label: 'Asset', module: 'Finance & Ledger' },
   liabilities: { label: 'Liability', module: 'Finance & Ledger' },
@@ -180,7 +183,7 @@ export function describeDeletedRecord(storeName: string, item: any): {
 /**
  * Creates schema stores and indexes in an atomic upgrade transaction.
  */
-export function createDatabaseSchema(db: IDBDatabase): void {
+export function createDatabaseSchema(db: IDBDatabase, upgradeTransaction?: IDBTransaction | null): void {
   for (const storeName of ENTITY_STORES) {
     if (!db.objectStoreNames.contains(storeName)) {
       const store = db.createObjectStore(storeName, { keyPath: 'id' });
@@ -189,6 +192,13 @@ export function createDatabaseSchema(db: IDBDatabase): void {
         store.createIndex('updatedAt', 'updatedAt', { unique: false });
         store.createIndex('profileId', 'profileId', { unique: false });
       } catch {}
+    }
+  }
+
+  if (upgradeTransaction && db.objectStoreNames.contains('finance')) {
+    const financeStore = upgradeTransaction.objectStore('finance');
+    if (!financeStore.indexNames.contains('scheduleOccurrenceKey')) {
+      financeStore.createIndex('scheduleOccurrenceKey', 'scheduleOccurrenceKey', { unique: true });
     }
   }
 

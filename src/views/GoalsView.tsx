@@ -1263,7 +1263,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       </div>
 
       {/* Capital Position Dashboard */}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
+      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {/* Card 1: Liquid Capital */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
@@ -1274,7 +1274,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             ₹{liquidCash.toLocaleString('en-IN')}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            Across {accounts.length} liquid accounts
+            {accounts.length} accounts
           </div>
         </div>
 
@@ -1288,7 +1288,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             {runwayDays} Days
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            ~{runwayMonths} months at entered burn; excludes FDs
+            {runwayMonths} mo · FDs excluded
           </div>
         </div>
 
@@ -1302,7 +1302,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             ₹{accessibleReserveCapital.toLocaleString('en-IN')} / ₹{totalReserves.toLocaleString('en-IN')}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            {reserveCoverage.toFixed(0)}% funded · Survival + Emergency target
+            {reserveCoverage.toFixed(0)}% funded · Survival + emergency
           </div>
         </div>
 

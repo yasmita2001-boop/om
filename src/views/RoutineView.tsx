@@ -728,7 +728,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       </div>
 
       {/* 4 Essential Metric Cards (Matching Dashboard Style) */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Routine Blocks</span>
@@ -751,7 +751,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             {habits.length}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            {linkedHabitsCount} linked to routines
+            {linkedHabitsCount} linked
           </div>
         </div>
 
@@ -779,7 +779,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               : 0}%
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            Daily ritual consistency
+            Today
           </div>
         </div>
       </div>

@@ -56,6 +56,10 @@ const calculateFinances = (finance: FinanceTransaction[]) => {
   let savingsWithdrawals = 0;
   let loanRepay = 0;
   let loanReceived = 0;
+  let loanGiven = 0;
+  let loanRecovered = 0;
+  let adjustmentCredits = 0;
+  let adjustmentDebits = 0;
   finance.forEach(f => {
     const amt = Number(f.amount) || 0;
     if (f.ledgerOnly) return;
@@ -71,11 +75,19 @@ const calculateFinances = (finance: FinanceTransaction[]) => {
     }
     else if (f.type === 'repayment') loanRepay += amt;
     else if (f.type === 'loan') loanReceived += amt;
+    else if (f.type === 'loanGiven') loanGiven += amt;
+    else if (f.type === 'loanReceipt') {
+      loanRecovered += Number(f.principal) || 0;
+      income += Number(f.interest) || 0;
+    } else if (f.type === 'adjustment') {
+      if (f.adjustmentDirection === 'credit') adjustmentCredits += amt;
+      else adjustmentDebits += amt;
+    }
   });
   const operatingCashFlow = income - expense;
-  const netCashFlow = operatingCashFlow - investment - savingsFlow - loanRepay + loanReceived;
-  const totalInflow = income + loanReceived + savingsWithdrawals;
-  const totalOutflow = expense + investment + savingsDeposits + loanRepay;
+  const netCashFlow = operatingCashFlow - investment - savingsFlow - loanRepay + loanReceived - loanGiven + loanRecovered + adjustmentCredits - adjustmentDebits;
+  const totalInflow = income + loanReceived + savingsWithdrawals + loanRecovered + adjustmentCredits;
+  const totalOutflow = expense + investment + savingsDeposits + loanRepay + loanGiven + adjustmentDebits;
   return { totalInflow, totalOutflow, netCashFlow };
 };
 
@@ -213,7 +225,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* 4 Essential Metric Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Open Tasks</span>
@@ -262,7 +274,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             NPR {netCashFlow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            All-time ledger · cash NPR {liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            Ledger · Cash NPR {liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </div>
         </div>
       </div>
@@ -510,7 +522,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 No transactions yet. Recent ledger activity will appear here.
               </div>
             ) : [...finance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3).map(tx => {
-              const isInflow = tx.type === 'income' || tx.type === 'loan' ||
+              const isInflow = tx.type === 'income' || tx.type === 'loan' || tx.type === 'loanReceipt' ||
                 tx.type === 'savingsWithdrawal' ||
                 (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit');
               const isTransfer = tx.type === 'transfer';

@@ -25,6 +25,7 @@ interface ThingsViewProps {
   financeTransactions?: FinanceTransaction[];
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
+  onError: (msg: string) => void;
   onNavigate?: (module: NavModule) => void;
 }
 
@@ -53,6 +54,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   financeTransactions = [],
   onRefresh,
   onSuccess,
+  onError,
   onNavigate
 }) => {
   const [activeTab, setActiveTab] = useState<SubMenuTab>('things');
@@ -620,6 +622,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       onRefresh();
     } catch (err) {
       console.error('Delete error', err);
+      onError('The record could not be deleted. Please try again.');
     }
   };
 

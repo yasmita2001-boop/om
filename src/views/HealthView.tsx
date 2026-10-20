@@ -394,7 +394,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
       </div>
 
       {/* Snapshot cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
           <div className="flex items-center justify-between gap-1 text-slate-500 dark:text-slate-400">
             <span className="text-[11px] font-bold uppercase tracking-wider truncate">Current Weight</span>
@@ -403,7 +403,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums truncate">
             {weight} kg
           </div>
-          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Target: {targetWeight} kg</div>
+          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Goal: {targetWeight} kg</div>
         </div>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
@@ -414,7 +414,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums truncate">
             {bmi}
           </div>
-          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Height: {height} cm · BMR ~{bmr} kcal</div>
+          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Ht {height} cm · BMR {bmr}</div>
         </div>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
@@ -425,7 +425,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-blue-600 dark:text-blue-400 tabular-nums truncate">
             {waterRecords.length}
           </div>
-          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Target: 3000 ml/day</div>
+          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Goal: 3,000 ml</div>
         </div>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
@@ -436,7 +436,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-purple-600 dark:text-purple-400 tabular-nums truncate">
             {sleepRecords.length}
           </div>
-          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Nights recorded</div>
+          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Nights</div>
         </div>
       </div>
 

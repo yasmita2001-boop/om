@@ -186,6 +186,7 @@ export interface MentorProfile {
   loanRemainingMonths?: number;
   loanStartDate?: string;
   emiAmount?: number;
+  emiAmountIsActual?: boolean;
   emiDay?: number;
   updatedAt?: number;
 }
@@ -306,17 +307,25 @@ export interface FinanceAccount {
   sync?: SyncMeta;
 }
 
-export type FinanceType = 'income' | 'expense' | 'transfer' | 'loan' | 'repayment' | 'investment' | 'savings' | 'savingsWithdrawal' | 'adjustment';
+export type FinanceType = 'income' | 'expense' | 'transfer' | 'loan' | 'loanGiven' | 'loanReceipt' | 'repayment' | 'investment' | 'savings' | 'savingsWithdrawal' | 'adjustment';
 
 export interface FinanceTransaction {
   id: string;
   type: FinanceType;
   amount: number;
   principal?: number;
+  extraPrincipal?: number;
   interest?: number;
   tds?: number;
   serviceCharge?: number;
   penalty?: number;
+  lateFee?: number;
+  penalInterest?: number;
+  processingFee?: number;
+  administrativeFee?: number;
+  applicableTax?: number;
+  insuranceCharge?: number;
+  otherFees?: number;
   otherDeduction?: number;
   settlementVariance?: number;
   category: string;
@@ -330,7 +339,12 @@ export interface FinanceTransaction {
   linkedLiabilityId?: string | null;
   linkedLoanPaymentId?: string | null;
   linkedInvestmentId?: string | null;
+  linkedInvestmentActivityId?: string | null;
+  linkedAssetId?: string | null;
   linkedSavingsPlanId?: string | null;
+  linkedCashFlowScheduleId?: string | null;
+  scheduleOccurrenceDate?: string | null;
+  scheduleOccurrenceKey?: string;
   adjustmentDirection?: 'credit' | 'debit';
   linkedReceiptId?: string | null;
   fileName?: string;
@@ -352,6 +366,33 @@ export interface Loan {
   tenure: number;
   dueDay: number;
   outstanding: number;
+  direction?: 'borrowed' | 'lent';
+  category?: 'institutional' | 'personal' | 'business' | 'private' | 'other';
+  loanType?: string;
+  lenderName?: string;
+  branchName?: string;
+  reference?: string;
+  approvedAmount?: number;
+  disbursedAmount?: number;
+  startDate?: string;
+  approvalDate?: string;
+  firstPaymentDate?: string;
+  maturityDate?: string;
+  rateType?: 'fixed' | 'floating';
+  interestMethod?: 'reducing' | 'flat' | 'simple';
+  repaymentFrequency?: 'monthly' | 'weekly' | 'biweekly' | 'quarterly';
+  emiAmount?: number;
+  emiAmountIsActual?: boolean;
+  processingFee?: number;
+  administrativeFee?: number;
+  applicableTax?: number;
+  insuranceCharge?: number;
+  otherFees?: number;
+  foreclosureCharge?: number;
+  collateralValue?: number;
+  status?: 'active' | 'closed';
+  closedDate?: string;
+  closureReference?: string;
   goalId?: string | null;
   createdAt: number;
   updatedAt?: number;
@@ -365,6 +406,16 @@ export interface LoanPayment {
   amount: number;
   principal: number;
   interest: number;
+  extraPrincipal?: number;
+  lateFee?: number;
+  penalInterest?: number;
+  processingFee?: number;
+  administrativeFee?: number;
+  applicableTax?: number;
+  insuranceCharge?: number;
+  otherFees?: number;
+  isClosure?: boolean;
+  settlementVariance?: number;
   date: string;
   accountId?: string | null;
   createdAt: number;
@@ -378,9 +429,54 @@ export interface Investment {
   date: string;
   accountId?: string | null;
   goalId?: string | null;
+  openingCostBasis?: number;
+  units?: number;
+  openingUnits?: number;
+  instrumentType?: string;
+  valuationDate?: string;
   createdAt: number;
   updatedAt: number;
   sync?: SyncMeta;
+}
+
+export type InvestmentActivityKind = 'buy' | 'sell' | 'dividend' | 'interest' | 'fee' | 'tax' | 'valuation';
+
+export interface InvestmentActivity {
+  id: string;
+  investmentId: string;
+  kind: InvestmentActivityKind;
+  date: string;
+  amount: number;
+  quantity?: number;
+  fees?: number;
+  tax?: number;
+  costBasisRemoved?: number;
+  accountId?: string | null;
+  linkedTransactionId?: string | null;
+  note?: string;
+  reversedAt?: number;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export type CashFlowScheduleFrequency = 'once' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+
+export interface CashFlowSchedule {
+  id: string;
+  name: string;
+  type: 'income' | 'expense';
+  category: string;
+  amount: number;
+  frequency: CashFlowScheduleFrequency;
+  startDate: string;
+  nextDueDate: string;
+  anchorDay?: number;
+  settledDates?: string[];
+  accountId?: string | null;
+  status: 'active' | 'paused' | 'completed';
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export type SavingsProductType =
@@ -454,8 +550,25 @@ export interface Asset {
   name: string;
   value: number;
   category?: string;
+  purchaseCost?: number;
+  acquisitionCosts?: number;
+  purchaseDate?: string;
+  valuationDate?: string;
+  quantity?: number;
+  unit?: string;
+  location?: string;
+  condition?: string;
+  depreciationMethod?: 'none' | 'straight_line';
+  usefulLifeYears?: number;
+  salvageValue?: number;
+  status?: 'active' | 'sold' | 'disposed' | 'lost' | 'archived';
+  salePrice?: number;
+  saleDate?: string;
+  notes?: string;
+  valueHistory?: Array<{ date: string; value: number; note?: string }>;
   goalId?: string | null;
   createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface Liability {

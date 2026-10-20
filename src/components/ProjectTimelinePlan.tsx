@@ -1703,7 +1703,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   return (
     <div className="space-y-5">
       {/* 1. EXECUTIVE METRICS DASHBOARD */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {/* Card 1: Time-Period Aware Execution Health */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
@@ -1717,8 +1717,8 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
             {periodMetrics.totalPeriodItems > 0
-              ? `${periodMetrics.completedPeriodItems} of ${periodMetrics.totalPeriodItems} scheduled items completed`
-              : '0 scheduled items in this window'}
+              ? `${periodMetrics.completedPeriodItems}/${periodMetrics.totalPeriodItems} done`
+              : 'No items'}
           </div>
         </div>
 
@@ -1735,22 +1735,22 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
             {totalDelayedAllCount > 0
-              ? `${totalDelayedAllCount} total all-time overdue bottlenecks`
-              : '0 bottlenecks across all streams'}
+              ? `${totalDelayedAllCount} total overdue`
+              : 'All streams clear'}
           </div>
         </div>
 
         {/* Card 3: Strategic Deliverables */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Deliverables & Skills</span>
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Work & Skills</span>
             <Briefcase className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
             {workProjects.length + skills.length + learningItems.length}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            {workProjects.length} projects · {skills.length} skills · {learningItems.length} learning
+            {workProjects.length} projects · {skills.length} skills · {learningItems.length} tracks
           </div>
         </div>
 
@@ -1764,7 +1764,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             {reminderMap.size}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            Active audio alarms ready
+            Active alarms
           </div>
         </div>
       </div>
@@ -1957,7 +1957,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
         <div className="space-y-4">
           {/* Top Financial Portfolio Overview when Finance stream is active */}
           {activeStream === 'finance' && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-in fade-in duration-200">
+            <div className="metric-summary-grid grid grid-cols-2 sm:grid-cols-4 gap-3 animate-in fade-in duration-200">
               <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tracked Goals</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
@@ -1980,7 +1980,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               </div>
 
               <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3.5 shadow-2xs dark:border-blue-900/60 dark:bg-blue-950/20">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments Backing</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-blue-600 dark:text-blue-400">
                   ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
                 </div>
@@ -2165,7 +2165,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                         timelineGranularity === 'daily' ? 'cursor-pointer hover:bg-indigo-100/60 dark:hover:bg-indigo-950/40' : ''
                       } ${
                         c.isToday
-                          ? 'bg-rose-500 text-white font-black dark:bg-rose-600'
+                        ? 'bg-indigo-600 text-white font-black dark:bg-indigo-500'
                           : c.isWeekend
                           ? 'bg-slate-200/40 dark:bg-slate-800/80'
                           : ''
@@ -2349,7 +2349,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                 <div
                                   key={c.id}
                                   className={`h-full border-l border-slate-200/40 dark:border-slate-800/40 ${
-                                    c.isToday ? 'bg-rose-500/5 dark:bg-rose-500/10' : ''
+                                    c.isToday ? 'bg-indigo-500/5 dark:bg-indigo-400/10' : ''
                                   }`}
                                 />
                               ))}
@@ -4052,7 +4052,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
       {/* 7. GOAL FINANCIAL PORTFOLIO & TIMELINE */}
       {activeStream === 'finance' && viewMode !== 'gantt' && (
         <div className="space-y-4 animate-in fade-in duration-200">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="metric-summary-grid grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tracked Goals</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
@@ -4075,7 +4075,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             </div>
 
             <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3.5 shadow-2xs dark:border-blue-900/60 dark:bg-blue-950/20">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments Backing</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-blue-600 dark:text-blue-400">
                 ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
               </div>

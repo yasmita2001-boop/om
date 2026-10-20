@@ -2196,9 +2196,13 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                     const goalSavings = indexed?.savingsPlans || [];
                     const goalLoans = indexed?.loans || [];
                     const goalInvestments = indexed?.investments || [];
+                    const childGoalCount = goals.filter(child =>
+                      child.parentId === goal.id || child.parentIds?.includes(goal.id)
+                    ).length;
 
                     const isGoalExpanded = expandedGoalIds[goal.id] !== false;
                     const totalGoalItems =
+                      childGoalCount +
                       goalMilestones.length +
                       goalProjects.length +
                       goalLearning.length +
@@ -2305,8 +2309,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                   <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                                     {goal.title}
                                   </span>
-                                  <span className="text-[10px] text-slate-400 shrink-0 font-mono">
-                                    ({totalGoalItems})
+                                  <span
+                                    className="text-[10px] text-slate-400 shrink-0 font-mono"
+                                    title={`${totalGoalItems} linked timeline items, including ${childGoalCount} subgoals`}
+                                  >
+                                    ({totalGoalItems} linked)
                                   </span>
                                 </div>
                                 {!isMobileCompactView && (
@@ -2329,8 +2336,13 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                       </span>
                                     )}
                                     <span>·</span>
-                                    <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">
-                                      Overall: {goal.progress}%
+                                    <span
+                                      className="font-bold text-indigo-600 dark:text-indigo-400 font-mono"
+                                      title={totalGoalItems === 0
+                                        ? 'No linked timeline items or subgoals are shown here. Progress may be manually set or based on linked data outside this timeline.'
+                                        : 'Progress is based on linked work items and subgoals.'}
+                                    >
+                                      {totalGoalItems === 0 ? 'Manual progress' : 'Overall'}: {goal.progress}%
                                     </span>
                                   </div>
                                 )}
@@ -2389,8 +2401,13 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                     ) : null}
 
                                     {/* Overall Destination Progress */}
-                                    <span className="font-mono text-white px-1.5 py-0.5 rounded bg-black/40 shadow-xs text-[9px]">
-                                      🎯 Overall: {goal.progress}%
+                                    <span
+                                      className="font-mono text-white px-1.5 py-0.5 rounded bg-black/40 shadow-xs text-[9px]"
+                                      title={totalGoalItems === 0
+                                        ? 'No linked timeline items or subgoals are shown here. Progress may be manually set or based on linked data outside this timeline.'
+                                        : 'Progress is based on linked work items and subgoals.'}
+                                    >
+                                      {totalGoalItems === 0 ? 'Manual' : '🎯 Overall'}: {goal.progress}%
                                     </span>
 
                                     <span className="text-slate-800 dark:text-slate-100 truncate hidden sm:inline drop-shadow-xs font-semibold">

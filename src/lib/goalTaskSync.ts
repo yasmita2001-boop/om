@@ -231,9 +231,7 @@ export function computeGoalAggregateBreakdown(
 
   const meetings = data.meetings || [];
 
-  const values = data.values || [];
   const practices = data.practices || [];
-  const commitments = data.commitments || [];
   const focusSessions = data.focusSessions || [];
   const reminders = data.reminders || [];
   const taskGoalId = createTaskGoalResolver({ workProjects: projects, routines, skills, learningItems: learning });
@@ -263,9 +261,7 @@ export function computeGoalAggregateBreakdown(
 
   const linkedMeetings = meetings.filter(m => m.goalId === goalId && m.status !== 'cancelled');
 
-  const linkedValues = values.filter(v => v.goalId === goalId);
   const linkedPractices = practices.filter(p => p.goalId === goalId);
-  const linkedCommitments = commitments.filter(c => c.goalId === goalId);
 
   const linkedFocusSessions = focusSessions.filter(f => f.goalId === goalId);
   const linkedReminders = reminders.filter(r => r.linkedType === 'goal' && r.linkedId === goalId);
@@ -567,19 +563,7 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // 20. Core Values
-  linkedValues.forEach(v => {
-    rawItems.push({
-      id: v.id,
-      type: 'value',
-      typeLabel: '💎 Core Value',
-      title: v.title,
-      progress: 0,
-      isCompleted: false
-    });
-  });
-
-  // 21. Spiritual Practices
+  // Spiritual Practices
   linkedPractices.forEach(p => {
     rawItems.push({
       id: p.id,
@@ -591,19 +575,7 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // 22. Philosophical Commitments
-  linkedCommitments.forEach(c => {
-    rawItems.push({
-      id: c.id,
-      type: 'commitment',
-      typeLabel: '📜 Commitment',
-      title: (c.text || '').slice(0, 40),
-      progress: 0,
-      isCompleted: false
-    });
-  });
-
-  // 23. Focus Sessions (Deep Work Session Log)
+  // Focus Sessions (Deep Work Session Log)
   linkedFocusSessions.forEach(f => {
     const mins = f.minutes || Math.round((f.durationSeconds || 0) / 60);
     rawItems.push({
@@ -616,7 +588,7 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // 24. Reminders
+  // Reminders
   linkedReminders.forEach(r => {
     const isDone = r.status === 'done';
     rawItems.push({

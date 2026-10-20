@@ -916,9 +916,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const accessibleReserveCapital = liquidCash + flexibleSavings;
   const runwayDays = dailyBurn > 0 ? Math.max(0, Math.floor(accessibleReserveCapital / dailyBurn)) : 0;
   const runwayMonths = (runwayDays / 30).toFixed(1);
-  const reserveCoverage = totalReserves > 0
-    ? Math.max(0, Math.min(100, (accessibleReserveCapital / totalReserves) * 100))
-    : 0;
 
   const handleAddGoal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1299,10 +1296,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <Target className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            ₹{accessibleReserveCapital.toLocaleString('en-IN')} / ₹{totalReserves.toLocaleString('en-IN')}
+            ₹{accessibleReserveCapital.toLocaleString('en-IN')}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            {reserveCoverage.toFixed(0)}% funded · Survival + emergency
+            Target · ₹{totalReserves.toLocaleString('en-IN')}
           </div>
         </div>
 

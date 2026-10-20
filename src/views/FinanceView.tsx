@@ -266,6 +266,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const today = getLocalDateString();
   const reportError = onError || ((message: string) => onSuccess(`⚠️ ${message}`));
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'accounts' | 'loans' | 'investments' | 'savings' | 'balanceSheet'>('overview');
+  const [showLoanSummary, setShowLoanSummary] = useState(false);
+  const [showSavingsSummary, setShowSavingsSummary] = useState(false);
+  const [showAssetSummary, setShowAssetSummary] = useState(false);
+  const [showLoanInfo, setShowLoanInfo] = useState(false);
+  const [showSavingsInfo, setShowSavingsInfo] = useState(false);
+  const [showAssetInfo, setShowAssetInfo] = useState(false);
   const [activeLoanAction, setActiveLoanAction] = useState<'payment' | 'newLoan' | 'liability'>('payment');
   const [activeInvestmentAction, setActiveInvestmentAction] = useState<'asset' | 'activity'>('asset');
   const getForecastEndDate = (days: number) => {
@@ -4616,11 +4622,34 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* Tab: Loans & Liabilities */}
       {activeTab === 'loans' && (
         <div className="space-y-5">
-        <details className="finance-details rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-slate-900 dark:text-white">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+          <button
+            type="button"
+            aria-expanded={showLoanSummary}
+            onClick={() => setShowLoanSummary(open => {
+              if (open) setShowLoanInfo(false);
+              return !open;
+            })}
+            className="flex w-full cursor-pointer items-center justify-between gap-3 text-left text-sm font-bold text-slate-900 dark:text-white"
+          >
             <span>Loan summary</span>
-            <span className="text-[10px] font-medium text-slate-400">{activeLoanCount} active · {closedLoanCount} closed</span>
-          </summary>
+            <span aria-hidden="true" className="text-base leading-none text-slate-400">{showLoanSummary ? '−' : '+'}</span>
+          </button>
+          {showLoanSummary && (
+          <>
+          <button
+            type="button"
+            aria-expanded={showLoanInfo}
+            onClick={() => setShowLoanInfo(open => !open)}
+            className="mt-3 text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            {showLoanInfo ? 'Hide supporting info' : 'Show supporting info'}
+          </button>
+          {showLoanInfo && (
+            <div className="mt-2 text-right text-[10px] font-medium text-slate-400">
+              {activeLoanCount} active · {closedLoanCount} closed
+            </div>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {[
               { label: 'Total loan amount', value: totalLoanAmount, suffix: `Borrowed · ${activeLoanCount} active` },
@@ -4633,16 +4662,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               { label: 'Closure amount', value: totalLoanClosureEstimate, suffix: 'Estimate · excludes bank quote' },
               { label: 'Total repayment', value: totalLoanRepayment, suffix: `Closed ${closedLoanCount} · Overdue est. ${overdueInstallments}` }
             ].map(metric => (
-              <div key={metric.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400">{metric.label}</div>
-                <div className="mt-1 truncate font-mono text-sm font-bold tabular-nums text-slate-900 dark:text-white">
+              <div key={metric.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
+                <div className="mt-1 truncate font-mono text-xs font-bold tabular-nums text-slate-900 dark:text-white">
                   NPR {metric.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                 </div>
-                <div className="mt-0.5 truncate text-[10px] text-slate-400">{metric.suffix}</div>
+                {showLoanInfo && <div className="mt-0.5 truncate text-[9px] text-slate-400">{metric.suffix}</div>}
               </div>
             ))}
           </div>
-        </details>
+          </>
+          )}
+        </section>
         <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs dark:border-slate-800 dark:bg-slate-900">
           <span className="text-slate-500">{upcomingLoanMetric && upcomingLoanMetric.nextDue < today ? 'Next unpaid installment (estimate)' : 'Upcoming installment'}</span>
           {upcomingLoanMetric ? (
@@ -5691,11 +5722,34 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* Tab: Savings & Goals */}
       {activeTab === 'savings' && (
         <div className="space-y-4">
-        <details className="finance-details rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-slate-900 dark:text-white">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+          <button
+            type="button"
+            aria-expanded={showSavingsSummary}
+            onClick={() => setShowSavingsSummary(open => {
+              if (open) setShowSavingsInfo(false);
+              return !open;
+            })}
+            className="flex w-full cursor-pointer items-center justify-between gap-3 text-left text-sm font-bold text-slate-900 dark:text-white"
+          >
             <span>Savings summary</span>
-            <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400">NPR {totalSavings.toLocaleString('en-IN', { maximumFractionDigits: 2 })} · {activeSavingsPlans.length} active</span>
-          </summary>
+            <span aria-hidden="true" className="text-base leading-none text-slate-400">{showSavingsSummary ? '−' : '+'}</span>
+          </button>
+          {showSavingsSummary && (
+          <>
+          <button
+            type="button"
+            aria-expanded={showSavingsInfo}
+            onClick={() => setShowSavingsInfo(open => !open)}
+            className="mt-3 text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            {showSavingsInfo ? 'Hide supporting info' : 'Show supporting info'}
+          </button>
+          {showSavingsInfo && (
+            <div className="mt-2 text-right font-mono text-xs text-indigo-600 dark:text-indigo-400">
+              NPR {totalSavings.toLocaleString('en-IN', { maximumFractionDigits: 2 })} · {activeSavingsPlans.length} active
+            </div>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
             {[
               { label: 'Savings Value (FD est.)', value: `NPR ${totalSavings.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: 'text-indigo-600 dark:text-indigo-400' },
@@ -5710,19 +5764,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               { label: 'Upcoming Maturity', value: `${upcomingSavingsMaturities.length} plans`, tone: 'text-slate-700 dark:text-slate-200' },
               { label: 'Active Plans', value: `${activeSavingsPlans.length} plans`, tone: 'text-slate-700 dark:text-slate-200' }
             ].map(metric => (
-              <div key={metric.label} className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{metric.label}</div>
-                <div className={`mt-1 truncate font-mono text-xs font-bold tabular-nums ${metric.tone}`}>{metric.value}</div>
+              <div key={metric.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
+                <div className={`mt-1 truncate font-mono text-[11px] font-bold tabular-nums ${metric.tone}`}>{metric.value}</div>
               </div>
             ))}
           </div>
-        </details>
+          </>
+          )}
+        </section>
+        {showSavingsSummary && showSavingsInfo && (
         <div className="flex flex-wrap gap-x-5 gap-y-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[11px] dark:border-slate-800 dark:bg-slate-900">
           <span className="font-semibold text-slate-500">Recorded deposits</span>
           <span>Today <strong className="font-mono text-slate-800 dark:text-slate-200">NPR {savingsToday.toLocaleString('en-IN')}</strong></span>
           <span>This month <strong className="font-mono text-slate-800 dark:text-slate-200">NPR {savingsThisMonth.toLocaleString('en-IN')}</strong></span>
           <span>This year <strong className="font-mono text-slate-800 dark:text-slate-200">NPR {savingsThisYear.toLocaleString('en-IN')}</strong></span>
         </div>
+        )}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
@@ -6367,16 +6425,35 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {activeTab === 'balanceSheet' && (
         <div className="space-y-4">
         <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:px-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
+          <div>
+            <button
+              type="button"
+              aria-expanded={showAssetSummary}
+              onClick={() => setShowAssetSummary(open => {
+                if (open) setShowAssetInfo(false);
+                return !open;
+              })}
+              className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] font-semibold text-indigo-600 dark:text-indigo-400"
+            >
+              <span>Asset summary</span>
+              <span aria-hidden="true" className="text-base leading-none text-slate-400">{showAssetSummary ? '−' : '+'}</span>
+            </button>
+            {showAssetSummary && (
+            <>
+            <button
+              type="button"
+              aria-expanded={showAssetInfo}
+              onClick={() => setShowAssetInfo(open => !open)}
+              className="mt-3 text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+            >
+              {showAssetInfo ? 'Hide supporting info' : 'Show supporting info'}
+            </button>
+            <div className="mt-3">
               <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Total asset value</div>
               <div className="mt-0.5 font-mono text-lg font-bold tabular-nums text-slate-900 dark:text-white">
                 NPR {totalAssets.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
               </div>
             </div>
-          </div>
-          <details className="finance-details mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
-            <summary className="cursor-pointer text-[11px] font-semibold text-indigo-600 marker:text-indigo-500 dark:text-indigo-400">Asset summary</summary>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
                 { label: 'Purchase cost', value: physicalAssetCostBasis, note: `${activePhysicalAssets.length} active assets` },
@@ -6384,16 +6461,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 { label: 'Unrealized gain / loss', value: physicalAssetGainLoss, note: 'Market value minus recorded cost' },
                 { label: 'Depreciation estimate', value: physicalAssetDepreciationEstimate, note: 'Straight-line book estimate only' }
               ].map(metric => (
-                <div key={metric.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400">{metric.label}</div>
-                  <div className={`mt-0.5 truncate font-mono text-xs font-semibold tabular-nums ${metric.label === 'Unrealized gain / loss' ? (metric.value >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-900 dark:text-white'}`}>
+                <div key={metric.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
+                  <div className={`mt-0.5 truncate font-mono text-[11px] font-semibold tabular-nums ${metric.label === 'Unrealized gain / loss' ? (metric.value >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-900 dark:text-white'}`}>
                     NPR {metric.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                   </div>
-                  <div className="mt-0.5 truncate text-[10px] text-slate-400">{metric.note}</div>
+                  {showAssetInfo && <div className="mt-0.5 truncate text-[9px] text-slate-400">{metric.note}</div>}
                 </div>
               ))}
             </div>
-          </details>
+            </>
+            )}
+          </div>
         </section>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Add Asset Form */}

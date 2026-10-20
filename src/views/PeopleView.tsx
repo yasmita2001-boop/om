@@ -24,6 +24,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   const [relationship, setRelationship] = useState('Friend');
   const [contact, setContact] = useState('');
   const [importantDate, setImportantDate] = useState('');
+  const [activeAction, setActiveAction] = useState<'person' | 'interaction'>('person');
   // Interaction logger & editor state
   const [selectedPersonId, setSelectedPersonId] = useState(people[0]?.id || '');
   const [interactionText, setInteractionText] = useState('');
@@ -82,6 +83,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
 
   const handleStartEditInteraction = (inter: Interaction) => {
     setEditingInteraction(inter);
+    setActiveAction('interaction');
     setSelectedPersonId(inter.personId);
     setInteractionText(inter.text);
   };
@@ -175,9 +177,30 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Column (5 cols): Add Person & Log Interaction */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">People actions</h2>
+          <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+            {([
+              ['person', 'Add Important Person'],
+              ['interaction', 'Log Touchpoint']
+            ] as const).map(([action, label]) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => setActiveAction(action)}
+                aria-pressed={activeAction === action}
+                className={`min-h-9 rounded-lg px-2 text-[10px] font-semibold transition-colors sm:text-xs ${
+                  activeAction === action
+                    ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className={activeAction === 'person' ? 'mt-4' : 'hidden'}>
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
               <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">Add Important Person</h2>
@@ -243,7 +266,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
           </div>
 
           {/* Log / Edit Interaction */}
-          <div className={`rounded-2xl border ${editingInteraction ? 'border-amber-400 bg-amber-50/20 dark:border-amber-700 dark:bg-amber-950/20' : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'} p-5 shadow-sm transition-colors`}>
+          <div className={`${activeAction === 'interaction' ? 'mt-4' : 'hidden'} ${editingInteraction ? 'rounded-xl border border-amber-400 bg-amber-50/20 p-4 dark:border-amber-700 dark:bg-amber-950/20' : ''} transition-colors`}>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 {editingInteraction ? (
@@ -321,9 +344,9 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </section>
 
-        {/* Right Column: Contacts Directory (7 cols) */}
+        {/* Contacts Directory */}
         <div className="lg:col-span-7 space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">

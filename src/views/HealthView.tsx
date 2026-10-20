@@ -55,6 +55,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
 }) => {
   const today = getLocalDateString();
   const [activeTab, setActiveTab] = useState<HealthTab>('movement');
+  const [activeAppointmentAction, setActiveAppointmentAction] = useState<'appointment' | 'observation'>('appointment');
 
   // Goal linking state for appointments
   const [apptInputMode, setApptInputMode] = useState<'manual' | 'link'>('manual');
@@ -722,8 +723,30 @@ export const HealthView: React.FC<HealthViewProps> = ({
       {/* Tab: Appointments & Health Notes */}
       {activeTab === 'appointments' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-5 flex flex-col gap-6">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Health actions</h2>
+            <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+              {([
+                ['appointment', 'Appointment'],
+                ['observation', 'Health Observation']
+              ] as const).map(([action, label]) => (
+                <button
+                  key={action}
+                  type="button"
+                  onClick={() => setActiveAppointmentAction(action)}
+                  aria-pressed={activeAppointmentAction === action}
+                  className={`min-h-9 rounded-lg px-2 text-[10px] font-semibold transition-colors sm:text-xs ${
+                    activeAppointmentAction === action
+                      ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className={activeAppointmentAction === 'appointment' ? 'mt-4' : 'hidden'}>
               <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
                 <Stethoscope className="h-4 w-4 text-indigo-500" />
                 <span>Log Medical Appointment</span>
@@ -765,7 +788,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
               </form>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className={activeAppointmentAction === 'observation' ? 'mt-4' : 'hidden'}>
               <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
                 <FileText className="h-4 w-4 text-emerald-500" />
                 <span>Quick Health Observation</span>
@@ -791,7 +814,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                 </button>
               </form>
             </div>
-          </div>
+          </section>
 
           <div className="lg:col-span-7 space-y-6">
             {/* Appointments List */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Compass, Heart, Shield, Trash2, Pencil, X } from 'lucide-react';
 import { ValueItem, SpiritualPractice, Commitment, Habit, NavModule, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -25,11 +25,11 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   onRefresh,
   onSuccess
 }) => {
+  const legacyGoalLinksRemoved = useRef(false);
   const [valTitle, setValTitle] = useState('');
   const [valDesc, setValDesc] = useState('');
   const [valType, setValType] = useState<'value' | 'principle'>('value');
-  const [valInputMode, setValInputMode] = useState<'manual' | 'link'>('manual');
-  const [valGoalId, setValGoalId] = useState('');
+  const [activeAction, setActiveAction] = useState<'values' | 'practices' | 'commitments'>('values');
 
   const [pracName, setPracName] = useState('');
   const [pracFreq, setPracFreq] = useState('Daily');
@@ -37,8 +37,6 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   const [pracGoalId, setPracGoalId] = useState<string>('');
 
   const [commText, setCommText] = useState('');
-  const [commInputMode, setCommInputMode] = useState<'manual' | 'link'>('manual');
-  const [commGoalId, setCommGoalId] = useState('');
 
   // Daily Practice Edit state
   const [editingPractice, setEditingPractice] = useState<SpiritualPractice | null>(null);
@@ -57,6 +55,29 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingPractice]);
 
+  useEffect(() => {
+    if (legacyGoalLinksRemoved.current) return;
+    legacyGoalLinksRemoved.current = true;
+
+    void (async () => {
+      const [savedValues, savedCommitments] = await Promise.all([
+        storage.getAll<ValueItem>('values'),
+        storage.getAll<Commitment>('commitments')
+      ]);
+      const linkedValues = savedValues.filter(value => value.goalId);
+      const linkedCommitments = savedCommitments.filter(commitment => commitment.goalId);
+      if (linkedValues.length === 0 && linkedCommitments.length === 0) return;
+
+      await Promise.all([
+        ...linkedValues.map(value => storage.put('values', { ...value, goalId: undefined })),
+        ...linkedCommitments.map(commitment => storage.put('commitments', { ...commitment, goalId: undefined }))
+      ]);
+      onRefresh();
+    })().catch(error => {
+      console.error('Failed to remove legacy goal links from values and commitments', error);
+    });
+  }, [onRefresh]);
+
   const handleAddValue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valTitle.trim()) return;
@@ -65,17 +86,13 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
       id: generateUUID(),
       title: `${valType === 'principle' ? '[Principle] ' : ''}${valTitle.trim()}`,
       description: valDesc.trim(),
-      goalId: valInputMode === 'link' ? valGoalId || undefined : undefined,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
     await storage.put('values', v);
-    if (v.goalId) await syncGoalProgressFromSpiritual(v.goalId);
-    onSuccess(`${valType === 'principle' ? 'Principle' : 'Core Value'} defined${v.goalId ? ' & linked to Goal' : ''}`);
+    onSuccess(`${valType === 'principle' ? 'Principle' : 'Core Value'} defined`);
     setValTitle('');
     setValDesc('');
-    setValGoalId('');
-    setValInputMode('manual');
     onRefresh();
   };
 
@@ -183,25 +200,16 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     const c: Commitment = {
       id: generateUUID(),
       text: commText.trim(),
-      goalId: commInputMode === 'link' ? commGoalId || undefined : undefined,
       createdAt: Date.now()
     };
     await storage.put('commitments', c);
-    if (c.goalId) await syncGoalProgressFromSpiritual(c.goalId);
-    onSuccess(`Solemn commitment recorded${c.goalId ? ' & linked to Goal' : ''}`);
+    onSuccess('Solemn commitment recorded');
     setCommText('');
-    setCommGoalId('');
-    setCommInputMode('manual');
     onRefresh();
   };
 
   const handleDeleteValue = async (id: string) => {
-    const val = values.find(v => v.id === id);
-    const linkedGoalId = val?.goalId;
     await storage.delete('values', id);
-    if (linkedGoalId) {
-      await syncGoalProgressFromSpiritual(linkedGoalId);
-    }
     onSuccess('✓ Value deleted');
     onRefresh();
   };
@@ -230,12 +238,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   };
 
   const handleDeleteCommitment = async (id: string) => {
-    const comm = commitments.find(c => c.id === id);
-    const linkedGoalId = comm?.goalId;
     await storage.delete('commitments', id);
-    if (linkedGoalId) {
-      await syncGoalProgressFromSpiritual(linkedGoalId);
-    }
     onSuccess('✓ Commitment deleted');
     onRefresh();
   };
@@ -248,22 +251,39 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         </h1>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">Foundations actions</h2>
+        <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+          {([
+            ['values', 'Values', values.length],
+            ['practices', 'Practices', practices.length],
+            ['commitments', 'Vows', commitments.length]
+          ] as const).map(([action, label, count]) => (
+            <button
+              key={action}
+              type="button"
+              onClick={() => setActiveAction(action)}
+              aria-pressed={activeAction === action}
+              className={`min-h-9 rounded-lg px-2 text-[10px] font-semibold transition-colors sm:text-xs ${
+                activeAction === action
+                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+            >
+              {label} ({count})
+            </button>
+          ))}
+        </div>
+
         {/* Core Values */}
-        <section className="rounded-3xl border border-slate-200 bg-white p-4.5 sm:p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
+        <div className={activeAction === 'values' ? 'mt-4' : 'hidden'}>
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Compass className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Values & Principles ({values.length})</h2>
           </div>
 
           <form onSubmit={handleAddValue} className="mt-4 space-y-2.5">
-            <GoalLinkSelector
-              goals={goals}
-              mode={valInputMode}
-              goalId={valGoalId}
-              onModeChange={setValInputMode}
-              onGoalChange={setValGoalId}
-            />
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -297,38 +317,10 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             </button>
           </form>
 
-          <div className="mt-4 space-y-2.5 max-h-80 overflow-y-auto">
-            {[...values].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(v => (
-              <div key={v.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
-                <div className="flex justify-between items-start gap-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-bold text-slate-900 dark:text-white">{v.title}</span>
-                    <GoalBadge goalId={v.goalId} goals={goals} />
-                  </div>
-                  <ProgressiveActions label={`More actions for ${v.title}`}>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteValue(v.id)}
-                      title="Delete value"
-                      aria-label={`Delete ${v.title}`}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </ProgressiveActions>
-                </div>
-                {v.description && (
-                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    {v.description}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+        </div>
 
         {/* Spiritual Practices */}
-        <section className="rounded-3xl border border-slate-200 bg-white p-4.5 sm:p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
+        <div className={activeAction === 'practices' ? 'mt-4' : 'hidden'}>
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Heart className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Daily Practices ({practices.length})</h2>
@@ -365,81 +357,16 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             </button>
           </form>
 
-          <div className="mt-4 space-y-2.5 max-h-80 overflow-y-auto">
-            {practices.length === 0 ? (
-              <p className="text-center py-6 text-xs text-slate-400">
-                No daily practices yet. Add one above to automatically track it in your habits.
-              </p>
-            ) : (
-              [...practices].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(p => (
-                <div
-                  key={p.id}
-                  tabIndex={0}
-                  onKeyDown={e => {
-                    if (e.key === 'Delete' || e.key === 'Backspace') {
-                      e.preventDefault();
-                      handleDeletePractice(p);
-                    }
-                  }}
-                  className="group rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center gap-2 hover:border-slate-200 dark:hover:border-slate-700 transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-400/50"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-semibold text-slate-900 dark:text-white truncate">{p.name}</span>
-                      <GoalBadge goalId={p.goalId} goals={goals} />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => onNavigate('routine')}
-                      className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 transition-colors cursor-pointer whitespace-nowrap"
-                      title="View linked habit in Routines & Habits"
-                    >
-                      View Habit →
-                    </button>
-                    <ProgressiveActions label={`More actions for ${p.name}`}>
-                    <button
-                      type="button"
-                      onClick={() => handleStartEditPractice(p)}
-                      title="Edit daily practice"
-                      aria-label={`Edit ${p.name}`}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400 transition-colors cursor-pointer"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeletePractice(p)}
-                      title="Delete practice (or press Delete key)"
-                      aria-label={`Delete ${p.name}`}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                    </ProgressiveActions>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
+        </div>
 
         {/* Personal Commitments */}
-        <section className="rounded-3xl border border-slate-200 bg-white p-4.5 sm:p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden flex flex-col">
+        <div className={activeAction === 'commitments' ? 'mt-4' : 'hidden'}>
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Shield className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Commitments & Vows ({commitments.length})</h2>
           </div>
 
           <form onSubmit={handleAddCommitment} className="mt-4 space-y-2.5">
-            <GoalLinkSelector
-              goals={goals}
-              mode={commInputMode}
-              goalId={commGoalId}
-              onModeChange={setCommInputMode}
-              onGoalChange={setCommGoalId}
-            />
             <textarea
               rows={2}
               required
@@ -456,34 +383,130 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             </button>
           </form>
 
-          <div className="mt-4 space-y-2 max-h-80 overflow-y-auto">
-            {[...commitments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(c => (
-              <div key={c.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
-                <div className="flex justify-between items-start">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-slate-800 dark:text-slate-200 italic leading-relaxed">
-                      "{c.text}"
+        </div>
+        </section>
+
+        <section className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">Saved foundations</h2>
+          <div className="mt-4 space-y-5">
+            <div>
+              <h3 className="border-b border-slate-100 pb-2 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-300">
+                Values & Principles ({values.length})
+              </h3>
+              <div className="mt-3 space-y-2.5 max-h-64 overflow-y-auto">
+                {values.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-slate-400">No values or principles saved yet.</p>
+                ) : [...values].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(v => (
+                  <div key={v.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
+                    <div className="flex justify-between items-start gap-1">
+                      <span className="font-bold text-slate-900 dark:text-white">{v.title}</span>
+                      <ProgressiveActions label={`More actions for ${v.title}`}>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteValue(v.id)}
+                          title="Delete value"
+                          aria-label={`Delete ${v.title}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </ProgressiveActions>
                     </div>
-                    {c.goalId && (
-                      <div className="mt-1">
-                        <GoalBadge goalId={c.goalId} goals={goals} />
-                      </div>
-                    )}
+                    {v.description && <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{v.description}</p>}
                   </div>
-                  <ProgressiveActions label="More actions for commitment" className="ml-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteCommitment(c.id)}
-                      title="Delete commitment"
-                      aria-label="Delete commitment"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </ProgressiveActions>
-                </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            <div>
+              <h3 className="border-b border-slate-100 pb-2 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-300">
+                Daily Practices ({practices.length})
+              </h3>
+              <div className="mt-3 space-y-2.5 max-h-64 overflow-y-auto">
+                {practices.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-slate-400">No daily practices saved yet.</p>
+                ) : [...practices].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(p => (
+                  <div
+                    key={p.id}
+                    tabIndex={0}
+                    onKeyDown={e => {
+                      if (e.key === 'Delete' || e.key === 'Backspace') {
+                        e.preventDefault();
+                        handleDeletePractice(p);
+                      }
+                    }}
+                    className="group flex items-center justify-between gap-2 rounded-2xl border border-slate-100 p-3.5 text-xs transition-colors hover:border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-400/50 dark:border-slate-800 dark:hover:border-slate-700"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="truncate font-semibold text-slate-900 dark:text-white">{p.name}</span>
+                        <GoalBadge goalId={p.goalId} goals={goals} />
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('routine')}
+                        className="whitespace-nowrap rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                        title="View linked habit in Routines & Habits"
+                      >
+                        View Habit →
+                      </button>
+                      <ProgressiveActions label={`More actions for ${p.name}`}>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditPractice(p)}
+                          title="Edit daily practice"
+                          aria-label={`Edit ${p.name}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePractice(p)}
+                          title="Delete practice (or press Delete key)"
+                          aria-label={`Delete ${p.name}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </ProgressiveActions>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="border-b border-slate-100 pb-2 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-300">
+                Commitments & Vows ({commitments.length})
+              </h3>
+              <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
+                {commitments.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-slate-400">No commitments saved yet.</p>
+                ) : [...commitments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(c => (
+                  <div key={c.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 flex-1 font-medium italic leading-relaxed text-slate-800 dark:text-slate-200">
+                        "{c.text}"
+                      </div>
+                      <ProgressiveActions label="More actions for commitment" className="ml-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCommitment(c.id)}
+                          title="Delete commitment"
+                          aria-label="Delete commitment"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </ProgressiveActions>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
       </div>

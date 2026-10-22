@@ -19,6 +19,7 @@ import { SlideTabs } from '../components/SlideTabs';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { syncGoalProgressFromFinance } from '../lib/goalTaskSync';
 import { addSchedulePeriod, advanceSchedule, getInvestmentMetrics } from '../lib/financeCalculations';
+import { calculatorEngine } from '../lib/calculatorEngine';
 
 interface FinanceViewProps {
   accounts: FinanceAccount[];
@@ -134,6 +135,17 @@ const SIMPLE_FREQUENCY_PRODUCTS: Record<string, SavingsProductType> = {
   half_yearly: 'half_yearly',
   yearly: 'yearly',
   custom: 'custom_period'
+};
+
+const calculateTransactionAmount = (value: string): number | null => {
+  const expression = value.trim();
+  if (!expression || !/^[\d+\-*/×÷−().%\s]+$/.test(expression)) return null;
+  try {
+    const result = calculatorEngine.scientific(expression);
+    return typeof result === 'number' && Number.isFinite(result) ? result : null;
+  } catch {
+    return null;
+  }
 };
 
 const isBankSavingsPlan = (plan: SavingsPlan) =>
@@ -321,6 +333,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [txRepayLoanId, setTxRepayLoanId] = useState(loans[0]?.id || '');
   const [txNote, setTxNote] = useState('');
   const [txDate, setTxDate] = useState(today);
+  const txAmountResult = useMemo(() => calculateTransactionAmount(txAmount), [txAmount]);
+  const txAmountHasCalculation = /[+*/×÷%]/.test(txAmount) || (txAmount.indexOf('-') > 0) || txAmount.includes('−');
 
   // Category Combobox State
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
@@ -1389,11 +1403,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const handleCreateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amt = Number(txAmount);
+    const amt = txAmountResult ?? Number.NaN;
     if (!Number.isFinite(amt) || amt <= 0 || !txDate || txDate > today) {
-      reportError('Enter a positive transaction amount and a date that is not in the future.');
+      reportError('Enter a valid positive amount or calculation and a date that is not in the future.');
       return;
     }
+    setTxAmount(String(amt));
     if (txType === 'repayment') {
       const loan = loans.find(item => item.id === (txRepayLoanId || loans[0]?.id));
       const outstanding = Number(loan?.outstanding) || 0;
@@ -3979,15 +3994,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </label>
                   <div className="relative">
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="text"
                       required
                       value={txAmount}
                       onChange={e => setTxAmount(e.target.value)}
+                      onBlur={() => {
+                        if (txAmountHasCalculation && txAmountResult !== null) {
+                          setTxAmount(String(txAmountResult));
+                        }
+                      }}
                       placeholder="0.00"
                       className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs sm:text-sm font-semibold text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
                     />
                   </div>
+                  {txAmountHasCalculation && txAmountResult !== null && (
+                    <p className="text-[11px] font-medium text-teal-700 dark:text-teal-400" aria-live="polite">
+                      Final amount: NPR {txAmountResult.toLocaleString('en-NP', { maximumFractionDigits: 10 })}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1">

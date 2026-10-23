@@ -44,7 +44,9 @@ export const JournalView: React.FC<JournalViewProps> = ({
   const [attachments, setAttachments] = useState<StoredAttachmentMeta[]>([]);
   const [journalHtml, setJournalHtml] = useState('');
   const [journalText, setJournalText] = useState('');
+  const [rightColumnEntryCount, setRightColumnEntryCount] = useState(2);
   const formRef = useRef<HTMLDivElement>(null);
+  const archiveFiltersRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -287,6 +289,32 @@ export const JournalView: React.FC<JournalViewProps> = ({
   });
 
   const linkedJournalCount = journal.filter(j => Boolean(j.goalId)).length;
+
+  useEffect(() => {
+    const form = formRef.current;
+    const archiveFilters = archiveFiltersRef.current;
+    if (!form || !archiveFilters) return;
+
+    const updateRightColumnEntryCount = () => {
+      if (window.innerWidth < 1024) {
+        setRightColumnEntryCount(Math.min(2, filteredEntries.length));
+        return;
+      }
+
+      const availableHeight = form.getBoundingClientRect().height
+        - archiveFilters.getBoundingClientRect().height
+        - 16;
+      const rowHeightWithGap = 336;
+      const rowCount = Math.max(1, Math.round((availableHeight + 16) / rowHeightWithGap));
+      setRightColumnEntryCount(Math.min(filteredEntries.length, rowCount * 2));
+    };
+
+    const resizeObserver = new ResizeObserver(updateRightColumnEntryCount);
+    resizeObserver.observe(form);
+    resizeObserver.observe(archiveFilters);
+    updateRightColumnEntryCount();
+    return () => resizeObserver.disconnect();
+  }, [filteredEntries.length]);
 
   const renderEntryCard = (j: JournalEntry) => {
     const theme = getTheme(j.color);
@@ -595,7 +623,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
 
         {/* Journal Timeline Archive (7 cols) */}
         <div className="space-y-4 lg:col-span-7">
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-3.5">
+          <div ref={archiveFiltersRef} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-3.5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
                 Journal Timeline ({filteredEntries.length})
@@ -663,7 +691,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-            {filteredEntries.slice(0, 2).map(renderEntryCard)}
+            {filteredEntries.slice(0, rightColumnEntryCount).map(renderEntryCard)}
           </div>
         </div>
 
@@ -671,9 +699,9 @@ export const JournalView: React.FC<JournalViewProps> = ({
           <div className="py-16 text-center text-xs text-slate-400 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 lg:col-span-12">
             No journal reflections found. Record today's entry on the left.
           </div>
-        ) : filteredEntries.length > 2 ? (
+        ) : filteredEntries.length > rightColumnEntryCount ? (
           <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:col-span-12">
-            {filteredEntries.slice(2).map(renderEntryCard)}
+            {filteredEntries.slice(rightColumnEntryCount).map(renderEntryCard)}
           </div>
         ) : null}
       </div>

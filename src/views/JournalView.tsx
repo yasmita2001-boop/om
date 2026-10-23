@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Calendar, Trash2, Edit3,
-  Copy, Check, Search, Volume2, Target, X
+  Copy, Check, Search, Volume2, Target, X, ChevronDown
 } from 'lucide-react';
 import { JournalEntry, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -39,6 +39,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
   const [selectedMoodFilter, setSelectedMoodFilter] = useState<string>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
+  const [archiveControlsOpen, setArchiveControlsOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
   const [attachments, setAttachments] = useState<StoredAttachmentMeta[]>([]);
@@ -314,7 +315,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
     resizeObserver.observe(archiveFilters);
     updateRightColumnEntryCount();
     return () => resizeObserver.disconnect();
-  }, [filteredEntries.length]);
+  }, [archiveControlsOpen, filteredEntries.length]);
 
   const renderEntryCard = (j: JournalEntry) => {
     const theme = getTheme(j.color);
@@ -430,6 +431,16 @@ export const JournalView: React.FC<JournalViewProps> = ({
             Daily Journal & Philosophical Reflections
           </h1>
         </div>
+        <button
+          type="button"
+          aria-expanded={archiveControlsOpen}
+          aria-controls="journal-archive-controls"
+          onClick={() => setArchiveControlsOpen(open => !open)}
+          className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300 sm:self-auto"
+        >
+          <span>Journal Timeline ({filteredEntries.length})</span>
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${archiveControlsOpen ? 'rotate-180' : ''}`} />
+        </button>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
@@ -623,14 +634,11 @@ export const JournalView: React.FC<JournalViewProps> = ({
 
         {/* Journal Timeline Archive (7 cols) */}
         <div className="space-y-4 lg:col-span-7">
-          <div ref={archiveFiltersRef} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-3.5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                Journal Timeline ({filteredEntries.length})
-              </h2>
-              <span className="text-[11px] text-slate-400">Chronological Archive</span>
-            </div>
-
+          <div
+            ref={archiveFiltersRef}
+            id="journal-archive-controls"
+            className={archiveControlsOpen ? 'rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-3.5' : 'hidden'}
+          >
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />

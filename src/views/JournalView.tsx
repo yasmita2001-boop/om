@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Calendar, Trash2, Edit3,
-  Copy, Check, Search, Volume2, Target
+  Copy, Check, Search, Volume2, Target, X
 } from 'lucide-react';
 import { JournalEntry, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -38,6 +38,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMoodFilter, setSelectedMoodFilter] = useState<string>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
   const [attachments, setAttachments] = useState<StoredAttachmentMeta[]>([]);
@@ -45,6 +46,15 @@ export const JournalView: React.FC<JournalViewProps> = ({
   const [journalText, setJournalText] = useState('');
   const formRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!viewingEntry) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setViewingEntry(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewingEntry]);
 
   const handleSelectGoalForJournal = (gId: string) => {
     setJournalGoalId(gId);
@@ -278,6 +288,106 @@ export const JournalView: React.FC<JournalViewProps> = ({
 
   const linkedJournalCount = journal.filter(j => Boolean(j.goalId)).length;
 
+  const renderEntryCard = (j: JournalEntry) => {
+    const theme = getTheme(j.color);
+    const moodObj = moodOptions.find(m => m.label === j.mood);
+    const linkedGoal = j.goalId ? goals.find(g => g.id === j.goalId) : null;
+    return (
+      <article
+        key={j.id}
+        role="button"
+        tabIndex={0}
+        aria-label={`Open reflection: ${j.title}`}
+        onClick={() => setViewingEntry(j)}
+        onKeyDown={event => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setViewingEntry(j);
+          }
+        }}
+        className={`progressive-row relative cursor-pointer rounded-2xl border p-4 sm:p-5 shadow-xs transition-all card-hover ${theme.cardClass}`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                {j.title}
+              </h3>
+              {j.mood && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-white/70 dark:bg-slate-800/70 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                  <span>{moodObj?.icon || '•'}</span>
+                  <span>{j.mood}</span>
+                </span>
+              )}
+              {linkedGoal && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50/90 dark:bg-indigo-950/70 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 truncate max-w-[180px]">
+                  <Target className="h-2.5 w-2.5 shrink-0" />
+                  <span className="truncate">{linkedGoal.title}</span>
+                  <span>({linkedGoal.progress}%)</span>
+                </span>
+              )}
+            </div>
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <Calendar className="h-3 w-3" />
+              <span className="font-mono">{j.date}</span>
+            </div>
+          </div>
+
+          <ProgressiveActions label={`More actions for ${j.title}`} className="shrink-0">
+            <button
+              type="button"
+              onClick={() => toggleSpeakEntry(j)}
+              className={`p-1 rounded-md transition-colors cursor-pointer ${
+                speakingEntryId === j.id
+                  ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950 animate-pulse'
+                  : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+              title={speakingEntryId === j.id ? "Stop reading" : "Read reflection aloud (Hindi & English)"}
+            >
+              <Volume2 className={`h-3.5 w-3.5 ${speakingEntryId === j.id ? 'animate-bounce' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCopy(j)}
+              className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+              title="Copy text"
+            >
+              {copiedId === j.id ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleEdit(j)}
+              className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+              title="Edit reflection"
+            >
+              <Edit3 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDelete(j)}
+              className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+              title="Delete reflection"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </ProgressiveActions>
+        </div>
+
+        <div
+          className="mt-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed om-rich-rendered"
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(j.html || (j.text ? j.text.replace(/\n/g, '<br/>') : '')) }}
+        />
+
+        {j.attachments && j.attachments.length > 0 && (
+          <div className="mt-3 pt-2 border-t border-black/5 dark:border-white/5" onClick={event => event.stopPropagation()}>
+            <AttachmentViewer attachments={j.attachments} compact={true} />
+          </div>
+        )}
+      </article>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -478,7 +588,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
         </div>
 
         {/* Journal Timeline Archive (7 cols) */}
-        <div className="lg:col-span-7">
+        <div className="space-y-4 lg:col-span-7">
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-3.5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
@@ -546,106 +656,72 @@ export const JournalView: React.FC<JournalViewProps> = ({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+            {filteredEntries.slice(0, 2).map(renderEntryCard)}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:col-span-12">
-          {filteredEntries.length === 0 ? (
-            <div className="py-16 text-center text-xs text-slate-400 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 md:col-span-2">
-                No journal reflections found. Record today's entry on the left.
-            </div>
-          ) : (
-            filteredEntries.map(j => {
-              const theme = getTheme(j.color);
-              const moodObj = moodOptions.find(m => m.label === j.mood);
-              const linkedGoal = j.goalId ? goals.find(g => g.id === j.goalId) : null;
-              return (
-                  <div
-                    key={j.id}
-                    className={`progressive-row relative rounded-2xl border p-4 sm:p-5 shadow-xs transition-all card-hover ${theme.cardClass}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                            {j.title}
-                          </h3>
-                          {j.mood && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-white/70 dark:bg-slate-800/70 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
-                              <span>{moodObj?.icon || '•'}</span>
-                              <span>{j.mood}</span>
-                            </span>
-                          )}
-                          {linkedGoal && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50/90 dark:bg-indigo-950/70 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 truncate max-w-[180px]">
-                              <Target className="h-2.5 w-2.5 shrink-0" />
-                              <span className="truncate">{linkedGoal.title}</span>
-                              <span>({linkedGoal.progress}%)</span>
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                          <Calendar className="h-3 w-3" />
-                          <span className="font-mono">{j.date}</span>
-                        </div>
-                      </div>
-
-                      <ProgressiveActions label={`More actions for ${j.title}`} className="shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => toggleSpeakEntry(j)}
-                          className={`p-1 rounded-md transition-colors cursor-pointer ${
-                            speakingEntryId === j.id
-                              ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950 animate-pulse'
-                              : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800'
-                          }`}
-                          title={speakingEntryId === j.id ? "Stop reading" : "Read reflection aloud (Hindi & English)"}
-                        >
-                          <Volume2 className={`h-3.5 w-3.5 ${speakingEntryId === j.id ? 'animate-bounce' : ''}`} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(j)}
-                          className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
-                          title="Copy text"
-                        >
-                          {copiedId === j.id ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(j)}
-                          className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
-                          title="Edit reflection"
-                        >
-                          <Edit3 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(j)}
-                          className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                          title="Delete reflection"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </ProgressiveActions>
-                    </div>
-
-                    <div
-                      className="mt-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed om-rich-rendered"
-                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(j.html || (j.text ? j.text.replace(/\n/g, '<br/>') : '')) }}
-                    />
-
-                    {/* Attached files indicator / download list */}
-                    {j.attachments && j.attachments.length > 0 && (
-                      <div className="mt-3 pt-2 border-t border-black/5 dark:border-white/5">
-                        <AttachmentViewer attachments={j.attachments} compact={true} />
-                      </div>
-                    )}
-                  </div>
-              );
-            })
-          )}
-        </div>
+        {filteredEntries.length === 0 ? (
+          <div className="py-16 text-center text-xs text-slate-400 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 lg:col-span-12">
+            No journal reflections found. Record today's entry on the left.
+          </div>
+        ) : filteredEntries.length > 2 ? (
+          <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:col-span-12">
+            {filteredEntries.slice(2).map(renderEntryCard)}
+          </div>
+        ) : null}
       </div>
+
+      {viewingEntry && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5"
+          onClick={() => setViewingEntry(null)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="journal-entry-title"
+            className={`w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border p-5 shadow-2xl sm:p-7 ${getTheme(viewingEntry.color).cardClass}`}
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-black/10 pb-4 dark:border-white/10">
+              <div className="min-w-0">
+                <h2 id="journal-entry-title" className="text-lg font-bold text-slate-900 dark:text-white sm:text-xl">
+                  {viewingEntry.title || 'Daily Reflection'}
+                </h2>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {viewingEntry.date}
+                  </span>
+                  {viewingEntry.mood && <span>{moodOptions.find(m => m.label === viewingEntry.mood)?.icon} {viewingEntry.mood}</span>}
+                  {viewingEntry.goalId && (
+                    <span>{goals.find(g => g.id === viewingEntry.goalId)?.title || 'Goal linked'}</span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingEntry(null)}
+                aria-label="Close reflection"
+                className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div
+              className="om-rich-rendered mt-5 text-sm leading-7 text-slate-800 dark:text-slate-200"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(viewingEntry.html || (viewingEntry.text ? viewingEntry.text.replace(/\n/g, '<br/>') : '')) }}
+            />
+            {viewingEntry.attachments && viewingEntry.attachments.length > 0 && (
+              <div className="mt-5 border-t border-black/10 pt-4 dark:border-white/10">
+                <AttachmentViewer attachments={viewingEntry.attachments} />
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {/* CONFIRM DELETE JOURNAL MODAL */}
       <ConfirmModal

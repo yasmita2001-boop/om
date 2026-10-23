@@ -36,6 +36,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [colorFilter, setColorFilter] = useState<string>('all');
+  const [noteFiltersOpen, setNoteFiltersOpen] = useState(false);
   
   // Custom notebooks list (merged from default categories, appSettings, and note categories)
   const [allCategories, setAllCategories] = useState<string[]>(categories);
@@ -519,7 +520,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateRightColumnNoteCount);
     };
-  }, [filteredNotes.length]);
+  }, [filteredNotes.length, noteFiltersOpen]);
 
   const noteCards = filteredNotes.map(n => {
     const theme = getTheme(n.color);
@@ -673,6 +674,16 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            aria-expanded={noteFiltersOpen}
+            aria-controls="note-archive-filters"
+            onClick={() => setNoteFiltersOpen(open => !open)}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300"
+          >
+            <span>Search & Filters</span>
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${noteFiltersOpen ? 'rotate-180' : ''}`} />
+          </button>
           <button
             type="button"
             onClick={() => setIsAddingCategory(true)}
@@ -976,7 +987,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
         {/* RIGHT PANEL: NOTEBOOKS DIRECTORY & CARDS (7 cols)                         */}
         {/* ========================================================================= */}
         <div className="space-y-4 lg:col-span-7">
-          <div ref={noteFiltersRef} className="rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-3.5">
+          <div
+            ref={noteFiltersRef}
+            id="note-archive-filters"
+            className={noteFiltersOpen ? 'rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-3.5' : 'hidden'}
+          >
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />

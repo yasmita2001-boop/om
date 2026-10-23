@@ -261,13 +261,13 @@ const isMarkdownOrFormattedText = (text: string): boolean => {
 
 // Helper: Convert Markdown to luxury Rich HTML
 const convertMarkdownToRichHtml = (markdown: string): string => {
-  let text = markdown;
+  let text = escapeHtml(markdown);
 
   // Code blocks first (protect from other replacements)
   const codeBlocks: string[] = [];
   text = text.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_, lang, code) => {
     const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
-    codeBlocks.push(`<pre><code class="language-${lang || 'plaintext'}">${escapeHtml(code.trim())}</code></pre>`);
+    codeBlocks.push(`<pre><code class="language-${lang || 'plaintext'}">${code.trim()}</code></pre>`);
     return placeholder;
   });
 
@@ -275,7 +275,7 @@ const convertMarkdownToRichHtml = (markdown: string): string => {
   const inlineCodes: string[] = [];
   text = text.replace(/`([^`]+)`/g, (_, code) => {
     const placeholder = `__INLINE_CODE_${inlineCodes.length}__`;
-    inlineCodes.push(`<code>${escapeHtml(code)}</code>`);
+    inlineCodes.push(`<code>${code}</code>`);
     return placeholder;
   });
 
@@ -377,8 +377,8 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   initialHtml = '',
   onChange,
   placeholder = '',
-  minHeight = 'min-h-[220px]',
-  maxHeight = 'max-h-[480px]',
+  minHeight = 'min-h-[150px]',
+  maxHeight = 'max-h-[280px]',
   className = ''
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -410,6 +410,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   // Formatting state
   const [activeStyle, setActiveStyle] = useState('p');
   const [activeSize, setActiveSize] = useState('3');
+  const plainTextPasteRef = useRef(false);
 
   // Speech synthesis
   const [isEditorSpeaking, setIsEditorSpeaking] = useState(false);
@@ -562,9 +563,8 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
 
     const htmlData = clipboardData.getData('text/html');
     const plainText = clipboardData.getData('text/plain');
-
-    // If Shift+Ctrl+V / Shift+Cmd+V was pressed, paste as clean formatted plain text
-    const isShiftPaste = (e.nativeEvent as any)?.shiftKey;
+    const isShiftPaste = plainTextPasteRef.current;
+    plainTextPasteRef.current = false;
 
     let processedHtml = '';
 
@@ -601,6 +601,10 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
 
   // Tab key navigation inside table cells
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.shiftKey && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+      plainTextPasteRef.current = true;
+    }
+
     if (e.key === 'Tab') {
       const sel = window.getSelection();
       const node = sel?.anchorNode;
@@ -653,6 +657,12 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
         exec('justifyFull');
       }
     }
+  };
+
+  const handleKeyUp = () => {
+    plainTextPasteRef.current = false;
+    saveSelection();
+    detectActiveTable();
   };
 
   const handleApplyStyle = (tag: string) => {
@@ -832,19 +842,17 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     let bulletHtml = '';
     if (lines.length > 0) {
       bulletHtml = lines.map(line =>
-        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: bold; user-select: none; flex-shrink: 0;">${symbol}</span><span>${line}</span></div>`
+        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: bold; user-select: none; flex-shrink: 0;">${escapeHtml(symbol)}</span><span>${escapeHtml(line)}</span></div>`
       ).join('') + '<p><br/></p>';
     } else {
-      bulletHtml = `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: bold; user-select: none; flex-shrink: 0;">${symbol}</span><span>List item</span></div><p><br/></p>`;
+      bulletHtml = `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: bold; user-select: none; flex-shrink: 0;">${escapeHtml(symbol)}</span><span>List item</span></div><p><br/></p>`;
     }
 
-    let ok = false;
+    let inserted = false;
     try {
-      ok = document.execCommand('insertHTML', false, bulletHtml);
+      inserted = document.execCommand('insertHTML', false, bulletHtml);
     } catch {}
-    if (!ok && editorRef.current) {
-      editorRef.current.insertAdjacentHTML('beforeend', bulletHtml);
-    }
+    if (!inserted) insertHtmlAtCaret(bulletHtml);
 
     isExecutingActionRef.current = false;
     saveSelection();
@@ -873,26 +881,24 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     if (customPrefix) {
       const items = lines.length > 0 ? lines : ['First item', 'Second item'];
       listHtml = items.map((line, idx) =>
-        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: 700; user-select: none; flex-shrink: 0;">${customPrefix} ${idx + 1}:</span><span>${line}</span></div>`
+        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: 700; user-select: none; flex-shrink: 0;">${escapeHtml(customPrefix)} ${idx + 1}:</span><span>${escapeHtml(line)}</span></div>`
       ).join('') + '<p><br/></p>';
     } else if (styleType === 'circled') {
       const circledDigits = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
       const items = lines.length > 0 ? lines : ['First item', 'Second item'];
       listHtml = items.map((line, idx) =>
-        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: bold; user-select: none; flex-shrink: 0;">${circledDigits[idx] || `(${idx + 1})`}</span><span>${line}</span></div>`
+        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: bold; user-select: none; flex-shrink: 0;">${circledDigits[idx] || `(${idx + 1})`}</span><span>${escapeHtml(line)}</span></div>`
       ).join('') + '<p><br/></p>';
     } else {
       const items = lines.length > 0 ? lines : ['First item'];
-      listHtml = `<ol type="${styleType}" style="margin: 6px 0; padding-left: 24px;">${items.map(i => `<li>${i}</li>`).join('')}</ol><p><br/></p>`;
+      listHtml = `<ol type="${styleType}" style="margin: 6px 0; padding-left: 24px;">${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ol><p><br/></p>`;
     }
 
-    let ok = false;
+    let inserted = false;
     try {
-      ok = document.execCommand('insertHTML', false, listHtml);
+      inserted = document.execCommand('insertHTML', false, listHtml);
     } catch {}
-    if (!ok && editorRef.current) {
-      editorRef.current.insertAdjacentHTML('beforeend', listHtml);
-    }
+    if (!inserted) insertHtmlAtCaret(listHtml);
 
     isExecutingActionRef.current = false;
     saveSelection();
@@ -928,13 +934,11 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     }
     tableHtml += `</tbody></table><p><br/></p>`;
 
-    let ok = false;
+    let inserted = false;
     try {
-      ok = document.execCommand('insertHTML', false, tableHtml);
+      inserted = document.execCommand('insertHTML', false, tableHtml);
     } catch {}
-    if (!ok && editorRef.current) {
-      editorRef.current.insertAdjacentHTML('beforeend', tableHtml);
-    }
+    if (!inserted) insertHtmlAtCaret(tableHtml);
 
     isExecutingActionRef.current = false;
     saveSelection();
@@ -1089,12 +1093,12 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   };
 
   return (
-    <div className={`relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/80 overflow-hidden ${className}`}>
+    <div className={`relative rounded-lg border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/80 overflow-hidden ${className}`}>
       {/* ========================================================================= */}
       {/* 1. PRIMARY DOCKED TOOLBAR                                                */}
       {/* ========================================================================= */}
-      <div className="border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/90 dark:bg-slate-800/60 backdrop-blur-xs px-2.5 py-1.5">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
+      <div className="border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/90 dark:bg-slate-800/60 backdrop-blur-xs px-1.5 py-0.75">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
           {/* Paragraph Style */}
           <div className="relative shrink-0">
             <select
@@ -1948,16 +1952,16 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
         onInput={handleEditorInput}
         onPaste={handlePaste}
         onKeyDown={handleKeyDown}
-        onKeyUp={() => { saveSelection(); detectActiveTable(); }}
+        onKeyUp={handleKeyUp}
         onMouseUp={() => { saveSelection(); detectActiveTable(); }}
         onSelect={() => { saveSelection(); detectActiveTable(); }}
         onTouchEnd={() => { saveSelection(); detectActiveTable(); }}
         onBlur={() => { handleEditorInput(); saveSelection(); }}
-        className={`p-4 sm:p-5 text-xs sm:text-sm text-slate-800 dark:text-slate-100 focus:outline-none overflow-y-auto leading-relaxed om-rich-rendered ${minHeight} ${maxHeight}
-          [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:my-3 [&_h1]:text-slate-950 dark:[&_h1]:text-white
-          [&_h2]:text-xl [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:my-2.5 [&_h2]:text-slate-900 dark:[&_h2]:text-slate-100
-          [&_h3]:text-base [&_h3]:font-bold [&_h3]:my-2 [&_h3]:text-slate-800 dark:[&_h3]:text-slate-200
-          [&_p]:my-1.5 [&_p]:leading-relaxed
+        className={`p-2.5 sm:p-3 text-[12.5px] sm:text-sm text-slate-800 dark:text-slate-100 focus:outline-none overflow-y-auto leading-relaxed om-rich-rendered ${minHeight} ${maxHeight}
+          [&_h1]:text-xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:my-1.5 [&_h1]:text-slate-950 dark:[&_h1]:text-white
+          [&_h2]:text-lg [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:my-1 [&_h2]:text-slate-900 dark:[&_h2]:text-slate-100
+          [&_h3]:text-base [&_h3]:font-bold [&_h3]:my-1 [&_h3]:text-slate-800 dark:[&_h3]:text-slate-200
+          [&_p]:my-1 [&_p]:leading-relaxed
           empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/80 empty:before:pointer-events-none empty:before:italic`}
         data-placeholder={placeholder}
       />

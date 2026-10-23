@@ -17,7 +17,7 @@ import { getLocalDateString } from './lib/dateUtils';
 import watermarkUrl from './assets/om-lifeos-watermark.png';
 import { LockKeyhole, ShieldCheck } from 'lucide-react';
 
-const IS_LOCAL_TEST_BUILD = import.meta.env.MODE === 'local-test';
+const IS_GUEST_MODE = import.meta.env.DEV || import.meta.env.MODE === 'local-test';
 const GUEST_PROFILE_ID = 'om-master-profile';
 
 // Components
@@ -89,10 +89,10 @@ function LifeOSApp() {
   // Entities state
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
   const [activeProfileId, setActiveProfileId] = useState<string | null>(
-    IS_LOCAL_TEST_BUILD ? GUEST_PROFILE_ID : null
+    IS_GUEST_MODE ? GUEST_PROFILE_ID : null
   );
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
-  const [isGoogleLocked, setIsGoogleLocked] = useState(!IS_LOCAL_TEST_BUILD);
+  const [isGoogleLocked, setIsGoogleLocked] = useState(!IS_GUEST_MODE);
   const [isUnlockingGoogle, setIsUnlockingGoogle] = useState(false);
   const [googleUnlockError, setGoogleUnlockError] = useState<string | null>(null);
   const activeProfileIdRef = useRef<string | null>(activeProfileId);
@@ -174,7 +174,7 @@ function LifeOSApp() {
       const requestedProfileId = overrideProfileId || activeProfileIdRef.current || storage.getActiveProfileId();
       if (requestedProfileId) storage.setActiveProfile(requestedProfileId);
       let settingsData = await storage.getSingleton<AppState>('appSettings', requestedProfileId || undefined);
-      if (!settingsData && IS_LOCAL_TEST_BUILD && requestedProfileId === GUEST_PROFILE_ID) {
+      if (!settingsData && IS_GUEST_MODE && requestedProfileId === GUEST_PROFILE_ID) {
         settingsData = await ensureDefaultProfiles();
       }
       const activeId = requestedProfileId || settingsData?.profileId;
@@ -385,11 +385,11 @@ function LifeOSApp() {
       alarmService.clearActiveAlarm();
       setActiveTriggeredAlarm(null);
       setAppSettings(undefined);
-      const guestProfileId = IS_LOCAL_TEST_BUILD ? GUEST_PROFILE_ID : null;
+      const guestProfileId = IS_GUEST_MODE ? GUEST_PROFILE_ID : null;
       storage.setActiveProfile(guestProfileId);
       activeProfileIdRef.current = guestProfileId;
       setActiveProfileId(guestProfileId);
-      setIsGoogleLocked(!IS_LOCAL_TEST_BUILD);
+      setIsGoogleLocked(!IS_GUEST_MODE);
       setIsMobileMenuOpen(false);
       setActiveModule('dashboard');
       return;

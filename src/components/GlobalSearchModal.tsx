@@ -48,11 +48,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     const q = query.trim().toLowerCase();
     if (!q) {
       setResults([]);
+      setLoading(false);
       return;
     }
 
     let isSubscribed = true;
     setLoading(true);
+    setResults([]);
 
     const performSearch = async () => {
       try {
@@ -70,7 +72,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         const hits: SearchHit[] = [];
 
         tasks.forEach(t => {
-          if ((t.title + ' ' + (t.description || '')).toLowerCase().includes(q)) {
+          const searchableText = [
+            t.title,
+            t.description,
+            t.priority,
+            t.domain
+          ].filter(Boolean).join(' ').toLowerCase();
+          if (searchableText.includes(q)) {
             hits.push({
               id: t.id,
               module: 'tasks',
@@ -83,7 +91,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         });
 
         notes.forEach(n => {
-          if ((n.title + ' ' + (n.body || '') + ' ' + (n.category || '')).toLowerCase().includes(q)) {
+          const searchableText = [
+            n.title,
+            n.body,
+            n.category,
+            n.tags
+          ].filter(Boolean).join(' ').toLowerCase();
+          if (searchableText.includes(q)) {
             hits.push({
               id: n.id,
               module: 'notes',
@@ -109,7 +123,12 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         });
 
         goals.forEach(g => {
-          if ((g.title + ' ' + (g.category || '')).toLowerCase().includes(q)) {
+          const searchableText = [
+            g.title,
+            g.category,
+            g.description
+          ].filter(Boolean).join(' ').toLowerCase();
+          if (searchableText.includes(q)) {
             hits.push({
               id: g.id,
               module: 'goals',
@@ -122,12 +141,15 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         });
 
         finance.forEach(f => {
-          if (((f.category || '') + ' ' + (f.note || '') + ' ' + f.type).toLowerCase().includes(q)) {
+          const transactionType = typeof f.type === 'string' ? f.type : '';
+          const searchableText = [f.category, f.note, transactionType]
+            .filter(Boolean).join(' ').toLowerCase();
+          if (searchableText.includes(q)) {
             hits.push({
               id: f.id,
               module: 'finance',
               type: 'Finance',
-              title: `${f.type.toUpperCase()}: ₹${f.amount}`,
+              title: `${transactionType.toUpperCase() || 'TRANSACTION'}: ₹${f.amount}`,
               subtitle: `${f.category || ''} ${f.note ? '· ' + f.note : ''}`,
               date: f.date
             });
@@ -135,7 +157,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         });
 
         people.forEach(p => {
-          if ((p.name + ' ' + (p.relationship || '') + ' ' + (p.contact || '')).toLowerCase().includes(q)) {
+          const searchableText = [
+            p.name,
+            p.relationship,
+            p.contact,
+            p.note
+          ].filter(Boolean).join(' ').toLowerCase();
+          if (searchableText.includes(q)) {
             hits.push({
               id: p.id,
               module: 'people',
@@ -185,7 +213,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Type to search across everything in Om-LifeOS..."
+            placeholder="Search tasks, notes, journal, goals, finance, and people..."
             className="flex-1 bg-transparent px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none dark:text-white"
             autoFocus
           />
@@ -224,9 +252,9 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             <div className="p-4 text-xs text-slate-400">
               <span className="font-semibold text-slate-500 dark:text-slate-300">Search tips:</span>
               <ul className="mt-1.5 list-disc list-inside space-y-1">
-                <li>Search tasks by title, category, or domain</li>
-                <li>Search notes by tags, notebook name, or full text</li>
-                <li>Search financial ledger records by category or payee</li>
+                <li>Search tasks by title, description, priority, or domain</li>
+                <li>Search notes by title, tags, notebook, or body</li>
+                <li>Search goals, journal entries, finance notes, and people</li>
               </ul>
             </div>
           )}

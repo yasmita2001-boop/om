@@ -1061,14 +1061,49 @@ class StorageEngine {
     const profileId = item.profileId || this.activeProfileId || 'om-master-profile';
     const deletedAt = Date.now();
     const signature = computeRecordSignature(storeName, item);
-    const linkedType = storeName === 'tasks' ? 'task' : storeName === 'people' ? 'contact' : null;
-    const linkedReminders = linkedType
-      ? (await this.getAll<any>('reminders')).filter(
-          reminder => reminder.linkedId === id && (
-            reminder.linkedType === linkedType ||
-            (linkedType === 'task' && !reminder.linkedType)
-          )
-        )
+    const sourceTaskField: Record<string, string> = {
+      workProjects: 'projectId',
+      learningItems: 'learningId',
+      skills: 'skillId',
+      routines: 'routineId',
+      habits: 'habitId'
+    };
+    const linkedTaskIds = new Set<string>();
+    const taskField = sourceTaskField[storeName];
+    if (taskField) {
+      for (const task of await this.getAll<any>('tasks', profileId)) {
+        if (task[taskField] === id) linkedTaskIds.add(task.id);
+      }
+    }
+
+    const linkedInteractions = storeName === 'people'
+      ? (await this.getAll<any>('interactions', profileId)).filter(interaction => interaction.personId === id)
+      : [];
+    const directReminderTypes: Record<string, string[]> = {
+      workProjects: ['project', 'workProject', 'workProjects'],
+      learningItems: ['learning', 'learningItem', 'learningItems'],
+      skills: ['skill', 'skills'],
+      routines: ['routine', 'routines'],
+      habits: ['habit', 'habits']
+    };
+    const linkedReminders = (storeName === 'tasks' || storeName === 'people' || taskField)
+      ? (await this.getAll<any>('reminders', profileId)).filter(reminder => {
+          if (storeName === 'tasks') {
+            return reminder.linkedId === id && (
+              reminder.linkedType === 'task' || !reminder.linkedType
+            );
+          }
+          if (storeName === 'people') {
+            return reminder.linkedId === id && reminder.linkedType === 'contact';
+          }
+          const directTypes = directReminderTypes[storeName] || [];
+          return (
+            (reminder.linkedId === id && (!reminder.linkedType || directTypes.includes(reminder.linkedType))) ||
+            (linkedTaskIds.has(reminder.linkedId) && (
+              reminder.linkedType === 'task' || !reminder.linkedType
+            ))
+          );
+        })
       : [];
 
     const recycleEntry: RecycleBinItem = {
@@ -1120,16 +1155,54 @@ class StorageEngine {
         } satisfies DeletionTombstone
       };
     });
+    const linkedInteractionEntries = linkedInteractions.map(interaction => {
+      const interactionBinId = `interactions:${interaction.id}`;
+      const description = describeDeletedRecord('interactions', interaction);
+      return {
+        interaction,
+        recycleEntry: {
+          id: interactionBinId,
+          storeName: 'interactions',
+          recordId: interaction.id,
+          profileId: interaction.profileId || profileId,
+          deletedAt,
+          data: interaction,
+          title: description.title,
+          moduleLabel: description.moduleLabel,
+          storeLabel: description.storeLabel
+        } satisfies RecycleBinItem,
+        tombstone: {
+          id: interactionBinId,
+          storeName: 'interactions',
+          recordId: interaction.id,
+          profileId: interaction.profileId || profileId,
+          deletedAt,
+          permanentlyDeleted: false,
+          contentSignature: computeRecordSignature('interactions', interaction)
+        } satisfies DeletionTombstone
+      };
+    });
 
     return new Promise((resolve, reject) => {
       try {
         const tx = db.transaction(
-          Array.from(new Set([storeName, 'reminders', 'recycleBin', 'tombstones'])),
+          Array.from(new Set([
+            storeName,
+            ...(linkedInteractions.length ? ['interactions'] : []),
+            'reminders',
+            'recycleBin',
+            'tombstones'
+          ])),
           'readwrite'
         );
         tx.objectStore(storeName).delete(id);
         tx.objectStore('recycleBin').put(recycleEntry);
         tx.objectStore('tombstones').put(tombstone);
+        for (const linkedInteraction of linkedInteractionEntries) {
+          tx.objectStore('interactions').delete(linkedInteraction.interaction.id);
+          tx.objectStore('recycleBin').put(linkedInteraction.recycleEntry);
+          tx.objectStore('tombstones').put(linkedInteraction.tombstone);
+        }
         for (const linkedReminder of linkedReminderEntries) {
           tx.objectStore('reminders').delete(linkedReminder.reminder.id);
           tx.objectStore('recycleBin').put(linkedReminder.recycleEntry);
@@ -1137,10 +1210,16 @@ class StorageEngine {
         }
         tx.oncomplete = () => {
           this.broadcastChange(storeName, 'recycle', id);
+          for (const linkedInteraction of linkedInteractionEntries) {
+            this.broadcastChange('interactions', 'recycle', linkedInteraction.interaction.id);
+          }
           for (const linkedReminder of linkedReminderEntries) {
             this.broadcastChange('reminders', 'recycle', linkedReminder.reminder.id);
           }
           this.broadcastChange('recycleBin', 'add', recycleEntry.id);
+          for (const linkedInteraction of linkedInteractionEntries) {
+            this.broadcastChange('recycleBin', 'add', linkedInteraction.recycleEntry.id);
+          }
           for (const linkedReminder of linkedReminderEntries) {
             this.broadcastChange('recycleBin', 'add', linkedReminder.recycleEntry.id);
           }
@@ -1285,13 +1364,41 @@ class StorageEngine {
   }
 
   public async reconcileLinkedReminders(profileId = this.getActiveProfileId()): Promise<void> {
-    const [reminders, tasks, people] = await Promise.all([
+    const [
+      reminders,
+      tasks,
+      people,
+      workProjects,
+      learningItems,
+      skills,
+      routines,
+      habits
+    ] = await Promise.all([
       this.getAll<any>('reminders', profileId),
       this.getAll<any>('tasks', profileId),
-      this.getAll<any>('people', profileId)
+      this.getAll<any>('people', profileId),
+      this.getAll<any>('workProjects', profileId),
+      this.getAll<any>('learningItems', profileId),
+      this.getAll<any>('skills', profileId),
+      this.getAll<any>('routines', profileId),
+      this.getAll<any>('habits', profileId)
     ]);
     const taskIds = new Set(tasks.map(task => task.id));
     const peopleIds = new Set(people.map(person => person.id));
+    const directLinkedSourceIds: Record<string, Set<string>> = {
+      project: new Set(workProjects.map(item => item.id)),
+      workProject: new Set(workProjects.map(item => item.id)),
+      workProjects: new Set(workProjects.map(item => item.id)),
+      learning: new Set(learningItems.map(item => item.id)),
+      learningItem: new Set(learningItems.map(item => item.id)),
+      learningItems: new Set(learningItems.map(item => item.id)),
+      skill: new Set(skills.map(item => item.id)),
+      skills: new Set(skills.map(item => item.id)),
+      routine: new Set(routines.map(item => item.id)),
+      routines: new Set(routines.map(item => item.id)),
+      habit: new Set(habits.map(item => item.id)),
+      habits: new Set(habits.map(item => item.id))
+    };
     const activeContactReminders = new Map<string, any>();
     const reminderIdsToRecycle = new Set<string>();
 
@@ -1303,6 +1410,11 @@ class StorageEngine {
         (reminder.linkedType === 'task' || isLegacyTaskReminder) &&
         !taskIds.has(reminder.linkedId)
       ) {
+        reminderIdsToRecycle.add(reminder.id);
+        continue;
+      }
+      const linkedSourceIds = directLinkedSourceIds[reminder.linkedType];
+      if (linkedSourceIds && !linkedSourceIds.has(reminder.linkedId)) {
         reminderIdsToRecycle.add(reminder.id);
         continue;
       }

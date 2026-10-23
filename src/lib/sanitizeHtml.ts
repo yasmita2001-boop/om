@@ -97,3 +97,19 @@ export function sanitizeHtml(html: string): string {
     return '';
   }
 }
+
+export function plainTextToHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\r?\n/g, '<br/>');
+}
+
+export function htmlToPlainText(html: string): string {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(sanitizeHtml(html), 'text/html');
+  return (doc.body.innerText || doc.body.textContent || '').trimEnd();
+}

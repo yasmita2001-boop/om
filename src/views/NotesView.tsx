@@ -14,7 +14,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { AttachmentUploader, AttachmentViewer, StoredAttachmentMeta } from '../components/AttachmentUploader';
 import { NoteRichEditor } from '../components/NoteRichEditor';
 import { globalTextReader } from '../lib/voiceService';
-import { sanitizeHtml } from '../lib/sanitizeHtml';
+import { htmlToPlainText, plainTextToHtml, sanitizeHtml } from '../lib/sanitizeHtml';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 
@@ -54,6 +54,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [tags, setTags] = useState('');
   const [colorTheme, setColorTheme] = useState('slate');
+  const [customColor, setCustomColor] = useState('#8b5cf6');
   const [isPinned, setIsPinned] = useState(false);
   const [editorText, setEditorText] = useState('');
   const [editorHtml, setEditorHtml] = useState('');
@@ -73,6 +74,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [modalCustomCat, setModalCustomCat] = useState('');
   const [modalTags, setModalTags] = useState('');
   const [modalColor, setModalColor] = useState('slate');
+  const [modalCustomColor, setModalCustomColor] = useState('#8b5cf6');
   const [modalPinned, setModalPinned] = useState(false);
   const [modalContent, setModalContent] = useState('');
   const [modalHtml, setModalHtml] = useState('');
@@ -139,11 +141,18 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
   const themePalettes: Record<string, { label: string; swatch: string; cardClass: string; dotClass: string; spineClass: string }> = {
     slate: {
-      label: 'Classic Slate',
+      label: 'Default',
       swatch: '#94a3b8',
       cardClass: 'bg-white border-slate-200/90 dark:bg-slate-900/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
       dotClass: 'bg-slate-400',
       spineClass: 'bg-slate-400 dark:bg-slate-600'
+    },
+    red: {
+      label: 'Ruby Red',
+      swatch: '#ef4444',
+      cardClass: 'bg-red-50/40 border-red-200/70 dark:bg-red-950/20 dark:border-red-800/40 hover:border-red-300 dark:hover:border-red-700/60',
+      dotClass: 'bg-red-500',
+      spineClass: 'bg-red-500'
     },
     amber: {
       label: 'Warm Amber',
@@ -159,12 +168,12 @@ export const NotesView: React.FC<NotesViewProps> = ({
       dotClass: 'bg-emerald-500',
       spineClass: 'bg-emerald-500'
     },
-    sky: {
-      label: 'Ocean Sky',
-      swatch: '#0ea5e9',
-      cardClass: 'bg-sky-50/40 border-sky-200/70 dark:bg-sky-950/20 dark:border-sky-800/40 hover:border-sky-300 dark:hover:border-sky-700/60',
-      dotClass: 'bg-sky-500',
-      spineClass: 'bg-sky-500'
+    indigo: {
+      label: 'Midnight Indigo',
+      swatch: '#6366f1',
+      cardClass: 'bg-indigo-50/40 border-indigo-200/70 dark:bg-indigo-950/20 dark:border-indigo-800/40 hover:border-indigo-300 dark:hover:border-indigo-700/60',
+      dotClass: 'bg-indigo-500',
+      spineClass: 'bg-indigo-500'
     },
     violet: {
       label: 'Royal Violet',
@@ -173,23 +182,24 @@ export const NotesView: React.FC<NotesViewProps> = ({
       dotClass: 'bg-purple-500',
       spineClass: 'bg-purple-500'
     },
-    rose: {
-      label: 'Velvet Rose',
-      swatch: '#f43f5e',
-      cardClass: 'bg-rose-50/40 border-rose-200/70 dark:bg-rose-950/20 dark:border-rose-800/40 hover:border-rose-300 dark:hover:border-rose-700/60',
-      dotClass: 'bg-rose-500',
-      spineClass: 'bg-rose-500'
+    custom: {
+      label: 'Custom Color',
+      swatch: customColor,
+      cardClass: 'bg-white border-slate-200/90 dark:bg-slate-900/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+      dotClass: 'bg-slate-400',
+      spineClass: 'bg-slate-400 dark:bg-slate-600'
     }
   };
 
   const getTheme = (colorVal?: string) => {
     if (!colorVal) return themePalettes.slate;
+    if (colorVal.startsWith('#')) return { ...themePalettes.custom, swatch: colorVal, label: 'Custom Color' };
     if (themePalettes[colorVal]) return themePalettes[colorVal];
     if (colorVal.includes('amber')) return themePalettes.amber;
     if (colorVal.includes('emerald')) return themePalettes.emerald;
-    if (colorVal.includes('sky') || colorVal.includes('blue')) return themePalettes.sky;
+    if (colorVal.includes('sky') || colorVal.includes('blue')) return themePalettes.indigo;
     if (colorVal.includes('violet') || colorVal.includes('purple')) return themePalettes.violet;
-    if (colorVal.includes('rose') || colorVal.includes('pink')) return themePalettes.rose;
+    if (colorVal.includes('rose') || colorVal.includes('pink')) return themePalettes.red;
     return themePalettes.slate;
   };
 
@@ -203,10 +213,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
     setModalCategory(note.category || 'General');
     setModalCustomCat('');
     setModalTags(note.tags || '');
-    setModalColor(note.color && themePalettes[note.color] ? note.color : 'slate');
+    setModalColor(note.color && themePalettes[note.color] ? note.color : note.color?.startsWith('#') ? 'custom' : 'slate');
+    setModalCustomColor(note.color?.startsWith('#') ? note.color : '#8b5cf6');
     setModalPinned(Boolean(note.pinned));
-    const content = note.body || note.html || '';
-    const htmlContent = note.html || (note.body ? note.body.replace(/\n/g, '<br/>') : '');
+    const content = note.body || htmlToPlainText(note.html || '');
+    const htmlContent = note.html || plainTextToHtml(note.body || '');
     setModalContent(content);
     setModalHtml(htmlContent);
     const parsedAtts: StoredAttachmentMeta[] = (note.attachments || []).map(a => {
@@ -230,10 +241,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
     setCategory(note.category || 'General');
     setCustomCategoryInput('');
     setTags(note.tags || '');
-    setColorTheme(note.color && themePalettes[note.color] ? note.color : 'slate');
+    setColorTheme(note.color && themePalettes[note.color] ? note.color : note.color?.startsWith('#') ? 'custom' : 'slate');
+    setCustomColor(note.color?.startsWith('#') ? note.color : '#8b5cf6');
     setIsPinned(Boolean(note.pinned));
-    const content = note.body || note.html || '';
-    const htmlContent = note.html || (note.body ? note.body.replace(/\n/g, '<br/>') : '');
+    const content = note.body || htmlToPlainText(note.html || '');
+    const htmlContent = note.html || plainTextToHtml(note.body || '');
     setEditorText(content);
     setEditorHtml(htmlContent);
     const parsedAtts: StoredAttachmentMeta[] = (note.attachments || []).map(a => {
@@ -274,6 +286,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
     setIsAddingCategory(false);
   };
 
+  const selectedThemeOptions = ['slate', 'red', 'amber', 'emerald', 'indigo', 'violet'];
+
   // Inline Form Save
   const handleSaveNote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,7 +312,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
           html,
           category: finalCategory,
           tags: tags.trim() || undefined,
-          color: colorTheme,
+          color: colorTheme === 'custom' ? customColor : colorTheme,
           pinned: isPinned,
           goalId: effectiveGoalId,
           attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
@@ -321,7 +335,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         html,
         category: finalCategory,
         tags: tags.trim() || undefined,
-        color: colorTheme,
+        color: colorTheme === 'custom' ? customColor : colorTheme,
         pinned: isPinned,
         goalId: effectiveGoalId,
         attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
@@ -365,7 +379,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       html,
       category: finalCategory,
       tags: modalTags.trim() || undefined,
-      color: modalColor,
+      color: modalColor === 'custom' ? modalCustomColor : modalColor,
       pinned: modalPinned,
       goalId: effectiveGoalId,
       attachments: serializedModalAttachments.length > 0 ? serializedModalAttachments : undefined,
@@ -461,6 +475,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     setNoteInputMode('manual');
     setTags('');
     setColorTheme('slate');
+    setCustomColor('#8b5cf6');
     setIsPinned(false);
     setEditorText('');
     setEditorHtml('');
@@ -632,7 +647,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
           <div
             className="mt-2.5 text-xs text-slate-600 dark:text-slate-300 max-h-36 overflow-hidden line-clamp-4 leading-relaxed om-rich-rendered"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.html || (n.body ? n.body.replace(/\n/g, '<br/>') : '')) }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.html || plainTextToHtml(n.body || '')) }}
           />
           {n.attachments && n.attachments.length > 0 && (
             <div className="mt-2.5 pt-1.5 border-t border-black/5 dark:border-white/5">
@@ -914,18 +929,18 @@ export const NotesView: React.FC<NotesViewProps> = ({
             </div>
 
             {/* Note Theme Palettes & Pin to top */}
-            <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 p-3 space-y-2">
-              <div className="flex items-center justify-between">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Notebook Spine & Theme
                 </span>
                 <button
                   type="button"
                   onClick={() => setIsPinned(!isPinned)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
                     isPinned
-                      ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/70 dark:text-amber-300 ring-1 ring-amber-400/50'
-                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                      ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300/80 dark:bg-amber-950/70 dark:text-amber-300 dark:ring-amber-700/70'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
                   }`}
                 >
                   <Star className={`h-3 w-3 ${isPinned ? 'fill-amber-500 text-amber-500' : ''}`} />
@@ -933,33 +948,52 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 </button>
               </div>
 
-              {/* Refined Color Swatches */}
-              <div className="flex items-center gap-2 pt-0.5">
-                {Object.entries(themePalettes).map(([k, t]) => {
-                  const isSelected = colorTheme === k;
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setColorTheme(k)}
-                      className={`group relative flex h-7.5 w-7.5 items-center justify-center rounded-xl border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-indigo-600 ring-2 ring-indigo-500/25 scale-105 shadow-xs'
-                          : 'border-slate-200/90 dark:border-slate-700 hover:scale-105 shadow-2xs'
-                      }`}
-                      title={t.label}
-                    >
-                      <span
-                        className="h-4.5 w-4.5 rounded-lg flex items-center justify-center"
-                        style={{ backgroundColor: t.swatch }}
+              <div className="pt-2">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {selectedThemeOptions.map((k) => {
+                    const t = themePalettes[k];
+                    const isSelected = colorTheme === k;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setColorTheme(k)}
+                        aria-label={t.label}
+                        aria-pressed={isSelected}
+                        className={`group relative flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? 'border-white shadow-[0_0_0_2px_rgba(99,102,241,0.9),0_4px_12px_rgba(15,23,42,0.12)] scale-[1.04]'
+                            : 'border-white/80 hover:scale-[1.06] shadow-sm dark:border-slate-700'
+                        }`}
+                        title={t.label}
                       >
-                        {isSelected && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-white shadow-xs" />
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
+                        <span
+                          className="h-5 w-5 rounded-full"
+                          style={{ backgroundColor: t.swatch }}
+                        />
+                      </button>
+                    );
+                  })}
+                  <label
+                    className={`group relative flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-200 cursor-pointer ${
+                      colorTheme === 'custom'
+                        ? 'border-white shadow-[0_0_0_2px_rgba(99,102,241,0.9),0_4px_12px_rgba(15,23,42,0.12)] scale-[1.04]'
+                        : 'border-white/80 hover:scale-[1.06] shadow-sm dark:border-slate-700'
+                    }`}
+                    title="Custom color"
+                    aria-label="Custom color"
+                  >
+                    <input
+                      type="color"
+                      value={customColor}
+                      onChange={(e) => {
+                        setCustomColor(e.target.value);
+                        setColorTheme('custom');
+                      }}
+                      className="h-5 w-5 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                    />
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -975,8 +1009,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   setEditorText(text);
                 }}
                 placeholder=""
-                minHeight="min-h-[220px]"
-                maxHeight="max-h-[460px]"
+                minHeight="min-h-[150px]"
+                maxHeight="max-h-[280px]"
               />
             </div>
 
@@ -1253,25 +1287,48 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   <span className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     Theme Palette
                   </span>
-                  <div className="flex items-center gap-2">
-                    {Object.entries(themePalettes).map(([k, t]) => (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => setModalColor(k)}
-                        className={`flex h-7.5 w-7.5 items-center justify-center rounded-xl border transition-all cursor-pointer ${
-                          modalColor === k
-                            ? 'border-indigo-600 ring-2 ring-indigo-500/30 scale-105'
-                            : 'border-slate-200 dark:border-slate-700 hover:scale-105'
-                        }`}
-                        title={t.label}
-                      >
-                        <span
-                          className="h-4.5 w-4.5 rounded-lg shadow-xs"
-                          style={{ backgroundColor: t.swatch }}
-                        />
-                      </button>
-                    ))}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedThemeOptions.map((k) => {
+                      const t = themePalettes[k];
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setModalColor(k)}
+                          aria-label={t.label}
+                          aria-pressed={modalColor === k}
+                          className={`flex h-7.5 w-7.5 items-center justify-center rounded-xl border transition-all cursor-pointer ${
+                            modalColor === k
+                              ? 'border-indigo-600 ring-2 ring-indigo-500/30 scale-105'
+                              : 'border-slate-200 dark:border-slate-700 hover:scale-105'
+                          }`}
+                          title={t.label}
+                        >
+                          <span
+                            className="h-4.5 w-4.5 rounded-lg shadow-xs"
+                            style={{ backgroundColor: t.swatch }}
+                          />
+                        </button>
+                      );
+                    })}
+                    <label
+                      className={`flex h-7.5 w-7.5 items-center justify-center rounded-xl border transition-all cursor-pointer ${
+                        modalColor === 'custom'
+                          ? 'border-indigo-600 ring-2 ring-indigo-500/30 scale-105'
+                          : 'border-slate-200 dark:border-slate-700 hover:scale-105'
+                      }`}
+                      title="Custom color"
+                    >
+                      <input
+                        type="color"
+                        value={modalCustomColor}
+                        onChange={(e) => {
+                          setModalCustomColor(e.target.value);
+                          setModalColor('custom');
+                        }}
+                        className="h-4.5 w-4.5 cursor-pointer rounded-lg border-0 bg-transparent p-0"
+                      />
+                    </label>
                   </div>
                 </div>
 
@@ -1301,8 +1358,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     setModalContent(text);
                   }}
                   placeholder=""
-                  minHeight="min-h-[260px]"
-                  maxHeight="max-h-[480px]"
+                  minHeight="min-h-[150px]"
+                  maxHeight="max-h-[280px]"
                 />
               </div>
 
@@ -1455,7 +1512,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               {/* Content */}
               <div 
                 className="text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-slate-200 max-w-none om-rich-rendered"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtml(viewingNote.html || (viewingNote.body ? viewingNote.body.replace(/\n/g, '<br/>') : '')) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(viewingNote.html || plainTextToHtml(viewingNote.body || '')) }}
               />
 
               {/* Tags */}

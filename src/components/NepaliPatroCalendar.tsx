@@ -594,8 +594,8 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                         key={`day-${cell.bsDay}`}
                         onClick={() => setSelectedDayData(cell)}
                         aria-pressed={cell.isSelected}
-                        aria-label={`${cell.bsDayDevanagari} ${OM_BS_MONTHS_NE[cell.bsMonth - 1]} ${omNepaliDigits(cell.bsYear)}, ${cell.adDate.iso}${cell.event ? `, ${cell.event.title}` : ''}`}
-                        className={`group relative h-14 sm:h-16 md:h-[4.5rem] min-w-0 p-0.5 sm:p-1 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between items-center select-none overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-slate-900 ${
+                        aria-label={`${cell.bsDayDevanagari} ${OM_BS_MONTHS_NE[cell.bsMonth - 1]} ${omNepaliDigits(cell.bsYear)}, ${cell.adDate.iso}, तिथि: ${cell.fullTithi || cell.tithi}${cell.event ? `, ${cell.event.title}` : ''}`}
+                        className={`group h-[3.75rem] sm:h-16 md:h-[4.5rem] min-w-0 p-0 sm:p-1 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col items-center select-none overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-slate-900 ${
                           cell.isToday
                             ? 'ring-2 ring-amber-500 bg-amber-500/10 dark:bg-amber-400/15 dark:ring-amber-400 shadow-sm'
                             : isSelected
@@ -603,12 +603,10 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                             : 'border border-gray-100 bg-white hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700'
                         }`}
                       >
-                        {/* Top-Left Corner: "आज" tag or Event dot */}
-                        <div className="absolute top-1 left-1 flex items-center gap-0.5 leading-none pointer-events-none z-10">
+                        {/* Reserve a top row for the event marker and Gregorian date. */}
+                        <div className="flex h-4 w-full shrink-0 items-center justify-between px-0.5 leading-none pointer-events-none">
                           {cell.isToday ? (
-                            <span className="px-1 py-0.2 rounded-xs bg-amber-500 text-[6.5px] sm:text-[7.5px] font-black text-white leading-none">
-                              आज
-                            </span>
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                           ) : cell.event ? (
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${
@@ -616,18 +614,14 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                               }`}
                               title={cell.event.title}
                             />
-                          ) : null}
-                        </div>
-
-                        {/* Top-Right Corner: Gregorian AD date numeral */}
-                        <div className="absolute top-1 right-1 leading-none pointer-events-none z-10">
-                          <span className="text-[9px] sm:text-[10px] font-bold font-mono text-gray-400 dark:text-gray-500">
+                          ) : <span className="h-1.5 w-1.5" />}
+                          <span className="inline-flex h-4 min-w-6 items-center justify-center rounded bg-slate-100 px-1 text-[9px] font-bold font-mono leading-none tabular-nums text-slate-700 dark:bg-slate-800 dark:text-slate-200 sm:text-[10px]">
                             {cell.adDate.dayOfMonthStr}
                           </span>
                         </div>
 
-                        {/* Center: Main Nepali Devanagari BS date numeral */}
-                        <div className="flex-1 flex items-center justify-center my-auto leading-none w-full">
+                        {/* Keep the main Nepali date between the reserved top and bottom rows. */}
+                        <div className="flex min-h-0 flex-1 items-center justify-center leading-none w-full">
                           <span
                             className={`text-base sm:text-lg md:text-xl font-black tracking-tight inline-block transition-transform group-hover:scale-110 ${
                               cell.isHoliday
@@ -642,8 +636,11 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                         </div>
 
                         {/* Bottom: Tithi Name */}
-                        <div className="w-full text-center leading-none px-0.5 pb-0.5 shrink-0">
-                          <span className="block max-w-full truncate text-[8px] sm:text-[9px] md:text-[10px] text-gray-500 dark:text-gray-400 font-medium leading-tight">
+                        <div className="h-[18px] w-full shrink-0 text-center leading-none px-0 pb-0.5">
+                          <span
+                            title={cell.fullTithi || cell.tithi}
+                            className="block whitespace-nowrap text-[8px] sm:text-[9px] md:text-[10px] text-slate-600 dark:text-slate-300 font-semibold leading-none"
+                          >
                             {cell.tithi}
                           </span>
                         </div>

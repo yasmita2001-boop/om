@@ -3,7 +3,7 @@ import {
   CheckSquare, Trash2, Calendar, Target, CheckCircle2,
   Circle, Edit3, Search, Filter, Check,
   Download, Save, History, Layers, ArrowRight,
-  Volume2, Bell, BellRing, Zap, AlertTriangle, X, Flame, Plus
+  Volume2, Bell, BellRing, Zap, AlertTriangle, X, Flame, Plus, ChevronDown
 } from 'lucide-react';
 import {
   Task, TaskDomain, TaskPriority, DailyPlanner, Goal,
@@ -138,6 +138,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   // Task Roster filters
   const [filterTab, setFilterTab] = useState<'all' | 'today' | 'high' | 'work' | 'personal' | 'done'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [taskGenesisOpen, setTaskGenesisOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
@@ -327,6 +328,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   const handleEditClick = (task: Task) => {
     setActiveSubMenu('roster');
+    setTaskGenesisOpen(true);
     setEditingTaskId(task.id);
     setTitle(task.title);
     setDescription(task.description || '');
@@ -742,7 +744,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
       <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
         <SlideTabs
           activeId={activeSubMenu}
-          onChange={(id) => setActiveSubMenu(id as any)}
+          onChange={(id) => {
+            setActiveSubMenu(id as any);
+            if (id !== 'roster') setTaskGenesisOpen(false);
+          }}
           tabs={[
             { id: 'roster', label: `Task Roster (${openCount})`, shortLabel: `Roster (${openCount})`, icon: CheckSquare },
             { id: 'dailyCommand', label: 'Daily Command Target', shortLabel: 'Daily Target', icon: Target },
@@ -753,16 +758,17 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {/* SUBMENU 1: TASK ROSTER & INLINE PLANNER */}
       {activeSubMenu === 'roster' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="space-y-4">
           {/* Add/Edit Task Box (5 cols) */}
-          <div
-            ref={formRef}
-            className={`lg:col-span-5 rounded-2xl border transition-all ${
+          {taskGenesisOpen && (
+            <div
+              ref={formRef}
+              className={`rounded-2xl border transition-all ${
               editingTaskId
                 ? 'border-indigo-400 bg-indigo-50/20 dark:border-indigo-500/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
                 : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
-            } p-3.5 sm:p-6 shadow-xs`}
-          >
+              } p-3.5 sm:p-6 shadow-xs`}
+            >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 text-xs font-bold">
@@ -984,9 +990,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
               </button>
             </form>
           </div>
+          )}
 
-          {/* Task Filter Tabs & All Tasks List (7 cols) */}
-          <section className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
+          {/* Task Filter Tabs & All Tasks List */}
+          <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -997,16 +1004,27 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </h2>
               </div>
 
-              {/* Quick Search */}
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search tasks..."
-                  className="h-8.5 w-full rounded-xl border border-slate-200 pl-8 pr-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  aria-expanded={taskGenesisOpen}
+                  onClick={() => setTaskGenesisOpen(open => !open)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>{taskGenesisOpen ? 'Hide Task Genesis' : 'Task Genesis'}</span>
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${taskGenesisOpen ? 'rotate-180' : ''}`} />
+                </button>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search tasks..."
+                    className="h-8.5 w-full rounded-xl border border-slate-200 pl-8 pr-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1036,18 +1054,18 @@ export const TasksView: React.FC<TasksViewProps> = ({
             </div>
 
             {/* Tasks List */}
-            <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[550px] overflow-y-auto">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredTasks.length === 0 ? (
-                <div className="py-16 text-center text-xs text-slate-400">
+                <div className="col-span-full py-16 text-center text-xs text-slate-400">
                   No tasks found in this view.
                 </div>
               ) : (
                 filteredTasks.map(task => (
                   <div
                     key={task.id}
-                    className="progressive-row flex items-center justify-between py-3 px-2 rounded-xl transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                    className="progressive-row flex min-w-0 items-start justify-between gap-3 rounded-xl border border-slate-100 p-3 transition-colors hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
                   >
-                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <div className="flex min-w-0 items-start gap-3 pr-1">
                       <button
                         type="button"
                         onClick={() => handleToggleTask(task)}

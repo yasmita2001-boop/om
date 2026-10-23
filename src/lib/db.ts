@@ -6,7 +6,7 @@
  */
 
 export const DB_NAME = 'om-lifeos-canonical-v4';
-export const DB_VERSION = 8;
+export const DB_VERSION = 9;
 
 export const ENTITY_STORES = [
   'tasks', 'routines', 'habits', 'habitLogs', 'goals', 'milestones', 'strategies',
@@ -21,7 +21,7 @@ export const ENTITY_STORES = [
   'relationshipReminders', 'values', 'principles', 'spiritualPractices',
   'commitments', 'things', 'documents', 'documentCollections', 'warranties',
   'receipts', 'certificates', 'importantRecords', 'reminders', 'notifications',
-  'achievements', 'calcHistory', 'attachments'
+  'achievements', 'calcHistory', 'attachments', 'customFonts'
 ];
 
 export const SINGLETON_STORES = ['appSettings', 'healthProfile'];
@@ -85,7 +85,8 @@ export const STORE_LABELS: Record<string, { label: string; module: string }> = {
   importantRecords: { label: 'Important Record', module: 'Things & Documents' },
   reminders: { label: 'Reminder', module: 'Tasks & Planner' },
   calcHistory: { label: 'Calculation', module: 'Calculator & Tools' },
-  attachments: { label: 'Attachment', module: 'Things & Documents' }
+  attachments: { label: 'Attachment', module: 'Things & Documents' },
+  customFonts: { label: 'Custom Font', module: 'Notes & Notebooks' }
 };
 
 export interface DeletionTombstone {

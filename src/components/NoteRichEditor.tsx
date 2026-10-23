@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { sanitizeHtml } from '../lib/sanitizeHtml';
 import { TextReaderController, VoiceLanguage, isSpeechSynthesisSupported } from '../lib/voiceService';
+import { generateUUID, storage } from '../lib/storage';
 
 export interface NoteRichEditorProps {
   initialHtml?: string;
@@ -108,6 +109,28 @@ const NUMBER_STYLES = [
   { id: 'upper-roman', label: 'I. II. III.', desc: 'Capital Roman', type: 'I' }
 ];
 
+const FONT_FAMILIES = [
+  { label: 'Arial', value: 'Arial', css: 'Arial, sans-serif' },
+  { label: 'Georgia', value: 'Georgia', css: 'Georgia, serif' },
+  { label: 'Times New Roman', value: 'Times New Roman', css: '"Times New Roman", serif' },
+  { label: 'Verdana', value: 'Verdana', css: 'Verdana, sans-serif' },
+  { label: 'Courier New', value: 'Courier New', css: '"Courier New", monospace' }
+];
+
+interface CustomFontRecord {
+  id: string;
+  profileId?: string;
+  familyName: string;
+  fileName: string;
+  dataUrl: string;
+  createdAt: number;
+}
+
+const isValidFontFamilyName = (value: string): boolean =>
+  /^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,63}$/u.test(value.trim());
+
+const fontFamilyCss = (familyName: string): string => `"${familyName.trim()}"`;
+
 // Helper: Escape HTML special characters
 const escapeHtml = (str: string): string => {
   return str
@@ -159,6 +182,7 @@ const sanitizeAndPreserveRichHtml = (rawHtml: string): string => {
     if (cleanTag === 'b') cleanTag = 'strong';
     if (cleanTag === 'i') cleanTag = 'em';
     if (cleanTag === 'strike' || cleanTag === 's') cleanTag = 'del';
+    if (cleanTag === 'font') cleanTag = 'span';
 
     const newEl = document.createElement(cleanTag);
 
@@ -167,6 +191,13 @@ const sanitizeAndPreserveRichHtml = (rawHtml: string): string => {
     if (style) {
       if (style.color && style.color !== 'inherit' && style.color !== 'initial') {
         newEl.style.color = style.color;
+      }
+      const pastedFamilyName = style.fontFamily.replace(/["']/g, '').split(',')[0].trim();
+      if (pastedFamilyName && isValidFontFamilyName(pastedFamilyName)) {
+        const knownFont = FONT_FAMILIES.find(font =>
+          font.value.toLowerCase() === pastedFamilyName.toLowerCase()
+        );
+        newEl.style.fontFamily = knownFont?.css || fontFamilyCss(pastedFamilyName);
       }
       if (style.backgroundColor && style.backgroundColor !== 'transparent' && style.backgroundColor !== 'inherit') {
         newEl.style.backgroundColor = style.backgroundColor;
@@ -183,6 +214,13 @@ const sanitizeAndPreserveRichHtml = (rawHtml: string): string => {
       if (style.textDecoration && style.textDecoration.includes('underline')) {
         newEl.style.textDecoration = 'underline';
       }
+    }
+
+    if (tagName === 'font') {
+      const fontFamily = FONT_FAMILIES.find(font =>
+        font.value.toLowerCase() === (el.getAttribute('face') || '').replace(/["']/g, '').split(',')[0].trim().toLowerCase()
+      );
+      if (fontFamily) newEl.style.fontFamily = fontFamily.css;
     }
 
     // Preserve attributes for specific tags
@@ -410,7 +448,15 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   // Formatting state
   const [activeStyle, setActiveStyle] = useState('p');
   const [activeSize, setActiveSize] = useState('3');
+  const [activeFont, setActiveFont] = useState('');
+  const [customFonts, setCustomFonts] = useState<CustomFontRecord[]>([]);
+  const [installedFontNames, setInstalledFontNames] = useState<string[]>([]);
+  const [isFontManagerOpen, setIsFontManagerOpen] = useState(false);
+  const [fontFamilyInput, setFontFamilyInput] = useState('');
+  const [fontFile, setFontFile] = useState<File | null>(null);
+  const [fontError, setFontError] = useState('');
   const plainTextPasteRef = useRef(false);
+  const loadedFontFacesRef = useRef<Map<string, FontFace>>(new Map());
 
   // Speech synthesis
   const [isEditorSpeaking, setIsEditorSpeaking] = useState(false);
@@ -421,13 +467,59 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   useEffect(() => {
     return () => {
       readerRef.current?.stop();
+      loadedFontFacesRef.current.forEach(fontFace => document.fonts.delete(fontFace));
+      loadedFontFacesRef.current.clear();
     };
   }, []);
+
+  const loadCustomFonts = useCallback(async () => {
+    try {
+      const fonts = await storage.getAll<CustomFontRecord>('customFonts');
+      loadedFontFacesRef.current.forEach(fontFace => document.fonts.delete(fontFace));
+      loadedFontFacesRef.current.clear();
+
+      const loadedFonts: CustomFontRecord[] = [];
+      for (const font of fonts) {
+        if (!font.familyName || !font.dataUrl) continue;
+        try {
+          const fontFace = new FontFace(font.familyName, `url("${font.dataUrl}")`);
+          await fontFace.load();
+          document.fonts.add(fontFace);
+          loadedFontFacesRef.current.set(font.id, fontFace);
+          loadedFonts.push(font);
+        } catch (error) {
+          console.error(`Could not load saved font "${font.familyName}".`, error);
+        }
+      }
+      setCustomFonts(loadedFonts);
+    } catch (error) {
+      console.error('Could not load saved custom fonts.', error);
+      setFontError('Saved fonts load nahi ho sake. App storage check karein.');
+    }
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const refreshFonts = () => {
+      if (isActive) void loadCustomFonts();
+    };
+    refreshFonts();
+    const unsubscribe = storage.subscribe((store, action) => {
+      if (store === 'customFonts' || (store === 'recycleBin' && action === 'restore')) {
+        refreshFonts();
+      }
+    });
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
+  }, [loadCustomFonts]);
 
   useEffect(() => {
     if (editorRef.current && initialHtml !== lastRenderedHtmlRef.current) {
       editorRef.current.innerHTML = sanitizeHtml(initialHtml || '');
       lastRenderedHtmlRef.current = initialHtml || '';
+      setActiveFont('');
     }
   }, [initialHtml]);
 
@@ -687,6 +779,171 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     isExecutingActionRef.current = false;
     saveSelection();
     handleEditorInput();
+  };
+
+  const handleApplyFont = (fontValue: string) => {
+    const font = FONT_FAMILIES.find(option => option.value === fontValue);
+    const familyName = font?.value ||
+      customFonts.find(option => option.familyName === fontValue)?.familyName ||
+      (isValidFontFamilyName(fontValue) ? fontValue.trim() : '');
+    if (!familyName) {
+      setFontError('Font name valid nahi hai.');
+      return;
+    }
+    const cssFamily = font?.css || fontFamilyCss(familyName);
+
+    setActiveFont(familyName);
+    isExecutingActionRef.current = true;
+    restoreSelection();
+
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+      const range = selection.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.fontFamily = cssFamily;
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      range.selectNodeContents(span);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } else {
+      try {
+        document.execCommand('styleWithCSS', false, 'true');
+        document.execCommand('fontName', false, familyName);
+      } catch {}
+
+      editorRef.current?.querySelectorAll('font[face]').forEach(fontElement => {
+        const selectedFont = FONT_FAMILIES.find(option =>
+          option.value.toLowerCase() === (fontElement.getAttribute('face') || '').toLowerCase()
+        );
+        const resolvedFamily = selectedFont?.value || customFonts.find(option =>
+          option.familyName.toLowerCase() === (fontElement.getAttribute('face') || '').toLowerCase()
+        )?.familyName;
+        if (!resolvedFamily) return;
+        const span = document.createElement('span');
+        span.style.fontFamily = selectedFont?.css || fontFamilyCss(resolvedFamily);
+        span.replaceChildren(...Array.from(fontElement.childNodes));
+        fontElement.replaceWith(span);
+      });
+    }
+
+    isExecutingActionRef.current = false;
+    saveSelection();
+    handleEditorInput();
+  };
+
+  const applyInstalledFont = () => {
+    const familyName = fontFamilyInput.trim();
+    if (!isValidFontFamilyName(familyName)) {
+      setFontError('Font name me sirf letters, numbers, spaces, dot, hyphen ya underscore use karein.');
+      return;
+    }
+    setInstalledFontNames(previous =>
+      previous.some(name => name.toLowerCase() === familyName.toLowerCase())
+        ? previous
+        : [...previous, familyName]
+    );
+    setFontError('');
+    handleApplyFont(familyName);
+  };
+
+  const uploadFont = async () => {
+    const familyName = fontFamilyInput.trim();
+    if (!isValidFontFamilyName(familyName)) {
+      setFontError('Font ka valid naam enter karein.');
+      return;
+    }
+    if (!fontFile) {
+      setFontError('Pehle .ttf, .otf, .woff ya .woff2 file choose karein.');
+      return;
+    }
+    if (fontFile.size > 10 * 1024 * 1024) {
+      setFontError('Font file 10 MB se chhoti honi chahiye.');
+      return;
+    }
+
+    const extension = fontFile.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = new Set(['ttf', 'otf', 'woff', 'woff2']);
+    if (!extension || !allowedExtensions.has(extension)) {
+      setFontError('Sirf .ttf, .otf, .woff ya .woff2 files supported hain.');
+      return;
+    }
+
+    setFontError('');
+    try {
+      const fileBuffer = await fontFile.arrayBuffer();
+      const header = new Uint8Array(fileBuffer.slice(0, 4));
+      const signature = String.fromCharCode(...header);
+      const validSignatures: Record<string, string[]> = {
+        ttf: ['\u0000\u0001\u0000\u0000', 'true'],
+        otf: ['OTTO'],
+        woff: ['wOFF'],
+        woff2: ['wOF2']
+      };
+      if (!validSignatures[extension].includes(signature)) {
+        setFontError('Yeh file valid font file nahi lagti.');
+        return;
+      }
+      if (FONT_FAMILIES.some(font => font.value.toLowerCase() === familyName.toLowerCase())) {
+        setFontError('Built-in font ka naam upload ke liye use nahi kar sakte.');
+        return;
+      }
+
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => typeof reader.result === 'string'
+          ? resolve(reader.result)
+          : reject(new Error('Could not read the font file.'));
+        reader.onerror = () => reject(reader.error || new Error('Could not read the font file.'));
+        reader.readAsDataURL(fontFile);
+      });
+      const existingFont = customFonts.find(font =>
+        font.familyName.toLowerCase() === familyName.toLowerCase()
+      );
+      const fontRecord: CustomFontRecord = {
+        id: existingFont?.id || generateUUID(),
+        familyName,
+        fileName: fontFile.name,
+        dataUrl,
+        createdAt: existingFont?.createdAt || Date.now()
+      };
+      const fontFace = new FontFace(familyName, `url("${dataUrl}")`);
+      await fontFace.load();
+      await storage.put('customFonts', fontRecord);
+      const previousFace = loadedFontFacesRef.current.get(fontRecord.id);
+      if (previousFace) document.fonts.delete(previousFace);
+      document.fonts.add(fontFace);
+      loadedFontFacesRef.current.set(fontRecord.id, fontFace);
+      setCustomFonts(previous => [
+        ...previous.filter(font => font.id !== fontRecord.id),
+        fontRecord
+      ]);
+      setActiveFont(familyName);
+      setFontFamilyInput(familyName);
+      setFontFile(null);
+      handleApplyFont(familyName);
+      setFontError('');
+    } catch (error) {
+      console.error('Failed to save custom font.', error);
+      setFontError(error instanceof Error ? error.message : 'Font upload failed.');
+    }
+  };
+
+  const removeCustomFont = async (font: CustomFontRecord) => {
+    try {
+      await storage.delete('customFonts', font.id);
+      const loadedFontFace = loadedFontFacesRef.current.get(font.id);
+      if (loadedFontFace) {
+        document.fonts.delete(loadedFontFace);
+        loadedFontFacesRef.current.delete(font.id);
+      }
+      setCustomFonts(previous => previous.filter(item => item.id !== font.id));
+      if (activeFont === font.familyName) setActiveFont('');
+      setFontError('');
+    } catch (error) {
+      console.error(`Failed to remove custom font "${font.familyName}".`, error);
+      setFontError('Font remove nahi ho saka. Dobara try karein.');
+    }
   };
 
   // =========================================================================
@@ -1134,6 +1391,50 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
             <ChevronDown className="pointer-events-none absolute right-1.5 top-2.5 h-3 w-3 text-slate-400" />
           </div>
 
+          {/* Font Family */}
+          <div className="relative shrink-0">
+            <select
+              value={activeFont}
+              onChange={(e) => handleApplyFont(e.target.value)}
+              className="h-7.5 w-28 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 pl-2 pr-5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs appearance-none"
+              title="Font Family"
+              aria-label="Font Family"
+            >
+              <option value="" disabled>Font</option>
+              {FONT_FAMILIES.map(font => (
+                <option key={font.value} value={font.value}>{font.label}</option>
+              ))}
+              {customFonts.map(font => (
+                <option key={font.id} value={font.familyName}>{font.familyName}</option>
+              ))}
+              {installedFontNames
+                .filter(name =>
+                  !FONT_FAMILIES.some(font => font.value.toLowerCase() === name.toLowerCase()) &&
+                  !customFonts.some(font => font.familyName.toLowerCase() === name.toLowerCase())
+                )
+                .map(name => <option key={`installed-${name}`} value={name}>{name}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 top-2.5 h-3 w-3 text-slate-400" />
+          </div>
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              saveSelection();
+              setIsFontManagerOpen(previous => !previous);
+            }}
+            className={`flex h-7.5 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition-colors cursor-pointer shrink-0 ${
+              isFontManagerOpen
+                ? 'border-indigo-600 bg-indigo-600 text-white'
+                : 'border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-indigo-400 hover:text-indigo-600'
+            }`}
+            title="Add or use a custom font"
+            aria-expanded={isFontManagerOpen}
+          >
+            <Plus className="h-3 w-3" />
+            <span>Fonts</span>
+          </button>
+
           <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5 shrink-0" />
 
           {/* Inline Formats: Bold, Italic, Underline, Strikethrough */}
@@ -1347,6 +1648,113 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           </button>
         </div>
       </div>
+
+      {isFontManagerOpen && (
+        <div
+          onMouseDown={(e) => {
+            if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+          }}
+          className="border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 py-3 sm:px-4 space-y-3"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white">Add or use a font</h3>
+              <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                Installed fonts use your exact computer font name. Uploaded fonts stay in this workspace.
+              </p>
+            </div>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setIsFontManagerOpen(false)}
+              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Close font manager"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={fontFamilyInput}
+              onChange={(e) => setFontFamilyInput(e.target.value)}
+              placeholder="Font family name, e.g. Aptos or Noto Sans"
+              aria-label="Font family name"
+              className="h-8 min-w-52 flex-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={applyInstalledFont}
+              className="h-8 rounded-md border border-slate-200 dark:border-slate-700 px-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-400 hover:text-indigo-600"
+            >
+              Use installed font
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="file"
+              accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
+              aria-label="Choose font file"
+              onChange={(e) => {
+                const selectedFile = e.target.files?.[0] || null;
+                setFontFile(selectedFile);
+                setFontError('');
+                if (selectedFile && !fontFamilyInput.trim()) {
+                  setFontFamilyInput(selectedFile.name.replace(/\.[^.]+$/, ''));
+                }
+              }}
+              className="min-w-52 flex-1 text-[11px] text-slate-600 dark:text-slate-300 file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2.5 file:py-1.5 file:text-[11px] file:font-semibold file:text-slate-700 dark:file:bg-slate-800 dark:file:text-slate-200"
+            />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => void uploadFont()}
+              disabled={!fontFile}
+              className="h-8 rounded-md bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Upload & use font
+            </button>
+          </div>
+
+          {fontError && (
+            <p role="alert" className="text-[11px] font-medium text-rose-600 dark:text-rose-400">{fontError}</p>
+          )}
+
+          {customFonts.length > 0 && (
+            <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800 pt-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Saved fonts
+              </p>
+              {customFonts.map(font => (
+                <div key={font.id} className="flex items-center justify-between gap-2 text-xs">
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleApplyFont(font.familyName)}
+                    className="truncate text-left font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600"
+                    style={{ fontFamily: fontFamilyCss(font.familyName) }}
+                    title={`Apply ${font.familyName}`}
+                  >
+                    {font.familyName} <span className="text-[10px] text-slate-400">({font.fileName})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => void removeCustomFont(font)}
+                    className="shrink-0 rounded px-2 py-1 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                    aria-label={`Remove ${font.familyName}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 2. EXPANDED LUXURY STUDIO PANELS (Color, Highlight, Bullets, Table)       */}

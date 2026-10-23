@@ -713,6 +713,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   <Hash className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                 </div>
               </div>
+
             </div>
 
             {/* Note Theme Palettes & Pin to top */}
@@ -814,8 +815,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
         {/* ========================================================================= */}
         {/* RIGHT PANEL: NOTEBOOKS DIRECTORY & CARDS (7 cols)                         */}
         {/* ========================================================================= */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-3.5">
+        <div className="contents">
+          <div className="rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-3.5 lg:col-span-7">
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
@@ -883,20 +884,20 @@ export const NotesView: React.FC<NotesViewProps> = ({
             </div>
           </div>
 
-          {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {filteredNotes.length === 0 ? (
-              <div className="col-span-full py-16 text-center rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-2">
-                <BookOpen className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto" />
-                <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                  No notes found matching your criteria
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  Write your first note using the notebook canvas on the left.
-                </div>
+        {/* Notes Cards Grid */}
+        <div className="grid grid-cols-1 items-start gap-3.5 sm:grid-cols-2 xl:grid-cols-3 lg:col-span-12">
+          {filteredNotes.length === 0 && (
+            <div className="col-span-full py-16 text-center rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-2">
+              <BookOpen className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto" />
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                No notes found matching your criteria
               </div>
-            ) : (
-              filteredNotes.map(n => {
+              <div className="text-[11px] text-slate-400">
+                Write your first note using the notebook canvas on the left.
+              </div>
+            </div>
+          )}
+          {filteredNotes.map(n => {
                 const theme = getTheme(n.color);
                 const linkedGoal = n.goalId ? goals.find(g => g.id === n.goalId) : null;
                 return (
@@ -1036,9 +1037,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     )}
                   </div>
                 );
-              })
-            )}
-          </div>
+          })}
+        </div>
         </div>
       </div>
 

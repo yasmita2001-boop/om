@@ -457,7 +457,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
       {/* Tab: Physical Movement */}
       {activeTab === 'movement' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <Activity className="h-4 w-4 text-emerald-500" />
@@ -565,7 +565,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
       {/* Tab: Wellness */}
       {activeTab === 'wellness' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <Droplet className="h-4 w-4 text-blue-500" />
@@ -722,7 +722,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
       {/* Tab: Appointments & Health Notes */}
       {activeTab === 'appointments' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Health actions</h2>
             <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">

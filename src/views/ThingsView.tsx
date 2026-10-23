@@ -736,7 +736,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 1: THINGS & HARDWARE */}
       {activeTab === 'things' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Item Form */}
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
@@ -925,7 +925,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 2: DOCUMENTS */}
       {activeTab === 'documents' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Document Form */}
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
@@ -1089,7 +1089,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 3: WARRANTIES */}
       {activeTab === 'warranties' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Warranty Form */}
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
@@ -1227,7 +1227,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 4: RECEIPTS */}
       {activeTab === 'receipts' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Receipt Form */}
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
@@ -1546,7 +1546,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 5: CERTIFICATES & CREDENTIALS */}
       {activeTab === 'certificates' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Certificate Form */}
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
@@ -1695,7 +1695,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 6: IMPORTANT RECORDS */}
       {activeTab === 'records' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Record Form */}
           <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">

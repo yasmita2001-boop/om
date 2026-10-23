@@ -251,7 +251,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         </h1>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
           <h2 className="text-sm font-bold text-slate-900 dark:text-white">Foundations actions</h2>
         <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">

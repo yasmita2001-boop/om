@@ -753,7 +753,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {/* SUBMENU 1: TASK ROSTER & INLINE PLANNER */}
       {activeSubMenu === 'roster' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add/Edit Task Box (5 cols) */}
           <div
             ref={formRef}
@@ -1168,7 +1168,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       {/* SUBMENU 2: DAILY COMMAND TARGET (With File Save, Export, and History!) */}
       {activeSubMenu === 'dailyCommand' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
             {/* Main Command Operations Form (7 cols) */}
             <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-5">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">

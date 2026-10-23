@@ -559,7 +559,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         </form>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* ========================================================================= */}
         {/* LEFT PANEL: LUXURY NOTEBOOK EDITOR (5 cols)                                */}
         {/* ========================================================================= */}

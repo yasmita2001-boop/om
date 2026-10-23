@@ -306,7 +306,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
             setViewingEntry(j);
           }
         }}
-        className={`progressive-row relative cursor-pointer rounded-2xl border p-4 sm:p-5 shadow-xs transition-all card-hover ${theme.cardClass}`}
+        className={`progressive-row relative flex h-80 cursor-pointer flex-col overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-xs transition-all card-hover ${theme.cardClass}`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -374,16 +374,22 @@ export const JournalView: React.FC<JournalViewProps> = ({
           </ProgressiveActions>
         </div>
 
-        <div
-          className="mt-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed om-rich-rendered"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(j.html || (j.text ? j.text.replace(/\n/g, '<br/>') : '')) }}
-        />
+        <div className="mt-3 min-h-0 flex-1 overflow-hidden">
+          <div
+            className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed om-rich-rendered"
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(j.html || (j.text ? j.text.replace(/\n/g, '<br/>') : '')) }}
+          />
 
-        {j.attachments && j.attachments.length > 0 && (
-          <div className="mt-3 pt-2 border-t border-black/5 dark:border-white/5" onClick={event => event.stopPropagation()}>
-            <AttachmentViewer attachments={j.attachments} compact={true} />
-          </div>
-        )}
+          {j.attachments && j.attachments.length > 0 && (
+            <div className="mt-3 border-t border-black/5 pt-2 dark:border-white/5" onClick={event => event.stopPropagation()}>
+              <AttachmentViewer attachments={j.attachments} compact={true} />
+            </div>
+          )}
+        </div>
+
+        <div className="mt-2 shrink-0 border-t border-black/5 pt-2 text-center text-[10px] font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
+          Click to read full reflection
+        </div>
       </article>
     );
   };

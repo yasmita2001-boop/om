@@ -2363,6 +2363,22 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                               <ProgressiveActions label={`More actions for ${atomicGoal.title}`} className="shrink-0 ml-auto sm:ml-0">
                                                                                 <button
                                                                                   type="button"
+                                                                                  onClick={() => handleMoveGoalOrder(atomicGoal, 'up')}
+                                                                                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md cursor-pointer shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                                                                  title="Move Up"
+                                                                                >
+                                                                                  <ArrowUp className="h-3 w-3" />
+                                                                                </button>
+                                                                                <button
+                                                                                  type="button"
+                                                                                  onClick={() => handleMoveGoalOrder(atomicGoal, 'down')}
+                                                                                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md cursor-pointer shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                                                                  title="Move Down"
+                                                                                >
+                                                                                  <ArrowDown className="h-3 w-3" />
+                                                                                </button>
+                                                                                <button
+                                                                                  type="button"
                                                                                   onClick={() => setEditingGoal(atomicGoal)}
                                                                                   className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md cursor-pointer shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800"
                                                                                   title="Edit Atomic Goal"

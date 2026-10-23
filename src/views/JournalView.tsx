@@ -288,7 +288,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* Journal Editor (5 cols) */}
         <div
           ref={formRef}
@@ -478,7 +478,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
         </div>
 
         {/* Journal Timeline Archive (7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
+        <div className="lg:col-span-7">
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-3.5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
@@ -546,17 +546,19 @@ export const JournalView: React.FC<JournalViewProps> = ({
             </div>
           </div>
 
-          <div className="space-y-3.5">
-            {filteredEntries.length === 0 ? (
-              <div className="py-16 text-center text-xs text-slate-400 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
+        </div>
+
+        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:col-span-12">
+          {filteredEntries.length === 0 ? (
+            <div className="py-16 text-center text-xs text-slate-400 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 md:col-span-2">
                 No journal reflections found. Record today's entry on the left.
-              </div>
-            ) : (
-              filteredEntries.map(j => {
-                const theme = getTheme(j.color);
-                const moodObj = moodOptions.find(m => m.label === j.mood);
-                const linkedGoal = j.goalId ? goals.find(g => g.id === j.goalId) : null;
-                return (
+            </div>
+          ) : (
+            filteredEntries.map(j => {
+              const theme = getTheme(j.color);
+              const moodObj = moodOptions.find(m => m.label === j.mood);
+              const linkedGoal = j.goalId ? goals.find(g => g.id === j.goalId) : null;
+              return (
                   <div
                     key={j.id}
                     className={`progressive-row relative rounded-2xl border p-4 sm:p-5 shadow-xs transition-all card-hover ${theme.cardClass}`}
@@ -639,10 +641,9 @@ export const JournalView: React.FC<JournalViewProps> = ({
                       </div>
                     )}
                   </div>
-                );
-              })
-            )}
-          </div>
+              );
+            })
+          )}
         </div>
       </div>
 

@@ -125,6 +125,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   };
 
   const formRef = useRef<HTMLDivElement>(null);
+  const noteFiltersRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Keep all categories synced with unique ones across existing notes
@@ -488,6 +489,165 @@ export const NotesView: React.FC<NotesViewProps> = ({
   });
 
   const linkedNotesCount = notes.filter(n => Boolean(n.goalId)).length;
+  const [rightColumnNoteCount, setRightColumnNoteCount] = useState(0);
+
+  useEffect(() => {
+    const form = formRef.current;
+    const filters = noteFiltersRef.current;
+    if (!form || !filters) return;
+
+    const updateRightColumnNoteCount = () => {
+      if (window.innerWidth < 1024) {
+        setRightColumnNoteCount(0);
+        return;
+      }
+
+      const availableHeight = form.getBoundingClientRect().height
+        - filters.getBoundingClientRect().height
+        - 16;
+      const rowHeightWithGap = 190;
+      const rowCount = Math.max(0, Math.floor((availableHeight + 14) / rowHeightWithGap));
+      setRightColumnNoteCount(Math.min(filteredNotes.length, rowCount * 2));
+    };
+
+    const resizeObserver = new ResizeObserver(updateRightColumnNoteCount);
+    resizeObserver.observe(form);
+    resizeObserver.observe(filters);
+    window.addEventListener('resize', updateRightColumnNoteCount);
+    updateRightColumnNoteCount();
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateRightColumnNoteCount);
+    };
+  }, [filteredNotes.length]);
+
+  const noteCards = filteredNotes.map(n => {
+    const theme = getTheme(n.color);
+    const linkedGoal = n.goalId ? goals.find(g => g.id === n.goalId) : null;
+    return (
+      <div
+        key={n.id}
+        onClick={() => setViewingNote(n)}
+        className={`group progressive-row relative flex h-44 flex-col justify-between rounded-2xl border p-4 shadow-xs transition-all card-hover cursor-pointer overflow-hidden ${theme.cardClass}`}
+      >
+        <div className={`absolute top-0 left-0 right-0 h-1 ${theme.spineClass}`} />
+
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex items-start justify-between gap-2 pt-0.5">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                {n.pinned && (
+                  <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />
+                )}
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
+                  {n.title}
+                </h3>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                <span className="font-semibold text-indigo-600 dark:text-indigo-400 truncate max-w-[110px]">{n.category}</span>
+                <span aria-hidden="true">·</span>
+                <span>{n.date}</span>
+                {linkedGoal && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 truncate max-w-[160px]">
+                      <Target className="h-2.5 w-2.5 shrink-0" />
+                      <span className="truncate">{linkedGoal.title}</span>
+                      <span>({linkedGoal.progress}%)</span>
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <ProgressiveActions label={`More actions for ${n.title}`} className="shrink-0">
+              <button
+                type="button"
+                onClick={e => handleTogglePin(n, e)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 transition-colors"
+                title={n.pinned ? 'Unpin note' : 'Pin note to top'}
+              >
+                <Star className={`h-3.5 w-3.5 ${n.pinned ? 'text-amber-500 fill-amber-500' : ''}`} />
+              </button>
+              <button
+                type="button"
+                onClick={e => handleCopyNote(n, e)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30 transition-colors"
+                title="Copy note text"
+              >
+                {copiedId === n.id ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={e => handleExportNote(n, e)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30 transition-colors"
+                title="Export markdown"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={e => toggleSpeakNoteCard(n, e)}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  speakingNoteCardId === n.id
+                    ? 'bg-indigo-600 text-white animate-pulse shadow-xs'
+                    : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-400'
+                }`}
+                title={speakingNoteCardId === n.id ? "Stop reading" : "Read note aloud (Hindi & English)"}
+                aria-label="Read note aloud"
+              >
+                <Volume2 className={`h-3.5 w-3.5 ${speakingNoteCardId === n.id ? 'animate-bounce' : ''}`} />
+              </button>
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  handleOpenEditModal(n);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-300 transition-colors cursor-pointer"
+                title="Edit note"
+                aria-label="Edit note"
+              >
+                <Edit3 className="h-3.5 w-3.5 text-indigo-500" />
+              </button>
+              <button
+                type="button"
+                onClick={e => handleDeleteClick(n, e)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                title="Delete note"
+                aria-label="Delete note"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+              </button>
+            </ProgressiveActions>
+          </div>
+
+          <div
+            className="mt-2.5 text-xs text-slate-600 dark:text-slate-300 max-h-36 overflow-hidden line-clamp-4 leading-relaxed om-rich-rendered"
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.html || (n.body ? n.body.replace(/\n/g, '<br/>') : '')) }}
+          />
+          {n.attachments && n.attachments.length > 0 && (
+            <div className="mt-2.5 pt-1.5 border-t border-black/5 dark:border-white/5">
+              <AttachmentViewer attachments={n.attachments} compact={true} />
+            </div>
+          )}
+        </div>
+
+        {n.tags && (
+          <div className="mt-2 flex shrink-0 flex-wrap gap-1 overflow-hidden border-t border-black/5 pt-2 dark:border-white/5">
+            {n.tags.split(',').map(tag => (
+              <span
+                key={tag}
+                className="inline-flex items-center rounded-md bg-white/70 dark:bg-slate-800/70 px-1.5 py-0.5 text-[9px] font-medium text-slate-600 dark:text-slate-300"
+              >
+                #{tag.trim()}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -815,8 +975,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
         {/* ========================================================================= */}
         {/* RIGHT PANEL: NOTEBOOKS DIRECTORY & CARDS (7 cols)                         */}
         {/* ========================================================================= */}
-        <div className="contents">
-          <div className="rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-3.5 lg:col-span-7">
+        <div className="space-y-4 lg:col-span-7">
+          <div ref={noteFiltersRef} className="rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-3.5">
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
@@ -884,6 +1044,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 items-start gap-3.5 sm:grid-cols-2">
+            {noteCards.slice(0, rightColumnNoteCount)}
+          </div>
+        </div>
+
         {/* Notes Cards Grid */}
         <div className="grid grid-cols-1 items-start gap-3.5 sm:grid-cols-2 xl:grid-cols-3 lg:col-span-12">
           {filteredNotes.length === 0 && (
@@ -897,148 +1062,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               </div>
             </div>
           )}
-          {filteredNotes.map(n => {
-                const theme = getTheme(n.color);
-                const linkedGoal = n.goalId ? goals.find(g => g.id === n.goalId) : null;
-                return (
-                  <div
-                    key={n.id}
-                    onClick={() => setViewingNote(n)}
-                    className={`group progressive-row relative rounded-2xl border p-4 shadow-xs transition-all card-hover flex flex-col justify-between cursor-pointer overflow-hidden ${theme.cardClass}`}
-                  >
-                    {/* Top Spine Stripe for tactile notebook feel */}
-                    <div className={`absolute top-0 left-0 right-0 h-1 ${theme.spineClass}`} />
-
-                    <div>
-                      {/* Top Header */}
-                      <div className="flex items-start justify-between gap-2 pt-0.5">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            {n.pinned && (
-                              <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />
-                            )}
-                            <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                              {n.title}
-                            </h3>
-                          </div>
-                          {/* Zero-Pill Clean Metadata */}
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
-                            <span className="font-semibold text-indigo-600 dark:text-indigo-400 truncate max-w-[110px]">{n.category}</span>
-                            <span aria-hidden="true">·</span>
-                            <span>{n.date}</span>
-                            {linkedGoal && (
-                              <>
-                                <span aria-hidden="true">·</span>
-                                <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 truncate max-w-[160px]">
-                                  <Target className="h-2.5 w-2.5 shrink-0" />
-                                  <span className="truncate">{linkedGoal.title}</span>
-                                  <span>({linkedGoal.progress}%)</span>
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Action buttons (Pin, Copy, Export, Read Aloud, Edit, Delete) */}
-                        <ProgressiveActions label={`More actions for ${n.title}`} className="shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => handleTogglePin(n, e)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 transition-colors"
-                            title={n.pinned ? 'Unpin note' : 'Pin note to top'}
-                          >
-                            <Star className={`h-3.5 w-3.5 ${n.pinned ? 'text-amber-500 fill-amber-500' : ''}`} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleCopyNote(n, e)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30 transition-colors"
-                            title="Copy note text"
-                          >
-                            {copiedId === n.id ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleExportNote(n, e)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30 transition-colors"
-                            title="Export markdown"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </button>
-                          
-                          {/* READ ALOUD (LISTEN) BUTTON */}
-                          <button
-                            type="button"
-                            onClick={(e) => toggleSpeakNoteCard(n, e)}
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                              speakingNoteCardId === n.id
-                                ? 'bg-indigo-600 text-white animate-pulse shadow-xs'
-                                : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-400'
-                            }`}
-                            title={speakingNoteCardId === n.id ? "Stop reading" : "Read note aloud (Hindi & English)"}
-                            aria-label="Read note aloud"
-                          >
-                            <Volume2 className={`h-3.5 w-3.5 ${speakingNoteCardId === n.id ? 'animate-bounce' : ''}`} />
-                          </button>
-
-                          {/* EDIT BUTTON: Opens dedicated modal */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenEditModal(n);
-                            }}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-300 transition-colors cursor-pointer"
-                            title="Edit note"
-                            aria-label="Edit note"
-                          >
-                            <Edit3 className="h-3.5 w-3.5 text-indigo-500" />
-                          </button>
-
-                          {/* DELETE BUTTON */}
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteClick(n, e)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                            title="Delete note"
-                            aria-label="Delete note"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-rose-500" />
-                          </button>
-                        </ProgressiveActions>
-                      </div>
-
-                      {/* Content Preview */}
-                      <div 
-                        className="mt-2.5 text-xs text-slate-600 dark:text-slate-300 max-h-36 overflow-hidden line-clamp-4 leading-relaxed om-rich-rendered"
-                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.html || (n.body ? n.body.replace(/\n/g, '<br/>') : '')) }}
-                      />
-
-                      {/* Attached Files indicator */}
-                      {n.attachments && n.attachments.length > 0 && (
-                        <div className="mt-2.5 pt-1.5 border-t border-black/5 dark:border-white/5">
-                          <AttachmentViewer attachments={n.attachments} compact={true} />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Tags at bottom */}
-                    {n.tags && (
-                      <div className="mt-3 flex flex-wrap gap-1 pt-2 border-t border-black/5 dark:border-white/5">
-                        {n.tags.split(',').map(tag => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center rounded-md bg-white/70 dark:bg-slate-800/70 px-1.5 py-0.5 text-[9px] font-medium text-slate-600 dark:text-slate-300"
-                          >
-                            #{tag.trim()}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-          })}
-        </div>
+          {noteCards.slice(rightColumnNoteCount)}
         </div>
       </div>
 

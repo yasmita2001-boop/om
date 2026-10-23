@@ -20,6 +20,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { ProjectTimelinePlan, computeItemDelay } from '../components/ProjectTimelinePlan';
 import { SlideTabs } from '../components/SlideTabs';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { FormDisclosure } from '../components/FormDisclosure';
 import {
   computeGoalAggregateBreakdown,
   GoalProgressBreakdown,
@@ -509,6 +510,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const [goalLevel, setGoalLevel] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [goalParentId, setGoalParentId] = useState<string>('');
   const [goalOrder, setGoalOrder] = useState<string>('');
+  const [goalFormOpen, setGoalFormOpen] = useState(false);
 
   // Hierarchy viewing state
   const [goalViewMode, setGoalViewMode] = useState<'tree' | 'flat'>('tree');
@@ -608,6 +610,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   };
 
   const goalFormRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!goalFormOpen || activeTab !== 'goals') return;
+    goalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [goalFormOpen, activeTab]);
 
   const goalsById = new Map(goals.map(goal => [goal.id, goal]));
 
@@ -837,6 +844,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     setGoalParentId(parentGoal.id);
     setGoalCategory(parentGoal.category || 'Career');
     if (parentGoal.targetDate) setTargetDate(parentGoal.targetDate);
+    setGoalFormOpen(true);
     goalFormRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -910,6 +918,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
   const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   const totalReserves = Number(survivalReserve) + Number(emergencyReserve);
+  const hasReserveTargets = mentor?.survivalReserve !== undefined && mentor?.emergencyReserve !== undefined;
+  const hasSavedDailyBurn = mentor?.dailyBurn !== undefined;
+  const hasRunwayEstimate = hasSavedDailyBurn && dailyBurn > 0;
   const flexibleSavings = savingsPlans
     .filter(plan => plan.productType !== 'fixed_deposit')
     .reduce((sum, plan) => sum + (Number(plan.currentAmount) || 0), 0);
@@ -975,6 +986,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     setGoalDescription('');
     setGoalOrder('');
     setGoalProgress(0);
+    setGoalFormOpen(false);
     onRefresh();
   };
 
@@ -1268,7 +1280,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            ₹{liquidCash.toLocaleString('en-IN')}
+            NPR {liquidCash.toLocaleString('en-IN')}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
             {accounts.length} accounts
@@ -1282,10 +1294,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <Flame className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {runwayDays} Days
+            {hasRunwayEstimate ? `${runwayDays} Days` : 'Not set'}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            {runwayMonths} mo · FDs excluded
+            {hasRunwayEstimate ? `${runwayMonths} mo · FDs excluded` : 'Set a daily burn rate in Mentor & Reserves'}
           </div>
         </div>
 
@@ -1296,10 +1308,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <Target className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            ₹{accessibleReserveCapital.toLocaleString('en-IN')}
+            NPR {accessibleReserveCapital.toLocaleString('en-IN')}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            Target · ₹{totalReserves.toLocaleString('en-IN')}
+            {hasReserveTargets
+              ? `Target · NPR ${totalReserves.toLocaleString('en-IN')}`
+              : 'Reserve targets not set'}
           </div>
         </div>
 
@@ -1310,10 +1324,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <TrendingUp className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            ₹{Number(dailyBurn).toLocaleString('en-IN')}/d
+            {hasSavedDailyBurn ? `NPR ${Number(dailyBurn).toLocaleString('en-IN')}/d` : 'Not set'}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            ₹{(Number(dailyBurn) * 30).toLocaleString('en-IN')}/mo
+            {hasSavedDailyBurn
+              ? `NPR ${(Number(dailyBurn) * 30).toLocaleString('en-IN')}/mo`
+              : 'Enter an estimate in Mentor & Reserves'}
           </div>
         </div>
       </div>
@@ -1426,7 +1442,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         <div className="space-y-6">
           <div className="flex flex-col gap-6 w-full">
             {/* Add Goal Form (Single Column - Upper) */}
-            <div ref={goalFormRef} className="w-full flex flex-col">
+            {goalFormOpen && <div ref={goalFormRef} className="w-full flex flex-col">
               <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
                   <div className="flex min-w-0 flex-1 items-start gap-2">
@@ -1447,6 +1463,14 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     <span className="sm:hidden">{goalLevel}/5</span>
                     <span className="hidden sm:inline">Tier {goalLevel} of 5</span>
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setGoalFormOpen(false)}
+                    aria-label="Close goal form"
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
 
                 <form onSubmit={handleAddGoal} className="mt-4 space-y-3.5">
@@ -1586,9 +1610,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       onChange={e => setGoalTitle(e.target.value)}
                       placeholder={
                         goalLevel === 1
-                          ? 'e.g. Build ₹1M Liquid Runway, Launch SaaS Product'
+                          ? 'e.g. Build NPR 1M Liquid Runway, Launch SaaS Product'
                           : goalLevel === 2
-                          ? 'e.g. Master Backend Architecture, Save First ₹200k'
+                          ? 'e.g. Master Backend Architecture, Save First NPR 200k'
                           : goalLevel === 3
                           ? 'e.g. Complete Postgres Indexing, Automate Monthly SIP'
                           : goalLevel === 4
@@ -1694,7 +1718,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   </button>
                 </form>
               </div>
-            </div>
+            </div>}
 
             {/* Strategic Goals Portfolio (Single Column - Lower) */}
             <div className="w-full flex flex-col">
@@ -1709,16 +1733,31 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       </h2>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 rounded-xl bg-slate-50 px-2.5 sm:px-3 py-1 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 text-[11px] sm:text-xs">
-                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{mainGoals.length} Main</span>
-                      <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{subGoals.length} Sub</span>
-                      <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{microGoals.length} Micro</span>
-                      <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{nanoGoals.length} Nano</span>
-                      <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{atomicGoals.length} Atomic</span>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 rounded-xl bg-slate-50 px-2.5 sm:px-3 py-1 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 text-[11px] sm:text-xs">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{mainGoals.length} Main</span>
+                        <span className="text-slate-300 dark:text-slate-600">·</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{subGoals.length} Sub</span>
+                        <span className="text-slate-300 dark:text-slate-600">·</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{microGoals.length} Micro</span>
+                        <span className="text-slate-300 dark:text-slate-600">·</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{nanoGoals.length} Nano</span>
+                        <span className="text-slate-300 dark:text-slate-600">·</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{atomicGoals.length} Atomic</span>
+                      </div>
+                      <button
+                        type="button"
+                        aria-expanded={goalFormOpen}
+                        onClick={() => setGoalFormOpen(open => !open)}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span className="hidden md:inline">
+                          {goalFormOpen ? 'Close Goal Form' : goalLevel === 1 ? 'Add Strategic Main Goal' : goalLevel === 2 ? 'Add Sub Goal' : goalLevel === 3 ? 'Add Micro Goal' : goalLevel === 4 ? 'Add Nano Goal' : 'Add Atomic Goal'}
+                        </span>
+                        <span className="md:hidden">{goalFormOpen ? 'Close' : 'Add Goal'}</span>
+                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${goalFormOpen ? 'rotate-180' : ''}`} />
+                      </button>
                     </div>
                   </div>
 
@@ -2529,6 +2568,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               <span>Declare Tactical Strategy</span>
             </h2>
 
+            <FormDisclosure label="Create a strategy">
             <form onSubmit={handleAddStrategy} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
@@ -2599,6 +2639,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 + Commit Tactical Strategy
               </button>
             </form>
+            </FormDisclosure>
           </div>
 
           {/* Strategies List (7 cols) */}
@@ -2669,6 +2710,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Add Milestone to Strategic Goal
             </h2>
+            <FormDisclosure label="Add a milestone">
             <form onSubmit={handleAddMilestone} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Milestone Title</label>
@@ -2714,6 +2756,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 + Register Milestone
               </button>
             </form>
+            </FormDisclosure>
           </div>
 
           <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -2785,6 +2828,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <p className="mt-2 text-[10px] text-slate-400">
               KPI current/target tracks goal progress only; it does not create a deposit or change Finance balances.
             </p>
+            <FormDisclosure label="Add a KPI">
             <form onSubmit={handleAddKPI} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">KPI Metric Name</label>
@@ -2843,7 +2887,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     type="text"
                     value={kpiUnit}
                     onChange={e => setKpiUnit(e.target.value)}
-                    placeholder="₹, reps, hrs"
+                    placeholder="NPR, reps, hrs"
                     className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -2855,6 +2899,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 + Save Metric Tracking
               </button>
             </form>
+            </FormDisclosure>
           </div>
 
           <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -2934,6 +2979,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Declare Mission / Monthly Focus
             </h2>
+            <FormDisclosure label="Create a mission">
             <form onSubmit={handleAddMission} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Mission Title</label>
@@ -2985,6 +3031,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 + Launch Mission
               </button>
             </form>
+            </FormDisclosure>
           </div>
 
           <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -3038,6 +3085,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             Reserve amounts below are planning targets, not extra assets. Runway uses account cash plus flexible Finance reserves at your entered daily burn; it excludes fixed deposits and is not auto-derived from expenses.
           </p>
 
+          <FormDisclosure label="Edit mentor strategy and reserves">
           <form onSubmit={handleSaveMentor} className="mt-4 space-y-4">
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
@@ -3055,7 +3103,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Survival Reserve (₹)
+                  Survival Reserve (NPR)
                 </label>
                 <input
                   type="number"
@@ -3069,7 +3117,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Daily Burn Rate (₹)
+                  Daily Burn Rate (NPR)
                 </label>
                 <input
                   type="number"
@@ -3086,7 +3134,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Emergency Fund (₹)
+                  Emergency Fund (NPR)
                 </label>
                 <input
                   type="number"
@@ -3100,7 +3148,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Annual Savings Goal (₹)
+                  Annual Savings Goal (NPR)
                 </label>
                 <input
                   type="number"
@@ -3121,6 +3169,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               Save Strategy & Allocation
             </button>
           </form>
+          </FormDisclosure>
         </div>
       )}
 

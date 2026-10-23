@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Calendar, Trash2, Edit3,
-  Copy, Check, Search, Volume2, Target, X, ChevronDown
+  Copy, Check, Search, Volume2, Target, X, ChevronDown, Plus
 } from 'lucide-react';
 import { JournalEntry, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -38,6 +38,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMoodFilter, setSelectedMoodFilter] = useState<string>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [archiveControlsOpen, setArchiveControlsOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -199,6 +200,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
   };
 
   const handleEdit = (entry: JournalEntry) => {
+    setIsEditorOpen(true);
     setEditingId(entry.id);
     setTitle(entry.title);
     setJournalGoalId(entry.goalId || '');
@@ -217,11 +219,13 @@ export const JournalView: React.FC<JournalViewProps> = ({
     setJournalHtml(entry.html || entry.text);
     setJournalText(entry.text || '');
 
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => {
-      titleInputRef.current?.focus();
-    }, 150);
   };
+
+  useEffect(() => {
+    if (!isEditorOpen || !editingId) return;
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    titleInputRef.current?.focus();
+  }, [isEditorOpen, editingId]);
 
   const handleCopy = async (entry: JournalEntry) => {
     const fullText = `${entry.title} (${entry.date})\nMood: ${entry.mood || 'Reflective'}\n\n${entry.text || ''}`;
@@ -260,6 +264,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
 
   const resetForm = () => {
     setEditingId(null);
+    setIsEditorOpen(false);
     setTitle('');
     setJournalGoalId('');
     setJournalInputMode('manual');
@@ -294,7 +299,10 @@ export const JournalView: React.FC<JournalViewProps> = ({
   useEffect(() => {
     const form = formRef.current;
     const archiveFilters = archiveFiltersRef.current;
-    if (!form || !archiveFilters) return;
+    if (!isEditorOpen || !form || !archiveFilters) {
+      setRightColumnEntryCount(0);
+      return;
+    }
 
     const updateRightColumnEntryCount = () => {
       if (window.innerWidth < 1024) {
@@ -315,7 +323,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
     resizeObserver.observe(archiveFilters);
     updateRightColumnEntryCount();
     return () => resizeObserver.disconnect();
-  }, [archiveControlsOpen, filteredEntries.length]);
+  }, [archiveControlsOpen, filteredEntries.length, isEditorOpen, editingId]);
 
   const renderEntryCard = (j: JournalEntry) => {
     const theme = getTheme(j.color);
@@ -431,21 +439,32 @@ export const JournalView: React.FC<JournalViewProps> = ({
             Daily Journal & Philosophical Reflections
           </h1>
         </div>
-        <button
-          type="button"
-          aria-expanded={archiveControlsOpen}
-          aria-controls="journal-archive-controls"
-          onClick={() => setArchiveControlsOpen(open => !open)}
-          className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300 sm:self-auto"
-        >
-          <span>Journal Timeline ({filteredEntries.length})</span>
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${archiveControlsOpen ? 'rotate-180' : ''}`} />
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            aria-expanded={archiveControlsOpen}
+            aria-controls="journal-archive-controls"
+            onClick={() => setArchiveControlsOpen(open => !open)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300"
+          >
+            <span>Journal Timeline ({filteredEntries.length})</span>
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${archiveControlsOpen ? 'rotate-180' : ''}`} />
+          </button>
+          <button
+            type="button"
+            aria-expanded={isEditorOpen}
+            onClick={() => setIsEditorOpen(open => !open)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>{isEditorOpen ? 'Close Reflection' : 'New Reflection'}</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* Journal Editor (5 cols) */}
-        <div
+        {(isEditorOpen || Boolean(editingId)) && <div
           ref={formRef}
           className={`lg:col-span-5 rounded-2xl border transition-all ${
             editingId
@@ -469,6 +488,16 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 className="text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
                 Cancel Edit
+              </button>
+            )}
+            {!editingId && (
+              <button
+                type="button"
+                onClick={() => setIsEditorOpen(false)}
+                aria-label="Close reflection editor"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
               </button>
             )}
           </div>
@@ -630,10 +659,10 @@ export const JournalView: React.FC<JournalViewProps> = ({
               {editingId ? 'Update Reflection' : '＋ Save Reflection'}
             </button>
           </form>
-        </div>
+        </div>}
 
         {/* Journal Timeline Archive (7 cols) */}
-        <div className="space-y-4 lg:col-span-7">
+        <div className={`space-y-4 ${isEditorOpen || editingId ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
           <div
             ref={archiveFiltersRef}
             id="journal-archive-controls"
@@ -705,9 +734,9 @@ export const JournalView: React.FC<JournalViewProps> = ({
 
         {filteredEntries.length === 0 ? (
           <div className="py-16 text-center text-xs text-slate-400 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 lg:col-span-12">
-            No journal reflections found. Record today's entry on the left.
+            No journal reflections found. Record an entry using the New Reflection button.
           </div>
-        ) : filteredEntries.length > rightColumnEntryCount ? (
+        ) : filteredEntries.length > rightColumnEntryCount || !isEditorOpen ? (
           <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:col-span-12">
             {filteredEntries.slice(rightColumnEntryCount).map(renderEntryCard)}
           </div>

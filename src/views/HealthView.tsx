@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Heart, Activity, Moon, Droplet, Calendar, Trash2,
-  Stethoscope, FileText, Edit3, X, CheckCircle2, Circle
+  Stethoscope, FileText, Edit3, X, CheckCircle2, Circle, Plus, ChevronDown
 } from 'lucide-react';
 import {
   HealthProfile, HealthMeasurement, SleepRecord, WaterRecord,
@@ -55,7 +55,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
 }) => {
   const today = getLocalDateString();
   const [activeTab, setActiveTab] = useState<HealthTab>('movement');
-  const [activeAppointmentAction, setActiveAppointmentAction] = useState<'appointment' | 'observation'>('appointment');
+  const [movementFormOpen, setMovementFormOpen] = useState(false);
+  const [wellnessFormOpen, setWellnessFormOpen] = useState(false);
+  const [appointmentFormOpen, setAppointmentFormOpen] = useState<'appointment' | 'observation' | null>(null);
+  const [profileFormOpen, setProfileFormOpen] = useState(false);
 
   // Goal linking state for appointments
   const [apptInputMode, setApptInputMode] = useState<'manual' | 'link'>('manual');
@@ -102,8 +105,21 @@ export const HealthView: React.FC<HealthViewProps> = ({
   const [editVal2, setEditVal2] = useState('');
   const [editNote, setEditNote] = useState('');
 
-  const bmi = height > 0 ? (weight / ((height / 100) ** 2)).toFixed(1) : '—';
-  const bmr = Math.round(10 * weight + 6.25 * height - 5 * 28 + 5);
+  const hasSavedHeight = typeof profile?.height === 'number' && profile.height > 0;
+  const hasSavedWeight = typeof profile?.weight === 'number' && profile.weight > 0;
+  const hasSavedTargetWeight = typeof profile?.targetWeight === 'number' && profile.targetWeight > 0;
+  const birthDate = profile?.dob ? new Date(`${profile.dob}T00:00:00`) : null;
+  const todayDate = new Date();
+  const age = birthDate && !Number.isNaN(birthDate.getTime())
+    ? todayDate.getFullYear() - birthDate.getFullYear() -
+      (todayDate.getMonth() < birthDate.getMonth() ||
+      (todayDate.getMonth() === birthDate.getMonth() && todayDate.getDate() < birthDate.getDate()) ? 1 : 0)
+    : null;
+  const hasSavedBmi = hasSavedHeight && hasSavedWeight;
+  const bmi = hasSavedBmi ? (weight / ((height / 100) ** 2)).toFixed(1) : 'Not set';
+  const bmr = hasSavedBmi && age !== null && age >= 0
+    ? Math.round(10 * weight + 6.25 * height - 5 * age + 5)
+    : null;
 
   const handleOpenEdit = (store: EditTarget['store'], item: any) => {
     setEditTarget({ store, item });
@@ -317,6 +333,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
     setWaterMl('');
     setCalories('');
     setNutritionNote('');
+    setWellnessFormOpen(false);
     onRefresh();
   };
 
@@ -343,6 +360,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
     setApptDoctor('');
     setApptGoalId('');
     setApptInputMode('manual');
+    setAppointmentFormOpen(null);
     onRefresh();
   };
 
@@ -383,7 +401,82 @@ export const HealthView: React.FC<HealthViewProps> = ({
     setHNoteText('');
     setHNoteGoalId('');
     setHNoteInputMode('manual');
+    setAppointmentFormOpen(null);
     onRefresh();
+  };
+
+  const movementAction = (
+    <button
+      type="button"
+      aria-expanded={movementFormOpen}
+      onClick={() => setMovementFormOpen(open => !open)}
+      className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-xs transition-colors hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/70"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      <span>{movementFormOpen ? 'Close Form' : 'Log Workout / Steps'}</span>
+      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${movementFormOpen ? 'rotate-180' : ''}`} />
+    </button>
+  );
+
+  const wellnessAction = (
+    <button
+      type="button"
+      aria-expanded={wellnessFormOpen}
+      onClick={() => setWellnessFormOpen(open => !open)}
+      className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 shadow-xs transition-colors hover:border-blue-300 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:border-blue-700 dark:hover:bg-blue-950/70"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      <span>{wellnessFormOpen ? 'Close Form' : 'Log Sleep & Fuel'}</span>
+      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${wellnessFormOpen ? 'rotate-180' : ''}`} />
+    </button>
+  );
+
+  const appointmentAction = (
+    <button
+      type="button"
+      aria-expanded={appointmentFormOpen === 'appointment'}
+      onClick={() => setAppointmentFormOpen(open => open === 'appointment' ? null : 'appointment')}
+      className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      <span>{appointmentFormOpen === 'appointment' ? 'Close Form' : 'Appointment'}</span>
+      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${appointmentFormOpen === 'appointment' ? 'rotate-180' : ''}`} />
+    </button>
+  );
+
+  const observationAction = (
+    <button
+      type="button"
+      aria-expanded={appointmentFormOpen === 'observation'}
+      onClick={() => setAppointmentFormOpen(open => open === 'observation' ? null : 'observation')}
+      className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-xs transition-colors hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/70"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      <span>{appointmentFormOpen === 'observation' ? 'Close Form' : 'Health Observation'}</span>
+      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${appointmentFormOpen === 'observation' ? 'rotate-180' : ''}`} />
+    </button>
+  );
+
+  const profileAction = (
+    <button
+      type="button"
+      aria-expanded={profileFormOpen}
+      onClick={() => setProfileFormOpen(open => !open)}
+      className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      <span>{profileFormOpen ? 'Close Form' : 'Edit Biometrics'}</span>
+      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${profileFormOpen ? 'rotate-180' : ''}`} />
+    </button>
+  );
+
+  const renderHealthTabActions = () => {
+    if (activeTab === 'movement') return movementAction;
+    if (activeTab === 'wellness') return wellnessAction;
+    if (activeTab === 'appointments') {
+      return <div className="flex items-center gap-2">{appointmentAction}{observationAction}</div>;
+    }
+    return profileAction;
   };
 
   return (
@@ -402,9 +495,11 @@ export const HealthView: React.FC<HealthViewProps> = ({
             <Heart className="h-4 w-4 shrink-0 text-rose-500" />
           </div>
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums truncate">
-            {weight} kg
+            {hasSavedWeight ? `${weight} kg` : 'Not set'}
           </div>
-          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Goal: {targetWeight} kg</div>
+          <div className="mt-1 text-xs text-slate-400 font-medium truncate">
+            {hasSavedTargetWeight ? `Goal: ${targetWeight} kg` : 'Set a target in Biometrics'}
+          </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
@@ -415,7 +510,11 @@ export const HealthView: React.FC<HealthViewProps> = ({
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums truncate">
             {bmi}
           </div>
-          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Ht {height} cm · BMR {bmr}</div>
+          <div className="mt-1 text-xs text-slate-400 font-medium truncate">
+            {hasSavedBmi
+              ? `Ht ${height} cm${bmr !== null ? ` · BMR est. ${bmr}` : ''}`
+              : 'Set height and weight in Biometrics'}
+          </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
@@ -426,7 +525,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-blue-600 dark:text-blue-400 tabular-nums truncate">
             {waterRecords.length}
           </div>
-          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Goal: 3,000 ml</div>
+          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Daily log entries</div>
         </div>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
@@ -452,16 +551,40 @@ export const HealthView: React.FC<HealthViewProps> = ({
             { id: 'appointments', label: `Appointments (${appointments.length + healthNotes.length})`, shortLabel: `Appts (${appointments.length + healthNotes.length})`, icon: Stethoscope },
             { id: 'profile', label: 'Biometrics', shortLabel: 'Biometrics', icon: Heart }
           ]}
+          extraRight={<div className="hidden sm:block">{renderHealthTabActions()}</div>}
         />
+        {activeTab === 'movement' && (
+          <div className="flex justify-end pt-2 sm:hidden">{movementAction}</div>
+        )}
+        {activeTab === 'wellness' && (
+          <div className="flex justify-end pt-2 sm:hidden">{wellnessAction}</div>
+        )}
+        {activeTab === 'appointments' && (
+          <div className="flex flex-wrap justify-end gap-2 pt-2 sm:hidden">
+            {appointmentAction}
+            {observationAction}
+          </div>
+        )}
+        {activeTab === 'profile' && (
+          <div className="flex justify-end pt-2 sm:hidden">{profileAction}</div>
+        )}
       </div>
 
       {/* Tab: Physical Movement */}
       {activeTab === 'movement' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
+          {movementFormOpen && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               <Activity className="h-4 w-4 text-emerald-500" />
               <span>Log Workout / Steps</span>
+              <button
+                type="button"
+                onClick={() => setMovementFormOpen(false)}
+                aria-label="Close workout form"
+                className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </h2>
             <form onSubmit={handleAddMeasurement} className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -513,18 +636,20 @@ export const HealthView: React.FC<HealthViewProps> = ({
                 Log Physical Activity
               </button>
             </form>
-          </div>
+          </div>}
 
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Movement History ({measurements.length})
-            </h2>
-            <div className="mt-4 space-y-2.5 max-h-[500px] overflow-y-auto">
+          <div className={`${movementFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+            <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Movement History ({measurements.length})
+              </h2>
+            </div>
+            <div className="mt-4 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {measurements.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No workout records logged yet.</div>
+                <div className="col-span-full py-12 text-center text-xs text-slate-400">No workout records logged yet.</div>
               ) : (
                 [...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
-                  <div key={m.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
+                  <div key={m.id} className="min-w-0 rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-slate-900 dark:text-white truncate">{m.exercise || 'Daily Activity'}</span>
@@ -566,10 +691,18 @@ export const HealthView: React.FC<HealthViewProps> = ({
       {/* Tab: Wellness */}
       {activeTab === 'wellness' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
+          {wellnessFormOpen && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               <Droplet className="h-4 w-4 text-blue-500" />
               <span>Log Sleep, Water & Nutrition</span>
+              <button
+                type="button"
+                onClick={() => setWellnessFormOpen(false)}
+                aria-label="Close wellness form"
+                className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </h2>
             <form onSubmit={handleAddWellness} className="mt-4 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -658,19 +791,21 @@ export const HealthView: React.FC<HealthViewProps> = ({
                 Save Wellness Record
               </button>
             </form>
-          </div>
+          </div>}
 
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Wellness Stream ({sleepRecords.length + waterRecords.length + nutritionRecords.length} records)
-            </h2>
-            <div className="mt-4 space-y-2.5 max-h-[500px] overflow-y-auto">
+          <div className={`${wellnessFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Wellness Stream ({sleepRecords.length + waterRecords.length + nutritionRecords.length} records)
+              </h2>
+            </div>
+            <div className="mt-4 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {[
                 ...sleepRecords.map(s => ({ type: 'Sleep', text: `${s.hours} hours`, date: s.date, id: s.id, store: 'sleepRecords' as const, raw: s })),
                 ...waterRecords.map(w => ({ type: 'Water', text: `${w.amount} ml`, date: w.date, id: w.id, store: 'waterRecords' as const, raw: w })),
                 ...nutritionRecords.map(n => ({ type: 'Nutrition', text: `${n.calories ? `${n.calories} kcal` : ''} ${n.note || ''}`, date: n.date, id: n.id, store: 'nutritionRecords' as const, raw: n }))
               ].length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No wellness records logged yet.</div>
+                <div className="col-span-full py-12 text-center text-xs text-slate-400">No wellness records logged yet.</div>
               ) : (
                 [
                   ...sleepRecords.map(s => ({ type: 'Sleep', text: `${s.hours} hours`, date: s.date, id: s.id, store: 'sleepRecords' as const, raw: s })),
@@ -680,7 +815,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   .sort((a, b) => (b.date || '').localeCompare(a.date || '') || ((b.raw as any)?.createdAt || 0) - ((a.raw as any)?.createdAt || 0))
                   .slice(0, 40)
                   .map(item => (
-                  <div key={item.id} className="rounded-2xl border border-slate-100 p-3 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
+                  <div key={item.id} className="min-w-0 rounded-2xl border border-slate-100 p-3 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
                     <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
                       <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
                         item.type === 'Sleep' ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400' :
@@ -723,34 +858,24 @@ export const HealthView: React.FC<HealthViewProps> = ({
       {/* Tab: Appointments & Health Notes */}
       {activeTab === 'appointments' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Health actions</h2>
-            <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-              {([
-                ['appointment', 'Appointment'],
-                ['observation', 'Health Observation']
-              ] as const).map(([action, label]) => (
-                <button
-                  key={action}
-                  type="button"
-                  onClick={() => setActiveAppointmentAction(action)}
-                  aria-pressed={activeAppointmentAction === action}
-                  className={`min-h-9 rounded-lg px-2 text-[10px] font-semibold transition-colors sm:text-xs ${
-                    activeAppointmentAction === action
-                      ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className={activeAppointmentAction === 'appointment' ? 'mt-4' : 'hidden'}>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
-                <Stethoscope className="h-4 w-4 text-indigo-500" />
-                <span>Log Medical Appointment</span>
+          {appointmentFormOpen && <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+              {appointmentFormOpen === 'appointment'
+                ? <Stethoscope className="h-4 w-4 text-indigo-500" />
+                : <FileText className="h-4 w-4 text-emerald-500" />}
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                {appointmentFormOpen === 'appointment' ? 'Log Medical Appointment' : 'Quick Health Observation'}
               </h2>
+              <button
+                type="button"
+                onClick={() => setAppointmentFormOpen(null)}
+                aria-label="Close health form"
+                className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {appointmentFormOpen === 'appointment' ? (
               <form onSubmit={handleAddAppointment} className="mt-4 space-y-3">
                 <GoalLinkSelector
                   goals={goals}
@@ -786,13 +911,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   + Add Appointment
                 </button>
               </form>
-            </div>
-
-            <div className={activeAppointmentAction === 'observation' ? 'mt-4' : 'hidden'}>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
-                <FileText className="h-4 w-4 text-emerald-500" />
-                <span>Quick Health Observation</span>
-              </h2>
+            ) : (
               <form onSubmit={handleAddHealthNote} className="mt-4 space-y-3">
                 <GoalLinkSelector
                   goals={goals}
@@ -813,18 +932,20 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   Save Health Note
                 </button>
               </form>
-            </div>
-          </section>
+            )}
+          </section>}
 
-          <div className="lg:col-span-7 space-y-6">
+          <div className={`space-y-6 ${appointmentFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
             {/* Appointments List */}
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-                Scheduled Consultations ({appointments.length})
-              </h2>
-              <div className="mt-4 space-y-3 max-h-64 overflow-y-auto">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Scheduled Consultations ({appointments.length})
+                </h2>
+              </div>
+              <div className="mt-4 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {appointments.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400">No medical appointments logged.</div>
+                  <div className="col-span-full py-8 text-center text-xs text-slate-400">No medical appointments logged.</div>
                 ) : (
                   [...appointments].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(a => (
                     <div key={a.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
@@ -888,12 +1009,14 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
             {/* Health Notes List */}
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-                Health Observations & Records ({healthNotes.length})
-              </h2>
-              <div className="mt-4 space-y-2.5 max-h-64 overflow-y-auto">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Health Observations & Records ({healthNotes.length})
+                </h2>
+              </div>
+              <div className="mt-4 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {healthNotes.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400">No observation notes logged.</div>
+                  <div className="col-span-full py-8 text-center text-xs text-slate-400">No observation notes logged.</div>
                 ) : (
                   [...healthNotes].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(n => (
                     <div key={n.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-start gap-2">
@@ -933,7 +1056,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
       {/* Tab: Biometric Profile */}
       {activeTab === 'profile' && (
-        <div className="max-w-xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        profileFormOpen && <div className="max-w-xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
             Biometric Profile Configuration
           </h2>

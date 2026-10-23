@@ -29,11 +29,19 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMobileMenu,
   onShowToast
 }) => {
-  const [bsDateInfo, setBsDateInfo] = useState({
-    bsIso: '2083-06-09',
-    bsEn: '2083 Ashwin 9',
-    bsMonth: 'Ashwin',
-    adIso: '2026-09-25'
+  const [bsDateInfo, setBsDateInfo] = useState(() => {
+    const adIso = getTodayIso();
+    try {
+      const bs = adToBs(adIso);
+      return {
+        bsIso: bs.iso,
+        bsFormattedNe: bs.formattedNe,
+        adIso
+      };
+    } catch (error) {
+      console.error('Failed to initialize the Nepali date in the header.', error);
+      return { bsIso: '', bsFormattedNe: '', adIso };
+    }
   });
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -49,25 +57,24 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Compute BS and AD dates
   useEffect(() => {
-    try {
+    const updateDate = () => {
       const todayIso = getTodayIso();
-      const bs = adToBs(todayIso);
-      setBsDateInfo({
-        bsIso: bs.iso,
-        bsEn: bs.formattedEn,
-        bsMonth: bs.monthNameEn,
-        adIso: todayIso
-      });
-    } catch {
-      const todayIso = getTodayIso();
-      setBsDateInfo({
-        bsIso: '2083-06-09',
-        bsEn: '2083 Ashwin 9',
-        bsMonth: 'Ashwin',
-        adIso: todayIso
-      });
-    }
-  }, []);
+      if (todayIso === bsDateInfo.adIso) return;
+      try {
+        const bs = adToBs(todayIso);
+        setBsDateInfo({
+          bsIso: bs.iso,
+          bsFormattedNe: bs.formattedNe,
+          adIso: todayIso
+        });
+      } catch (error) {
+        console.error('Failed to refresh the Nepali date in the header.', error);
+        setBsDateInfo({ bsIso: '', bsFormattedNe: '', adIso: todayIso });
+      }
+    };
+    const timer = setInterval(updateDate, 60_000);
+    return () => clearInterval(timer);
+  }, [bsDateInfo.adIso]);
 
   const formattedTimeFull = currentTime.toLocaleTimeString('en-US', {
     hour: 'numeric',
@@ -82,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
   });
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full items-center justify-between border-b border-slate-200/80 bg-white px-2 sm:px-3 lg:px-6 dark:border-white/[0.08] dark:bg-[#0B0F19] gap-1 sm:gap-1.5 lg:gap-2">
+    <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full items-center justify-between border-b border-slate-200/80 bg-white/95 px-2 sm:px-3 lg:px-6 shadow-[0_2px_12px_rgb(15_23_42/0.035)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0B0F19]/95 dark:shadow-black/10 gap-1 sm:gap-1.5 lg:gap-3">
       {/* Zone 1: Left - Brand Identity & Nepali BS / Gregorian AD Date (Date is placed where search was) */}
       <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 shrink-0 select-none">
         {/* Mobile & Tablet Hamburger Drawer Trigger */}
@@ -99,10 +106,10 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => onNavigate('dashboard')}
-          className="flex items-center gap-1.5 sm:gap-2 text-left focus:outline-none group cursor-pointer shrink-0"
+          className="flex items-center gap-1.5 sm:gap-2.5 text-left focus:outline-none group cursor-pointer shrink-0"
           title="Om-LifeOS Dashboard"
         >
-          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-indigo-600 font-serif font-bold text-white shadow-sm shadow-indigo-500/20 group-hover:scale-105 transition-transform text-sm sm:text-base shrink-0">
+          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 font-serif font-bold text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform text-sm sm:text-base shrink-0">
             ॐ
           </div>
           <span className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white whitespace-nowrap shrink-0 hidden min-[540px]:inline">
@@ -114,33 +121,21 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenBsModal}
-          className="hidden sm:inline-flex items-center gap-1.5 lg:gap-2 rounded-xl border border-slate-200/90 bg-slate-50/90 px-2 lg:px-3 py-1.5 transition-all hover:border-indigo-400 hover:bg-white dark:border-slate-800 dark:bg-slate-800/80 dark:hover:border-indigo-500 dark:hover:bg-slate-800 shrink-0 cursor-pointer shadow-2xs group h-9"
+          className="hidden sm:inline-flex items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/60 px-2.5 lg:px-3 py-1.5 transition-all hover:border-amber-300 hover:bg-white dark:border-amber-900/50 dark:bg-amber-950/20 dark:hover:border-amber-700 dark:hover:bg-slate-800 shrink-0 cursor-pointer shadow-2xs group h-10"
           title={`Nepal Bikram Sambat: ${bsDateInfo.bsIso} | Gregorian: ${bsDateInfo.adIso}. Click for converter.`}
           aria-label="Nepal Bikram Sambat and Gregorian AD Calendar Converter"
         >
-          <Calendar className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0 group-hover:scale-105 transition-transform" />
-          <div className="flex items-center gap-1 lg:gap-2 font-mono text-xs sm:text-[13px] font-semibold tracking-tight whitespace-nowrap">
-            <span className="inline-flex items-center gap-1 text-indigo-700 dark:text-indigo-300">
-              <span className="rounded bg-indigo-100/90 dark:bg-indigo-950/80 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-indigo-700 dark:text-indigo-300 tracking-wide uppercase">
+          <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 group-hover:scale-105 transition-transform" />
+          <div className="flex min-w-0 flex-col items-start leading-tight">
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
                 BS
               </span>
-              <span className="text-slate-900 dark:text-slate-100 font-bold">
-                {bsDateInfo.bsIso}
-              </span>
-              {bsDateInfo.bsMonth && (
-                <span className="hidden 2xl:inline text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                  ({bsDateInfo.bsMonth})
-                </span>
-              )}
+              <span>{bsDateInfo.bsFormattedNe || bsDateInfo.bsIso}</span>
             </span>
-            <span className="text-slate-300 dark:text-slate-600 select-none font-normal hidden xl:inline">|</span>
-            <span className="hidden xl:inline-flex items-center gap-1 text-slate-700 dark:text-slate-300">
-              <span className="rounded bg-slate-200/80 dark:bg-slate-700/80 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-300 tracking-wide uppercase">
-                AD
-              </span>
-              <span className="text-slate-700 dark:text-slate-200 font-semibold">
-                {bsDateInfo.adIso}
-              </span>
+            <span className="mt-0.5 flex items-center gap-1 text-[9px] font-medium text-slate-500 dark:text-slate-400">
+              <span className="font-bold uppercase tracking-wide">AD</span>
+              <span>{bsDateInfo.adIso}</span>
             </span>
           </div>
         </button>
@@ -149,22 +144,22 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenBsModal}
-          className="inline-flex sm:hidden items-center gap-1 rounded-xl border border-slate-200/90 bg-slate-50/80 px-1.5 text-slate-700 transition-all hover:border-indigo-400 hover:bg-white dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200 cursor-pointer shadow-2xs shrink-0 h-9"
+          className="inline-flex sm:hidden items-center gap-1 rounded-xl border border-amber-200/80 bg-amber-50/60 px-1.5 text-slate-700 transition-all hover:border-amber-400 hover:bg-white dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-slate-200 cursor-pointer shadow-2xs shrink-0 h-9"
           title={`Nepal BS: ${bsDateInfo.bsIso} | AD: ${bsDateInfo.adIso} (Click to open converter)`}
           aria-label="Nepal Bikram Sambat Date Converter"
         >
-          <Calendar className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-          <span className="hidden min-[360px]:inline rounded bg-indigo-100/90 dark:bg-indigo-950/80 px-1 py-0.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase leading-none">
+          <Calendar className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <span className="hidden min-[360px]:inline rounded bg-amber-100/90 dark:bg-amber-950/80 px-1 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase leading-none">
             BS
           </span>
           <span className="font-mono text-[10px] font-semibold text-slate-800 dark:text-slate-200 hidden min-[400px]:inline">
-            {bsDateInfo.bsIso.slice(5)}
+            {bsDateInfo.bsIso ? bsDateInfo.bsIso.slice(8) : ''}
           </span>
         </button>
       </div>
 
       {/* Zone 2: Middle - Search (Mobile & Tablet < 1024px: Crisp Icon Button, Laptop/Desktop >= 1024px: Full Search Bar) */}
-      <div className="flex items-center justify-center shrink-0 lg:flex-1 lg:min-w-0 lg:px-4">
+      <div className="flex items-center justify-center shrink-0 lg:flex-1 lg:min-w-0 lg:px-6">
         {/* Mobile & Tablet Search Icon Button (< 1024px) */}
         <button
           type="button"
@@ -203,10 +198,6 @@ export const Header: React.FC<HeaderProps> = ({
           title={`Live System Clock (${is24Hour ? '24h' : '12h'} - Click to toggle)`}
           aria-label={`Current time ${formattedTimeFull}. Toggle 12/24 hour time format`}
         >
-          <div className="relative hidden sm:flex h-2 w-2 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </div>
           <Clock className="hidden min-[360px]:block h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
           <span className="inline sm:hidden font-mono text-[9px] min-[360px]:text-[10px] font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
             {formattedTimeCompact}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Play, Pause, RotateCcw, Check, Sparkles, Volume2,
   VolumeX, Clock, Target, Bell, Plus, Trash2,
-  Upload, Music, Radio, CheckCircle2, Sliders, ArrowRight,
+  Upload, Music, Radio, CheckCircle2, Sliders,
   Link2
 } from 'lucide-react';
 import { FocusSession, Task, Goal, Routine } from '../types';
@@ -423,6 +423,18 @@ export const FocusView: React.FC<FocusViewProps> = ({
     }
   };
 
+  const alarmFormAction = (
+    <button
+      type="button"
+      aria-expanded={isAddingAlarm}
+      onClick={() => setIsAddingAlarm(open => !open)}
+      className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-indigo-500"
+    >
+      <Plus className="h-4 w-4" />
+      <span>{isAddingAlarm ? 'Close Form' : 'New Alarm'}</span>
+    </button>
+  );
+
   const totalFocusSeconds = sessions.reduce((sum, s) => sum + (Number(s.durationSeconds) || 0), 0);
   const totalFocusHours = (totalFocusSeconds / 3600).toFixed(1);
   const today = getLocalDateString();
@@ -478,7 +490,11 @@ export const FocusView: React.FC<FocusViewProps> = ({
             { id: 'alarms', label: 'Alarm Clock', shortLabel: 'Alarms', icon: Bell, badge: alarmsList.filter(a => a.enabled).length },
             { id: 'ringtones', label: 'Ringtone Studio', shortLabel: 'Ringtones', icon: Music }
           ]}
+          extraRight={activeMenuTab === 'alarms' ? <div className="hidden sm:block">{alarmFormAction}</div> : undefined}
         />
+        {activeMenuTab === 'alarms' && (
+          <div className="flex justify-end pt-2 sm:hidden">{alarmFormAction}</div>
+        )}
       </div>
 
       {/* ============================================================== */}
@@ -712,8 +728,8 @@ export const FocusView: React.FC<FocusViewProps> = ({
       {/* ============================================================== */}
       {activeMenuTab === 'alarms' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Alarms Roster (7 cols) */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+          {/* Alarms Roster */}
+          <div className="lg:col-span-12 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400">
@@ -729,14 +745,6 @@ export const FocusView: React.FC<FocusViewProps> = ({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsAddingAlarm(!isAddingAlarm)}
-                className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 active:scale-95 transition-all cursor-pointer"
-              >
-                <Plus className="h-4 w-4" />
-                <span>New Alarm</span>
-              </button>
             </div>
 
             {/* Quick Add Alarm Form */}
@@ -919,7 +927,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
             )}
 
             {/* Alarms List */}
-            <div className="space-y-3 pt-1">
+            <div className="grid gap-3 pt-1 [grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr))]">
               {alarmsList.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-400">
                   No alarms scheduled yet. Click "+ New Alarm" to create one.
@@ -932,14 +940,14 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   return (
                     <div
                       key={alarm.id}
-                      className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                      className={`flex min-w-0 items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
                         alarm.enabled
                           ? 'border-indigo-100 bg-indigo-50/30 dark:border-indigo-900/50 dark:bg-indigo-950/20'
                           : 'border-slate-200 bg-white opacity-60 dark:border-slate-800 dark:bg-slate-800/40'
                       }`}
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2.5">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                           <span className="font-mono text-2xl font-black tracking-tight text-slate-900 dark:text-white tabular-nums">
                             {alarm.time}
                           </span>
@@ -972,7 +980,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex shrink-0 items-center gap-3">
                         <ProgressiveActions label={`More actions for ${alarm.label}`} className="shrink-0">
                           <button
                             type="button"
@@ -1015,85 +1023,6 @@ export const FocusView: React.FC<FocusViewProps> = ({
             </div>
           </div>
 
-          {/* Quick Alarm Helpers & Clock Overview (5 cols) */}
-          <div className="lg:col-span-5 space-y-4">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-                Quick Alarm Presets
-              </h2>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Tap to quickly schedule an alarm from right now:
-              </p>
-
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: 'In 15 Minutes', mins: 15 },
-                  { label: 'In 30 Minutes', mins: 30 },
-                  { label: 'In 45 Minutes', mins: 45 },
-                  { label: 'In 1 Hour', mins: 60 },
-                  { label: 'In 2 Hours', mins: 120 },
-                  { label: 'Power Nap (20m)', mins: 20 }
-                ].map(p => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => {
-                      const d = new Date(Date.now() + p.mins * 60 * 1000);
-                      const hh = String(d.getHours()).padStart(2, '0');
-                      const mm = String(d.getMinutes()).padStart(2, '0');
-                      alarmService.addFocusAlarm({
-                        time: `${hh}:${mm}`,
-                        label: `Quick Alarm (${p.label})`,
-                        ringtone: selectedDefaultRingtone,
-                        enabled: true,
-                        days: []
-                      });
-                      refreshAlarms();
-                      onSuccess(`⏰ Alarm set for ${hh}:${mm} (${p.label})`);
-                    }}
-                    className="flex items-center justify-between p-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 hover:bg-indigo-50 hover:border-indigo-300 text-left transition-all dark:border-slate-800 dark:bg-slate-800/60 cursor-pointer shadow-2xs"
-                  >
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">{p.label}</div>
-                      <div className="text-[10px] text-slate-400">Timer alarm</div>
-                    </div>
-                    <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Test Alarm Trigger Card */}
-            <div className="rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-50/60 to-purple-50/40 p-5 dark:border-indigo-900/60 dark:from-indigo-950/40 dark:to-slate-900 space-y-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                <h3 className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
-                  Alarm Testing & Sound Check
-                </h3>
-              </div>
-              <p className="text-[11px] text-indigo-900/70 dark:text-indigo-300/70 leading-relaxed">
-                Test the real full-screen alarm popup, ringtone playback, snooze (+5m), and dismissal on your current device.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  alarmService.triggerAlarm({
-                    id: generateUUID(),
-                    type: 'focus_alarm',
-                    title: '🔔 Test Alarm Trigger',
-                    subtitle: 'Testing ringtone audio and alert responsiveness',
-                    timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    ringtone: selectedDefaultRingtone
-                  });
-                }}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-500 cursor-pointer"
-              >
-                <Bell className="h-4 w-4" />
-                <span>Test Trigger Alarm Now</span>
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

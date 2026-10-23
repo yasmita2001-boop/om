@@ -491,6 +491,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <button
                     type="button"
                     role="switch"
+                    aria-label="Auditory Micro-Clicks"
                     aria-checked={soundEnabled}
                     onClick={() => {
                       const next = !soundEnabled;
@@ -517,10 +518,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       <Smartphone className="h-3.5 w-3.5 text-slate-400" />
                       <span>Haptic Vibration</span>
                     </div>
+                    <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                      Requires a supported device; most desktops cannot vibrate.
+                    </p>
                   </div>
                   <button
                     type="button"
                     role="switch"
+                    aria-label="Haptic Vibration"
                     aria-checked={hapticEnabled}
                     onClick={() => {
                       const next = !hapticEnabled;
@@ -558,8 +563,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       setSoundVolume(val);
                       soundEngine.setVolume(val / 100);
                     }}
-                    onMouseUp={() => soundEngine.play('tap')}
-                    onTouchEnd={() => soundEngine.play('tap')}
+                    onPointerUp={() => soundEngine.play('tap')}
                     className="w-full accent-indigo-600 cursor-pointer disabled:opacity-40"
                   />
                 </div>

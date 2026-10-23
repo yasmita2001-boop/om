@@ -18,6 +18,7 @@ import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
+import { FormDisclosure } from '../components/FormDisclosure';
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 
@@ -1227,6 +1228,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </div>
               </div>
 
+              <FormDisclosure label="Edit daily command target">
               {/* Decisive Victory Target */}
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
@@ -1337,6 +1339,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   />
                 </div>
               </div>
+              </FormDisclosure>
             </div>
 
             {/* Saved Command Target Files & Historical Archive (5 cols) */}

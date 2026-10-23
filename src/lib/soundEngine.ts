@@ -15,6 +15,18 @@ export type SoundEffectType =
   | 'switchToggle'
   | 'successChime';
 
+const vibrationPatterns: Record<SoundEffectType, number | number[]> = {
+  taskComplete: [14],
+  taskUncheck: 8,
+  habitComplete: [12, 40, 18],
+  habitUncheck: 10,
+  calcKey: 6,
+  calcEquals: [8, 25, 12],
+  tap: 5,
+  switchToggle: 9,
+  successChime: [10, 30, 15]
+};
+
 class TactileSoundEngine {
   private ctx: AudioContext | null = null;
   private soundEnabled: boolean = true;
@@ -49,14 +61,21 @@ class TactileSoundEngine {
 
   private getAudioContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
-    if (!this.ctx) {
+    if (!this.ctx || this.ctx.state === 'closed') {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioCtx) {
-        this.ctx = new AudioCtx();
+        try {
+          this.ctx = new AudioCtx();
+        } catch (error) {
+          console.error('Failed to initialize the audio feedback engine.', error);
+          return null;
+        }
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
+      void this.ctx.resume().catch(error => {
+        console.error('Failed to resume the audio feedback engine.', error);
+      });
     }
     return this.ctx;
   }
@@ -70,13 +89,15 @@ class TactileSoundEngine {
     try {
       localStorage.setItem('om_sound_enabled', String(enabled));
     } catch {}
-    if (enabled) {
-      this.play('tap');
-    }
+    this.play('switchToggle');
   }
 
   public isHapticEnabled(): boolean {
     return this.hapticEnabled;
+  }
+
+  public isHapticSupported(): boolean {
+    return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
   }
 
   public setHapticEnabled(enabled: boolean): void {
@@ -102,18 +123,17 @@ class TactileSoundEngine {
 
   // Haptic feedback trigger
   public vibrate(pattern: number | number[] = 12): void {
-    if (!this.hapticEnabled) return;
+    if (!this.hapticEnabled || !this.isHapticSupported()) return;
     try {
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        navigator.vibrate(pattern);
-      }
-    } catch {
-      // Haptics unavailable on device/browser
+      navigator.vibrate(pattern);
+    } catch (error) {
+      console.error('Failed to trigger device vibration.', error);
     }
   }
 
   // Synthesizes tactile sounds using Web Audio oscillators & gain nodes
   public play(type: SoundEffectType): void {
+    this.vibrate(vibrationPatterns[type]);
     if (!this.soundEnabled) return;
     const ctx = this.getAudioContext();
     if (!ctx) return;
@@ -152,7 +172,6 @@ class TactileSoundEngine {
         osc2.start(now);
         osc.stop(now + 0.08);
         osc2.stop(now + 0.08);
-        this.vibrate([14]);
         break;
       }
 
@@ -169,7 +188,6 @@ class TactileSoundEngine {
         osc.connect(gainNode);
         osc.start(now);
         osc.stop(now + 0.055);
-        this.vibrate(8);
         break;
       }
 
@@ -198,7 +216,6 @@ class TactileSoundEngine {
           osc.stop(now + delay + dur + 0.02);
         });
 
-        this.vibrate([12, 40, 18]);
         break;
       }
 
@@ -215,7 +232,6 @@ class TactileSoundEngine {
         osc.connect(gainNode);
         osc.start(now);
         osc.stop(now + 0.065);
-        this.vibrate(10);
         break;
       }
 
@@ -240,7 +256,6 @@ class TactileSoundEngine {
 
         osc.start(now);
         osc.stop(now + 0.025);
-        this.vibrate(6);
         break;
       }
 
@@ -272,7 +287,6 @@ class TactileSoundEngine {
         osc2.start(now + 0.035);
         osc1.stop(now + 0.09);
         osc2.stop(now + 0.17);
-        this.vibrate([8, 25, 12]);
         break;
       }
 
@@ -289,7 +303,6 @@ class TactileSoundEngine {
         osc.connect(gainNode);
         osc.start(now);
         osc.stop(now + 0.025);
-        this.vibrate(5);
         break;
       }
 
@@ -306,7 +319,6 @@ class TactileSoundEngine {
         osc.connect(gainNode);
         osc.start(now);
         osc.stop(now + 0.04);
-        this.vibrate(9);
         break;
       }
 
@@ -329,7 +341,6 @@ class TactileSoundEngine {
           osc.start(now + idx * 0.035);
           osc.stop(now + idx * 0.035 + 0.25);
         });
-        this.vibrate([10, 30, 15]);
         break;
       }
     }

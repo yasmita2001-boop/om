@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Repeat, Clock, Trash2, CheckCircle2,
   Flame, Check, Bell, Link2, Edit3, X, Target,
-  BellRing, Zap, AlertTriangle, CheckSquare
+  BellRing, Zap, AlertTriangle, CheckSquare, ChevronDown, Plus
 } from 'lucide-react';
 import { Routine, Habit, HabitLog, Goal, Task, TaskPriority, ReminderItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -59,6 +59,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'routine' | 'habit'; id: string; name: string } | null>(null);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [habitFilter, setHabitFilter] = useState<'all' | 'linked' | 'standalone' | string>('all');
+  const [routineFormOpen, setRoutineFormOpen] = useState(false);
+  const [habitFormOpen, setHabitFormOpen] = useState(false);
 
   // Creation form Genesis options
   const [routineArmGenesis, setRoutineArmGenesis] = useState(false);
@@ -282,6 +284,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     setRoutineName('');
     setRoutineNote('');
     setRoutineArmGenesis(false);
+    setRoutineFormOpen(false);
     onRefresh();
   };
 
@@ -362,6 +365,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     setLinkedRoutineId('');
     setHabitGoalId('');
     setHabitArmGenesis(false);
+    setHabitFormOpen(false);
     onRefresh();
   };
 
@@ -725,6 +729,28 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             Routine & Habits Architecture
           </h1>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-expanded={routineFormOpen}
+            onClick={() => setRoutineFormOpen(open => !open)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>{routineFormOpen ? 'Close Routine' : 'Routine Genesis'}</span>
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${routineFormOpen ? 'rotate-180' : ''}`} />
+          </button>
+          <button
+            type="button"
+            aria-expanded={habitFormOpen}
+            onClick={() => setHabitFormOpen(open => !open)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-semibold text-amber-700 shadow-xs transition-colors hover:border-amber-300 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:border-amber-700 dark:hover:bg-amber-950/70"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>{habitFormOpen ? 'Close Habit' : 'Habit Genesis'}</span>
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${habitFormOpen ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* 4 Essential Metric Cards (Matching Dashboard Style) */}
@@ -850,9 +876,9 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       })()}
 
       {/* Forms Grid (Routine Genesis & Habit Genesis) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className={`grid grid-cols-1 gap-6 ${routineFormOpen && habitFormOpen ? 'lg:grid-cols-2' : ''}`}>
         {/* Schedule Routine Block (1st col) */}
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        {routineFormOpen && <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 text-xs">
@@ -1057,10 +1083,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               ＋ Add Routine Block
             </button>
           </form>
-        </section>
+        </section>}
 
         {/* Create Habit & Link Routine in Habit (2nd col) */}
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        {habitFormOpen && <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 text-xs">
@@ -1323,7 +1349,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               ＋ Save Habit Ritual
             </button>
           </form>
-        </section>
+        </section>}
       </div>
 
       {/* Routine Time Blocks Display with Nested Linked Habits */}

@@ -13,6 +13,7 @@ import { getLocalDateString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { FormToggleButton } from '../components/FormToggleButton';
 
 interface ThingsViewProps {
   things: ThingItem[];
@@ -58,6 +59,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   onNavigate
 }) => {
   const [activeTab, setActiveTab] = useState<SubMenuTab>('things');
+  const [openThingsForm, setOpenThingsForm] = useState<SubMenuTab | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const today = getLocalDateString();
 
@@ -661,6 +663,25 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     { id: 'records', label: `Important Records (${importantRecords.length})`, shortLabel: `Records (${importantRecords.length})`, icon: FileText }
   ];
 
+  const renderThingsFormAction = () => {
+    if (activeTab === 'things') {
+      return <FormToggleButton label="Add Item" open={openThingsForm === 'things'} onClick={() => setOpenThingsForm(openThingsForm === 'things' ? null : 'things')} />;
+    }
+    if (activeTab === 'documents') {
+      return <FormToggleButton label="Add Document" open={openThingsForm === 'documents'} onClick={() => setOpenThingsForm(openThingsForm === 'documents' ? null : 'documents')} colorClassName="border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/70" />;
+    }
+    if (activeTab === 'warranties') {
+      return <FormToggleButton label="Add Warranty" open={openThingsForm === 'warranties'} onClick={() => setOpenThingsForm(openThingsForm === 'warranties' ? null : 'warranties')} colorClassName="border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:border-amber-700 dark:hover:bg-amber-950/70" />;
+    }
+    if (activeTab === 'receipts') {
+      return <FormToggleButton label="Add Receipt" open={openThingsForm === 'receipts'} onClick={() => setOpenThingsForm(openThingsForm === 'receipts' ? null : 'receipts')} />;
+    }
+    if (activeTab === 'certificates') {
+      return <FormToggleButton label="Add Certificate" open={openThingsForm === 'certificates'} onClick={() => setOpenThingsForm(openThingsForm === 'certificates' ? null : 'certificates')} colorClassName="border-purple-200 bg-purple-50 text-purple-700 hover:border-purple-300 hover:bg-purple-100 dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:border-purple-700 dark:hover:bg-purple-950/70" />;
+    }
+    return <FormToggleButton label="Add Record" open={openThingsForm === 'records'} onClick={() => setOpenThingsForm(openThingsForm === 'records' ? null : 'records')} />;
+  };
+
   return (
     <div className="space-y-6">
       {/* Hidden global file input for top Import File action */}
@@ -703,7 +724,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
             setAttachedFile(null);
           }}
           tabs={tabs}
+          extraRight={<div className="hidden sm:block">{renderThingsFormAction()}</div>}
         />
+      </div>
+      <div className="flex justify-end sm:hidden">
+        {renderThingsFormAction()}
       </div>
 
       {/* SEARCH AND QUICK IMPORT ACTION STRIP */}
@@ -738,7 +763,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       {activeTab === 'things' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Item Form */}
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'things' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <Folder className="h-4 w-4 text-indigo-500" />
               <span>Register Physical Item</span>
@@ -831,31 +856,33 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 + Register Thing
               </button>
             </form>
-          </div>
+          </div>}
 
           {/* Items Registry List */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className={`${openThingsForm === 'things' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 Physical Inventory ({things.length})
               </h2>
-              <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                Total: ₹{totalPhysicalValue.toLocaleString('en-IN')}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                  Total: ₹{totalPhysicalValue.toLocaleString('en-IN')}
+                </span>
+              </div>
             </div>
 
-            <div className="mt-4 space-y-2.5 max-h-[500px] overflow-y-auto">
+            <div className="adaptive-card-grid mt-4 gap-2.5">
               {things
                 .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.category.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No items found matching criteria.</div>
+                <div className="col-span-full py-12 text-center text-xs text-slate-400">No items found matching criteria.</div>
               ) : (
                 [...things]
                   .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.category.toLowerCase().includes(searchQuery.toLowerCase()))
                   .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
                   .map(t => (
                     <div key={t.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
-                      <div className="flex justify-between items-start gap-2">
+                      <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-slate-900 dark:text-white truncate">{t.name}</div>
                           <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
@@ -879,7 +906,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         </div>
 
                         {/* Actions (Value, Task, Edit, Delete) */}
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <span className="font-mono font-bold text-slate-900 dark:text-white mr-1 tabular-nums">
                             ₹{Number(t.value).toLocaleString('en-IN')}
                           </span>
@@ -927,7 +954,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       {activeTab === 'documents' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Document Form */}
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'documents' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <FileCheck className="h-4 w-4 text-emerald-500" />
               <span>Add Official Document</span>
@@ -1013,28 +1040,28 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 + Register Document
               </button>
             </form>
-          </div>
+          </div>}
 
           {/* Documents Registry List */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className={`${openThingsForm === 'documents' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 Official Documents ({documents.length})
               </h2>
             </div>
 
-            <div className="mt-4 space-y-2.5 max-h-[500px] overflow-y-auto">
+            <div className="adaptive-card-grid mt-4 gap-2.5">
               {documents
                 .filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()) || (d.type && d.type.toLowerCase().includes(searchQuery.toLowerCase())))
                 .length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No documents registered.</div>
+                <div className="col-span-full py-12 text-center text-xs text-slate-400">No documents registered.</div>
               ) : (
                 [...documents]
                   .filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()) || (d.type && d.type.toLowerCase().includes(searchQuery.toLowerCase())))
                   .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
                   .map(d => (
                     <div key={d.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
-                      <div className="flex justify-between items-start gap-2">
+                      <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-slate-900 dark:text-white truncate">{d.title}</div>
                           <div className="text-[10px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
@@ -1091,7 +1118,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       {activeTab === 'warranties' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Warranty Form */}
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'warranties' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <Shield className="h-4 w-4 text-amber-500" />
               <span>Register Warranty</span>
@@ -1153,25 +1180,25 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 + Register Warranty
               </button>
             </form>
-          </div>
+          </div>}
 
           {/* Warranties List */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+          <div className={`${openThingsForm === 'warranties' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+            <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Active Warranties ({warranties.length})
             </h2>
-            <div className="mt-4 space-y-2.5 max-h-[500px] overflow-y-auto">
+            <div className="adaptive-card-grid mt-4 gap-2.5">
               {warranties
                 .filter(w => w.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No warranties registered.</div>
+                <div className="col-span-full py-12 text-center text-xs text-slate-400">No warranties registered.</div>
               ) : (
                 [...warranties]
                   .filter(w => w.title.toLowerCase().includes(searchQuery.toLowerCase()))
                   .sort((a, b) => (b.expiry || '').localeCompare(a.expiry || '') || (b.createdAt || 0) - (a.createdAt || 0))
                   .map(w => (
                     <div key={w.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
-                      <div className="flex justify-between items-start gap-2">
+                      <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-slate-900 dark:text-white truncate">{w.title}</div>
                           <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
@@ -1229,7 +1256,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       {activeTab === 'receipts' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Receipt Form */}
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'receipts' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -1419,10 +1446,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 <span>Save Receipt in Vault</span>
               </button>
             </form>
-          </div>
+          </div>}
 
           {/* Receipts Archive List */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col">
+          <div className={`${openThingsForm === 'receipts' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800 gap-2">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -1435,11 +1462,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </span>
             </div>
 
-            <div className="mt-4 space-y-3 max-h-[600px] overflow-y-auto">
+            <div className="adaptive-card-grid mt-4 gap-3">
               {receipts
                 .filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="py-16 text-center text-xs text-slate-400">
+                <div className="col-span-full py-16 text-center text-xs text-slate-400">
                   No receipts found matching your search.
                 </div>
               ) : (
@@ -1456,7 +1483,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     return (
                       <div
                         key={r.id}
-                        className="rounded-2xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/40 p-4 hover:border-slate-200 dark:hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                        className="rounded-2xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/40 p-4 hover:border-slate-200 dark:hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 text-xs"
                       >
                         <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex items-center justify-between sm:justify-start gap-2">
@@ -1511,7 +1538,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         </div>
 
                         {/* Desktop Price & Edit/Delete Actions */}
-                        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
+                        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-2 dark:border-slate-800 sm:justify-end sm:border-t-0 sm:pt-0">
                           <span className="hidden sm:inline font-mono font-bold text-sm text-slate-900 dark:text-white tabular-nums">
                             ₹{Number(r.amount).toLocaleString('en-IN')}
                           </span>
@@ -1548,7 +1575,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       {activeTab === 'certificates' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Certificate Form */}
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'certificates' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <Award className="h-4 w-4 text-purple-500" />
               <span>Register Certificate</span>
@@ -1622,26 +1649,26 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 + Register Certificate
               </button>
             </form>
-          </div>
+          </div>}
 
           {/* Certificates Registry List */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+          <div className={`${openThingsForm === 'certificates' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+            <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Certificates & Credentials ({certificates.length})
             </h2>
 
-            <div className="mt-4 space-y-2.5 max-h-[500px] overflow-y-auto">
+            <div className="adaptive-card-grid mt-4 gap-2.5">
               {certificates
                 .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No certificates registered.</div>
+                <div className="col-span-full py-12 text-center text-xs text-slate-400">No certificates registered.</div>
               ) : (
                 [...certificates]
                   .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
                   .sort((a, b) => (b.expiry || '').localeCompare(a.expiry || '') || (b.createdAt || 0) - (a.createdAt || 0))
                   .map(c => (
                     <div key={c.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
-                      <div className="flex justify-between items-start gap-2">
+                      <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-slate-900 dark:text-white truncate">{c.title}</div>
                           <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
@@ -1697,7 +1724,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       {activeTab === 'records' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Record Form */}
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'records' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <FileText className="h-4 w-4 text-slate-600 dark:text-slate-300" />
               <span>Save Important Record</span>
@@ -1759,26 +1786,26 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 Save Record
               </button>
             </form>
-          </div>
+          </div>}
 
           {/* Important Records List */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+          <div className={`${openThingsForm === 'records' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+            <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Important Records ({importantRecords.length})
             </h2>
 
-            <div className="mt-4 space-y-2.5 max-h-[500px] overflow-y-auto">
+            <div className="adaptive-card-grid mt-4 gap-2.5">
               {importantRecords
                 .filter(ir => ir.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No records found.</div>
+                <div className="col-span-full py-12 text-center text-xs text-slate-400">No records found.</div>
               ) : (
                 [...importantRecords]
                   .filter(ir => ir.title.toLowerCase().includes(searchQuery.toLowerCase()))
                   .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
                   .map(ir => (
                     <div key={ir.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
-                      <div className="flex justify-between items-start gap-2">
+                      <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-slate-900 dark:text-white truncate">{ir.title}</div>
                           {ir.date && <div className="text-[10px] text-slate-400 mt-0.5">Recorded: {ir.date}</div>}

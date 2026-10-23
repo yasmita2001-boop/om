@@ -18,7 +18,7 @@ html.dark .text-slate-400 {
   left: 50%;
   width: min(60vw, 580px);
   height: auto;
-  opacity: 0.09;
+  opacity: 0.025;
   transform: translate(-50%, -50%);
   pointer-events: none;
   user-select: none;
@@ -26,7 +26,7 @@ html.dark .text-slate-400 {
 
 html.dark .app-watermark__image {
   filter: brightness(0) invert(1) contrast(1.35);
-  opacity: 0.19;
+  opacity: 0.04;
 }
 
 .app-watermark__content {
@@ -613,10 +613,16 @@ a, button, input, select, textarea, label, [role="button"], summary {
 }
 .progressive-actions {
   display: inline-flex;
+  flex-wrap: wrap;
   min-width: 0;
+  max-width: 100%;
   align-items: center;
   justify-content: flex-end;
   gap: 0.25rem;
+}
+
+.progressive-actions[data-open='true'] {
+  width: min(18rem, 100%);
 }
 
 .progressive-actions__trigger {
@@ -639,7 +645,9 @@ a, button, input, select, textarea, label, [role="button"], summary {
 .progressive-actions__content {
   display: inline-flex;
   flex-wrap: wrap;
-  width: auto;
+  flex: 1 1 100%;
+  min-width: 0;
+  width: 100%;
   max-width: 0;
   max-height: 0;
   align-items: center;
@@ -669,8 +677,61 @@ a, button, input, select, textarea, label, [role="button"], summary {
   color: #cbd5e1;
 }
 
+.dashboard-view .dashboard-hero {
+  border-color: rgb(199 210 254 / 0.7);
+  background:
+    radial-gradient(ellipse at 100% 0%, rgb(224 231 255 / 0.72), transparent 48%),
+    linear-gradient(115deg, #fff 0%, #f8faff 58%, #f1f5ff 100%);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 3%), 0 16px 36px rgb(79 70 229 / 5%);
+}
+
+.dark .dashboard-view .dashboard-hero {
+  border-color: rgb(99 102 241 / 0.2);
+  background:
+    radial-gradient(ellipse at 100% 0%, rgb(49 46 129 / 0.32), transparent 48%),
+    linear-gradient(115deg, #111827 0%, #111827 58%, #15172d 100%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 12%), 0 16px 36px rgb(0 0 0 / 12%);
+}
+
+.dashboard-view .metric-summary-grid > * {
+  border-color: #e5eaf2;
+  border-radius: 1.125rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 3%), 0 8px 20px rgb(15 23 42 / 3%);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.dark .dashboard-view .metric-summary-grid > * {
+  border-color: rgb(148 163 184 / 0.15);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%), 0 8px 20px rgb(0 0 0 / 10%);
+}
+
+.dashboard-view > div > section {
+  border-color: #e5eaf2;
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 3%), 0 10px 26px rgb(15 23 42 / 3%);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.dark .dashboard-view > div > section {
+  border-color: rgb(148 163 184 / 0.15);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%), 0 10px 26px rgb(0 0 0 / 10%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .dashboard-view .metric-summary-grid > *:hover {
+    border-color: #c7d2fe;
+    box-shadow: 0 4px 8px rgb(15 23 42 / 4%), 0 14px 28px rgb(79 70 229 / 7%);
+    transform: translateY(-2px);
+  }
+
+  .dark .dashboard-view .metric-summary-grid > *:hover {
+    border-color: rgb(129 140 248 / 0.36);
+    box-shadow: 0 4px 8px rgb(0 0 0 / 16%), 0 14px 28px rgb(0 0 0 / 14%);
+  }
+}
+
 .progressive-actions[data-open='true'] .progressive-actions__content {
-  max-width: min(18rem, calc(100vw - 4rem));
+  max-width: 100%;
   max-height: 8rem;
   opacity: 1;
   pointer-events: auto;

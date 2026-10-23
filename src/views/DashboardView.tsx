@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckSquare, Target, Repeat, DollarSign,
   ArrowUpRight, ArrowDownRight, Sparkles,
-  BookOpen, Bell, ArrowRight
+  BookOpen, Bell, ArrowRight, Plus
 } from 'lucide-react';
 import {
   Task, Goal, Routine, Habit, HabitLog, FinanceTransaction,
@@ -174,54 +174,33 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   const timeGreeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      {/* Executive Cockpit Header (Compact, modern, zero wasted space) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white/80 p-3.5 sm:p-4 backdrop-blur-xl shadow-2xs dark:border-white/[0.08] dark:bg-[#070A12]/80">
+    <div className="dashboard-view space-y-4 sm:space-y-5">
+      <div className="dashboard-hero flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white/80 p-4 sm:p-5 backdrop-blur-xl shadow-2xs dark:border-white/[0.08] dark:bg-[#070A12]/80">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-sm font-serif font-bold text-sm shrink-0">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-md shadow-indigo-500/20 font-serif font-bold text-base shrink-0">
             ॐ
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
                 {timeGreeting}
               </h1>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+            <p className="mt-0.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
               {dailyPlanner?.date === today && dailyPlanner.target
                 ? dailyPlanner.target
                 : `${todayTasks.length} priorities today · ${activeGoals.length} active goals`}
             </p>
           </div>
         </div>
-
-        {/* Rapid Action Shortcuts */}
-        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-          <button
-            type="button"
-            onClick={() => onOpenQuickCapture('task')}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
-          >
-            <span className="text-emerald-500 font-bold">✓</span>
-            <span>Task</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpenQuickCapture('expense')}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
-          >
-            <span className="text-emerald-500">💰</span>
-            <span>Expense</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpenQuickCapture('note')}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
-          >
-            <span className="text-amber-500">📝</span>
-            <span>Note</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => onOpenQuickCapture('task')}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-colors hover:bg-indigo-500 focus-visible:outline-indigo-600 cursor-pointer"
+        >
+          <Plus className="h-4 w-4" />
+          Quick capture
+        </button>
       </div>
 
       {/* 4 Essential Metric Cards */}

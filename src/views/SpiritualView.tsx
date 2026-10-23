@@ -5,6 +5,7 @@ import { storage, generateUUID } from '../lib/storage';
 import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
 import { syncGoalProgressFromSpiritual } from '../lib/goalTaskSync';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { FormToggleButton } from '../components/FormToggleButton';
 
 interface SpiritualViewProps {
   values: ValueItem[];
@@ -30,6 +31,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   const [valDesc, setValDesc] = useState('');
   const [valType, setValType] = useState<'value' | 'principle'>('value');
   const [activeAction, setActiveAction] = useState<'values' | 'practices' | 'commitments'>('values');
+  const [openSpiritualForm, setOpenSpiritualForm] = useState<'values' | 'practices' | 'commitments' | null>(null);
 
   const [pracName, setPracName] = useState('');
   const [pracFreq, setPracFreq] = useState('Daily');
@@ -245,36 +247,31 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
           Values, Principles & Spiritual Foundations
         </h1>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <FormToggleButton label="Add Value" open={openSpiritualForm === 'values'} onClick={() => {
+            const next = openSpiritualForm === 'values' ? null : 'values';
+            setOpenSpiritualForm(next);
+            setActiveAction('values');
+          }} />
+          <FormToggleButton label="Add Practice" open={openSpiritualForm === 'practices'} onClick={() => {
+            const next = openSpiritualForm === 'practices' ? null : 'practices';
+            setOpenSpiritualForm(next);
+            setActiveAction('practices');
+          }} colorClassName="border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:border-rose-700 dark:hover:bg-rose-950/70" />
+          <FormToggleButton label="Add Vow" open={openSpiritualForm === 'commitments'} onClick={() => {
+            const next = openSpiritualForm === 'commitments' ? null : 'commitments';
+            setOpenSpiritualForm(next);
+            setActiveAction('commitments');
+          }} colorClassName="border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:border-amber-700 dark:hover:bg-amber-950/70" />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-        <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white">Foundations actions</h2>
-        <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-          {([
-            ['values', 'Values', values.length],
-            ['practices', 'Practices', practices.length],
-            ['commitments', 'Vows', commitments.length]
-          ] as const).map(([action, label, count]) => (
-            <button
-              key={action}
-              type="button"
-              onClick={() => setActiveAction(action)}
-              aria-pressed={activeAction === action}
-              className={`min-h-9 rounded-lg px-2 text-[10px] font-semibold transition-colors sm:text-xs ${
-                activeAction === action
-                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300'
-                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-              }`}
-            >
-              {label} ({count})
-            </button>
-          ))}
-        </div>
+        {openSpiritualForm && <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
 
         {/* Core Values */}
         <div className={activeAction === 'values' ? 'mt-4' : 'hidden'}>
@@ -384,21 +381,23 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
           </form>
 
         </div>
-        </section>
+        </section>}
 
-        <section className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+        <section className={`${openSpiritualForm ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6`}>
           <h2 className="text-sm font-bold text-slate-900 dark:text-white">Saved foundations</h2>
           <div className="mt-4 space-y-5">
             <div>
-              <h3 className="border-b border-slate-100 pb-2 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-300">
+              <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
+                <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Values & Principles ({values.length})
-              </h3>
-              <div className="mt-3 space-y-2.5 max-h-64 overflow-y-auto">
+                </h3>
+              </div>
+              <div className="adaptive-card-grid mt-3 gap-2.5">
                 {values.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-slate-400">No values or principles saved yet.</p>
+                  <p className="col-span-full py-4 text-center text-xs text-slate-400">No values or principles saved yet.</p>
                 ) : [...values].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(v => (
                   <div key={v.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
-                    <div className="flex justify-between items-start gap-1">
+                    <div className="flex flex-wrap justify-between items-start gap-1">
                       <span className="font-bold text-slate-900 dark:text-white">{v.title}</span>
                       <ProgressiveActions label={`More actions for ${v.title}`}>
                         <button
@@ -419,12 +418,14 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             </div>
 
             <div>
-              <h3 className="border-b border-slate-100 pb-2 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-300">
+              <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
+                <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Daily Practices ({practices.length})
-              </h3>
-              <div className="mt-3 space-y-2.5 max-h-64 overflow-y-auto">
+                </h3>
+              </div>
+              <div className="adaptive-card-grid mt-3 gap-2.5">
                 {practices.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-slate-400">No daily practices saved yet.</p>
+                  <p className="col-span-full py-4 text-center text-xs text-slate-400">No daily practices saved yet.</p>
                 ) : [...practices].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(p => (
                   <div
                     key={p.id}
@@ -435,7 +436,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                         handleDeletePractice(p);
                       }
                     }}
-                    className="group flex items-center justify-between gap-2 rounded-2xl border border-slate-100 p-3.5 text-xs transition-colors hover:border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-400/50 dark:border-slate-800 dark:hover:border-slate-700"
+                    className="group flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 p-3.5 text-xs transition-colors hover:border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-400/50 dark:border-slate-800 dark:hover:border-slate-700"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -443,7 +444,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                         <GoalBadge goalId={p.goalId} goals={goals} />
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1">
                       <button
                         type="button"
                         onClick={() => onNavigate('routine')}
@@ -479,15 +480,17 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             </div>
 
             <div>
-              <h3 className="border-b border-slate-100 pb-2 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-300">
+              <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
+                <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Commitments & Vows ({commitments.length})
-              </h3>
-              <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
+                </h3>
+              </div>
+              <div className="adaptive-card-grid mt-3 gap-2">
                 {commitments.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-slate-400">No commitments saved yet.</p>
+                  <p className="col-span-full py-4 text-center text-xs text-slate-400">No commitments saved yet.</p>
                 ) : [...commitments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(c => (
                   <div key={c.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
-                    <div className="flex justify-between items-start">
+                    <div className="flex flex-wrap justify-between items-start">
                       <div className="min-w-0 flex-1 font-medium italic leading-relaxed text-slate-800 dark:text-slate-200">
                         "{c.text}"
                       </div>

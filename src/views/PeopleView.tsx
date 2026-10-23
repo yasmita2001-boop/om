@@ -4,6 +4,7 @@ import { Person, Interaction, ReminderItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { FormToggleButton } from '../components/FormToggleButton';
 
 interface PeopleViewProps {
   people: Person[];
@@ -25,6 +26,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   const [contact, setContact] = useState('');
   const [importantDate, setImportantDate] = useState('');
   const [activeAction, setActiveAction] = useState<'person' | 'interaction'>('person');
+  const [openPeopleForm, setOpenPeopleForm] = useState<'person' | 'interaction' | null>(null);
   // Interaction logger & editor state
   const [selectedPersonId, setSelectedPersonId] = useState(people[0]?.id || '');
   const [interactionText, setInteractionText] = useState('');
@@ -84,6 +86,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   const handleStartEditInteraction = (inter: Interaction) => {
     setEditingInteraction(inter);
     setActiveAction('interaction');
+    setOpenPeopleForm('interaction');
     setSelectedPersonId(inter.personId);
     setInteractionText(inter.text);
   };
@@ -167,39 +170,31 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
-          People & Relationships
-        </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Manage key people, interaction touchpoints, and milestone celebrations aligned with your life missions.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+            People & Relationships
+          </h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Manage key people, interaction touchpoints, and milestone celebrations aligned with your life missions.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <FormToggleButton label="Add Person" open={openPeopleForm === 'person'} onClick={() => {
+            const next = openPeopleForm === 'person' ? null : 'person';
+            setOpenPeopleForm(next);
+            setActiveAction('person');
+          }} />
+          <FormToggleButton label="Log Touchpoint" open={openPeopleForm === 'interaction'} onClick={() => {
+            const next = openPeopleForm === 'interaction' ? null : 'interaction';
+            setOpenPeopleForm(next);
+            setActiveAction('interaction');
+          }} colorClassName="border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:border-rose-700 dark:hover:bg-rose-950/70" />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-        <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white">People actions</h2>
-          <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-            {([
-              ['person', 'Add Important Person'],
-              ['interaction', 'Log Touchpoint']
-            ] as const).map(([action, label]) => (
-              <button
-                key={action}
-                type="button"
-                onClick={() => setActiveAction(action)}
-                aria-pressed={activeAction === action}
-                className={`min-h-9 rounded-lg px-2 text-[10px] font-semibold transition-colors sm:text-xs ${
-                  activeAction === action
-                    ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
+        {openPeopleForm && <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
           <div className={activeAction === 'person' ? 'mt-4' : 'hidden'}>
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
               <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
@@ -344,19 +339,19 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
               </div>
             </form>
           </div>
-        </section>
+        </section>}
 
         {/* Contacts Directory */}
-        <div className="lg:col-span-7 space-y-4">
+        <div className={`${openPeopleForm ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-4`}>
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Relationships Directory ({people.length})
+            <h2 className="border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
+              <span>Relationships Directory ({people.length})</span>
             </h2>
 
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="adaptive-card-grid mt-4 gap-3">
               {people.length === 0 ? (
                 <div className="col-span-full py-12 text-center text-xs text-slate-400">
-                  No contacts recorded yet. Add your first connection on the left.
+                  No contacts recorded yet. Add your first connection using the button above.
                 </div>
               ) : (
                 [...people].sort((a, b) => (a.name || '').localeCompare(b.name || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(p => {
@@ -367,7 +362,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   return (
                     <div key={p.id} className="rounded-xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex flex-col justify-between">
                       <div>
-                        <div className="flex justify-between items-start gap-1">
+                        <div className="flex flex-wrap justify-between items-start gap-1">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-bold text-slate-900 dark:text-white truncate">{p.name}</span>
@@ -449,7 +444,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                             {displayedInteractions.map(i => (
                               <div
                                 key={i.id}
-                                className={`group rounded-lg p-2 text-[10px] flex items-start justify-between gap-1.5 transition-colors ${
+                                className={`group flex flex-wrap items-start justify-between gap-1.5 rounded-lg p-2 text-[10px] transition-colors ${
                                   editingInteraction?.id === i.id
                                     ? 'bg-amber-100/70 border border-amber-300 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200'
                                     : 'bg-slate-50 hover:bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-300'

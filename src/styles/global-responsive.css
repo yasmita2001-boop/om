@@ -111,3 +111,12 @@ main, main > div {
   min-width: 0;
   max-width: 100%;
 }
+
+main .grid > * {
+  min-width: 0;
+}
+
+.adaptive-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+}

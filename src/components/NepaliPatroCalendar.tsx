@@ -334,7 +334,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('patro')}
-                  className={`flex items-center gap-1 px-2.5 sm:px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                  className={`flex items-center gap-1 px-2 sm:px-3 py-1 text-xs font-bold rounded-lg transition-all ${
                     activeTab === 'patro'
                       ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -347,7 +347,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('converter')}
-                  className={`flex items-center gap-1 px-2.5 sm:px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                  className={`flex items-center gap-1 px-2 sm:px-3 py-1 text-xs font-bold rounded-lg transition-all ${
                     activeTab === 'converter'
                       ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -355,7 +355,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">रूपान्तरण (AD↔BS)</span>
-                  <span className="sm:hidden">मिति बदल्नुहोस्</span>
+                  <span className="sm:hidden">AD↔BS</span>
                 </button>
               </div>
 

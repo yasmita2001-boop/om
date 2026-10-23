@@ -37,6 +37,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [colorFilter, setColorFilter] = useState<string>('all');
   const [noteFiltersOpen, setNoteFiltersOpen] = useState(false);
+  const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(false);
   
   // Custom notebooks list (merged from default categories, appSettings, and note categories)
   const [allCategories, setAllCategories] = useState<string[]>(categories);
@@ -221,6 +222,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   // Inline edit handler (populates form and focuses)
   const handleEditInline = (note: Note) => {
     setIsEditingInline(true);
+    setIsNoteEditorOpen(true);
     setEditingNoteId(note.id);
     setTitle(note.title);
     setNoteGoalId(note.goalId || '');
@@ -243,12 +245,13 @@ export const NotesView: React.FC<NotesViewProps> = ({
     });
     setAttachments(parsedAtts);
 
-    // Smooth scroll to form and focus
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => {
-      titleInputRef.current?.focus();
-    }, 150);
   };
+
+  useEffect(() => {
+    if (!isNoteEditorOpen || !editingNoteId) return;
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    titleInputRef.current?.focus();
+  }, [isNoteEditorOpen, editingNoteId]);
 
   const handleAddNewNotebook = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -452,6 +455,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const resetForm = () => {
     setIsEditingInline(false);
     setEditingNoteId(null);
+    setIsNoteEditorOpen(false);
     setTitle('');
     setNoteGoalId('');
     setNoteInputMode('manual');
@@ -495,7 +499,10 @@ export const NotesView: React.FC<NotesViewProps> = ({
   useEffect(() => {
     const form = formRef.current;
     const filters = noteFiltersRef.current;
-    if (!form || !filters) return;
+    if (!isNoteEditorOpen || !form || !filters) {
+      setRightColumnNoteCount(0);
+      return;
+    }
 
     const updateRightColumnNoteCount = () => {
       if (window.innerWidth < 1024) {
@@ -520,7 +527,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateRightColumnNoteCount);
     };
-  }, [filteredNotes.length, noteFiltersOpen]);
+  }, [filteredNotes.length, noteFiltersOpen, isNoteEditorOpen, editingNoteId]);
 
   const noteCards = filteredNotes.map(n => {
     const theme = getTheme(n.color);
@@ -686,6 +693,15 @@ export const NotesView: React.FC<NotesViewProps> = ({
           </button>
           <button
             type="button"
+            aria-expanded={isNoteEditorOpen}
+            onClick={() => setIsNoteEditorOpen(open => !open)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 shadow-2xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>{isNoteEditorOpen ? 'Close New Note' : 'New Note'}</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setIsAddingCategory(true)}
             className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 shadow-2xs transition-colors cursor-pointer"
           >
@@ -734,7 +750,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         {/* ========================================================================= */}
         {/* LEFT PANEL: LUXURY NOTEBOOK EDITOR (5 cols)                                */}
         {/* ========================================================================= */}
-        <div
+        {(isNoteEditorOpen || Boolean(editingNoteId)) && <div
           ref={formRef}
           className={`lg:col-span-5 rounded-3xl border transition-all ${
             editingNoteId
@@ -764,6 +780,16 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
               >
                 Cancel Edit
+              </button>
+            )}
+            {!editingNoteId && (
+              <button
+                type="button"
+                onClick={() => setIsNoteEditorOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                aria-label="Close note editor"
+              >
+                <X className="h-4 w-4" />
               </button>
             )}
           </div>
@@ -981,12 +1007,12 @@ export const NotesView: React.FC<NotesViewProps> = ({
               )}
             </button>
           </form>
-        </div>
+        </div>}
 
         {/* ========================================================================= */}
         {/* RIGHT PANEL: NOTEBOOKS DIRECTORY & CARDS (7 cols)                         */}
         {/* ========================================================================= */}
-        <div className="space-y-4 lg:col-span-7">
+        <div className={`space-y-4 ${isNoteEditorOpen || editingNoteId ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
           <div
             ref={noteFiltersRef}
             id="note-archive-filters"

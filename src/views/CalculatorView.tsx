@@ -44,6 +44,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
 
   // Dynamic input values
   const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [inputsTool, setInputsTool] = useState('Basic');
   const [unitFrom, setUnitFrom] = useState<string>('');
   const [unitTo, setUnitTo] = useState<string>('');
   const [result, setResult] = useState<string>('—');
@@ -58,6 +59,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
     config.fields.forEach((f, idx) => {
       newInputs[`f${idx + 1}`] = f.default;
     });
+    setInputsTool(selectedTool);
     setInputs(newInputs);
 
     // Default units for converters
@@ -76,10 +78,11 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
   const handleCalculate = async () => {
     try {
       const config = getToolConfig(selectedTool);
-      const f1 = inputs.f1 ?? config.fields[0]?.default ?? '';
-      const f2 = inputs.f2 ?? config.fields[1]?.default ?? '';
-      const f3 = inputs.f3 ?? config.fields[2]?.default ?? '';
-      const f4 = inputs.f4 ?? config.fields[3]?.default ?? '';
+      const activeInputs = inputsTool === selectedTool ? inputs : {};
+      const f1 = activeInputs.f1 ?? config.fields[0]?.default ?? '';
+      const f2 = activeInputs.f2 ?? config.fields[1]?.default ?? '';
+      const f3 = activeInputs.f3 ?? config.fields[2]?.default ?? '';
+      const f4 = activeInputs.f4 ?? config.fields[3]?.default ?? '';
 
       const output = config.calculate(f1, f2, f3, f4, unitFrom, unitTo);
       const resString = String(output);
@@ -382,7 +385,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                   <div className={`grid gap-3 ${currentConfig.fields.length >= 3 ? 'grid-cols-1 sm:grid-cols-3' : currentConfig.fields.length === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                     {currentConfig.fields.map((field, idx) => {
                       const fieldKey = `f${idx + 1}`;
-                      const val = inputs[fieldKey] ?? field.default;
+                      const val = (inputsTool === selectedTool ? inputs[fieldKey] : undefined) ?? field.default;
 
                       return (
                         <div key={fieldKey}>

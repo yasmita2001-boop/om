@@ -382,7 +382,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   className = ''
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
-  const lastRenderedHtmlRef = useRef(initialHtml || '');
+  const lastRenderedHtmlRef = useRef('');
 
   // Selection & Table Tracking
   const savedRangeRef = useRef<Range | null>(null);

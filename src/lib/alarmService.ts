@@ -29,7 +29,8 @@ export interface TriggeredAlarmData {
 }
 
 const STORAGE_KEY_FOCUS_ALARMS = 'om_focus_alarms_list';
-const getFocusAlarmStorageKey = () => `${STORAGE_KEY_FOCUS_ALARMS}:${storage.getActiveProfileId()}`;
+const getFocusAlarmStorageKey = (profileId = storage.getActiveProfileId()) =>
+  `${STORAGE_KEY_FOCUS_ALARMS}:${profileId}`;
 
 class AlarmManagerService {
   private listenerCallback: ((data: TriggeredAlarmData) => void) | null = null;
@@ -76,11 +77,11 @@ class AlarmManagerService {
     } catch {}
   }
 
-  public getFocusAlarms(): FocusAlarm[] {
+  public getFocusAlarms(profileId = storage.getActiveProfileId()): FocusAlarm[] {
     try {
-      const key = getFocusAlarmStorageKey();
+      const key = getFocusAlarmStorageKey(profileId);
       const stored = localStorage.getItem(key) ||
-        (storage.getActiveProfileId() === 'om-master-profile' ? localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS) : null);
+        (profileId === 'om-master-profile' ? localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS) : null);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
@@ -99,6 +100,7 @@ class AlarmManagerService {
   public saveFocusAlarms(alarms: FocusAlarm[]) {
     try {
       localStorage.setItem(getFocusAlarmStorageKey(), JSON.stringify(alarms));
+      window.dispatchEvent(new Event('om_focus_alarms_changed'));
     } catch {}
   }
 
@@ -294,6 +296,7 @@ class AlarmManagerService {
       const reminders = await storage.getAll<ReminderItem>('reminders');
       for (const rem of reminders) {
         if (rem.status === 'done') continue;
+        if (rem.alarmEnabled === false) continue;
         if (!rem.dueAt) continue;
 
         // Parse rem.dueAt (format could be "YYYY-MM-DDTHH:mm" or "YYYY-MM-DD HH:mm")

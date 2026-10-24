@@ -7,10 +7,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
-// `npm run build:single` inlines everything into ONE html file, so code-splitting
-// and the service worker must be off for that build (otherwise the inlined entry
-// would try to import chunk files that do not exist next to the html file).
-const isSingleFile = process.env.npm_lifecycle_event === 'build:single';
+// Single-file builds disable code-splitting and the service worker because the
+// inlined entry cannot import chunks that do not exist next to the HTML file.
+const isSingleFile = ['build:single', 'build:local-test'].includes(process.env.npm_lifecycle_event || '');
 
 export default defineConfig(() => {
   return {
@@ -29,6 +28,9 @@ export default defineConfig(() => {
         },
       }] : [VitePWA({
         registerType: 'autoUpdate',
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: './',
@@ -62,42 +64,11 @@ export default defineConfig(() => {
             },
           ],
         },
-        workbox: {
+        injectManifest: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           globIgnores: ['**/om-lifeos-complete.html', '**/vendor-firebase-*.js'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-          navigateFallback: 'index.html',
-          cleanupOutdatedCaches: true,
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'google-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'gstatic-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-          ],
+          rollupFormat: 'es',
         },
         devOptions: {
           enabled: false,

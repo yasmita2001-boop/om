@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Download, Database, Trash2,
   Palette, ChevronDown, RefreshCw,
-  Volume2, VolumeX, Smartphone
+  Volume2, VolumeX, Smartphone, BellRing
 } from 'lucide-react';
 import {
   storage,
@@ -14,9 +14,15 @@ import { UniversalDataManagerCard } from '../components/UniversalDataManagerCard
 import { SlideTabs } from '../components/SlideTabs';
 import { RecycleBinView } from './RecycleBinView';
 import { soundEngine } from '../lib/soundEngine';
+import {
+  disableBackgroundReminders,
+  enableBackgroundReminders,
+  isBackgroundRemindersEnabled
+} from '../lib/pushReminderService';
 
 interface SettingsViewProps {
   settings?: AppState;
+  googleUserUid?: string;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
   onError: (msg: string) => void;
@@ -26,6 +32,7 @@ interface SettingsViewProps {
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
+  googleUserUid,
   onRefresh,
   onSuccess,
   onError,
@@ -48,6 +55,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [soundEnabled, setSoundEnabled] = useState(() => soundEngine.isSoundEnabled());
   const [hapticEnabled, setHapticEnabled] = useState(() => soundEngine.isHapticEnabled());
   const [soundVolume, setSoundVolume] = useState(() => Math.round(soundEngine.getVolume() * 100));
+  const [backgroundRemindersEnabled, setBackgroundRemindersEnabled] = useState(false);
+  const [isUpdatingBackgroundReminders, setIsUpdatingBackgroundReminders] = useState(false);
+  const reminderProfileId = settings?.profileId || storage.getActiveProfileId();
 
   useEffect(() => {
     if (settings?.accentColor) {
@@ -58,6 +68,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   useEffect(() => {
     storage.getStorageEstimate().then(setStorageStats);
   }, []);
+
+  useEffect(() => {
+    setBackgroundRemindersEnabled(
+      Boolean(googleUserUid && isBackgroundRemindersEnabled(googleUserUid, reminderProfileId))
+    );
+  }, [googleUserUid, reminderProfileId]);
+
+  const handleBackgroundReminders = async () => {
+    if (!googleUserUid) {
+      onError('Sign in with Google before enabling background reminders.');
+      return;
+    }
+
+    setIsUpdatingBackgroundReminders(true);
+    try {
+      if (backgroundRemindersEnabled) {
+        await disableBackgroundReminders(googleUserUid, reminderProfileId);
+        setBackgroundRemindersEnabled(false);
+        onSuccess('Background reminders disabled on this device.');
+      } else {
+        await enableBackgroundReminders(googleUserUid, reminderProfileId);
+        setBackgroundRemindersEnabled(true);
+        onSuccess('Background reminders enabled on this device.');
+      }
+    } catch (error) {
+      console.error('Failed to update background reminders:', error);
+      setBackgroundRemindersEnabled(
+        Boolean(googleUserUid && isBackgroundRemindersEnabled(googleUserUid, reminderProfileId))
+      );
+      onError(error instanceof Error ? error.message : 'Could not update background reminders.');
+    } finally {
+      setIsUpdatingBackgroundReminders(false);
+    }
+  };
 
   const handleRunIntegrityAudit = async () => {
     setIsAuditing(true);
@@ -200,6 +244,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Tab: System & Appearance */}
       {activeTab === 'system' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-stretch">
+          <section className="lg:col-span-12 rounded-3xl border border-indigo-200 bg-indigo-50/70 p-5 shadow-sm dark:border-indigo-900 dark:bg-indigo-950/30 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-indigo-100 p-2.5 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300">
+                  <BellRing className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">Reminders when Om is closed</h2>
+                  <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-600 dark:text-slate-300">
+                    Sends generic push notifications for reminders and focus alarms on this device. Requires Google sign-in,
+                    internet at the scheduled time, and notifications enabled in Windows/Android settings. Sound uses the
+                    device's notification settings; custom ringtones need Om to be open. Due times and a device push token
+                    are stored in Firebase; reminder titles stay on this device.
+                  </p>
+                  {!googleUserUid && (
+                    <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                      Sign in with Google to enable cloud-delivered notifications.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleBackgroundReminders}
+                disabled={!googleUserUid || isUpdatingBackgroundReminders}
+                className={`shrink-0 rounded-xl px-4 py-2.5 text-xs font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  backgroundRemindersEnabled
+                    ? 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+              >
+                {isUpdatingBackgroundReminders
+                  ? 'Updating...'
+                  : backgroundRemindersEnabled
+                    ? 'Disable on this device'
+                    : 'Enable background reminders'}
+              </button>
+            </div>
+          </section>
+
           {/* Left Column: Appearance & Theme + Storage Health & Quota (6 cols) */}
           <div className="lg:col-span-6 flex flex-col">
             <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-6 flex flex-col justify-between h-full">

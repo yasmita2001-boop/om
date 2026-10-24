@@ -32,7 +32,6 @@ import { VoiceStudioWidget } from './components/VoiceStudioWidget';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
 import { alarmAudio } from './lib/alarmAudio';
-import { isBackgroundRemindersEnabled, syncBackgroundReminders } from './lib/pushReminderService';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress, computeGoalAggregateBreakdown } from './lib/goalTaskSync';
 import { soundEngine } from './lib/soundEngine';
@@ -379,27 +378,6 @@ function LifeOSApp() {
       setActiveTriggeredAlarm(alarmData);
     });
   }, []);
-
-  useEffect(() => {
-    const uid = googleUser?.uid;
-    if (!uid || !activeProfileId || !isBackgroundRemindersEnabled(uid, activeProfileId)) return;
-
-    const sync = () => {
-      void syncBackgroundReminders(uid, activeProfileId).catch(error => {
-        console.error('Background alarm sync failed:', error);
-      });
-    };
-    const unsubscribe = storage.onStorageChange(store => {
-      if (store === 'reminders') sync();
-    });
-    window.addEventListener('om_focus_alarms_changed', sync);
-    sync();
-
-    return () => {
-      unsubscribe();
-      window.removeEventListener('om_focus_alarms_changed', sync);
-    };
-  }, [googleUser?.uid, activeProfileId]);
 
   const handleGoogleAccountChange = useCallback(async (user: GoogleUser | null) => {
     if (!user) {
@@ -972,7 +950,6 @@ function LifeOSApp() {
             {activeModule === 'settings' && (
               <SettingsView
                 settings={appSettings}
-                googleUserUid={googleUser?.uid}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
                 onError={msg => showToast(`⚠️ ${msg}`)}

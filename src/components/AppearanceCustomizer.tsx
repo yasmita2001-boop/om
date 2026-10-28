@@ -278,9 +278,11 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
             ['Vertical position', 'positionY', 0, 100, '%'],
             ['Zoom', 'zoom', 100, 150, '%'],
             ['Foreground transparency', 'foregroundTransparency', 0, 100, '%'],
-            ['Background brightness', 'backgroundBrightness', 50, 150, '%'],
+            ['Foreground brightness', 'foregroundBrightness', 55, 100, '%'],
+            ['Foreground contrast', 'foregroundContrast', 50, 150, '%'],
+            ['Background brightness', 'backgroundBrightness', 0, 150, '%'],
             ['Background contrast', 'backgroundContrast', 50, 150, '%'],
-            ['Text clarity', 'textClarity', 0, 100, '%'],
+            ['Foreground sharpness', 'textClarity', 0, 100, '%'],
             ['Dark overlay', 'overlay', 0, 70, '%'],
             ['Blur', 'blur', 0, 12, 'px']
           ] as const).map(([label, key, min, max, unit]) => {

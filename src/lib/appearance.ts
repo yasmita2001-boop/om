@@ -11,6 +11,8 @@ export interface AppearancePreferences {
   backgroundImage: string;
   transparentBackground: boolean;
   foregroundTransparency: number;
+  foregroundBrightness: number;
+  foregroundContrast: number;
   backgroundBrightness: number;
   backgroundContrast: number;
   textClarity: number;
@@ -82,6 +84,8 @@ export const DEFAULT_APPEARANCE: AppearancePreferences = {
   backgroundImage: '',
   transparentBackground: false,
   foregroundTransparency: 0,
+  foregroundBrightness: 100,
+  foregroundContrast: 100,
   backgroundBrightness: 100,
   backgroundContrast: 100,
   textClarity: 0,
@@ -153,7 +157,9 @@ export function normalizeAppearance(value?: Partial<AppearancePreferences> | nul
     backgroundImage,
     transparentBackground,
     foregroundTransparency: clamp(value?.foregroundTransparency, 0, 100, DEFAULT_APPEARANCE.foregroundTransparency),
-    backgroundBrightness: clamp(value?.backgroundBrightness, 50, 150, DEFAULT_APPEARANCE.backgroundBrightness),
+    foregroundBrightness: clamp(value?.foregroundBrightness, 55, 100, DEFAULT_APPEARANCE.foregroundBrightness),
+    foregroundContrast: clamp(value?.foregroundContrast, 50, 150, DEFAULT_APPEARANCE.foregroundContrast),
+    backgroundBrightness: clamp(value?.backgroundBrightness, 0, 150, DEFAULT_APPEARANCE.backgroundBrightness),
     backgroundContrast: clamp(value?.backgroundContrast, 50, 150, DEFAULT_APPEARANCE.backgroundContrast),
     textClarity: clamp(value?.textClarity, 0, 100, DEFAULT_APPEARANCE.textClarity),
     positionX: clamp(value?.positionX, 0, 100, DEFAULT_APPEARANCE.positionX),
@@ -197,6 +203,8 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
   root.style.setProperty('--om-wallpaper-blur', `${appearance.blur}px`);
   root.style.setProperty('--om-wallpaper-brightness', `${appearance.backgroundBrightness}%`);
   root.style.setProperty('--om-wallpaper-contrast', `${appearance.backgroundContrast}%`);
+  root.style.setProperty('--om-foreground-dim-alpha', String((100 - appearance.foregroundBrightness) / 100));
+  root.style.setProperty('--om-foreground-contrast', String(appearance.foregroundContrast / 100));
   const opacity = (100 - appearance.foregroundTransparency) / 100;
   root.style.setProperty('--om-card-alpha', `${Number((96 * opacity).toFixed(1))}%`);
   root.style.setProperty('--om-card-soft-alpha', `${Number((90 * opacity).toFixed(1))}%`);
@@ -207,6 +215,7 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
   root.style.setProperty('--om-foreground-transparency', `${appearance.foregroundTransparency}%`);
   root.style.setProperty('--om-text-outline-alpha', `${Number((appearance.textClarity * 0.65).toFixed(1))}%`);
   root.style.removeProperty('--om-text-shadow-alpha');
+  root.dataset.foregroundContrast = String(appearance.foregroundContrast !== 100);
   root.dataset.wallpaperId = appearance.backgroundId;
   root.dataset.wallpaperCustom = String(appearance.backgroundId === 'custom');
   return appearance;

@@ -27,6 +27,8 @@ describe('appearance preferences', () => {
       zoom: 300,
       overlay: 95,
       foregroundTransparency: 105,
+      foregroundBrightness: 180,
+      foregroundContrast: 200,
       backgroundBrightness: 200,
       backgroundContrast: 0,
       textClarity: -10,
@@ -42,11 +44,43 @@ describe('appearance preferences', () => {
       zoom: 150,
       overlay: 70,
       foregroundTransparency: 100,
+      foregroundBrightness: 100,
+      foregroundContrast: 150,
       backgroundBrightness: 150,
       backgroundContrast: 50,
       textClarity: 0,
       blur: 0
     });
+  });
+
+  it('allows the background to be dimmed fully', () => {
+    const appearance = normalizeAppearance({ backgroundBrightness: 0 });
+
+    expect(appearance.backgroundBrightness).toBe(0);
+    expect(normalizeAppearance({ backgroundBrightness: -1 }).backgroundBrightness).toBe(0);
+  });
+
+  it('allows the foreground to be dimmed independently', () => {
+    const appearance = normalizeAppearance({ foregroundBrightness: 0 });
+
+    expect(appearance.foregroundBrightness).toBe(55);
+    expect(normalizeAppearance({ foregroundBrightness: 54 }).foregroundBrightness).toBe(55);
+    expect(normalizeAppearance({ foregroundBrightness: 101 }).foregroundBrightness).toBe(100);
+  });
+
+  it('clamps foreground contrast and applies it independently of wallpaper contrast', () => {
+    const appearance = applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      foregroundContrast: 125,
+      backgroundContrast: 80
+    });
+
+    expect(appearance.foregroundContrast).toBe(125);
+    expect(document.documentElement.style.getPropertyValue('--om-foreground-contrast')).toBe('1.25');
+    expect(document.documentElement.dataset.foregroundContrast).toBe('true');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-contrast')).toBe('80%');
+    expect(normalizeAppearance({ foregroundContrast: 151 }).foregroundContrast).toBe(150);
+    expect(normalizeAppearance({ foregroundContrast: 49 }).foregroundContrast).toBe(50);
   });
 
   it('accepts a bounded image data URL as a custom background', () => {
@@ -111,6 +145,8 @@ describe('appearance preferences', () => {
       zoom: 120,
       overlay: 30,
       foregroundTransparency: 45,
+      foregroundBrightness: 55,
+      foregroundContrast: 125,
       backgroundBrightness: 120,
       backgroundContrast: 130,
       textClarity: 60,
@@ -125,6 +161,7 @@ describe('appearance preferences', () => {
     expect(document.documentElement.style.getPropertyValue('--om-wallpaper-blur')).toBe('4px');
     expect(document.documentElement.style.getPropertyValue('--om-wallpaper-brightness')).toBe('120%');
     expect(document.documentElement.style.getPropertyValue('--om-wallpaper-contrast')).toBe('130%');
+    expect(document.documentElement.style.getPropertyValue('--om-foreground-dim-alpha')).toBe('0.45');
     expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe('#eee5d9');
     expect(document.documentElement.style.getPropertyValue('--om-text-outline-alpha')).toBe('39%');
     expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('52.8%');

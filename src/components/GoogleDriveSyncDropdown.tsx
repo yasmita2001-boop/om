@@ -387,12 +387,13 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
         <button
           type="button"
           onClick={() => setIsOpen(prev => !prev)}
-          className={`flex w-full items-center justify-between gap-1.5 rounded-lg border py-1.5 px-2 text-xs font-semibold transition-all cursor-pointer ${
+          className={`sanctuary-drive-trigger flex w-full items-center justify-between gap-1.5 py-1.5 px-2 text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
             isOpen
-              ? 'border-indigo-400 bg-indigo-50/80 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300'
-              : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800/80'
+              ? 'text-amber-700 dark:text-amber-300'
+              : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
           }`}
           title="Sign in with Google & Google Drive Sync"
+          aria-expanded={isOpen}
         >
           <div className="flex items-center gap-1.5 min-w-0 truncate">
             {/* Google G Multi-Color Icon */}
@@ -416,7 +417,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
             </svg>
             <span className="truncate">Google Drive Sync</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0 text-slate-400 dark:text-slate-500">
+          <div className="flex items-center gap-1 shrink-0">
             {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
           </div>
         </button>
@@ -424,12 +425,13 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
         <button
           type="button"
           onClick={() => setIsOpen(prev => !prev)}
-          className={`flex w-full items-center justify-between gap-1.5 rounded-lg border py-1.5 px-2 text-xs font-semibold transition-all cursor-pointer ${
+          className={`sanctuary-drive-trigger flex w-full items-center justify-between gap-1.5 py-1.5 px-2 text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
             isOpen
-              ? 'border-indigo-400 bg-indigo-50 text-indigo-800 dark:border-indigo-600 dark:bg-indigo-950/70 dark:text-indigo-200'
-              : 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800/80'
+              ? 'text-amber-700 dark:text-amber-300'
+              : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
           }`}
           title={`Google Account: ${user.email} • Click to open Google Drive options`}
+          aria-expanded={isOpen}
         >
           <div className="flex items-center gap-1.5 min-w-0 truncate">
             {user.photoURL ? (
@@ -464,7 +466,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
 
       {/* DROPDOWN MENU PANEL (Opens Upward cleanly) */}
       {isOpen && (
-        <div className="absolute bottom-full left-0 right-0 mb-1.5 z-50 rounded-xl border border-slate-200/90 bg-white p-3 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900 space-y-2.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div className="sanctuary-drive-panel absolute bottom-full left-0 right-0 mb-1.5 z-50 rounded-xl border border-slate-200/90 bg-white p-3 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900 space-y-2.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
             <div className="flex items-center gap-1.5">
@@ -474,7 +476,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
               </span>
             </div>
             {user && (
-              <span className="rounded-full bg-emerald-50 px-1.5 py-0.2 text-[9px] font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                 Connected
               </span>
             )}
@@ -483,16 +485,12 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
           {/* SIGNED-OUT STATE: Show official Google Sign-In button */}
           {!user ? (
             <div className="space-y-2.5 py-1">
-              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                Sign in to open the workspace linked to this Google account. Your offline guest workspace stays separate; Drive is its only cloud sync destination.
-              </p>
-
               {/* Official Google Material Style Button */}
               <button
                 type="button"
                 onClick={handleSignIn}
                 disabled={isSigningIn || !isOnline}
-                className="w-full flex items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white py-2 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:shadow-xs active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 transition-all cursor-pointer disabled:opacity-60"
+                className="sanctuary-drive-signin w-full flex items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white py-2 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:shadow-xs active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 transition-all cursor-pointer disabled:opacity-60"
               >
                 {isSigningIn ? (
                   <>
@@ -660,8 +658,8 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
 
       {/* RESTORE CONFIRMATION MODAL */}
       {showRestoreConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="sanctuary-drive-confirm-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="sanctuary-glass-dialog w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 shrink-0">
                 <CloudDownload className="h-5 w-5" />

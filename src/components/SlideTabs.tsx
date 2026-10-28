@@ -100,7 +100,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
           type="button"
           onClick={() => handleScroll('left')}
           aria-label="Slide tabs left"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs transition-colors hover:bg-slate-50 hover:text-slate-900 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+          className="flex h-8 w-8 shrink-0 items-center justify-center text-indigo-800 transition-colors hover:text-indigo-950 active:scale-95 dark:text-indigo-300 dark:hover:text-indigo-200"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -109,7 +109,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
       {/* Main Horizontal Slide Scroll Area */}
       <div
         ref={scrollRef}
-        className={`flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-1 ${className}`}
+        className={`flex min-w-0 flex-1 items-center gap-3 overflow-x-auto no-scrollbar scroll-smooth py-1 ${className}`}
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {tabs.map(tab => {
@@ -134,14 +134,14 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
               type="button"
               onClick={() => onChange(tab.id)}
               aria-current={isSelected ? 'page' : undefined}
-              className={`flex shrink-0 items-center justify-center gap-1.5 sm:gap-2 rounded-lg font-semibold tracking-normal transition-colors cursor-pointer whitespace-nowrap min-w-fit select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 ${
+              className={`relative flex shrink-0 items-center justify-center gap-1.5 sm:gap-2 border-b-0 border-transparent font-semibold tracking-normal transition-colors cursor-pointer whitespace-nowrap min-w-fit select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 ${
                 isSmall
-                  ? 'px-2.5 sm:px-3 py-1.5 text-xs'
-                  : 'px-3 sm:px-3.5 py-2 text-xs'
+                  ? 'px-1.5 sm:px-2 py-1.5 text-xs'
+                  : 'px-2 sm:px-2.5 py-2 text-xs'
               } ${
                 isSelected
-                  ? 'bg-indigo-600 text-white shadow-sm font-bold hover:bg-indigo-700'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/80'
+                  ? 'text-indigo-700 font-bold dark:text-indigo-300 [&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300'
+                  : 'text-indigo-800 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
               }`}
             >
               {iconElement}
@@ -155,12 +155,11 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
                   tab.label
                 )}
               </span>
-
               {/* Delayed Badge */}
               {hasDelayed && (
                 <span
-                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-black uppercase shrink-0 ${
-                    isSelected ? 'bg-rose-700 text-white animate-pulse' : 'bg-rose-600 text-white animate-pulse'
+                  className={`text-[10px] font-black uppercase shrink-0 ${
+                    isSelected ? 'text-rose-700 dark:text-rose-300 animate-pulse' : 'text-rose-600 dark:text-rose-400 animate-pulse'
                   }`}
                 >
                   {tab.delayed}
@@ -170,10 +169,10 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
               {/* Regular Badge */}
               {!hasDelayed && tab.badge !== undefined && tab.badge !== null && (
                 <span
-                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold shrink-0 ${
+                  className={`text-[10px] font-bold shrink-0 ${
                     isSelected
-                      ? 'bg-white/20 text-white'
-                      : tab.badgeColor || 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                      ? 'text-indigo-700 dark:text-indigo-300'
+                      : 'text-slate-500 dark:text-slate-400'
                   }`}
                 >
                   {tab.badge}
@@ -190,7 +189,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
           type="button"
           onClick={() => handleScroll('right')}
           aria-label="Slide tabs right"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs transition-colors hover:bg-slate-50 hover:text-slate-900 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+          className="flex h-8 w-8 shrink-0 items-center justify-center text-indigo-800 transition-colors hover:text-indigo-950 active:scale-95 dark:text-indigo-300 dark:hover:text-indigo-200"
         >
           <ChevronRight className="h-4 w-4" />
         </button>

@@ -34,11 +34,11 @@ import {
 
 import {
   AppState, UserProfile, RecycleBinItem, ManualUpdateBundle,
-  BundleDiffInspection, ApplyBundleResult, Task, Routine, Habit, Goal, Note,
+  BundleDiffInspection, ApplyBundleResult,
   CashFlowSchedule, InvestmentActivity, Investment
 } from '../types';
 
-import { createLightweightEntities, calculatePayloadBreakdown } from './thumbnailService';
+import { calculatePayloadBreakdown } from './thumbnailService';
 import { advanceSchedule, getInvestmentMetrics, restoreScheduleOccurrence } from './financeCalculations';
 
 const FOCUS_ALARMS_STORAGE_KEY = 'om_focus_alarms_list';
@@ -196,6 +196,10 @@ class StorageEngine {
   }
 
   public open(): Promise<IDBDatabase> {
+    if (typeof indexedDB === 'undefined') {
+      return Promise.reject(new Error('IndexedDB is not supported in this environment.'));
+    }
+
     if (this.db) {
       const allRequired = [...ENTITY_STORES, ...SINGLETON_STORES, ...SYSTEM_STORES];
       const hasAll = allRequired.every(name => this.db!.objectStoreNames.contains(name));
@@ -210,46 +214,22 @@ class StorageEngine {
     if (this.dbPromise) return this.dbPromise;
 
     this.dbPromise = new Promise((resolve, reject) => {
-      if (typeof indexedDB === 'undefined') {
+      let settled = false;
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
         this.dbPromise = null;
-        reject(new Error('IndexedDB is not supported in this environment.'));
-        return;
-      }
-
-      const setupAndResolve = (db: IDBDatabase) => {
-        const allRequired = [...ENTITY_STORES, ...SINGLETON_STORES, ...SYSTEM_STORES];
-        const missing = allRequired.filter(s => !db.objectStoreNames.contains(s));
-        if (missing.length > 0) {
-          const nextVersion = (db.version || DB_VERSION) + 1;
-          try { db.close(); } catch {}
-          const upReq = indexedDB.open(DB_NAME, nextVersion);
-          upReq.onupgradeneeded = () => {
-            createDatabaseSchema(upReq.result, upReq.transaction);
-          };
-          upReq.onsuccess = () => {
-            const upgradedDb = upReq.result;
-            this.db = upgradedDb;
-            upgradedDb.onversionchange = () => {
-              try { upgradedDb.close(); } catch {}
-              this.db = null;
-              this.dbPromise = null;
-            };
-            upgradedDb.onclose = () => {
-              this.db = null;
-              this.dbPromise = null;
-            };
-            resolve(upgradedDb);
-          };
-          upReq.onerror = () => {
-            this.dbPromise = null;
-            reject(upReq.error || new Error('Failed to upgrade IndexedDB stores.'));
-          };
+        reject(error);
+      };
+      const finishOpen = (db: IDBDatabase) => {
+        if (settled) {
+          db.close();
           return;
         }
-
+        settled = true;
         this.db = db;
         db.onversionchange = () => {
-          try { db.close(); } catch {}
+          db.close();
           this.db = null;
           this.dbPromise = null;
         };
@@ -260,10 +240,40 @@ class StorageEngine {
         resolve(db);
       };
 
+      const setupAndResolve = (db: IDBDatabase) => {
+        if (settled) {
+          db.close();
+          return;
+        }
+        const allRequired = [...ENTITY_STORES, ...SINGLETON_STORES, ...SYSTEM_STORES];
+        const missing = allRequired.filter(s => !db.objectStoreNames.contains(s));
+        if (missing.length > 0) {
+          const nextVersion = (db.version || DB_VERSION) + 1;
+          try { db.close(); } catch {}
+          const upReq = indexedDB.open(DB_NAME, nextVersion);
+          upReq.onupgradeneeded = () => {
+            createDatabaseSchema(upReq.result, upReq.transaction);
+          };
+          upReq.onsuccess = () => {
+            finishOpen(upReq.result);
+          };
+          upReq.onblocked = () => {
+            fail(new Error('Database upgrade is blocked by another Om LifeOS tab. Close other tabs and retry.'));
+          };
+          upReq.onerror = () => {
+            fail(upReq.error || new Error('Failed to upgrade IndexedDB stores.'));
+          };
+          return;
+        }
+
+        finishOpen(db);
+      };
+
       const req = indexedDB.open(DB_NAME, DB_VERSION);
 
       req.onblocked = () => {
         console.warn('[IndexedDB] Database upgrade blocked by open connection.');
+        fail(new Error('Database access is blocked by another Om LifeOS tab. Close other tabs and retry.'));
       };
 
       req.onupgradeneeded = () => {
@@ -275,8 +285,7 @@ class StorageEngine {
       };
 
       req.onerror = () => {
-        this.dbPromise = null;
-        reject(req.error || new Error('Failed to open IndexedDB database.'));
+        fail(req.error || new Error('Failed to open IndexedDB database.'));
       };
     });
 
@@ -426,11 +435,13 @@ class StorageEngine {
         const store = tx.objectStore(storeName);
         const id = this.getScopedSingletonId(storeName, profileId);
         const req = store.put({ id, value, profileId });
-        req.onsuccess = () => {
+        req.onerror = () => reject(req.error);
+        tx.oncomplete = () => {
           this.broadcastChange(storeName, 'set', id);
           resolve();
         };
-        req.onerror = () => reject(req.error);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error(`Setting "${storeName}" was aborted.`));
       } catch (err) {
         reject(err);
       }
@@ -463,11 +474,13 @@ class StorageEngine {
         const tx = db.transaction(storeName, 'readwrite');
         const store = tx.objectStore(storeName);
         const req = store.put(prepared);
-        req.onsuccess = () => {
+        req.onerror = () => reject(req.error);
+        tx.oncomplete = () => {
           this.broadcastChange(storeName, 'put', prepared.id);
           resolve(prepared);
         };
-        req.onerror = () => reject(req.error);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error(`Writing to "${storeName}" was aborted.`));
       } catch (err) {
         reject(err);
       }
@@ -511,11 +524,13 @@ class StorageEngine {
         const tx = db.transaction(storeName, 'readwrite');
         const store = tx.objectStore(storeName);
         const req = store.delete(id);
-        req.onsuccess = () => {
+        req.onerror = () => reject(req.error);
+        tx.oncomplete = () => {
           this.broadcastChange(storeName, 'delete', id);
           resolve();
         };
-        req.onerror = () => reject(req.error);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error(`Deleting from "${storeName}" was aborted.`));
       } catch (err) {
         reject(err);
       }
@@ -1608,7 +1623,7 @@ class StorageEngine {
         role: 'Personal',
         authType: 'local',
         avatarChar: targetProfileName.trim().charAt(0).toUpperCase() || 'W',
-        avatarColor: '#6366f1',
+        avatarColor: '#b88648',
         isCurrent: true,
         createdAt: now
       };
@@ -1811,7 +1826,7 @@ export async function ensureDefaultProfiles(): Promise<AppState> {
           role: 'Personal',
           authType: 'local',
           avatarChar: 'P',
-          avatarColor: '#6366f1',
+          avatarColor: '#b88648',
           isCurrent: true,
           createdAt: now
         }
@@ -1822,7 +1837,7 @@ export async function ensureDefaultProfiles(): Promise<AppState> {
         provider: 'local'
       },
       themeMode: 'light',
-      accentColor: '#6366f1',
+      accentColor: '#b88648',
       notificationsEnabled: true,
       noteCategories: ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
       calcFavorites: ['EMI / Loan', 'SIP / Investment', 'Date Difference']

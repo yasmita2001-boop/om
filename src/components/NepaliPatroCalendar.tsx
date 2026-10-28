@@ -7,8 +7,7 @@ import {
   Sparkles,
   X,
   ListFilter,
-  LayoutGrid,
-  Info
+  LayoutGrid
 } from 'lucide-react';
 import {
   adToBs,
@@ -128,7 +127,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
   };
 
   // Compute month cell days and padding
-  const { monthCells, leadingEmptySlots, englishMonthSpan, daysInMonth, monthEvents } = useMemo(() => {
+  const { monthCells, leadingEmptySlots, englishMonthSpan, monthEvents } = useMemo(() => {
     const daysCount = OM_BS_DATA[viewYear]?.[viewMonth - 1] || 30;
 
     // Determine the day-of-week for Day 1 of this BS month by converting to AD
@@ -242,7 +241,6 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
       monthCells: cells,
       leadingEmptySlots: startWeekday,
       englishMonthSpan: monthSpanStr,
-      daysInMonth: daysCount,
       monthEvents: eventsList
     };
   }, [viewYear, viewMonth, todayBs, selectedDayData]);
@@ -303,17 +301,17 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
   return (
     <div className="w-full flex flex-col">
       {/* Clean Modern Card Container (Fully Responsive for All Devices) */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200/80 shadow-2xl shadow-slate-950/15 overflow-hidden flex flex-col flex-1 min-h-0 dark:bg-slate-900 dark:border-slate-800">
+      <div className="sanctuary-bs-calendar bg-white rounded-2xl border border-gray-200/80 shadow-card overflow-hidden flex flex-col flex-1 min-h-0 dark:bg-slate-900 dark:border-slate-800">
         
         {/* ============================================================== */}
         {/* 1. TOP HEADER & NAVIGATION TAB SWITCHER */}
         {/* ============================================================== */}
-        <div className="px-3 py-3 sm:px-5 sm:py-3.5 border-b border-gray-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
+        <div className="sanctuary-bs-calendar-header px-3 py-3 sm:px-5 sm:py-3.5 border-b border-gray-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
           <div className="flex items-center justify-between gap-2">
             
             {/* Title & Badge */}
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400 flex items-center justify-center font-bold text-sm sm:text-base shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-400 flex items-center justify-center font-bold text-sm sm:text-base shrink-0">
                 🇳🇵
               </div>
               <div className="min-w-0">
@@ -321,7 +319,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                   <h1 className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-white truncate">
                     नेपाली पात्रो
                   </h1>
-                  <span className="text-[10px] sm:text-xs font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60 shrink-0">
+                  <span className="text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60 shrink-0">
                     B.S.
                   </span>
                 </div>
@@ -330,14 +328,14 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
 
             {/* Top Navigation Tabs & Close Button */}
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-              <div className="flex items-center gap-0.5 p-0.5 bg-gray-100 dark:bg-slate-800 rounded-xl border border-gray-200/60 dark:border-slate-700">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setActiveTab('patro')}
-                  className={`flex items-center gap-1 px-2 sm:px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                  className={`flex items-center gap-1 border-0 px-2 sm:px-3 py-1 text-xs font-bold transition-colors ${
                     activeTab === 'patro'
-                      ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                      ? 'text-indigo-700 dark:text-indigo-300'
+                      : 'text-indigo-800 hover:border-indigo-500 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
                   }`}
                 >
                   <CalendarIcon className="w-3.5 h-3.5" />
@@ -347,10 +345,10 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('converter')}
-                  className={`flex items-center gap-1 px-2 sm:px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                  className={`flex items-center gap-1 border-0 px-2 sm:px-3 py-1 text-xs font-bold transition-colors ${
                     activeTab === 'converter'
-                      ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                      ? 'text-indigo-700 dark:text-indigo-300'
+                      : 'text-indigo-800 hover:border-indigo-500 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
                   }`}
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -390,7 +388,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                     type="button"
                     onClick={handlePrevMonth}
                     disabled={viewYear <= OM_BS_MIN_YEAR && viewMonth <= 1}
-                    className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-600 hover:text-amber-600 hover:bg-amber-50/60 dark:text-gray-300 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/60 dark:text-gray-300 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                     title="Previous Month"
                     aria-label="Previous Month"
                   >
@@ -400,7 +398,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                     type="button"
                     onClick={handleNextMonth}
                     disabled={viewYear >= OM_BS_MAX_YEAR && viewMonth >= 12}
-                    className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-600 hover:text-amber-600 hover:bg-amber-50/60 dark:text-gray-300 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/60 dark:text-gray-300 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                     title="Next Month"
                     aria-label="Next Month"
                   >
@@ -412,7 +410,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                   <span className="text-base sm:text-lg font-black text-gray-900 dark:text-white tracking-tight">
                     {currentMonthNe} {currentYearNe}
                   </span>
-                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400 truncate">
+                  <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 truncate">
                     {currentMonthEn}
                   </span>
                   <span className="text-[10px] text-gray-400 font-medium hidden md:inline">
@@ -423,7 +421,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                 <button
                   type="button"
                   onClick={handleJumpToToday}
-                  className="h-9 px-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold rounded-xl shadow-sm shadow-amber-500/20 transition-all flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0"
+                  className="h-9 px-3 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-xs font-bold rounded-xl shadow-sm shadow-indigo-500/20 transition-all flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0"
                 >
                   <Sparkles className="w-3 h-3" />
                   <span>आज</span>
@@ -433,14 +431,14 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
               {/* Row 2 on mobile / Right on desktop: Selectors & View Mode */}
               <div className="flex items-center justify-between sm:justify-end gap-1.5">
                 {/* Mobile View Toggle: Grid vs Agenda */}
-                <div className="sm:hidden flex items-center bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-0.5 shrink-0">
+                <div className="sm:hidden flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => setViewMode('grid')}
-                    className={`min-w-9 min-h-9 flex items-center justify-center rounded-lg text-xs transition-colors ${
+                    className={`min-w-9 min-h-9 flex items-center justify-center border-0 text-xs transition-colors ${
                       viewMode === 'grid'
-                        ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-bold'
-                        : 'text-gray-500 hover:text-gray-800'
+                        ? 'text-indigo-700 dark:text-indigo-300 font-bold'
+                        : 'text-indigo-800 hover:border-indigo-500 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
                     }`}
                     title="Grid View"
                   >
@@ -449,10 +447,10 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                   <button
                     type="button"
                     onClick={() => setViewMode('agenda')}
-                    className={`min-w-9 min-h-9 flex items-center justify-center rounded-lg text-xs transition-colors ${
+                    className={`min-w-9 min-h-9 flex items-center justify-center border-0 text-xs transition-colors ${
                       viewMode === 'agenda'
-                        ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-bold'
-                        : 'text-gray-500 hover:text-gray-800'
+                        ? 'text-indigo-700 dark:text-indigo-300 font-bold'
+                        : 'text-indigo-800 hover:border-indigo-500 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
                     }`}
                     title="Agenda/List View"
                   >
@@ -469,7 +467,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                       setSelectedDayData(null);
                     }}
                     aria-label="Select BS Year"
-                    className="h-9 px-2.5 sm:px-3 text-xs font-bold rounded-xl border border-gray-200 bg-white text-gray-700 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-gray-200"
+                    className="h-9 px-2.5 sm:px-3 text-xs font-bold rounded-xl border border-gray-200 bg-white text-gray-700 hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-gray-200"
                   >
                     {Array.from({ length: OM_BS_MAX_YEAR - OM_BS_MIN_YEAR + 1 }).map((_, idx) => {
                       const y = OM_BS_MIN_YEAR + idx;
@@ -489,7 +487,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                       setSelectedDayData(null);
                     }}
                     aria-label="Select BS Month"
-                    className="h-9 px-2.5 sm:px-3 text-xs font-bold rounded-xl border border-gray-200 bg-white text-gray-700 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-gray-200"
+                    className="h-9 px-2.5 sm:px-3 text-xs font-bold rounded-xl border border-gray-200 bg-white text-gray-700 hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-800 dark:border-slate-700 dark:text-gray-200"
                   >
                     {OM_BS_MONTHS_NE.map((mNe, idx) => (
                       <option key={mNe} value={idx + 1}>
@@ -503,10 +501,10 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
 
             {/* Active / Selected Date Summary Card (Always shows rich details of today or clicked day) */}
             {activeDay && (
-              <div className="p-3 sm:p-3.5 rounded-2xl bg-linear-to-r from-amber-50/90 via-orange-50/40 to-amber-50/90 border border-amber-200/80 dark:from-amber-950/40 dark:via-slate-900 dark:to-amber-950/40 dark:border-amber-900/50 shadow-sm shrink-0">
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-linear-to-r from-indigo-50/90 via-indigo-50/40 to-indigo-50/90 border border-indigo-200/80 dark:from-indigo-950/40 dark:via-slate-900 dark:to-indigo-950/40 dark:border-indigo-900/50 shadow-sm shrink-0">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-black text-lg sm:text-2xl shadow-sm shadow-amber-500/20 shrink-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-indigo-500 text-white flex items-center justify-center font-black text-lg sm:text-2xl shadow-sm shadow-indigo-500/20 shrink-0">
                       {activeDay.bsDayDevanagari}
                     </div>
                     <div className="min-w-0">
@@ -519,20 +517,20 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                         </span>
                       </div>
                       <div className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 flex items-center gap-2 flex-wrap">
-                        <span className="text-amber-800 dark:text-amber-300 font-semibold">
+                        <span className="text-indigo-800 dark:text-indigo-300 font-semibold">
                           तिथि: <strong>{activeDay.fullTithi || activeDay.tithi}</strong>
                         </span>
                         {activeDay.event && (
-                          <span className={`font-bold px-1.5 py-0.2 rounded text-[10px] ${
+                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
                             activeDay.event.isHoliday
                               ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
-                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                              : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300'
                           }`}>
                             {activeDay.event.title}
                           </span>
                         )}
                         {activeDay.isSaturday && !activeDay.event?.isHoliday && (
-                          <span className="font-bold px-1.5 py-0.2 rounded bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300 text-[10px]">
+                          <span className="font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300 text-[10px]">
                             शनिवार (सार्वजनिक बिदा)
                           </span>
                         )}
@@ -541,7 +539,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                   </div>
 
                   {activeDay.isToday && (
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold shrink-0">
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-500 text-white text-[10px] font-bold shrink-0">
                       आज
                     </span>
                   )}
@@ -595,22 +593,22 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                         onClick={() => setSelectedDayData(cell)}
                         aria-pressed={cell.isSelected}
                         aria-label={`${cell.bsDayDevanagari} ${OM_BS_MONTHS_NE[cell.bsMonth - 1]} ${omNepaliDigits(cell.bsYear)}, ${cell.adDate.iso}, तिथि: ${cell.fullTithi || cell.tithi}${cell.event ? `, ${cell.event.title}` : ''}`}
-                        className={`group h-[3.75rem] sm:h-16 md:h-[4.5rem] min-w-0 p-0 sm:p-1 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col items-center select-none overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-slate-900 ${
+                        className={`group h-[3.75rem] sm:h-16 md:h-[4.5rem] min-w-0 p-0 sm:p-1 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col items-center select-none overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-slate-900 ${
                           cell.isToday
-                            ? 'ring-2 ring-amber-500 bg-amber-500/10 dark:bg-amber-400/15 dark:ring-amber-400 shadow-sm'
+                            ? 'ring-2 ring-indigo-500 bg-indigo-500/10 dark:bg-indigo-400/15 dark:ring-indigo-400 shadow-sm'
                             : isSelected
-                            ? 'ring-2 ring-amber-400 bg-amber-50/80 dark:bg-amber-950/40'
-                            : 'border border-gray-100 bg-white hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700'
+                            ? 'ring-2 ring-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/40'
+                            : 'border border-gray-100 bg-white hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700'
                         }`}
                       >
                         {/* Reserve a top row for the event marker and Gregorian date. */}
                         <div className="flex h-4 w-full shrink-0 items-center justify-between px-0.5 leading-none pointer-events-none">
                           {cell.isToday ? (
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
                           ) : cell.event ? (
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${
-                                cell.event.isHoliday ? 'bg-red-500' : 'bg-amber-500'
+                                cell.event.isHoliday ? 'bg-red-500' : 'bg-indigo-500'
                               }`}
                               title={cell.event.title}
                             />
@@ -627,7 +625,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                               cell.isHoliday
                                 ? 'text-red-600 dark:text-red-400'
                                 : cell.isToday
-                                ? 'text-amber-600 dark:text-amber-400'
+                                ? 'text-[var(--om-on-accent)]'
                                 : 'text-gray-900 dark:text-white'
                             }`}
                           >
@@ -659,10 +657,10 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                   <div
                     key={`agenda-${evCell.bsDay}`}
                     onClick={() => setSelectedDayData(evCell)}
-                    className="p-2.5 rounded-xl border border-gray-100 bg-white hover:border-amber-300 dark:border-slate-800 dark:bg-slate-900/90 flex items-center justify-between cursor-pointer"
+                    className="p-2.5 rounded-xl border border-gray-100 bg-white hover:border-indigo-300 dark:border-slate-800 dark:bg-slate-900/90 flex items-center justify-between cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400 flex items-center justify-center font-bold text-base">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-400 flex items-center justify-center font-bold text-base">
                         {evCell.bsDayDevanagari}
                       </div>
                       <div>
@@ -688,7 +686,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
             <div className="pt-3 border-t border-gray-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 shrink-0">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded border-2 border-amber-500 bg-amber-50/40" />
+                  <span className="w-2.5 h-2.5 rounded border-2 border-indigo-500 bg-indigo-50/40" />
                   <span>आज (Today)</span>
                 </span>
                 <span className="flex items-center gap-1">
@@ -696,7 +694,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                   <span className="text-red-600 font-semibold">शनिवार / सार्वजनिक बिदा</span>
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span className="w-2 h-2 rounded-full bg-indigo-500" />
                   <span>पर्व / उत्सव</span>
                 </span>
               </div>
@@ -746,20 +744,20 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                     type="date"
                     value={adDateInput}
                     onChange={e => setAdDateInput(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 bg-white font-medium focus:border-amber-500 focus:outline-none dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 bg-white font-medium focus:border-indigo-500 focus:outline-none dark:bg-slate-900 dark:border-slate-700 dark:text-white"
                   />
 
                   <button
                     type="button"
                     onClick={handleConvertAdToBs}
-                    className="w-full py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5"
+                    className="w-full py-2 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5"
                   >
                     <span>BS मा परिवर्तन गर्नुहोस्</span>
                   </button>
 
                   {convertedBsResult && (
-                    <div className="p-3 rounded-xl bg-white border border-amber-200/80 dark:bg-slate-900 dark:border-amber-900/50 shadow-2xs space-y-1">
-                      <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                    <div className="p-3 rounded-xl bg-white border border-indigo-200/80 dark:bg-slate-900 dark:border-indigo-900/50 shadow-2xs space-y-1">
+                      <div className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
                         नेपाली मिति (B.S.):
                       </div>
                       <div className="text-base sm:text-lg font-black text-gray-900 dark:text-white">
@@ -786,7 +784,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                     placeholder="2082-06-16"
                     value={bsDateInput}
                     onChange={e => setBsDateInput(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 bg-white font-medium focus:border-amber-500 focus:outline-none dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 bg-white font-medium focus:border-indigo-500 focus:outline-none dark:bg-slate-900 dark:border-slate-700 dark:text-white"
                   />
 
                   <button
@@ -818,7 +816,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                 <button
                   type="button"
                   onClick={handleResetConverterToToday}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50 transition-colors flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/50 transition-colors flex items-center gap-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>आजको मिति रिसेट गर्नुहोस् (Reset to Today)</span>

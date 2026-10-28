@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Compass, Heart, Shield, Trash2, Pencil, X } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 import { ValueItem, SpiritualPractice, Commitment, Habit, NavModule, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
@@ -261,17 +262,17 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             const next = openSpiritualForm === 'practices' ? null : 'practices';
             setOpenSpiritualForm(next);
             setActiveAction('practices');
-          }} colorClassName="border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:border-rose-700 dark:hover:bg-rose-950/70" />
+          }} />
           <FormToggleButton label="Add Vow" open={openSpiritualForm === 'commitments'} onClick={() => {
             const next = openSpiritualForm === 'commitments' ? null : 'commitments';
             setOpenSpiritualForm(next);
             setActiveAction('commitments');
-          }} colorClassName="border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:border-amber-700 dark:hover:bg-amber-950/70" />
+          }} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-        {openSpiritualForm && <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+      <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+        {openSpiritualForm && <section className="lg:col-span-5  border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
 
         {/* Core Values */}
         <div className={activeAction === 'values' ? 'mt-4' : 'hidden'}>
@@ -383,7 +384,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         </div>
         </section>}
 
-        <section className={`${openSpiritualForm ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6`}>
+        <section className={`${openSpiritualForm ? 'lg:col-span-7' : 'lg:col-span-12'}  border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6`}>
           <h2 className="text-sm font-bold text-slate-900 dark:text-white">Saved foundations</h2>
           <div className="mt-4 space-y-5">
             <div>
@@ -394,7 +395,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               </div>
               <div className="adaptive-card-grid mt-3 gap-2.5">
                 {values.length === 0 ? (
-                  <p className="col-span-full py-4 text-center text-xs text-slate-400">No values or principles saved yet.</p>
+                  <div className="col-span-full"><EmptyState icon={Shield} compact title="No values or principles yet" hint="Define what you stand for - they anchor goal choices." /></div>
                 ) : [...values].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(v => (
                   <div key={v.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
                     <div className="flex flex-wrap justify-between items-start gap-1">
@@ -425,7 +426,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               </div>
               <div className="adaptive-card-grid mt-3 gap-2.5">
                 {practices.length === 0 ? (
-                  <p className="col-span-full py-4 text-center text-xs text-slate-400">No daily practices saved yet.</p>
+                  <div className="col-span-full"><EmptyState icon={Heart} compact title="No daily practices yet" hint="Add small rituals to keep the spiritual core active." /></div>
                 ) : [...practices].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(p => (
                   <div
                     key={p.id}
@@ -487,7 +488,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               </div>
               <div className="adaptive-card-grid mt-3 gap-2">
                 {commitments.length === 0 ? (
-                  <p className="col-span-full py-4 text-center text-xs text-slate-400">No commitments saved yet.</p>
+                  <div className="col-span-full"><EmptyState icon={Compass} compact title="No commitments yet" hint="Declare commitments you intend to keep visible." /></div>
                 ) : [...commitments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(c => (
                   <div key={c.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
                     <div className="flex flex-wrap justify-between items-start">
@@ -524,14 +525,14 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
           <button
             type="button"
             onClick={() => onNavigate('journal')}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            className="border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
           >
             Reflect in Journal →
           </button>
           <button
             type="button"
             onClick={() => onNavigate('routine')}
-            className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+            className="border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
           >
             Open Habits →
           </button>
@@ -560,9 +561,6 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                   <h3 id="edit-practice-title" className="text-sm font-bold text-slate-900 dark:text-white">
                     Edit Daily Practice
                   </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Update practice details & synchronize linked habit
-                  </p>
                 </div>
               </div>
               <button
@@ -615,10 +613,6 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                   placeholder="Frequency (e.g. Daily, Weekly)"
                   className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
-              </div>
-
-              <div className="rounded-xl bg-slate-50 p-2.5 text-[11px] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 leading-relaxed">
-                💡 Any changes made here are automatically synced to the corresponding habit in your Routines & Habits schedule.
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">

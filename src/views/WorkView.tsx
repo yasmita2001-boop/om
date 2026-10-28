@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import {
   Briefcase, BookOpen, Users, Trash2, Award, Edit3, X, Calendar,
-  Target, CheckCircle2, Circle, Check, ArrowRight, Layers, TrendingUp,
-  BellRing, Bell, Zap, AlertTriangle, Search, Plus
+  Target, CheckCircle2, Circle, BellRing, Bell, Zap
 } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 import {
   WorkProject, LearningItem, Meeting, WorkResponsibility, Skill, Course, Goal,
   Task, TaskPriority, ReminderItem
@@ -14,14 +14,12 @@ import {
   syncGoalProgressFromProjects,
   syncGoalProgressFromLearning,
   syncGoalProgressFromSkills,
-  syncGoalProgressDirect,
   syncGoalProgressFromTasks,
   syncGoalProgressFromMeetings
 } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { SlideTabs } from '../components/SlideTabs';
-import { FormDisclosure } from '../components/FormDisclosure';
 import { FormToggleButton } from '../components/FormToggleButton';
 import { computeItemDelay } from '../components/ProjectTimelinePlan';
 import { alarmService } from '../lib/alarmService';
@@ -61,12 +59,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
   projects,
   learningItems,
   meetings,
-  responsibilities = [],
   skills = [],
-  courses = [],
   goals = [],
-  tasks = [],
-  reminders = [],
   onRefresh,
   onSuccess
 }) => {
@@ -108,7 +102,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [projArmGenesis, setProjArmGenesis] = useState(false);
   const [projTaskPriority, setProjTaskPriority] = useState<TaskPriority>('High');
   const [projAlarmTime, setProjAlarmTime] = useState('09:00');
-  const [projRingtone, setProjRingtone] = useState('digital_pulse');
+  const projRingtone = 'digital_pulse';
 
   // New Item Forms: Learning Tracks
   const [learnTitle, setLearnTitle] = useState('');
@@ -120,7 +114,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [learnArmGenesis, setLearnArmGenesis] = useState(false);
   const [learnTaskPriority, setLearnTaskPriority] = useState<TaskPriority>('Medium');
   const [learnAlarmTime, setLearnAlarmTime] = useState('10:00');
-  const [learnRingtone, setLearnRingtone] = useState('morning_chime');
+  const learnRingtone = 'morning_chime';
 
   // New Item Forms: Skills
   const [skillName, setSkillName] = useState('');
@@ -132,7 +126,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [skillArmGenesis, setSkillArmGenesis] = useState(false);
   const [skillTaskPriority, setSkillTaskPriority] = useState<TaskPriority>('Medium');
   const [skillAlarmTime, setSkillAlarmTime] = useState('18:00');
-  const [skillRingtone, setSkillRingtone] = useState('zen_bell');
+  const skillRingtone = 'zen_bell';
 
   // Quick Preset Alarm Modal
   const [quickAlarmItem, setQuickAlarmItem] = useState<{
@@ -142,8 +136,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
     due?: string;
   } | null>(null);
   const [alarmPresetChoice, setAlarmPresetChoice] = useState<'5m' | '15m' | '30m' | '1h' | 'tonight' | 'tomorrow' | 'custom'>('15m');
-  const [quickCustomDate, setQuickCustomDate] = useState(today);
-  const [quickCustomTime, setQuickCustomTime] = useState('18:00');
+  const quickCustomDate = today;
+  const quickCustomTime = '18:00';
   const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('digital_pulse');
 
   // New Item Forms: Meetings
@@ -568,11 +562,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
     onSuccess(`🚨 Urgent alarm ringing for "${title}"!`);
   };
 
-  // Backward compatibility aliases
-  const handleCreateProjectTask = (proj: WorkProject) => handleOpenGenesisForProject(proj);
-  const handleCreateLearningTask = (item: LearningItem) => handleOpenGenesisForLearning(item);
-  const handleCreateSkillTask = (s: Skill) => handleOpenGenesisForSkill(s);
-
   const handleAddLearning = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!learnTitle.trim()) return;
@@ -850,10 +839,10 @@ export const WorkView: React.FC<WorkViewProps> = ({
       return <FormToggleButton label="Add Project" open={openWorkForm === 'projects'} onClick={() => setOpenWorkForm(openWorkForm === 'projects' ? null : 'projects')} />;
     }
     if (activeTab === 'learning') {
-      return <FormToggleButton label="Add Learning Track" open={openWorkForm === 'learning'} onClick={() => setOpenWorkForm(openWorkForm === 'learning' ? null : 'learning')} colorClassName="border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/70" />;
+      return <FormToggleButton label="Add Learning Track" open={openWorkForm === 'learning'} onClick={() => setOpenWorkForm(openWorkForm === 'learning' ? null : 'learning')} />;
     }
     if (activeTab === 'skills') {
-      return <FormToggleButton label="Add Skill" open={openWorkForm === 'skills'} onClick={() => setOpenWorkForm(openWorkForm === 'skills' ? null : 'skills')} colorClassName="border-purple-200 bg-purple-50 text-purple-700 hover:border-purple-300 hover:bg-purple-100 dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:border-purple-700 dark:hover:bg-purple-950/70" />;
+      return <FormToggleButton label="Add Skill" open={openWorkForm === 'skills'} onClick={() => setOpenWorkForm(openWorkForm === 'skills' ? null : 'skills')} />;
     }
     return <FormToggleButton label="Schedule Meeting" open={openWorkForm === 'meetings'} onClick={() => setOpenWorkForm(openWorkForm === 'meetings' ? null : 'meetings')} />;
   };
@@ -868,7 +857,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
       {/* 4 Essential Metric Cards (Matching Dashboard Style) */}
       <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Active Projects</span>
             <Briefcase className="h-4 w-4 text-indigo-500 shrink-0" />
@@ -881,7 +870,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Learning Tracks</span>
             <BookOpen className="h-4 w-4 text-blue-500 shrink-0" />
@@ -894,7 +883,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Skill Trees</span>
             <Award className="h-4 w-4 text-amber-500 shrink-0" />
@@ -907,7 +896,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Meetings</span>
             <Users className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -1003,9 +992,9 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
       {/* Tab: Projects */}
       {activeTab === 'projects' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
           {/* Project Genesis (Left Card: 5 cols) */}
-          {openWorkForm === 'projects' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openWorkForm === 'projects' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Briefcase className="h-4 w-4 text-indigo-500" />
@@ -1165,7 +1154,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
           </div>}
 
           {/* Active Deliverables (Right Card: 7 cols) */}
-          <div className={`${openWorkForm === 'projects' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${openWorkForm === 'projects' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Briefcase className="h-4 w-4 text-indigo-500" />
@@ -1175,8 +1164,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
             <div className="adaptive-card-grid mt-4 gap-3">
               {projects.length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">
-                  No work projects created yet.
+                <div className="col-span-full">
+                  <EmptyState
+                    icon={Briefcase}
+                    compact
+                    title="No work projects yet"
+                    hint="Create a project to link tasks, notes and outcomes."
+                  />
                 </div>
               ) : (
                 [...projects].sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)).map(p => {
@@ -1321,8 +1315,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
       {/* Tab: Learning */}
       {activeTab === 'learning' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          {openWorkForm === 'learning' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+          {openWorkForm === 'learning' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4 text-emerald-500" />
@@ -1484,13 +1478,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
             </form>
           </div>}
 
-          <div className={`${openWorkForm === 'learning' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${openWorkForm === 'learning' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Curriculum & Mastery ({learningItems.length})
             </h2>
             <div className="adaptive-card-grid mt-4 gap-3">
               {learningItems.length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">No learning tracks added yet.</div>
+                <div className="col-span-full"><EmptyState icon={BookOpen} compact title="No learning tracks yet" hint="Add a course or track to follow structured progress." /></div>
               ) : (
                 [...learningItems].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(l => {
                   const linkedGoal = goals.find(g => g.id === l.goalId);
@@ -1636,8 +1630,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
       {/* Tab: Skills */}
       {activeTab === 'skills' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          {openWorkForm === 'skills' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+          {openWorkForm === 'skills' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Award className="h-4 w-4 text-purple-500" />
@@ -1803,13 +1797,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
             </form>
           </div>}
 
-          <div className={`${openWorkForm === 'skills' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${openWorkForm === 'skills' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Acquired Competencies ({skills.length})
             </h2>
             <div className="adaptive-card-grid mt-4 gap-3">
               {skills.length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">No skill competencies recorded.</div>
+                <div className="col-span-full"><EmptyState icon={Award} compact title="No competencies recorded" hint="Rate skills to reveal your capability map." /></div>
               ) : (
                 [...skills].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(s => {
                   const linkedGoal = goals.find(g => g.id === s.goalId);
@@ -1826,7 +1820,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                         <div className="flex flex-wrap items-center justify-between gap-1.5">
                           <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
                             {isSkillDelayed && (
-                              <span className="rounded bg-rose-600 px-1.5 py-0.2 text-[9px] font-black uppercase text-white animate-pulse">
+                              <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white animate-pulse">
                                 ⚠️ {delayInfo.label}
                               </span>
                             )}
@@ -1909,7 +1903,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                       {/* QUICK LEVEL BUTTONS */}
                       <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
                         <span className="block text-[10px] text-slate-400 mb-1">Set Level & Advance Goal:</span>
-                        <div className="grid grid-cols-4 gap-1">
+                        <div className="grid grid-cols-4 gap-2">
                           {levels.map(lvl => {
                             const isCurrent = (s.level || 'Intermediate').toLowerCase() === lvl.toLowerCase();
                             return (
@@ -1917,10 +1911,10 @@ export const WorkView: React.FC<WorkViewProps> = ({
                                 key={lvl}
                                 type="button"
                                 onClick={() => handleUpdateSkillLevel(s, lvl)}
-                                className={`py-1 text-[9px] font-bold rounded-md transition-all cursor-pointer truncate ${
+                                className={`border-b-0 border-transparent py-1 text-[9px] font-bold transition-colors cursor-pointer truncate ${
                                   isCurrent
-                                    ? 'bg-purple-600 text-white shadow-2xs'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-purple-50 hover:text-purple-700 dark:bg-slate-800 dark:text-slate-400'
+                                    ? 'text-amber-700 dark:text-amber-300'
+                                    : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                                 }`}
                                 title={`Set level to ${lvl}`}
                               >
@@ -1941,8 +1935,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
       {/* Tab: Meetings */}
       {activeTab === 'meetings' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          {openWorkForm === 'meetings' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+          {openWorkForm === 'meetings' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <Users className="h-4 w-4 text-indigo-500" />
               <span>Schedule Meeting</span>
@@ -1997,13 +1991,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
             </form>
           </div>}
 
-          <div className={`${openWorkForm === 'meetings' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${openWorkForm === 'meetings' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Meetings Timeline ({meetings.length})
             </h2>
             <div className="adaptive-card-grid mt-4 gap-3">
               {meetings.length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">No scheduled meetings on agenda.</div>
+                <div className="col-span-full"><EmptyState icon={Calendar} compact title="No meetings on the agenda" hint="Schedule meetings to track prep and outcomes." /></div>
               ) : (
                 [...meetings].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
                   <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 p-4 text-xs transition-colors hover:border-slate-200 dark:border-slate-800 dark:hover:border-slate-700">
@@ -2086,9 +2080,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white capitalize">
                     Edit {editTarget.type}
                   </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Modify record details and link to goal.
-                  </p>
                 </div>
               </div>
               <button
@@ -2497,10 +2488,10 @@ export const WorkView: React.FC<WorkViewProps> = ({
                       key={p.id}
                       type="button"
                       onClick={() => setAlarmPresetChoice(p.id as any)}
-                      className={`rounded-xl py-2 px-1 text-center text-xs font-bold transition-all cursor-pointer ${
+                      className={`py-2 px-1 text-center text-xs font-bold transition-colors cursor-pointer ${
                         alarmPresetChoice === p.id
-                          ? 'bg-amber-500 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                       }`}
                     >
                       {p.label}

@@ -8,14 +8,26 @@ import {
   HealthMeasurement, HealthAppointment, HealthNote, HealthProfile, WorkProject, LearningItem,
   Meeting, Person, Interaction, ValueItem, SpiritualPractice, Commitment,
   ThingItem, DocumentItem, WarrantyItem, ReceiptItem, CertificateItem,
-  ImportantRecordItem, ReminderItem, NotificationItem, AchievementItem,
+  ImportantRecordItem, ReminderItem, AchievementItem,
   CalcHistoryItem, Skill, Course, WorkResponsibility
 } from './types';
 import { ensureDefaultProfiles, storage } from './lib/storage';
 import { getGoogleWorkspaceProfileId, GoogleUser, signInWithGoogle } from './lib/googleDriveSync';
 import { getLocalDateString } from './lib/dateUtils';
-import watermarkUrl from './assets/om-lifeos-watermark.png';
 import { LockKeyhole, ShieldCheck } from 'lucide-react';
+import { ViewSkeleton } from './components/Skeleton';
+import { resolveSavedAccent } from './lib/accentTheme';
+import {
+  applyAppearance,
+  AppearancePreferences,
+  DEFAULT_APPEARANCE,
+  getEffectiveColorMode,
+  hasSavedAppearance,
+  normalizeAppearance,
+  readSavedAppearance,
+  restoreBackgroundImage,
+  saveLocalAppearance
+} from './lib/appearance';
 
 const IS_GUEST_MODE = import.meta.env.DEV || import.meta.env.MODE === 'local-test';
 const GUEST_PROFILE_ID = 'om-master-profile';
@@ -26,14 +38,14 @@ import { Sidebar } from './components/Sidebar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { QuickCaptureModal } from './components/QuickCaptureModal';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
+import { OmLogoMark } from './components/OmLogoMark';
 import { BsDateModal } from './components/BsDateModal';
 import { AlarmTriggerModal } from './components/AlarmTriggerModal';
 import { VoiceStudioWidget } from './components/VoiceStudioWidget';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
-import { alarmAudio } from './lib/alarmAudio';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress, computeGoalAggregateBreakdown } from './lib/goalTaskSync';
+import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress, resolveHabitGoalId } from './lib/goalTaskSync';
 import { soundEngine } from './lib/soundEngine';
 
 // Views
@@ -53,14 +65,10 @@ const SpiritualView = lazyWithRetry(() => import('./views/SpiritualView').then(m
 const ThingsView = lazyWithRetry(() => import('./views/ThingsView').then(m => ({ default: m.ThingsView })));
 const RecycleBinView = lazyWithRetry(() => import('./views/RecycleBinView').then(m => ({ default: m.RecycleBinView })));
 const SettingsView = lazyWithRetry(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
+const SanctuaryEnvironment = lazyWithRetry(() => import('./components/SanctuaryEnvironment').then(m => ({ default: m.default })));
 
 
-const ViewFallback: React.FC = () => (
-  <div role="status" aria-live="polite" className="flex items-center justify-center py-24">
-    <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-500 dark:border-slate-700 dark:border-t-indigo-400" />
-    <span className="sr-only">Loading…</span>
-  </div>
-);
+const ViewFallback: React.FC = () => <ViewSkeleton />;
 
 export default function App() {
   return <LifeOSApp />;
@@ -68,15 +76,19 @@ export default function App() {
 
 function LifeOSApp() {
   const [activeModule, setActiveModule] = useState<NavModule>('dashboard');
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+  const [appearance, setAppearance] = useState<AppearancePreferences>(() => readSavedAppearance());
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => getEffectiveColorMode(readSavedAppearance().colorMode));
+  const appearanceRef = useRef(appearance);
+  const [environmentEnabled, setEnvironmentEnabled] = useState(() => {
     try {
-      const saved = localStorage.getItem('om_theme');
-      if (saved === 'dark' || saved === 'light') return saved;
-    } catch {}
-    return 'light';
+      return localStorage.getItem('om_environment') !== 'off';
+    } catch {
+      return true;
+    }
   });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
 
   // Modals state
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
@@ -88,6 +100,42 @@ function LifeOSApp() {
 
   // Entities state
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
+
+  // Module switches get a soft cross-fade/slide via the View Transitions API.
+  const changeModule = useCallback((module: NavModule) => {
+    const doc = document as Document & { startViewTransition?: (updateCallback: () => void) => unknown };
+    const reduceMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof doc.startViewTransition === 'function' && !reduceMotion) {
+      doc.startViewTransition(() => { setActiveModule(module); });
+      return;
+    }
+    setActiveModule(module);
+  }, []);
+
+  // Restore appearance immediately so local preferences remain available offline.
+  useEffect(() => {
+    appearanceRef.current = appearance;
+    applyAppearance(appearance);
+    setTheme(getEffectiveColorMode(appearance.colorMode));
+    try {
+      localStorage.setItem('om_theme_mode', appearance.colorMode);
+    } catch {}
+  }, [appearance]);
+  useEffect(() => {
+    if (appearance.backgroundId !== 'custom' || !appearance.backgroundImage.startsWith('idb-background:')) return;
+    let cancelled = false;
+    restoreBackgroundImage(appearance.backgroundImage)
+      .then(() => {
+        if (!cancelled) applyAppearance(appearance);
+      })
+      .catch(error => {
+        console.error('Could not restore the saved background image.', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [appearance.backgroundId, appearance.backgroundImage]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(
     IS_GUEST_MODE ? GUEST_PROFILE_ID : null
   );
@@ -157,7 +205,6 @@ function LifeOSApp() {
   const [importantRecords, setImportantRecords] = useState<ImportantRecordItem[]>([]);
 
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
   const [calcHistory, setCalcHistory] = useState<CalcHistoryItem[]>([]);
 
@@ -168,8 +215,30 @@ function LifeOSApp() {
     }, 2500);
   }, []);
 
+  const handleApplyAppearance = useCallback(async (value: AppearancePreferences) => {
+    const nextAppearance = applyAppearance(value);
+    appearanceRef.current = nextAppearance;
+    setAppearance(nextAppearance);
+    saveLocalAppearance(nextAppearance);
+
+    const profileId = activeProfileIdRef.current;
+    const settingsData = await storage.getSingleton<AppState>('appSettings', profileId || undefined);
+    if (!settingsData) {
+      throw new Error('Workspace settings are not ready. Please try again.');
+    }
+    const nextSettings: AppState = {
+      ...settingsData,
+      appearance: nextAppearance,
+      themeMode: nextAppearance.colorMode,
+      accentColor: nextAppearance.accentColor
+    };
+    await storage.setSingleton('appSettings', nextSettings);
+    setAppSettings(nextSettings);
+  }, []);
+
   const loadAllData = useCallback(async (overrideProfileId?: string) => {
     const loadGeneration = ++loadGenerationRef.current;
+    setDataLoadError(null);
     try {
       const requestedProfileId = overrideProfileId || activeProfileIdRef.current || storage.getActiveProfileId();
       if (requestedProfileId) storage.setActiveProfile(requestedProfileId);
@@ -234,7 +303,6 @@ function LifeOSApp() {
         certData,
         irData,
         remData,
-        notifData,
         achData,
         calcData
       ] = await Promise.all([
@@ -285,17 +353,34 @@ function LifeOSApp() {
         getAllForProfile<CertificateItem>('certificates'),
         getAllForProfile<ImportantRecordItem>('importantRecords'),
         getAllForProfile<ReminderItem>('reminders'),
-        getAllForProfile<NotificationItem>('notifications'),
         getAllForProfile<AchievementItem>('achievements'),
         getAllForProfile<CalcHistoryItem>('calcHistory')
       ]);
 
       if (!isCurrentLoad()) return;
       if (settingsData) {
-        setAppSettings(settingsData);
-        if (settingsData.themeMode) {
-          setTheme(settingsData.themeMode);
+        const savedAppearance = hasSavedAppearance()
+          ? readSavedAppearance()
+          : normalizeAppearance({
+              ...DEFAULT_APPEARANCE,
+              ...settingsData.appearance,
+              colorMode: settingsData.appearance?.colorMode || settingsData.themeMode || DEFAULT_APPEARANCE.colorMode,
+              accentColor: settingsData.appearance?.accentColor || resolveSavedAccent(settingsData.accentColor)
+            });
+        if (!hasSavedAppearance()) {
+          try {
+            saveLocalAppearance(savedAppearance);
+          } catch (error) {
+            console.error('Could not migrate appearance preferences to this device.', error);
+          }
         }
+        settingsData.appearance = savedAppearance;
+        settingsData.themeMode = savedAppearance.colorMode;
+        settingsData.accentColor = savedAppearance.accentColor;
+        appearanceRef.current = savedAppearance;
+        setAppearance(savedAppearance);
+        setAppSettings(settingsData);
+        setTheme(getEffectiveColorMode(savedAppearance.colorMode));
       }
 
       setTasks([...tasksData]);
@@ -356,7 +441,6 @@ function LifeOSApp() {
         }
         return true;
       }));
-      setNotifications([...notifData]);
       setAchievements([...achData]);
       setCalcHistory([...calcData]);
       // Auto-reconcile goal progress against actual linked items in database to fix stale/legacy 100% false progress
@@ -369,6 +453,9 @@ function LifeOSApp() {
       });
     } catch (err) {
       console.error('Failed to load initial data', err);
+      if (loadGeneration === loadGenerationRef.current) {
+        setDataLoadError(err instanceof Error ? err.message : 'Unexpected storage error.');
+      }
     }
   }, []);
 
@@ -417,7 +504,7 @@ function LifeOSApp() {
         authType: 'google' as const,
         avatarUrl: user.photoURL || undefined,
         avatarChar: (user.displayName || user.email || 'G').charAt(0).toUpperCase(),
-        avatarColor: '#6366f1',
+        avatarColor: '#b88648',
         isCurrent: true,
         createdAt: now
     };
@@ -441,7 +528,7 @@ function LifeOSApp() {
               avatarUrl: profile.avatarUrl
             },
             themeMode: 'light',
-            accentColor: '#6366f1',
+            accentColor: '#b88648',
             notificationsEnabled: true,
             noteCategories: ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
             calcFavorites: ['EMI / Loan', 'SIP / Investment', 'Date Difference']
@@ -482,6 +569,14 @@ function LifeOSApp() {
     }
   }, [activeProfileId, loadAllData]);
 
+  useEffect(() => {
+    if (appearance.colorMode !== 'system') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateSystemTheme = () => setTheme(media.matches ? 'dark' : 'light');
+    media.addEventListener('change', updateSystemTheme);
+    return () => media.removeEventListener('change', updateSystemTheme);
+  }, [appearance.colorMode]);
+
   // Sync theme with HTML root class, localStorage, and accent color
   useEffect(() => {
     try {
@@ -496,9 +591,7 @@ function LifeOSApp() {
       document.documentElement.setAttribute('data-lifeos-mode', 'light');
       document.documentElement.style.backgroundColor = '#F8FAFC';
     }
-    const brandColor = appSettings?.accentColor || '#6366f1';
-    document.documentElement.style.setProperty('--color-brand', brandColor);
-  }, [theme, appSettings?.accentColor]);
+  }, [theme]);
 
   // Keyboard Shortcuts (⌘K for search)
   useEffect(() => {
@@ -542,30 +635,11 @@ function LifeOSApp() {
 
 
 
-  const toggleTheme = async () => {
+  const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    try {
-      localStorage.setItem('om_theme', newTheme);
-      if (newTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.style.backgroundColor = '#0B0F19';
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.style.backgroundColor = '#F8FAFC';
-      }
-    } catch {}
-    const settingsObj = (await storage.getSingleton<AppState>('appSettings')) || {
-      profileId: 'default',
-      profiles: [],
-      themeMode: newTheme,
-      accentColor: '#5d57c9',
-      notificationsEnabled: true,
-      noteCategories: ['General'],
-      calcFavorites: []
-    };
-    settingsObj.themeMode = newTheme;
-    await storage.setSingleton('appSettings', settingsObj);
+    void handleApplyAppearance({ ...appearanceRef.current, colorMode: newTheme }).catch(error => {
+      showToast(error instanceof Error ? error.message : 'Could not save color mode.');
+    });
   };
 
   const handleToggleTask = async (id: string) => {
@@ -611,8 +685,9 @@ function LifeOSApp() {
       await storage.put('habitLogs', newLog);
     }
     const targetHabit = habits.find(h => h.id === habitId);
-    if (targetHabit?.goalId) {
-      await syncGoalProgressFromHabits(targetHabit.goalId, targetHabit.id);
+    const goalId = targetHabit ? resolveHabitGoalId(targetHabit, routines) : undefined;
+    if (targetHabit && goalId) {
+      await syncGoalProgressFromHabits(goalId, targetHabit.id);
     }
     loadAllData();
   };
@@ -654,12 +729,35 @@ function LifeOSApp() {
   }
 
   if (!appSettings || !activeProfileId) {
+    if (dataLoadError && activeProfileId) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 text-slate-900 dark:bg-[#0B0F19] dark:text-slate-100">
+          <section className="w-full max-w-lg space-y-5 rounded-2xl border border-rose-200 bg-white p-6 shadow-sm dark:border-rose-900/60 dark:bg-slate-900">
+            <div className="space-y-2">
+              <h1 className="text-lg font-bold">Workspace could not be opened</h1>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                Your saved data has not been cleared. Check browser storage availability, then retry.
+              </p>
+              <p role="alert" className="break-words rounded-lg bg-rose-50 p-3 text-xs text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+                {dataLoadError}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadAllData(activeProfileId)}
+              className="rounded-lg border border-amber-700/30 bg-amber-700/10 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-700/15 dark:text-amber-200"
+            >
+              Retry opening workspace
+            </button>
+          </section>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F19] flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm font-medium">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 font-serif font-bold text-white text-xs">
-            ॐ
-          </div>
+          <OmLogoMark className="h-8 w-7" />
           <span>Loading Om-LifeOS…</span>
         </div>
       </div>
@@ -669,12 +767,20 @@ function LifeOSApp() {
   return (
     <div
       data-app-root="true"
-      className="flex min-h-screen flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white dark:text-slate-100 bg-[#F8FAFC] dark:bg-[#0B0F19]"
+      data-environment={environmentEnabled ? 'on' : 'off'}
+      data-wallpaper-custom={appearance.backgroundId === 'custom' ? 'true' : 'false'}
+      className="sanctuary-shell isolate flex min-h-screen flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white dark:text-slate-100 bg-transparent"
     >
+      <style>{'@supports (appearance: base-select) { .sanctuary-shell select::picker(select)::backdrop { background: transparent; } }'}</style>
+      {environmentEnabled && (
+        <Suspense fallback={null}>
+          <SanctuaryEnvironment />
+        </Suspense>
+      )}
       {/* Top Bar */}
       <Header
         activeModule={activeModule}
-        onNavigate={setActiveModule}
+        onNavigate={changeModule}
         onOpenQuickCapture={(type = 'task') => {
           setQuickCaptureType(type);
           setIsQuickCaptureOpen(true);
@@ -684,6 +790,18 @@ function LifeOSApp() {
         onOpenVoiceStudio={() => setIsVoiceStudioOpen(true)}
         theme={theme}
         onToggleTheme={toggleTheme}
+        environmentEnabled={environmentEnabled}
+        onToggleEnvironment={() => {
+          setEnvironmentEnabled(enabled => {
+            const nextEnabled = !enabled;
+            try {
+              localStorage.setItem('om_environment', nextEnabled ? 'on' : 'off');
+            } catch (error) {
+              console.error('Could not save the sanctuary environment preference.', error);
+            }
+            return nextEnabled;
+          });
+        }}
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
         onShowToast={showToast}
       />
@@ -692,7 +810,7 @@ function LifeOSApp() {
         {/* Sidebar */}
         <Sidebar
           activeModule={activeModule}
-          onNavigate={setActiveModule}
+          onNavigate={changeModule}
           isOpenMobile={isMobileMenuOpen}
           onCloseMobile={() => setIsMobileMenuOpen(false)}
           openTasksCount={openTasksCount}
@@ -705,14 +823,8 @@ function LifeOSApp() {
         />
 
         {/* Main Content Viewport - Responsive across Mobile, Tablet, Laptop, and Desktop */}
-        <main className="app-watermark relative isolate flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-28 md:pb-12 w-full">
-          <img
-            className="app-watermark__image"
-            src={watermarkUrl}
-            alt=""
-            aria-hidden="true"
-          />
-          <div className="app-watermark__content w-full space-y-6">
+        <main className="sanctuary-main relative isolate mx-auto w-full max-w-7xl flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-28 md:pb-12">
+          <div className="w-full space-y-6">
             <Suspense fallback={<ViewFallback />}>
             {activeModule === 'dashboard' && (
               <DashboardView
@@ -728,7 +840,7 @@ function LifeOSApp() {
                 dailyPlanner={appSettings?.dailyPlanner}
                 reminders={reminders}
                 achievements={achievements}
-                onNavigate={setActiveModule}
+                onNavigate={changeModule}
                 onToggleTask={handleToggleTask}
                 onLogHabit={handleLogHabit}
                 onOpenQuickCapture={type => {
@@ -861,7 +973,7 @@ function LifeOSApp() {
                 financialGoals={financialGoals}
                 receipts={receipts}
                 goals={goals}
-                onNavigate={setActiveModule}
+                onNavigate={changeModule}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
                 onError={msg => showToast(`⚠️ ${msg}`)}
@@ -915,7 +1027,7 @@ function LifeOSApp() {
                 practices={practices}
                 commitments={commitments}
                 goals={goals}
-                onNavigate={setActiveModule}
+                onNavigate={changeModule}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
               />
@@ -929,7 +1041,7 @@ function LifeOSApp() {
                 receipts={receipts}
                 financeAccounts={financeAccounts}
                 financeTransactions={financeTransactions}
-                onNavigate={setActiveModule}
+                onNavigate={changeModule}
                 certificates={certificates}
                 importantRecords={importantRecords}
                 onRefresh={loadAllData}
@@ -955,6 +1067,8 @@ function LifeOSApp() {
                 onError={msg => showToast(`⚠️ ${msg}`)}
                 theme={theme}
                 onToggleTheme={toggleTheme}
+                appearance={appearance}
+                onApplyAppearance={handleApplyAppearance}
               />
             )}
             </Suspense>
@@ -963,7 +1077,7 @@ function LifeOSApp() {
       </div>
 
       {/* Mobile Bottom Thumb Navigation */}
-      <MobileBottomNav activeModule={activeModule} onNavigate={setActiveModule} />
+      <MobileBottomNav activeModule={activeModule} onNavigate={changeModule} />
 
       {/* Quick Capture Dialog */}
       <QuickCaptureModal
@@ -978,7 +1092,7 @@ function LifeOSApp() {
       <GlobalSearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        onNavigate={setActiveModule}
+        onNavigate={changeModule}
       />
 
       {/* Nepali Bikram Sambat Date Modal */}

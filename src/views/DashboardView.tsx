@@ -10,6 +10,8 @@ import {
   ReminderItem, AchievementItem
 } from '../types';
 import { getLocalDateString } from '../lib/dateUtils';
+import { OmLogoMark } from '../components/OmLogoMark';
+import { EmptyState } from '../components/EmptyState';
 
 interface DashboardViewProps {
   tasks: Task[];
@@ -30,7 +32,7 @@ interface DashboardViewProps {
   onOpenQuickCapture: (type?: string) => void;
 }
 
-const sortTasks = (tasks: Task[], today: string) => {
+const sortTasks = (tasks: Task[]) => {
   const priorityWeight: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
   return [...tasks]
     .filter(t => !t.done)
@@ -118,16 +120,12 @@ const getActiveReminders = (reminders: ReminderItem[]) => {
 const DashboardView: React.FC<DashboardViewProps> = ({
   tasks,
   goals,
-  routines,
   habits,
   habitLogs,
   finance,
   accounts,
-  notes,
-  journal,
   dailyPlanner,
   reminders = [],
-  achievements = [],
   onNavigate,
   onToggleTask,
   onLogHabit,
@@ -142,7 +140,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
   const today = getLocalDateString(now);
 
-  const sortedTasks = useMemo(() => sortTasks(tasks, today), [tasks, today]);
+  const sortedTasks = useMemo(() => sortTasks(tasks), [tasks]);
   const openTasks = sortedTasks;
   const todayTasks = sortedTasks.filter(t => (t.dueAt === today || t.date === today));
   const overdueTasks = sortedTasks.filter(t => Boolean(t.dueAt && t.dueAt < today));
@@ -177,16 +175,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     <div className="dashboard-view space-y-4 sm:space-y-5">
       <div className="dashboard-hero flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white/80 p-4 sm:p-5 backdrop-blur-xl shadow-2xs dark:border-white/[0.08] dark:bg-[#070A12]/80">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-md shadow-indigo-500/20 font-serif font-bold text-base shrink-0">
-            ॐ
-          </div>
+          <OmLogoMark className="h-[3.4rem] w-11 shrink-0" />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
                 {timeGreeting}
               </h1>
             </div>
-            <p className="mt-0.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
+            <p className="mt-1 font-display text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">
+              Build the life you love
+            </p>
+            <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium">
+              Small steps every day. Big dreams tomorrow.
+            </p>
+            <p className="mt-1.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
               {dailyPlanner?.date === today && dailyPlanner.target
                 ? dailyPlanner.target
                 : `${todayTasks.length} priorities today · ${activeGoals.length} active goals`}
@@ -196,7 +198,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <button
           type="button"
           onClick={() => onOpenQuickCapture('task')}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-colors hover:bg-indigo-500 focus-visible:outline-indigo-600 cursor-pointer"
+          className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-amber-700 transition-colors hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
         >
           <Plus className="h-4 w-4" />
           Quick capture
@@ -205,7 +207,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* 4 Essential Metric Cards */}
       <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-raised dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Open Tasks</span>
             <CheckSquare className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -218,7 +220,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-raised dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Goals</span>
             <Target className="h-4 w-4 text-indigo-500 shrink-0" />
@@ -231,7 +233,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-raised dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Habits Today</span>
             <Repeat className="h-4 w-4 text-amber-500 shrink-0" />
@@ -244,7 +246,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-raised dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Net Flow</span>
             <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -258,10 +260,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Grid: Tasks & Planner + Habits */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      {/* Grid: Tasks & Planner + Habits (independent columns - no void stretching) */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        {/* Left column (7 cols) */}
+        <div className="space-y-6 lg:col-span-7">
         {/* Today's Tasks & Execution Checkpoints (7 cols) */}
-        <section className="lg:col-span-7 flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        <section className="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -288,11 +292,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="mt-4 space-y-2.5">
             {dashboardTasks.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400">
-                {upcomingTaskCount
-                  ? `No tasks due today. ${upcomingTaskCount} upcoming task${upcomingTaskCount === 1 ? '' : 's'} scheduled.`
-                  : 'No pending tasks for today. Capture a priority anytime.'}
-              </div>
+              <EmptyState
+                icon={CheckSquare}
+                compact
+                title={upcomingTaskCount ? 'Nothing due today' : 'All caught up'}
+                hint={upcomingTaskCount
+                  ? `${upcomingTaskCount} upcoming task${upcomingTaskCount === 1 ? '' : 's'} scheduled - you are ahead of the day.`
+                  : 'Capture a priority anytime with Quick Capture.'}
+              />
             ) : (
               dashboardTasks.map(task => (
                 <div
@@ -335,9 +342,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             )}
           </div>
         </section>
+        </div>
 
+        {/* Right column (5 cols) */}
+        <div className="space-y-6 lg:col-span-5">
         {/* Habit Consistency & Rituals (5 cols) */}
-        <section className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
@@ -359,9 +369,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="mt-4 space-y-2.5">
             {habits.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400">
-                No habits configured. Define recurring rituals in Routine.
-              </div>
+              <EmptyState
+                icon={Repeat}
+                compact
+                title="No habits configured"
+                hint="Define recurring rituals in Routine to see them here."
+              />
             ) : (
               habits.slice(0, 5).map(habit => {
                 const progress = habitProgress.get(habit.id) || { target: 1, complete: 0, occurrences: new Set<number>() };
@@ -399,12 +412,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             )}
           </div>
         </section>
+        </div>
       </div>
 
-      {/* Grid: Financial Flow Overview + Strategic Goals */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Strategic Goals (6 cols) */}
-        <section className="lg:col-span-6 flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+            {/* Grid: Financial Flow Overview + Strategic Goals (independent column stacks) */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        {/* Left column (6 cols): goals flows into reminders */}
+        <div className="space-y-6 lg:col-span-6">
+{/* Strategic Goals (6 cols) */}
+        <section className="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -426,9 +442,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="mt-4 space-y-4">
             {activeGoals.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400">
-                No active goals yet. Create or activate a goal to track progress here.
-              </div>
+              <EmptyState
+                icon={Target}
+                compact
+                title="No active goals yet"
+                hint="Create or activate a goal to track its trajectory here."
+              />
             ) : activeGoals.slice(0, 4).map(goal => (
               <div key={goal.id} className="space-y-1.5">
                 <div className="flex justify-between text-xs sm:text-sm">
@@ -447,88 +466,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             ))}
           </div>
         </section>
-
-        {/* Financial Flow & Cashflow Overview (6 cols) */}
-        <section className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
-                <DollarSign className="h-4.5 w-4.5" />
-              </div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                Cashflow Breakdown
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => onNavigate('finance')}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 flex items-center gap-1 cursor-pointer"
-            >
-              <span>Ledger</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-800/60">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                <ArrowDownRight className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Inflow · all time</span>
-              </div>
-              <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                NPR {totalInflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-800/60">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                <ArrowUpRight className="h-3.5 w-3.5 text-rose-600" />
-                <span>Outflow · all time</span>
-              </div>
-              <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                NPR {totalOutflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Transaction stream */}
-          <div className="mt-4 space-y-2">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Recent Activity
-            </div>
-            {finance.length === 0 ? (
-              <div className="py-5 text-center text-xs text-slate-400">
-                No transactions yet. Recent ledger activity will appear here.
-              </div>
-            ) : [...finance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3).map(tx => {
-              const isInflow = tx.type === 'income' || tx.type === 'loan' || tx.type === 'loanReceipt' ||
-                tx.type === 'savingsWithdrawal' ||
-                (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit');
-              const isTransfer = tx.type === 'transfer';
-              const isLedgerOnly = Boolean(tx.ledgerOnly);
-              return (
-              <div
-                key={tx.id}
-                className="flex items-center justify-between gap-2 min-w-0 text-xs sm:text-sm py-1.5 border-b border-slate-50 dark:border-slate-800/40 last:border-0"
-              >
-                <div className="min-w-0 flex-1 truncate">
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{tx.category}</span>
-                  {tx.note && <span className="ml-1.5 text-slate-400">({tx.note})</span>}
-                </div>
-                <span className={`shrink-0 font-mono font-bold tabular-nums ${isLedgerOnly ? 'text-slate-500' : isInflow ? (tx.type === 'loan' ? 'text-teal-600 dark:text-teal-400' : 'text-emerald-600') : 'text-slate-900 dark:text-white'}`}>
-                  {isLedgerOnly ? '' : isInflow ? '+' : isTransfer ? '⇄ ' : '-'}NPR {Number(tx.amount || 0).toLocaleString('en-IN')}
-                </span>
-              </div>
-              );
-            })}
-          </div>
-        </section>
-      </div>
-
-      {/* Grid: Active Reminders + Achievements */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Reminders (6 cols) */}
-        <section className="lg:col-span-6 flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+{/* Reminders (6 cols) */}
+        <section className="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400">
@@ -547,9 +486,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="mt-4 space-y-2.5">
             {activeReminders.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400">
-                No pending reminders. All clear!
-              </div>
+              <EmptyState icon={Bell} compact title="All clear" hint="No reminders waiting on you right now." />
             ) : (
               activeReminders.map(rem => {
                 const isAlarm = rem.alarmEnabled !== false;
@@ -577,9 +514,90 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             )}
           </div>
         </section>
+        </div>
 
-        {/* Quick Capture Panel (6 cols) */}
-        <section className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        {/* Right column (6 cols): cashflow flows into quick capture */}
+        <div className="space-y-6 lg:col-span-6">
+{/* Financial Flow & Cashflow Overview (6 cols) */}
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
+                <DollarSign className="h-4.5 w-4.5" />
+              </div>
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                Cashflow Breakdown
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigate('finance')}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 flex items-center gap-1 cursor-pointer"
+            >
+              <span>Ledger</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                <ArrowDownRight className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Inflow · all time</span>
+              </div>
+              <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
+                NPR {totalInflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              </div>
+            </div>
+
+            <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                <ArrowUpRight className="h-3.5 w-3.5 text-rose-600" />
+                <span>Outflow · all time</span>
+              </div>
+              <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
+                NPR {totalOutflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Transaction stream */}
+          <div className="mt-4 space-y-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Recent Activity
+            </div>
+            {finance.length === 0 ? (
+              <EmptyState
+                icon={DollarSign}
+                compact
+                title="No transactions yet"
+                hint="Recent ledger activity will appear here."
+              />
+            ) : [...finance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3).map(tx => {
+              const isInflow = tx.type === 'income' || tx.type === 'loan' || tx.type === 'loanReceipt' ||
+                tx.type === 'savingsWithdrawal' ||
+                (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit');
+              const isTransfer = tx.type === 'transfer';
+              const isLedgerOnly = Boolean(tx.ledgerOnly);
+              return (
+              <div
+                key={tx.id}
+                className="flex items-center justify-between gap-2 min-w-0 text-xs sm:text-sm py-1.5 border-b border-slate-50 dark:border-slate-800/40 last:border-0"
+              >
+                <div className="min-w-0 flex-1 truncate">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">{tx.category}</span>
+                  {tx.note && <span className="ml-1.5 text-slate-400">({tx.note})</span>}
+                </div>
+                <span className={`shrink-0 font-mono font-bold tabular-nums ${isLedgerOnly ? 'text-slate-500' : isInflow ? (tx.type === 'loan' ? 'text-teal-600 dark:text-teal-400' : 'text-emerald-600') : 'text-slate-900 dark:text-white'}`}>
+                  {isLedgerOnly ? '' : isInflow ? '+' : isTransfer ? '⇄ ' : '-'}NPR {Number(tx.amount || 0).toLocaleString('en-IN')}
+                </span>
+              </div>
+              );
+            })}
+          </div>
+        </section>
+{/* Quick Capture Panel (6 cols) */}
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4 dark:border-slate-800">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 font-bold">
               ⚡
@@ -593,7 +611,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               onClick={() => onOpenQuickCapture('task')}
-              className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-left transition-all hover:bg-indigo-50 hover:border-indigo-300 dark:border-slate-800 dark:bg-slate-800 cursor-pointer"
+              className="rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
             >
               <CheckSquare className="h-4 w-4 text-emerald-500 mb-1" />
               <div className="text-xs font-bold text-slate-900 dark:text-white">Task</div>
@@ -603,7 +621,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               onClick={() => onOpenQuickCapture('note')}
-              className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-left transition-all hover:bg-indigo-50 hover:border-indigo-300 dark:border-slate-800 dark:bg-slate-800 cursor-pointer"
+              className="rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
             >
               <BookOpen className="h-4 w-4 text-amber-500 mb-1" />
               <div className="text-xs font-bold text-slate-900 dark:text-white">Note</div>
@@ -613,7 +631,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               onClick={() => onOpenQuickCapture('journal')}
-              className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-left transition-all hover:bg-indigo-50 hover:border-indigo-300 dark:border-slate-800 dark:bg-slate-800 cursor-pointer"
+              className="rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
             >
               <Sparkles className="h-4 w-4 text-blue-500 mb-1" />
               <div className="text-xs font-bold text-slate-900 dark:text-white">Journal</div>
@@ -623,7 +641,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               onClick={() => onOpenQuickCapture('expense')}
-              className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-left transition-all hover:bg-indigo-50 hover:border-indigo-300 dark:border-slate-800 dark:bg-slate-800 cursor-pointer"
+              className="rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
             >
               <DollarSign className="h-4 w-4 text-emerald-600 mb-1" />
               <div className="text-xs font-bold text-slate-900 dark:text-white">Expense</div>
@@ -631,6 +649,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
         </section>
+        </div>
       </div>
     </div>
   );

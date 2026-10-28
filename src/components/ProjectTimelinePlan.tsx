@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Calendar, Clock, AlertTriangle, Bell, BellRing, CheckCircle2,
+  Calendar, AlertTriangle, Bell, BellRing, CheckCircle2,
   Circle, ChevronLeft, ChevronRight, ChevronDown, Search,
-  ArrowRight, Layers, Flame, ShieldAlert,
-  Check, Plus, X, Target, Flag, Briefcase, BookOpen, Award, Repeat,
-  Zap, Landmark, DollarSign, TrendingUp, ShieldCheck,
-  CalendarClock, MoreHorizontal, Eye, EyeOff, Stethoscope, Users
+  Layers, ShieldAlert,
+  Check, X, Target, Flag, Briefcase, BookOpen, Award, Repeat,
+  Zap, Landmark, TrendingUp,
+  CalendarClock, Eye, EyeOff, Stethoscope, Users
 } from 'lucide-react';
 import {
   Goal, Milestone, Task, ReminderItem, TaskPriority,
@@ -18,7 +18,7 @@ import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
 import { SlideTabs } from './SlideTabs';
 import { alarmService } from '../lib/alarmService';
-import { useRingtoneOptions, getDefaultRingtoneId } from '../lib/alarmAudio';
+import { useRingtoneOptions } from '../lib/alarmAudio';
 import {
   createHabitGoalResolver,
   createTaskGoalResolver,
@@ -26,9 +26,6 @@ import {
   resolveHabitGoalId,
   syncGoalProgressFromTasks,
   syncGoalProgressFromMilestones,
-  syncGoalProgressFromProjects,
-  syncGoalProgressFromLearning,
-  syncGoalProgressFromSkills,
   syncGoalProgressFromRoutines,
   syncGoalProgressFromHabits,
   syncGoalProgressFromAppointments,
@@ -374,10 +371,6 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   assets = [],
   appointments = [],
   meetings = [],
-  notes = [],
-  journal = [],
-  practices = [],
-  commitments = [],
   people = [],
   initialStream,
   onRefresh,
@@ -420,16 +413,6 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
     currentDate?: string;
   } | null>(null);
 
-  // Alarm Setting State
-  const [alarmTargetItem, setAlarmTargetItem] = useState<{
-    id: string;
-    title: string;
-    type: 'task' | 'project' | 'learning' | 'skill' | 'routine' | 'milestone';
-    dueAt?: string;
-  } | null>(null);
-  const [alarmCustomTime, setAlarmCustomTime] = useState<string>('');
-  const [alarmRingtone, setAlarmRingtone] = useState<string>(() => getDefaultRingtoneId());
-
   // Task Genesis Modal State
   const [genesisModal, setGenesisModal] = useState<{
     isOpen: boolean;
@@ -469,57 +452,6 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   const goalMap = useMemo(() => {
     const map = new Map<string, Goal>();
     goals.forEach(g => map.set(g.id, g));
-    return map;
-  }, [goals]);
-
-  // ----------------------------------------------------
-  // CROSS-MENU GOAL RESOLVERS & DESCENDANT MAPPING
-  // ----------------------------------------------------
-  const projectGoalMap = useMemo(() => {
-    const map = new Map<string, string>();
-    workProjects.forEach(p => { if (p.goalId) map.set(p.id, p.goalId); });
-    return map;
-  }, [workProjects]);
-
-  const routineGoalMap = useMemo(() => {
-    const map = new Map<string, string>();
-    routines.forEach(r => { if (r.goalId) map.set(r.id, r.goalId); });
-    return map;
-  }, [routines]);
-
-  const skillGoalMap = useMemo(() => {
-    const map = new Map<string, string>();
-    skills.forEach(s => { if (s.goalId) map.set(s.id, s.goalId); });
-    return map;
-  }, [skills]);
-
-  const learningGoalMap = useMemo(() => {
-    const map = new Map<string, string>();
-    learningItems.forEach(l => { if (l.goalId) map.set(l.id, l.goalId); });
-    return map;
-  }, [learningItems]);
-
-  // Descendant Goal Map: maps goalId to Set of itself + all child/sub-goals
-  const descendantGoalMap = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    goals.forEach(g => map.set(g.id, new Set([g.id])));
-
-    const getChildren = (parentId: string): string[] => {
-      return goals.filter(g => g.parentId === parentId || (g.parentIds && g.parentIds.includes(parentId))).map(g => g.id);
-    };
-
-    goals.forEach(g => {
-      const set = map.get(g.id)!;
-      const queue = getChildren(g.id);
-      while (queue.length > 0) {
-        const childId = queue.shift()!;
-        if (!set.has(childId)) {
-          set.add(childId);
-          queue.push(...getChildren(childId));
-        }
-      }
-    });
-
     return map;
   }, [goals]);
 
@@ -1352,17 +1284,6 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
     onRefresh();
   };
 
-  const handleToggleProject = async (proj: WorkProject) => {
-    const isComp = proj.status === 'Completed';
-    const nextStatus = isComp ? 'Active' : 'Completed';
-    const nextProg = isComp ? 35 : 100;
-    const updated: WorkProject = { ...proj, status: nextStatus, progress: nextProg, updatedAt: Date.now() };
-    await storage.put('workProjects', updated);
-    if (proj.goalId) await syncGoalProgressFromProjects(proj.goalId, proj.id, nextStatus, nextProg);
-    onSuccess(nextStatus === 'Completed' ? `✓ Project deliverable completed: "${proj.name}"` : `Project set to active`);
-    onRefresh();
-  };
-
   const handleToggleRoutineToday = async (rt: Routine) => {
     const dates = rt.completedDates || [];
     const nextDates = dates.includes(today) ? dates.filter(d => d !== today) : [...dates, today];
@@ -1519,8 +1440,6 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
     }
 
     let armed = 0;
-    const nowTime = Date.now();
-
     const armItem = async (title: string, linkedId: string, ringtone: string = 'digital_pulse') => {
       if (reminderMap.has(linkedId)) return;
       const targetTimeStr = getLocalDateTimeStr(5 + armed * 2);
@@ -1684,21 +1603,6 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
   const financiallyLinkedGoals = useMemo(() => {
     return goals.filter(g => getGoalFinancialMetrics(g.id).hasAnyLink);
   }, [goals, transactions, investments, loans, liabilities, savingsPlans, assets]);
-
-  // ----------------------------------------------------
-  // RENDER HELPERS: SINGLE DAY SLOT RESOLVER
-  // ----------------------------------------------------
-  const getItemHour = (dueAtStr?: string, startTimeStr?: string): number | null => {
-    if (dueAtStr && dueAtStr.includes('T')) {
-      const h = parseInt(dueAtStr.slice(11, 13), 10);
-      if (!isNaN(h)) return h;
-    }
-    if (startTimeStr) {
-      const h = parseInt(startTimeStr.slice(0, 2), 10);
-      if (!isNaN(h)) return h;
-    }
-    return null;
-  };
 
   return (
     <div className="space-y-5">
@@ -1874,12 +1778,12 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
           </div>
 
           {/* View Mode Switcher (Gantt, Operating Plan, Delay Radar) */}
-          <div className="flex min-w-0 max-w-full flex-1 basis-[20rem] items-center gap-1 overflow-x-auto no-scrollbar rounded-xl bg-slate-100 p-0.5 dark:bg-slate-800">
+          <div className="flex min-w-0 max-w-full flex-1 basis-[20rem] items-center gap-3 overflow-x-auto no-scrollbar">
             <button
               type="button"
               onClick={() => setViewMode('gantt')}
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                viewMode === 'gantt' ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+              className={`flex items-center gap-1 border-b-0 border-transparent px-2.5 py-1 text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                viewMode === 'gantt' ? 'text-amber-700 dark:text-amber-300' : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
               }`}
             >
               <Calendar className="h-3 w-3" />
@@ -1888,8 +1792,8 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <button
               type="button"
               onClick={() => setViewMode('hierarchy')}
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                viewMode === 'hierarchy' ? 'bg-white text-indigo-600 shadow-2xs dark:bg-slate-900 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+              className={`flex items-center gap-1 border-b-0 border-transparent px-2.5 py-1 text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                viewMode === 'hierarchy' ? 'text-amber-700 dark:text-amber-300' : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
               }`}
             >
               <Layers className="h-3 w-3" />
@@ -1898,8 +1802,8 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <button
               type="button"
               onClick={() => setViewMode('radar')}
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                viewMode === 'radar' ? 'bg-white text-rose-600 shadow-2xs dark:bg-slate-900 dark:text-rose-400' : 'text-slate-500 hover:text-rose-600 dark:text-slate-400'
+              className={`flex items-center gap-1 border-b-0 border-transparent px-2.5 py-1 text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                viewMode === 'radar' ? 'text-amber-700 dark:text-amber-300' : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
               }`}
             >
               <ShieldAlert className="h-3 w-3" />
@@ -1909,14 +1813,14 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
 
           {/* Search & Filters */}
           <div className="flex min-w-0 flex-1 basis-[22rem] flex-wrap items-center gap-2">
-          <div className="flex min-w-28 flex-1 basis-36 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex min-w-28 flex-1 basis-36 items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50/40 px-2.5 py-1 text-xs dark:border-amber-900/60 dark:bg-slate-800">
               <Search className="h-3.5 w-3.5 text-slate-400 shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search plan..."
-                className="w-24 min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-400 dark:text-white sm:flex-none sm:w-32"
+                className="w-24 min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-500 focus-visible:ring-1 focus-visible:ring-amber-500 dark:text-white dark:placeholder:text-slate-400 sm:flex-none sm:w-32"
               />
               {searchQuery && (
                 <button type="button" onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600">
@@ -1928,7 +1832,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <select
               value={selectedGoalId}
               onChange={e => setSelectedGoalId(e.target.value)}
-              className="h-8 min-w-28 max-w-full flex-1 basis-28 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+              className="h-8 min-w-28 max-w-full flex-1 basis-28 rounded-xl border border-amber-200 bg-amber-50/40 px-2.5 text-xs font-medium text-slate-700 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-amber-500 cursor-pointer"
             >
               <option value="all">Goals ({goals.length})</option>
               {hierarchicalGoals.map(g => (
@@ -1941,7 +1845,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
-              className="h-8 min-w-28 max-w-full flex-1 basis-28 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+              className="h-8 min-w-28 max-w-full flex-1 basis-28 rounded-xl border border-amber-200 bg-amber-50/40 px-2.5 text-xs font-medium text-slate-700 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-amber-500 cursor-pointer"
             >
               <option value="all">Status</option>
               <option value="delayed">Overdue ({totalDelayedAllCount})</option>
@@ -1958,28 +1862,28 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
           {/* Top Financial Portfolio Overview when Finance stream is active */}
           {activeStream === 'finance' && (
             <div className="metric-summary-grid grid grid-cols-2 sm:grid-cols-4 gap-3 animate-in fade-in duration-200">
-              <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tracked Goals</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
                   {financiallyLinkedGoals.length} <span className="text-xs font-normal text-slate-400">/ {goals.length}</span>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-3.5 shadow-2xs dark:border-emerald-900/60 dark:bg-emerald-950/20">
+              <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Linked Income</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
                   ₹{transactions.filter(t => t.goalId && t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-rose-200/80 bg-rose-50/40 p-3.5 shadow-2xs dark:border-rose-900/60 dark:bg-rose-950/20">
+              <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400">Linked Expenses</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-rose-600 dark:text-rose-400">
                   ₹{transactions.filter(t => t.goalId && t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3.5 shadow-2xs dark:border-blue-900/60 dark:bg-blue-950/20">
+              <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-blue-600 dark:text-blue-400">
                   ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
@@ -1988,199 +1892,163 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             </div>
           )}
 
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+          <div className="overflow-hidden rounded-2xl border border-[var(--om-line)] bg-card shadow-sm">
             {/* Header Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/90 px-4 py-2.5 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+            <div className="flex flex-col justify-between gap-2 border-b border-[var(--om-line)] bg-card-soft px-4 py-2.5 text-xs text-ink-soft sm:flex-row sm:items-center">
               <div className="flex items-center gap-2 min-w-0">
-                <Calendar className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                <span className="font-semibold text-slate-900 dark:text-white truncate">
+                <Calendar className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+                <span className="truncate font-semibold text-ink">
                   Multi-Stream Execution Schedule
                 </span>
-              <span className="text-slate-400 hidden md:inline">· 5-Branch Hierarchy, Milestones, Projects, Learning, Skills & Routines</span>
-            </div>
-            <div className="flex items-center gap-3 text-[11px] shrink-0">
-              <span className="flex items-center gap-1.5 font-medium">
-                <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                <span>Delayed</span>
-              </span>
-              <span className="flex items-center gap-1.5 font-medium">
-                <span className="h-2 w-2 rounded-full bg-indigo-500" />
-                <span>Planned Span</span>
-              </span>
-              <span className="flex items-center gap-1.5 font-medium">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span>Completed</span>
-              </span>
-            </div>
-          </div>
-
-          {/* Granularity Switcher & Period Controls */}
-          <div className="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-2.5 border-b border-slate-200/80 bg-slate-100/60 px-3 sm:px-4 py-2 dark:border-slate-800/80 dark:bg-slate-800/30">
-            {/* 5 Granularities */}
-            <div className="flex w-full max-w-full min-w-0 flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-white p-1 shadow-2xs dark:border-slate-700/80 dark:bg-slate-900 sm:w-auto sm:flex-1">
-              <button
-                type="button"
-                onClick={() => { setTimelineGranularity('single_day'); setTimelineOffset(0); }}
-                className={`rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  timelineGranularity === 'single_day'
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
-              >
-                📅 Day
-              </button>
-              <button
-                type="button"
-                onClick={() => { setTimelineGranularity('daily'); setTimelineOffset(0); }}
-                className={`rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  timelineGranularity === 'daily'
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
-              >
-                📆 Week
-              </button>
-              <button
-                type="button"
-                onClick={() => { setTimelineGranularity('monthly'); setTimelineOffset(0); }}
-                className={`rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  timelineGranularity === 'monthly'
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
-              >
-                🗓️ Monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => { setTimelineGranularity('yearly'); setTimelineOffset(0); }}
-                className={`rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  timelineGranularity === 'yearly'
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
-              >
-                📈 Yearly
-              </button>
-              <button
-                type="button"
-                onClick={() => { setTimelineGranularity('lifecycle'); setTimelineOffset(0); }}
-                className={`rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  timelineGranularity === 'lifecycle'
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
-              >
-                🚀 Lifecycle
-              </button>
-            </div>
-
-            {/* Previous / Current / Next Controls */}
-            <div className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto">
-              <button
-                type="button"
-                onClick={() => setTimelineOffset(prev => prev - 1)}
-                className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 cursor-pointer text-slate-600 dark:text-slate-300 transition-colors"
-                title="Previous Window"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setTimelineOffset(0)}
-                className={`px-2 py-0.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${
-                  timelineOffset === 0
-                    ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300'
-                    : 'border-slate-200 bg-white hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                }`}
-              >
-                {timelineGranularity === 'single_day' ? 'Today' : 'Current'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setTimelineOffset(prev => prev + 1)}
-                className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 cursor-pointer text-slate-600 dark:text-slate-300 transition-colors"
-                title="Next Window"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-              <span className="min-w-0 flex-1 basis-24 truncate text-right font-mono text-xs font-bold text-slate-800 dark:text-slate-200 sm:ml-1">
-                {timelineData.title}
-              </span>
-            </div>
-          </div>
-
-          {/* Quick Financial KPIs bar when in Finance stream */}
-          {activeStream === 'finance' && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-slate-100 bg-emerald-50/20 p-2.5 dark:border-slate-800 dark:bg-emerald-950/10">
-              <div className="rounded-xl border border-slate-200/60 bg-white p-2 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Tracked Goals</span>
-                <div className="font-mono text-base font-extrabold text-slate-900 dark:text-white">
-                  {financiallyLinkedGoals.length} <span className="text-[10px] font-normal text-slate-400">/ {goals.length}</span>
-                </div>
+                <span className="hidden text-ink-muted md:inline">· 5-Branch Hierarchy, Milestones, Projects, Learning, Skills & Routines</span>
               </div>
-              <div className="rounded-xl border border-emerald-200/60 bg-white p-2 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600">Savings Target</span>
-                <div className="font-mono text-base font-extrabold text-emerald-600">
-                  ₹{savingsPlans.reduce((s, sp) => s + (Number(sp.targetAmount) || 0), 0).toLocaleString('en-IN')}
-                </div>
-              </div>
-              <div className="rounded-xl border border-rose-200/60 bg-white p-2 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600">Active Debt / Loans</span>
-                <div className="font-mono text-base font-extrabold text-rose-600">
-                  ₹{loans.reduce((s, l) => s + (Number((l as any).principal ?? (l as any).amount) || 0), 0).toLocaleString('en-IN')}
-                </div>
-              </div>
-              <div className="rounded-xl border border-blue-200/60 bg-white p-2 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600">Investments Val</span>
-                <div className="font-mono text-base font-extrabold text-blue-600">
-                  ₹{investments.reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
-                </div>
+              <div className="flex shrink-0 items-center gap-3 text-[11px]">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="h-2 w-2 rounded-full bg-rose-500" />
+                  <span>Delayed</span>
+                </span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="h-2 w-2 rounded-full bg-amber-600" />
+                  <span>Planned Span</span>
+                </span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span>Completed</span>
+                </span>
               </div>
             </div>
-          )}
 
-          {/* Timeline Table Body */}
-          <div className="overflow-x-auto no-scrollbar">
-            <div className="min-w-[720px] sm:min-w-[850px]">
-              {/* Timeline Header Row (Sticky left title column) */}
-              <div className="flex border-b border-slate-200 bg-slate-100/70 text-center text-[10px] font-bold text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-400">
-                <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} shrink-0 p-2 text-left pl-3 sm:pl-4 font-semibold text-slate-700 dark:text-slate-300 sticky left-0 z-30 bg-slate-100/95 dark:bg-slate-800/95 backdrop-blur-xs border-r border-slate-200 dark:border-slate-800 transition-all`}>
-                  {isMobileCompactView ? 'WORKSTREAM' : 'PROJECT WORKSTREAM'}
-                </div>
-                <div
-                  className="flex-1 grid"
-                  style={{ gridTemplateColumns: `repeat(${timelineData.cols.length}, minmax(0, 1fr))` }}
-                >
-                  {timelineData.cols.map(c => (
-                    <div
-                      key={c.id}
-                      onClick={() => {
-                        if (timelineGranularity === 'daily' && (c as any).offsetFromToday !== undefined) {
-                          setTimelineGranularity('single_day');
-                          setTimelineOffset((c as any).offsetFromToday);
-                        }
-                      }}
-                      className={`p-1.5 border-l border-slate-200/60 dark:border-slate-800/60 transition-colors ${
-                        timelineGranularity === 'daily' ? 'cursor-pointer hover:bg-indigo-100/60 dark:hover:bg-indigo-950/40' : ''
-                      } ${
-                        c.isToday
-                        ? 'bg-indigo-600 text-white font-black dark:bg-indigo-500'
-                          : c.isWeekend
-                          ? 'bg-slate-200/40 dark:bg-slate-800/80'
-                          : ''
+            {/* Granularity Switcher & Period Controls */}
+            <div className="flex flex-col justify-between gap-2 border-b border-[var(--om-line)] bg-card-soft px-4 py-2 sm:flex-row sm:items-center">
+              <div className="timeline-granularity-tabs flex w-full max-w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:flex-1">
+                {([
+                  ['single_day', 'Day'],
+                  ['daily', 'Week'],
+                  ['monthly', 'Monthly'],
+                  ['yearly', 'Yearly'],
+                  ['lifecycle', 'Lifecycle']
+                ] as const).map(([granularity, label], index) => (
+                  <React.Fragment key={granularity}>
+                    {index > 0 && <span aria-hidden="true" className="px-0.5 text-amber-400/80 dark:text-amber-700">·</span>}
+                    <button
+                      type="button"
+                      aria-pressed={timelineGranularity === granularity}
+                      onClick={() => { setTimelineGranularity(granularity); setTimelineOffset(0); }}
+                      className={`timeline-granularity-tab px-1.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap sm:text-xs ${
+                        timelineGranularity === granularity
+                          ? 'text-amber-800 dark:text-amber-200'
+                          : 'text-amber-700 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-100'
                       }`}
-                      title={timelineGranularity === 'daily' ? `Click to open Single Day focus for ${c.dateStr}` : undefined}
                     >
-                      <div className="truncate">{c.label}</div>
-                      {c.subLabel && <div className="text-[11px] truncate">{c.subLabel}</div>}
-                    </div>
-                  ))}
-                </div>
+                      {label}
+                    </button>
+                  </React.Fragment>
+                ))}
               </div>
 
-              {/* Rows Grouped by Hierarchical Goals */}
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <div className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setTimelineOffset(prev => prev - 1)}
+                  className="p-1 text-amber-800 transition-colors hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
+                  title="Previous Window"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimelineOffset(0)}
+                  className={`rounded-full border border-amber-300/80 px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer dark:border-amber-800 ${
+                    timelineOffset === 0
+                      ? 'bg-card-soft text-amber-900 dark:text-amber-200'
+                      : 'bg-transparent text-amber-800 hover:bg-card-soft dark:text-amber-300 dark:hover:bg-card-soft'
+                  }`}
+                >
+                  {timelineGranularity === 'single_day' ? 'Today' : 'Current'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimelineOffset(prev => prev + 1)}
+                  className="p-1 text-amber-800 transition-colors hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
+                  title="Next Window"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+                <span className="min-w-0 flex-1 basis-24 truncate text-right font-mono text-xs font-bold text-ink sm:ml-1">
+                  {timelineData.title}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Financial KPIs bar when in Finance stream */}
+            {activeStream === 'finance' && (
+              <div className="grid grid-cols-2 gap-2 border-b border-[var(--om-line)] p-2.5 sm:grid-cols-4">
+                <div className="rounded-xl border border-[var(--om-line)] bg-card-soft p-2">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-ink-muted">Tracked Goals</span>
+                  <div className="font-mono text-base font-extrabold text-ink">
+                    {financiallyLinkedGoals.length} <span className="text-[10px] font-normal text-ink-muted">/ {goals.length}</span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[var(--om-line)] bg-card-soft p-2">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Savings Target</span>
+                  <div className="font-mono text-base font-extrabold text-emerald-700 dark:text-emerald-400">
+                    ₹{savingsPlans.reduce((s, sp) => s + (Number(sp.targetAmount) || 0), 0).toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[var(--om-line)] bg-card-soft p-2">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400">Active Debt / Loans</span>
+                  <div className="font-mono text-base font-extrabold text-rose-700 dark:text-rose-400">
+                    ₹{loans.reduce((s, l) => s + (Number((l as any).principal ?? (l as any).amount) || 0), 0).toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[var(--om-line)] bg-card-soft p-2">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Investments Val</span>
+                  <div className="font-mono text-base font-extrabold text-amber-700 dark:text-amber-300">
+                    ₹{investments.reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Timeline Table Body */}
+            <div className="overflow-x-auto no-scrollbar">
+              <div className="min-w-[720px] sm:min-w-[850px]">
+                <div className="flex border-b border-[var(--om-line)] bg-card-soft text-center text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                  <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} sticky left-0 z-30 shrink-0 border-r border-[var(--om-line)] bg-card-soft p-2 pl-3 text-left font-semibold text-slate-700 transition-all dark:text-slate-300 sm:pl-4`}>
+                    {isMobileCompactView ? 'WORKSTREAM' : 'PROJECT WORKSTREAM'}
+                  </div>
+                  <div
+                    className="grid flex-1"
+                    style={{ gridTemplateColumns: `repeat(${timelineData.cols.length}, minmax(0, 1fr))` }}
+                  >
+                    {timelineData.cols.map(c => (
+                      <div
+                        key={c.id}
+                        onClick={() => {
+                          if (timelineGranularity === 'daily' && (c as any).offsetFromToday !== undefined) {
+                            setTimelineGranularity('single_day');
+                            setTimelineOffset((c as any).offsetFromToday);
+                          }
+                        }}
+                        className={`border-l border-[var(--om-line)] p-1.5 transition-colors ${
+                          timelineGranularity === 'daily' ? 'cursor-pointer hover:bg-amber-100/70 dark:hover:bg-amber-950/40' : ''
+                        } ${
+                          c.isToday
+                            ? 'bg-[#b88648] font-black text-white dark:bg-[#9b713b]'
+                            : 'bg-card-soft text-slate-500 dark:text-slate-400'
+                        }`}
+                        title={timelineGranularity === 'daily' ? `Click to open Single Day focus for ${c.dateStr}` : undefined}
+                      >
+                        <div className="truncate">{c.label}</div>
+                        {c.subLabel && <div className="truncate text-[11px]">{c.subLabel}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Rows Grouped by Hierarchical Goals */}
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+
                 {(selectedGoalId === 'all' ? hierarchicalGoals : hierarchicalGoals.filter(g => g.id === selectedGoalId))
                   .map(goal => {
                     const indexed = goalItemIndex.get(goal.id);
@@ -2327,7 +2195,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                         <span className="font-bold text-blue-600 dark:text-blue-400">📈 Inv: {goalInvestments.length}</span>
                                       </div>
                                     ) : periodGoalRate !== null ? (
-                                      <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded font-mono">
+                                      <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded font-mono">
                                         {windowLabel}: {periodGoalRate}% ({periodGoalDone}/{periodGoalItems})
                                       </span>
                                     ) : (
@@ -3586,9 +3454,6 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               <Layers className="h-4 w-4 text-indigo-600" />
               <span>Full Strategic Lineage: Goals ➔ Milestones ➔ Deliverables ➔ Action Units</span>
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Structured 5-Tier roadmap connecting macro missions to daily habit & task execution.
-            </p>
           </div>
 
           <div className="space-y-3">
@@ -3596,9 +3461,6 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               const indexed = goalItemIndex.get(goal.id);
               const gMilestones = indexed?.milestones || [];
               const gProjects = indexed?.projects || [];
-              const gLearning = indexed?.learning || [];
-              const gSkills = indexed?.skills || [];
-              const gRoutines = indexed?.routines || [];
               const gTasks = indexed?.tasks || [];
               const gSavings = indexed?.savingsPlans || [];
               const gLoans = indexed?.loans || [];
@@ -3835,12 +3697,12 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               </div>
 
               {/* Severity Filter */}
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setRadarSeverityFilter('all')}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold cursor-pointer ${
-                    radarSeverityFilter === 'all' ? 'bg-rose-600 text-white' : 'bg-white border text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                  className={`border-b-0 border-transparent px-2 py-1 text-xs font-semibold cursor-pointer ${
+                    radarSeverityFilter === 'all' ? 'text-amber-700 dark:text-amber-300' : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
                   All ({totalDelayedAllCount})
@@ -3848,8 +3710,8 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                 <button
                   type="button"
                   onClick={() => setRadarSeverityFilter('critical')}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold cursor-pointer ${
-                    radarSeverityFilter === 'critical' ? 'bg-rose-600 text-white' : 'bg-white border text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                  className={`border-b-0 border-transparent px-2 py-1 text-xs font-semibold cursor-pointer ${
+                    radarSeverityFilter === 'critical' ? 'text-amber-700 dark:text-amber-300' : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
                   Critical (&gt;3d)
@@ -4070,28 +3932,28 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
       {activeStream === 'finance' && viewMode !== 'gantt' && (
         <div className="space-y-4 animate-in fade-in duration-200">
           <div className="metric-summary-grid grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+            <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tracked Goals</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
                 {financiallyLinkedGoals.length} <span className="text-xs font-normal text-slate-400">/ {goals.length}</span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-3.5 shadow-2xs dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Linked Income</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
                 ₹{transactions.filter(t => t.goalId && t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-rose-200/80 bg-rose-50/40 p-3.5 shadow-2xs dark:border-rose-900/60 dark:bg-rose-950/20">
+            <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400">Linked Expenses</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-rose-600 dark:text-rose-400">
                 ₹{transactions.filter(t => t.goalId && t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3.5 shadow-2xs dark:border-blue-900/60 dark:bg-blue-950/20">
+            <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-blue-600 dark:text-blue-400">
                 ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}

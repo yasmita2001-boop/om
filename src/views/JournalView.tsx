@@ -14,6 +14,7 @@ import { NoteRichEditor } from '../components/NoteRichEditor';
 import { htmlToPlainText, plainTextToHtml, sanitizeHtml } from '../lib/sanitizeHtml';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
+import { FormDisclosureToggle } from '../components/FormDisclosure';
 
 interface JournalViewProps {
   journal: JournalEntry[];
@@ -34,7 +35,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
   const [journalGoalId, setJournalGoalId] = useState<string>('');
   const [date, setDate] = useState(today);
   const [colorTheme, setColorTheme] = useState('slate');
-  const [customColor, setCustomColor] = useState('#8b5cf6');
+  const [customColor, setCustomColor] = useState('#b88648');
   const [mood, setMood] = useState('Productive');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMoodFilter, setSelectedMoodFilter] = useState<string>('all');
@@ -219,7 +220,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
     setJournalInputMode(entry.goalId ? 'link' : 'manual');
     setDate(entry.date);
     setColorTheme(entry.color && themePalettes[entry.color] ? entry.color : entry.color?.startsWith('#') ? 'custom' : 'slate');
-    setCustomColor(entry.color?.startsWith('#') ? entry.color : '#8b5cf6');
+    setCustomColor(entry.color?.startsWith('#') ? entry.color : '#b88648');
     setMood(entry.mood || 'Productive');
     const parsedAtts: StoredAttachmentMeta[] = (entry.attachments || []).map(a => {
       try {
@@ -283,7 +284,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
     setJournalInputMode('manual');
     setDate(today);
     setColorTheme('slate');
-    setCustomColor('#8b5cf6');
+    setCustomColor('#b88648');
     setMood('Productive');
     setAttachments([]);
     setJournalHtml('');
@@ -357,7 +358,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
             setViewingEntry(j);
           }
         }}
-        className={`progressive-row relative flex h-80 cursor-pointer flex-col overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-xs transition-all card-hover ${theme.cardClass}`}
+        className={`progressive-row relative flex h-80 cursor-pointer flex-col overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-card transition-all card-hover ${theme.cardClass}`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -459,32 +460,34 @@ export const JournalView: React.FC<JournalViewProps> = ({
             aria-expanded={archiveControlsOpen}
             aria-controls="journal-archive-controls"
             onClick={() => setArchiveControlsOpen(open => !open)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300"
+            className={`inline-flex items-center justify-center gap-2 border-b-0 px-3.5 py-2 text-xs font-semibold transition-colors ${
+              archiveControlsOpen
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'border-transparent text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+            }`}
           >
             <span>Journal Timeline ({filteredEntries.length})</span>
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${archiveControlsOpen ? 'rotate-180' : ''}`} />
           </button>
-          <button
-            type="button"
-            aria-expanded={isEditorOpen}
-            onClick={() => setIsEditorOpen(open => !open)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>{isEditorOpen ? 'Close Reflection' : 'New Reflection'}</span>
-          </button>
+          <FormDisclosureToggle
+            label="New Reflection"
+            openLabel="Close Reflection"
+            isOpen={isEditorOpen}
+            onToggle={() => setIsEditorOpen(open => !open)}
+            icon={<Plus className="h-3.5 w-3.5" />}
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
         {/* Journal Editor (5 cols) */}
         {(isEditorOpen || Boolean(editingId)) && <div
           ref={formRef}
-          className={`lg:col-span-5 rounded-2xl border transition-all ${
+          className={`min-w-0 lg:col-span-5 rounded-2xl border transition-all ${
             editingId
               ? 'border-indigo-400 bg-indigo-50/20 dark:border-indigo-500/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
               : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
-          } p-5 sm:p-6 shadow-xs`}
+          } p-5 sm:p-6 shadow-card`}
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
@@ -527,6 +530,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 <LinkModeSelector
                   value={journalInputMode}
                   ariaLabel="Journal goal link mode"
+                  className="journal-reflection-mode"
                   options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
                   onChange={mode => {
                     if (mode === 'link') {
@@ -581,7 +585,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder="e.g. Navigating strategic ambiguity"
-                className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="journal-reflection-field h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
@@ -594,7 +598,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                   type="date"
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
+                  className="journal-reflection-field mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
                 />
               </div>
 
@@ -605,7 +609,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 <select
                   value={mood}
                   onChange={e => setMood(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="journal-reflection-field mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
                   {moodOptions.map(m => (
                     <option key={m.label} value={m.label}>{m.icon} {m.label}</option>
@@ -632,7 +636,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                       aria-pressed={isSelected}
                       className={`h-7 w-7 rounded-xl border flex items-center justify-center transition-all ${
                         isSelected
-                          ? 'border-indigo-600 ring-2 ring-indigo-500/30 scale-105'
+                          ? 'border-amber-500 ring-2 ring-amber-500/30 scale-105'
                           : 'border-slate-200 dark:border-slate-700'
                       }`}
                       title={t.label}
@@ -647,7 +651,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 <label
                   className={`flex h-7 w-7 items-center justify-center rounded-xl border transition-all cursor-pointer ${
                     colorTheme === 'custom'
-                      ? 'border-indigo-600 ring-2 ring-indigo-500/30 scale-105'
+                      ? 'border-amber-500 ring-2 ring-amber-500/30 scale-105'
                       : 'border-slate-200 dark:border-slate-700'
                   }`}
                   title="Custom color"
@@ -678,6 +682,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 placeholder=""
                 minHeight="min-h-[150px]"
                 maxHeight="max-h-[280px]"
+                className="journal-reflection-editor"
               />
             </div>
 
@@ -687,6 +692,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 attachments={attachments}
                 onChange={setAttachments}
                 label="Attach Files & Media"
+                className="journal-reflection-upload"
               />
             </div>
 
@@ -714,19 +720,19 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search reflections by word, mood, or date..."
-                className="h-9 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="h-9 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-9 pr-3 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
             {/* Mood / Category Filter Tabs */}
-            <div className="flex overflow-x-auto pb-1 gap-2 no-scrollbar">
+            <div className="flex overflow-x-auto pb-1 gap-3 no-scrollbar">
               <button
                 type="button"
                 onClick={() => setSelectedMoodFilter('all')}
-                className={`rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap tracking-normal transition-all cursor-pointer ${
+                className={`shrink-0 border-b-0 border-transparent px-2 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap tracking-normal transition-all cursor-pointer ${
                   selectedMoodFilter === 'all'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/80'
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                 }`}
               >
                 All Entries ({journal.length})
@@ -734,10 +740,10 @@ export const JournalView: React.FC<JournalViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSelectedMoodFilter('__linked_goals__')}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap tracking-normal transition-all cursor-pointer ${
+                className={`flex shrink-0 items-center gap-1.5 border-b-0 border-transparent px-2 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap tracking-normal transition-all cursor-pointer ${
                   selectedMoodFilter === '__linked_goals__'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900/60'
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                 }`}
               >
                 <Target className="h-3.5 w-3.5" />
@@ -750,10 +756,10 @@ export const JournalView: React.FC<JournalViewProps> = ({
                     key={m.label}
                     type="button"
                     onClick={() => setSelectedMoodFilter(m.label)}
-                    className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap tracking-normal transition-all cursor-pointer ${
+                    className={`flex shrink-0 items-center gap-1.5 border-b-0 border-transparent px-2 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap tracking-normal transition-all cursor-pointer ${
                       selectedMoodFilter === m.label
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/80'
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     <span>{m.icon}</span>

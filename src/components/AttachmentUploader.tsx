@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Paperclip, File, X, Download, FileText, HardDrive, Upload, AlertCircle, Video } from 'lucide-react';
+import { Paperclip, X, Download, FileText, HardDrive, Upload, AlertCircle } from 'lucide-react';
 import { generateImageThumbnail } from '../lib/thumbnailService';
 import { generateVideoThumbnail } from '../lib/attachmentService';
 
@@ -178,7 +178,7 @@ export const AttachmentUploader: React.FC<AttachmentUploaderProps> = ({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={attachments.length >= maxFiles}
-          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer transition-colors disabled:opacity-50"
+          className="sanctuary-upload-control flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer transition-colors disabled:opacity-50"
         >
           <Paperclip className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
           <span>{attachments.length > 0 ? `+ Add File (${attachments.length}/${maxFiles})` : 'Choose File'}</span>
@@ -220,7 +220,7 @@ export const AttachmentUploader: React.FC<AttachmentUploaderProps> = ({
                     {isOriginOnly && (
                       <span
                         title="Transferred in lightweight mode without heavy media. Media stored on originating device."
-                        className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                        className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
                       >
                         <HardDrive className="h-2 w-2" />
                         Origin device
@@ -406,7 +406,7 @@ export const AttachmentViewer: React.FC<{
                   {isOriginOnly && (
                     <span
                       title="Media stored on originating device"
-                      className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                      className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
                     >
                       <HardDrive className="h-2 w-2" />
                       Origin device

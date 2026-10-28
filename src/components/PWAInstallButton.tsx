@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Monitor, Smartphone, X, Check } from 'lucide-react';
+import { Download, Smartphone, X } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 export const PWAInstallButton: React.FC = () => {
@@ -26,7 +26,7 @@ export const PWAInstallButton: React.FC = () => {
       <button
         type="button"
         onClick={handleInstallClick}
-        className="flex h-9 items-center gap-1.5 rounded-xl bg-indigo-600 px-2.5 sm:px-3 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 active:scale-95 transition-all cursor-pointer shrink-0"
+        className="flex h-9 items-center gap-1.5 px-2.5 sm:px-3 text-xs font-semibold text-amber-700 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
         title="Install Om-LifeOS as an app on Windows or Android"
       >
         <Download className="h-3.5 w-3.5" />
@@ -42,10 +42,10 @@ export const PWAInstallButton: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowIOSGuide(true)}
-          className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-850 dark:text-slate-200 dark:hover:bg-slate-800 transition-all cursor-pointer shrink-0"
+          className="flex h-9 items-center gap-1.5 px-2.5 text-xs font-medium text-amber-700 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           title="Install on iPhone / iPad"
         >
-          <Smartphone className="h-3.5 w-3.5 text-indigo-500" />
+          <Smartphone className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Install PWA</span>
         </button>
 

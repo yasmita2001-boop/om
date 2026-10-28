@@ -48,20 +48,12 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
   const notes: any[] = fullData.notes || [];
   const journal: any[] = fullData.journal || [];
   const habits: any[] = fullData.habits || [];
-  const routines: any[] = fullData.routines || [];
   const people: any[] = fullData.people || [];
-  const healthMeasurements: any[] = fullData.healthMeasurements || [];
-  const sleepRecords: any[] = fullData.sleepRecords || [];
-  const settings: any = fullData.appSettings || {};
 
   // Timeline & Plan Datasets
   const workProjects: any[] = fullData.workProjects || [];
   const milestones: any[] = fullData.milestones || [];
   const learningItems: any[] = fullData.learningItems || [];
-  const skills: any[] = fullData.skills || [];
-  const reminders: any[] = fullData.reminders || [];
-  const meetings: any[] = fullData.meetings || [];
-  const appointments: any[] = fullData.healthAppointments || [];
   const savingsPlans: any[] = fullData.savingsPlans || [];
   const investments: any[] = fullData.investments || [];
 
@@ -260,10 +252,10 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
       --border-color: #e2e8f0;
       --text-main: #0f172a;
       --text-muted: #64748b;
-      --accent: #4f46e5;
-      --accent-hover: #4338ca;
-      --accent-light: #eef2ff;
-      --accent-text: #4338ca;
+      --accent: #b88648;
+      --accent-hover: #94683d;
+      --accent-light: #f5ead8;
+      --accent-text: #795326;
       --success: #10b981;
       --success-light: #ecfdf5;
       --success-text: #047857;
@@ -283,10 +275,10 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
       --border-color: #1e293b;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
-      --accent: #6366f1;
-      --accent-hover: #4f46e5;
-      --accent-light: #1e1b4b;
-      --accent-text: #a5b4fc;
+      --accent: #d4aa6b;
+      --accent-hover: #e0bd7d;
+      --accent-light: #3a2f1e;
+      --accent-text: #f0d7aa;
       --success: #10b981;
       --success-light: #064e3b;
       --success-text: #6ee7b7;
@@ -337,7 +329,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
     .brand-icon {
       width: 2.25rem;
       height: 2.25rem;
-      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      background: linear-gradient(135deg, #c99c5a, #94683d);
       color: white;
       border-radius: 0.75rem;
       display: flex;

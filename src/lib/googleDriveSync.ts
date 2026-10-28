@@ -19,6 +19,7 @@ import {
   UniversalDataManager
 } from './universalDataManager';
 import { AppState, HealthProfile } from '../types';
+import { omitDeviceAppearanceSettings } from './appearance';
 
 export const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file'
@@ -349,7 +350,7 @@ export async function buildCleanWorkspaceSnapshot(userEmail?: string | null, acc
   const purgedCount = canonical.purgedGhostCount + tombstoneExcludedCount;
 
   const settingsData = await storage.getSingleton<AppState>('appSettings', activeProfileId);
-  const safeSettings = settingsData ? { ...settingsData } : null;
+  const safeSettings = settingsData ? omitDeviceAppearanceSettings(settingsData) : null;
 
   const workspaceId = activeProfileId || settingsData?.profileId || 'default';
   const activeProfileName = settingsData?.profiles?.find(p => p.id === workspaceId)?.name || 'Om-LifeOS';

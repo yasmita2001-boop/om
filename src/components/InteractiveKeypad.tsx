@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Delete, Check, Copy, ArrowLeftRight, HelpCircle } from 'lucide-react';
+import { Delete, Check, Copy } from 'lucide-react';
 import { calculatorEngine } from '../lib/calculatorEngine';
 import { soundEngine } from '../lib/soundEngine';
 
@@ -210,16 +210,34 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
       <div className="flex items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-2">
           {/* Deg / Rad Toggle */}
-          <button
-            type="button"
-            onClick={() => setAngleMode(prev => (prev === 'deg' ? 'rad' : 'deg'))}
-            className="flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 transition-colors cursor-pointer border border-slate-200/60 dark:border-slate-700 shadow-2xs"
-            title="Toggle Angle Unit: Degrees / Radians"
-          >
-            <span className={angleMode === 'deg' ? 'text-indigo-600 dark:text-indigo-400 font-black' : 'text-slate-400'}>DEG</span>
-            <span className="text-slate-300 dark:text-slate-600">|</span>
-            <span className={angleMode === 'rad' ? 'text-indigo-600 dark:text-indigo-400 font-black' : 'text-slate-400'}>RAD</span>
-          </button>
+          <div className="flex items-center gap-2" role="group" aria-label="Angle unit">
+            <button
+              type="button"
+              aria-pressed={angleMode === 'deg'}
+              onClick={() => setAngleMode('deg')}
+              className={`border-b-0 border-transparent px-1.5 py-1 text-xs font-bold transition-colors cursor-pointer ${
+                angleMode === 'deg'
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+              }`}
+              title="Degrees"
+            >
+              DEG
+            </button>
+            <button
+              type="button"
+              aria-pressed={angleMode === 'rad'}
+              onClick={() => setAngleMode('rad')}
+              className={`border-b-0 border-transparent px-1.5 py-1 text-xs font-bold transition-colors cursor-pointer ${
+                angleMode === 'rad'
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+              }`}
+              title="Radians"
+            >
+              RAD
+            </button>
+          </div>
 
           {/* Memory Status Badge */}
           {memory !== null && (

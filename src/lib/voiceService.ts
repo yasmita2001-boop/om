@@ -408,8 +408,7 @@ import {
   splitIntoSpeechUnits,
   pickOptimalVoice,
   SpeechUnit,
-  VoicePersona,
-  PERSONA_PRESETS
+  VoicePersona
 } from './nativeVoiceEngine';
 
 /**

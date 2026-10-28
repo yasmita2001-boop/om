@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CheckSquare, FileText, BookOpen, DollarSign, Target, Bell, User, Volume2, Clock } from 'lucide-react';
+import { X, CheckSquare, FileText, BookOpen, DollarSign, Target, Bell, User, Volume2 } from 'lucide-react';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
 import { Task, Note, JournalEntry, FinanceTransaction, FinanceAccount, Goal, ReminderItem, Person } from '../types';
@@ -236,16 +236,16 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
         </div>
 
         {/* Capture Type Selector */}
-        <div className="mt-4 flex flex-wrap gap-1.5 border-b border-slate-100 pb-3 dark:border-slate-800">
+        <div className="mt-4 flex flex-wrap gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
           {types.map(t => (
             <button
               key={t.id}
               type="button"
               onClick={() => setActiveType(t.id)}
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+              className={`flex items-center gap-1.5 border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold transition-colors ${
                 activeType === t.id
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                  ? 'text-amber-700 dark:text-amber-300 [&_svg]:text-amber-700 dark:[&_svg]:text-amber-300'
+                  : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
               }`}
             >
               {t.icon}

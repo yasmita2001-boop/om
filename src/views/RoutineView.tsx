@@ -2,19 +2,21 @@ import React, { useState } from 'react';
 import {
   Repeat, Clock, Trash2, CheckCircle2,
   Flame, Check, Bell, Link2, Edit3, X, Target,
-  BellRing, Zap, AlertTriangle, CheckSquare, ChevronDown, Plus
+  BellRing, Zap, CheckSquare, Plus
 } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 import { Routine, Habit, HabitLog, Goal, Task, TaskPriority, ReminderItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { resolveHabitGoalId, syncGoalProgressFromHabits, syncGoalProgressFromRoutines, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { alarmService } from '../lib/alarmService';
 import { computeItemDelay } from '../components/ProjectTimelinePlan';
-import { BUILTIN_RINGTONES, useRingtoneOptions, getDefaultRingtoneId } from '../lib/alarmAudio';
+import { BUILTIN_RINGTONES, getDefaultRingtoneId } from '../lib/alarmAudio';
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
+import { FormDisclosureToggle } from '../components/FormDisclosure';
 
 interface RoutineViewProps {
   routines: Routine[];
@@ -49,13 +51,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   habits,
   habitLogs,
   goals = [],
-  tasks = [],
-  reminders = [],
   onRefresh,
   onSuccess
 }) => {
   const today = getLocalDateString();
-  const { ringtoneOptions, defaultRingtone } = useRingtoneOptions();
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'routine' | 'habit'; id: string; name: string } | null>(null);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [habitFilter, setHabitFilter] = useState<'all' | 'linked' | 'standalone' | string>('all');
@@ -117,7 +116,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
   // New Habit form
   const [habitName, setHabitName] = useState('');
-  const [habitInputMode, setHabitInputMode] = useState<'manual' | 'linkRoutine' | 'linkGoal'>('manual');
+  const [habitInputMode, setHabitInputMode] = useState<'manual' | 'linkRoutine'>('manual');
   const [habitFrequency, setHabitFrequency] = useState('Daily');
   const [timesPerDay, setTimesPerDay] = useState(1);
   const [isOccurrencesManual, setIsOccurrencesManual] = useState(false);
@@ -126,10 +125,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     '08:00', '14:00', '20:00', '10:00', '16:00', '18:00', '21:00', '22:00'
   ]);
   const [time1, setTime1] = useState('08:00');
-  const [time2, setTime2] = useState('14:00');
-  const [time3, setTime3] = useState('20:00');
   const [linkedRoutineId, setLinkedRoutineId] = useState<string>('');
-  const [habitGoalId, setHabitGoalId] = useState<string>('');
 
   const handleUpdateSlotTime = (index: number, val: string) => {
     setSlotTimes(prev => {
@@ -138,8 +134,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       return next;
     });
     if (index === 0) setTime1(val);
-    if (index === 1) setTime2(val);
-    if (index === 2) setTime3(val);
   };
 
   // Past 7 days calculation for streak visualization
@@ -185,37 +179,16 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     }
   };
 
-  const handleSelectGoalForHabit = (gId: string) => {
-    setHabitGoalId(gId);
-    if (!gId) return;
-    const g = goals.find(goal => goal.id === gId);
-    if (g) {
-      if (!habitName.trim() || goals.some(gl => habitName.includes(gl.title))) {
-        setHabitName(`Daily Practice: ${g.title}`);
-      }
-    }
-  };
-
   const switchToLinkMode = () => {
     setHabitInputMode('linkRoutine');
-    setHabitGoalId('');
     if (routines.length > 0 && !linkedRoutineId) {
       handleSelectRoutineForHabit(routines[0].id);
-    }
-  };
-
-  const switchToGoalMode = () => {
-    setHabitInputMode('linkGoal');
-    setLinkedRoutineId('');
-    if (goals.length > 0 && !habitGoalId) {
-      handleSelectGoalForHabit(goals[0].id);
     }
   };
 
   const switchToManualMode = () => {
     setHabitInputMode('manual');
     setLinkedRoutineId('');
-    setHabitGoalId('');
   };
 
   const handleAddRoutine = async (e: React.FormEvent) => {
@@ -306,7 +279,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       linkedRoutineId: linkedRoutineId || undefined,
       routineId: linkedRoutineId || undefined,
       linkedRoutineName: matchedRoutine?.name || undefined,
-      goalId: habitGoalId || undefined,
       createdAt: now,
       updatedAt: now
     };
@@ -322,13 +294,17 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         priority: habitTaskPriority,
         dueAt: today,
         date: today,
-        goalId: habitGoalId || null,
+        goalId: null,
+        routineId: linkedRoutineId || null,
         done: false,
         status: 'open',
         createdAt: now,
         updatedAt: now
       };
       await storage.put('tasks', newTask);
+      if (matchedRoutine?.goalId) {
+        await syncGoalProgressFromTasks(matchedRoutine.goalId, taskId, false);
+      }
 
       const alarmDueAt = `${today}T${times[0] || '08:00'}`;
       await storage.put('reminders', {
@@ -344,26 +320,20 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         updatedAt: now
       });
 
-      if (habitGoalId) {
-        await syncGoalProgressFromTasks(habitGoalId, taskId, false);
-      }
     }
 
-    if (habitGoalId) {
-      await syncGoalProgressFromHabits(habitGoalId);
+    if (matchedRoutine?.goalId) {
+      await syncGoalProgressFromHabits(matchedRoutine.goalId);
     }
     onSuccess(
       habitArmGenesis
         ? '✓ Habit & Task Genesis with Alarm deployed!'
-        : habitGoalId
-        ? '✓ Habit linked to Goal & ready to track'
         : linkedRoutineId
         ? `✓ New habit created and linked to "${matchedRoutine?.name}"`
         : '✓ New habit created'
     );
     setHabitName('');
     setLinkedRoutineId('');
-    setHabitGoalId('');
     setHabitArmGenesis(false);
     setHabitFormOpen(false);
     onRefresh();
@@ -501,7 +471,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       title: `Daily Habit: ${h.name}`,
       priority: 'Medium',
       dueAt: today,
-      goalId: h.goalId || goals[0]?.id || '',
+      goalId: resolveHabitGoalId(h, routines) || '',
       armAlarm: true,
       ringtone: 'morning_chime',
       alarmTime: (h.times && h.times[0]) || '09:00'
@@ -570,14 +540,23 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
   const handleUpdateHabitRoutine = async (habit: Habit, newRoutineId: string) => {
     const matchedRoutine = routines.find(r => r.id === newRoutineId);
+    const oldGoalId = resolveHabitGoalId(habit, routines);
     const updated: Habit = {
       ...habit,
       linkedRoutineId: newRoutineId || null,
       routineId: newRoutineId || null,
       linkedRoutineName: matchedRoutine?.name || null,
+      goalId: undefined,
       updatedAt: Date.now()
     };
     await storage.put('habits', updated);
+    const updatedGoalId = resolveHabitGoalId(updated, routines);
+    if (updatedGoalId) {
+      await syncGoalProgressFromHabits(updatedGoalId);
+    }
+    if (oldGoalId && oldGoalId !== updatedGoalId) {
+      await syncGoalProgressFromHabits(oldGoalId);
+    }
     onSuccess(newRoutineId ? `✓ Linked "${habit.name}" to routine "${matchedRoutine?.name}"` : `✓ Unlinked "${habit.name}" to standalone`);
     onRefresh();
   };
@@ -594,7 +573,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       name: editingHabit.name.trim(),
       linkedRoutineName: matchedRoutine?.name || null,
       routineId: editingHabit.linkedRoutineId || null,
-      goalId: editingHabit.goalId || null,
+      goalId: undefined,
       updatedAt: Date.now()
     };
 
@@ -730,32 +709,26 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            aria-expanded={routineFormOpen}
-            onClick={() => setRoutineFormOpen(open => !open)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>{routineFormOpen ? 'Close Routine' : 'Routine Genesis'}</span>
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${routineFormOpen ? 'rotate-180' : ''}`} />
-          </button>
-          <button
-            type="button"
-            aria-expanded={habitFormOpen}
-            onClick={() => setHabitFormOpen(open => !open)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-semibold text-amber-700 shadow-xs transition-colors hover:border-amber-300 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:border-amber-700 dark:hover:bg-amber-950/70"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>{habitFormOpen ? 'Close Habit' : 'Habit Genesis'}</span>
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${habitFormOpen ? 'rotate-180' : ''}`} />
-          </button>
+          <FormDisclosureToggle
+            label="Routine Genesis"
+            openLabel="Close Routine"
+            isOpen={routineFormOpen}
+            onToggle={() => setRoutineFormOpen(open => !open)}
+            icon={<Plus className="h-3.5 w-3.5" />}
+          />
+          <FormDisclosureToggle
+            label="Habit Genesis"
+            openLabel="Close Habit"
+            isOpen={habitFormOpen}
+            onToggle={() => setHabitFormOpen(open => !open)}
+            icon={<Plus className="h-3.5 w-3.5" />}
+          />
         </div>
       </div>
 
       {/* 4 Essential Metric Cards (Matching Dashboard Style) */}
       <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Routine Blocks</span>
             <Clock className="h-4 w-4 text-indigo-500 shrink-0" />
@@ -768,7 +741,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Active Habits</span>
             <Repeat className="h-4 w-4 text-amber-500 shrink-0" />
@@ -781,7 +754,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Habits Today</span>
             <CheckSquare className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -794,7 +767,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Adherence Rate</span>
             <Flame className="h-4 w-4 text-rose-500 shrink-0" />
@@ -878,7 +851,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       {/* Forms Grid (Routine Genesis & Habit Genesis) */}
       <div className={`grid grid-cols-1 gap-6 ${routineFormOpen && habitFormOpen ? 'lg:grid-cols-2' : ''}`}>
         {/* Schedule Routine Block (1st col) */}
-        {routineFormOpen && <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        {routineFormOpen && <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 text-xs">
@@ -1086,7 +1059,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         </section>}
 
         {/* Create Habit & Link Routine in Habit (2nd col) */}
-        {habitFormOpen && <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        {habitFormOpen && <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 text-xs">
@@ -1106,50 +1079,20 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   Habit Title / Purpose
                 </label>
 
-                {/* Mode Selector above Habit Name: Link Goal vs Link Routine vs Manual */}
+                {/* Habit linking is limited to a routine or no link. */}
                 <LinkModeSelector
                   value={habitInputMode}
-                  ariaLabel="Habit goal or routine link mode"
+                  ariaLabel="Habit routine link mode"
                   options={[
-                    { value: 'linkGoal', label: 'Link Goal', icon: Target },
-                    { value: 'linkRoutine', label: 'Link Routine', icon: Clock },
-                    { value: 'manual', label: 'Manual' }
+                    { value: 'linkRoutine', label: 'Link Routine', icon: null },
+                    { value: 'manual', label: 'Manual', icon: null }
                   ]}
                   onChange={mode => {
-                    if (mode === 'linkGoal') switchToGoalMode();
-                    else if (mode === 'linkRoutine') switchToLinkMode();
+                    if (mode === 'linkRoutine') switchToLinkMode();
                     else switchToManualMode();
                   }}
                 />
               </div>
-
-              {habitInputMode === 'linkGoal' && (
-                <div className="mb-2 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
-                  <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                    Select Target Goal to Link *
-                  </label>
-                  <select
-                    value={habitGoalId}
-                    onChange={e => handleSelectGoalForHabit(e.target.value)}
-                    className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
-                  >
-                    <option value="">-- Choose Goal (🎯 Main, 🔹 Sub, ▫️ Micro, 🔸 Nano, ⚡ Atomic) --</option>
-                    {goals.map(g => {
-                      const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
-                      return (
-                        <option key={g.id} value={g.id}>
-                          {lvl}: {g.title} ({g.progress}%)
-                        </option>
-                      );
-                    })}
-                  </select>
-                  {habitGoalId && (
-                    <span className="block text-[10px] text-indigo-800 dark:text-indigo-300">
-                      ⚡ Logging this habit will automatically advance this goal's progress and roll up to parent goals!
-                    </span>
-                  )}
-                </div>
-              )}
 
               {habitInputMode === 'linkRoutine' && (
                 <div className="mb-2 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
@@ -1353,7 +1296,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       </div>
 
       {/* Routine Time Blocks Display with Nested Linked Habits */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-2">
           <div>
             <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
@@ -1367,8 +1310,13 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {routines.length === 0 ? (
-            <div className="col-span-full py-10 text-center text-xs text-slate-400">
-              No routine time blocks defined. Add one above or load an Architecture Blueprint from the manual.
+            <div className="col-span-full">
+              <EmptyState
+                icon={Repeat}
+                compact
+                title="No routine blocks defined"
+                hint="Add one above or load an Architecture Blueprint from the manual."
+              />
             </div>
           ) : (
             [...routines].sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || '')).map(r => {
@@ -1493,7 +1441,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           <span>Linked Habits ({linkedHabits.length})</span>
                         </span>
                         {linkedHabits.length > 0 && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md ${
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
                             percentDone === 100
                               ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                               : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
@@ -1557,7 +1505,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       </section>
 
       {/* Habit Tracker Table & 7-Day Consistency Grid with Routine Link Badges */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800 gap-3">
           <div className="flex items-center gap-2.5">
             <Repeat className="h-4.5 w-4.5 text-amber-500" />
@@ -1565,21 +1513,18 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
                 Habit Tracker & 7-Day Consistency (Today: {today})
               </h2>
-              <p className="text-xs text-slate-400">
-                Shows streak continuity and parent routine links.
-              </p>
             </div>
           </div>
 
           {/* Habit Filters */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => setHabitFilter('all')}
-              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`border-b-0 border-transparent px-2 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                 habitFilter === 'all'
-                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
               }`}
             >
               All ({habits.length})
@@ -1587,10 +1532,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             <button
               type="button"
               onClick={() => setHabitFilter('linked')}
-              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`border-b-0 border-transparent px-2 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                 habitFilter === 'linked'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
               }`}
             >
               Linked to Routine ({linkedHabitsCount})
@@ -1598,10 +1543,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             <button
               type="button"
               onClick={() => setHabitFilter('standalone')}
-              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`border-b-0 border-transparent px-2 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                 habitFilter === 'standalone'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
               }`}
             >
               Standalone ({standaloneHabitsCount})
@@ -1611,9 +1556,12 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
         <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
           {filteredHabits.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-400">
-              No habits found matching filter. Define one above.
-            </div>
+            <EmptyState
+              icon={Repeat}
+              compact
+              title="No habits found"
+              hint="Define one above or clear the active filter."
+            />
           ) : (
             filteredHabits.map(h => {
               const occCount = h.timesPerDay || 1;
@@ -1659,18 +1607,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         </span>
                       )}
 
-                      {/* LINKED GOAL BADGE */}
-                      {h.goalId && (() => {
-                        const g = goals.find(goal => goal.id === h.goalId);
-                        if (!g) return null;
-                        const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
-                        return (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
-                            <Target className="h-3 w-3 text-indigo-500" />
-                            <span>{lvl}: {g.title} ({g.progress}%)</span>
-                          </span>
-                        );
-                      })()}
                     </div>
 
                     <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-2">
@@ -1869,32 +1805,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   </select>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                    <Target className="h-3 w-3 text-indigo-500" />
-                    <span>Link Goal:</span>
-                  </span>
-                  <select
-                    value={editingHabit.goalId || ''}
-                    onChange={e => {
-                      setEditingHabit({
-                        ...editingHabit,
-                        goalId: e.target.value || null
-                      });
-                    }}
-                    className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-transparent border-0 focus:outline-none cursor-pointer max-w-[200px] truncate"
-                  >
-                    <option value="">None (No Goal)</option>
-                    {goals.map(g => {
-                      const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
-                      return (
-                        <option key={g.id} value={g.id}>
-                          {lvl}: {g.title} ({g.progress}%)
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -2205,10 +2115,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       key={p.id}
                       type="button"
                       onClick={() => setAlarmPresetChoice(p.id as any)}
-                      className={`rounded-xl py-2 px-1 text-center text-xs font-bold transition-all cursor-pointer ${
+                      className={`py-2 px-1 text-center text-xs font-bold transition-colors cursor-pointer ${
                         alarmPresetChoice === p.id
-                          ? 'bg-amber-500 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                       }`}
                     >
                       {p.label}

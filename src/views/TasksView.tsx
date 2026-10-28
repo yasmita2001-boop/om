@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   CheckSquare, Trash2, Calendar, Target, CheckCircle2,
-  Circle, Edit3, Search, Filter, Check,
+  Circle, Edit3, Search, Check,
   Download, Save, History, Layers, ArrowRight,
-  Volume2, Bell, BellRing, Zap, AlertTriangle, X, Flame, Plus, ChevronDown
+  Volume2, Bell, BellRing, AlertTriangle, X, Flame, Plus
 } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
+import { ShowMoreBar } from '../components/ShowMoreBar';
 import {
   Task, TaskDomain, TaskPriority, DailyPlanner, Goal,
   WorkProject, LearningItem, Skill, Routine, Habit, HabitLog, ReminderItem
@@ -13,12 +15,12 @@ import { storage, generateUUID } from '../lib/storage';
 import { resolveTaskGoalId, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SlideTabs } from '../components/SlideTabs';
-import { globalTextReader, isSpeechSynthesisSupported } from '../lib/voiceService';
+import { globalTextReader } from '../lib/voiceService';
 import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
-import { FormDisclosure } from '../components/FormDisclosure';
+import { FormDisclosure, FormDisclosureToggle } from '../components/FormDisclosure';
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 
@@ -56,9 +58,6 @@ export const TasksView: React.FC<TasksViewProps> = ({
   learningItems = [],
   skills = [],
   routines = [],
-  habits = [],
-  habitLogs = [],
-  reminders = [],
   onRefresh,
   onSuccess
 }) => {
@@ -73,6 +72,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
   } | null>(null);
   const [alarmPresetChoice, setAlarmPresetChoice] = useState<'5m' | '15m' | '30m' | '1h' | 'tonight' | 'tomorrow' | 'custom'>('15m');
   const [quickCustomDate, setQuickCustomDate] = useState(today);
+
+  // Progressive rendering: very long rosters choke scroll/input latency.
+  const [visibleTaskCount, setVisibleTaskCount] = useState(120);
   const [quickCustomTime, setQuickCustomTime] = useState('18:00');
   const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('digital_pulse');
 
@@ -216,7 +218,6 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [pointText, setPointText] = useState('');
   const [dailyWins, setDailyWins] = useState(dailyPlanner?.wins?.join('\n') || '');
   const [eveningReview, setEveningReview] = useState(dailyPlanner?.reflection?.join('\n') || '');
-  const [lastSavedTimestamp, setLastSavedTimestamp] = useState<string | null>(null);
   const [savedTargetsArchive, setSavedTargetsArchive] = useState<SavedTargetRecord[]>([]);
 
   // Synchronize Daily Planner state whenever dailyPlanner prop updates from storage
@@ -468,9 +469,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updatedArchive));
     } catch {}
 
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setLastSavedTimestamp(timeStr);
-    onSuccess(`✓ Command Target saved successfully at ${timeStr}`);
+    onSuccess('✓ Command Target saved successfully');
     onRefresh();
   };
 
@@ -640,9 +639,6 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const upcomingTasks = sortedTasks
     .filter(t => !t.done && t.dueAt && t.dueAt > today)
     .sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || ''));
-  const unscheduledTasks = sortedTasks
-    .filter(t => !t.done && !t.dueAt);
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -655,7 +651,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {/* 4 Essential Metric Cards (Matching Dashboard Style) */}
       <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Open Tasks</span>
             <CheckSquare className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -668,7 +664,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">High Priority</span>
             <Flame className="h-4 w-4 text-rose-500 shrink-0" />
@@ -681,7 +677,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Completed</span>
             <CheckCircle2 className="h-4 w-4 text-indigo-500 shrink-0" />
@@ -694,7 +690,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Scheduled</span>
             <Calendar className="h-4 w-4 text-blue-500 shrink-0" />
@@ -763,6 +759,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           {/* Add/Edit Task Box (5 cols) */}
           {taskGenesisOpen && (
             <div
+              id="task-genesis-form"
               ref={formRef}
               className={`rounded-2xl border transition-all ${
               editingTaskId
@@ -994,7 +991,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           )}
 
           {/* Task Filter Tabs & All Tasks List */}
-          <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
+          <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -1006,16 +1003,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <button
-                  type="button"
-                  aria-expanded={taskGenesisOpen}
-                  onClick={() => setTaskGenesisOpen(open => !open)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>{taskGenesisOpen ? 'Hide Task Genesis' : 'Task Genesis'}</span>
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${taskGenesisOpen ? 'rotate-180' : ''}`} />
-                </button>
+                <FormDisclosureToggle
+                  label="Task Genesis"
+                  openLabel="Close Task Genesis"
+                  isOpen={taskGenesisOpen}
+                  onToggle={() => setTaskGenesisOpen(open => !open)}
+                  icon={<Plus className="h-3.5 w-3.5" />}
+                  controls="task-genesis-form"
+                />
                 <div className="relative w-full sm:w-64">
                   <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
                   <input
@@ -1023,14 +1018,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search tasks..."
-                    className="h-8.5 w-full rounded-xl border border-slate-200 pl-8 pr-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="h-8.5 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-8 pr-3 text-xs focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
             </div>
 
             {/* Tab Filter Chips */}
-            <div className="flex overflow-x-auto pb-1 gap-1.5 no-scrollbar">
+            <div className="flex overflow-x-auto pb-1 gap-3 no-scrollbar">
               {[
                 { id: 'all', label: `All Tasks (${tasks.length})` },
                 { id: 'today', label: `Due Today (${todayCount})` },
@@ -1043,10 +1038,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   key={tab.id}
                   type="button"
                   onClick={() => setFilterTab(tab.id as any)}
-                  className={`rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap tracking-normal transition-all cursor-pointer ${
+                  className={`shrink-0 border-b-0 border-transparent px-2 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap tracking-normal transition-all cursor-pointer ${
                     filterTab === tab.id
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/80'
+                      ? 'text-amber-700 dark:text-amber-300'
+                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
                   {tab.label}
@@ -1057,11 +1052,16 @@ export const TasksView: React.FC<TasksViewProps> = ({
             {/* Tasks List */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredTasks.length === 0 ? (
-                <div className="col-span-full py-16 text-center text-xs text-slate-400">
-                  No tasks found in this view.
+                <div className="col-span-full">
+                  <EmptyState
+                    icon={CheckSquare}
+                    compact
+                    title="No tasks in this view"
+                    hint="Create a task with Quick Capture or clear the active filters."
+                  />
                 </div>
               ) : (
-                filteredTasks.map(task => (
+                filteredTasks.slice(0, visibleTaskCount).map(task => (
                   <div
                     key={task.id}
                     className="progressive-row flex min-w-0 items-start justify-between gap-3 rounded-xl border border-slate-100 p-3 transition-colors hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
@@ -1187,165 +1187,169 @@ export const TasksView: React.FC<TasksViewProps> = ({
       {/* SUBMENU 2: DAILY COMMAND TARGET (With File Save, Export, and History!) */}
       {activeSubMenu === 'dailyCommand' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
             {/* Main Command Operations Form (7 cols) */}
-            <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-5">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 text-sm font-bold">
-                    🎯
-                  </span>
-                  <div>
+            <div className="lg:col-span-7 rounded-2xl border border-[var(--om-line)] bg-card p-5 sm:p-6 shadow-sm">
+              <FormDisclosure
+                label="Edit daily command target"
+                header={
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 text-sm font-bold">
+                      🎯
+                    </span>
                     <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Daily Command Target ({today})
+                      Daily Command Target
                     </h2>
-                    <p className="text-[11px] text-slate-400">
-                      {lastSavedTimestamp ? `Last saved at ${lastSavedTimestamp}` : 'Changes auto-saved to sovereign state'}
-                    </p>
+                  </div>
+                }
+              >
+              <div className="mt-5 space-y-5">
+                {/* Decisive Victory Target */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-ink-soft">
+                    Core Priority <span className="font-normal text-ink-muted">/ Decisive Victory Outcome</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={plannerTarget}
+                    onChange={e => setPlannerTarget(e.target.value)}
+                    placeholder="What single outcome will make today a decisive victory?"
+                    className="h-11 w-full rounded-xl border border-[var(--om-line)] bg-white px-3.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/10 dark:bg-slate-800 dark:text-white font-medium"
+                  />
+                </div>
+
+                {/* Progress Slider */}
+                <div className="rounded-xl border border-[var(--om-line)] bg-card-soft/70 px-3 py-3">
+                  <div className="flex min-h-6 items-center justify-between gap-3 text-xs font-semibold text-ink-soft">
+                    <label htmlFor="daily-command-progress" className="block min-w-0 flex-1 py-0.5 leading-5">
+                      Execution Progress
+                    </label>
+                    <span className="shrink-0 font-mono text-sm font-bold leading-5 text-amber-800 dark:text-amber-300">
+                      {plannerProgress}%
+                    </span>
+                  </div>
+                  <div className="mt-3 px-2">
+                    <input
+                      id="daily-command-progress"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      value={plannerProgress}
+                      onChange={e => setPlannerProgress(Number(e.target.value))}
+                      className="block h-2 w-full accent-amber-600 rounded-lg cursor-pointer"
+                    />
                   </div>
                 </div>
 
-                {/* Primary Action Buttons */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSaveToFile}
-                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
-                    title="Export and download command target as a file (.md)"
-                  >
-                    <Download className="h-3.5 w-3.5 text-indigo-500" />
-                    <span>Save to File</span>
-                  </button>
+                {/* Action Checkpoints */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-ink-soft">
+                    Action Checkpoints <span className="font-normal text-ink-muted">· press Enter to add</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={pointText}
+                    onChange={e => setPointText(e.target.value)}
+                    onKeyDown={handleAddPlannerPoint}
+                    placeholder="Add a specific, actionable step..."
+                    className="h-10 w-full rounded-xl border border-[var(--om-line)] bg-white px-3.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/10 dark:bg-slate-800 dark:text-white"
+                  />
 
-                  <button
-                    type="button"
-                    onClick={handleSavePlannerTarget}
-                    className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 cursor-pointer"
-                  >
-                    <Save className="h-3.5 w-3.5" />
-                    <span>Save Target</span>
-                  </button>
-                </div>
-              </div>
-
-              <FormDisclosure label="Edit daily command target">
-              {/* Decisive Victory Target */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Core Priority / Decisive Victory Outcome
-                </label>
-                <input
-                  type="text"
-                  value={plannerTarget}
-                  onChange={e => setPlannerTarget(e.target.value)}
-                  placeholder="What single outcome will make today a decisive victory?"
-                  className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-medium"
-                />
-              </div>
-
-              {/* Progress Slider */}
-              <div className="rounded-2xl bg-amber-50/50 p-4 border border-amber-200/60 dark:bg-amber-950/20 dark:border-amber-800/40">
-                <div className="flex justify-between text-xs font-semibold text-amber-900 dark:text-amber-200">
-                  <span>Execution Progress</span>
-                  <span className="font-mono text-sm font-extrabold">{plannerProgress}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={plannerProgress}
-                  onChange={e => setPlannerProgress(Number(e.target.value))}
-                  className="mt-2 h-2.5 w-full accent-amber-500 rounded-lg cursor-pointer"
-                />
-              </div>
-
-              {/* Action Checkpoints */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Action Checkpoints (Type and hit Enter to add)
-                </label>
-                <input
-                  type="text"
-                  value={pointText}
-                  onChange={e => setPointText(e.target.value)}
-                  onKeyDown={handleAddPlannerPoint}
-                  placeholder="Type an actionable checkpoint and hit Enter..."
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 focus:border-amber-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-
-                <div className="mt-3 space-y-1.5 max-h-56 overflow-y-auto">
-                  {(dailyPlanner?.points || []).length === 0 ? (
-                    <div className="py-6 text-center text-xs text-slate-400">
-                      No checkpoints registered for today yet.
-                    </div>
-                  ) : (
-                    (dailyPlanner?.points || []).map(pt => (
-                      <div
-                        key={pt.id}
-                        onClick={() => handleTogglePoint(pt.id)}
-                        className="flex items-center justify-between rounded-xl p-2.5 text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors group border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                          {pt.done ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                          ) : (
-                            <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0" />
-                          )}
-                          <span className={pt.done ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200 font-medium'}>
-                            {pt.text}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeletePoint(pt.id, e)}
-                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 p-1"
-                          title="Remove checkpoint"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                  <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
+                    {(dailyPlanner?.points || []).length === 0 ? (
+                      <div className="flex items-center gap-2 rounded-lg bg-card-soft px-3 py-2.5 text-xs text-ink-muted">
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-700/70 dark:text-amber-300/70" />
+                        <span>No checkpoints yet. Add one above to plan your day.</span>
                       </div>
-                    ))
-                  )}
+                    ) : (
+                      (dailyPlanner?.points || []).map(pt => (
+                        <div
+                          key={pt.id}
+                          onClick={() => handleTogglePoint(pt.id)}
+                          className="group flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors hover:bg-card-soft cursor-pointer"
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5 pr-2">
+                            {pt.done ? (
+                              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                            ) : (
+                              <Circle className="h-4 w-4 shrink-0 text-ink-muted/50" />
+                            )}
+                            <span className={pt.done ? 'text-ink-muted line-through' : 'font-medium text-ink'}>
+                              {pt.text}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeletePoint(pt.id, e)}
+                            className="p-1 text-slate-300 opacity-0 transition-opacity hover:text-rose-500 group-hover:opacity-100"
+                            title="Remove checkpoint"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Wins & Reflections */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Daily Victories & Wins (1 per line)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={dailyWins}
-                    onChange={e => setDailyWins(e.target.value)}
-                    placeholder="• Shipped feature on schedule&#10;• Hit daily calorie goal"
-                    className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                </div>
+                {/* Wins & Reflections */}
+                <div className="grid grid-cols-1 gap-4 border-t border-[var(--om-line)] pt-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-ink-soft">
+                      Daily Victories & Wins
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={dailyWins}
+                      onChange={e => setDailyWins(e.target.value)}
+                      placeholder="One win per line..."
+                      className="w-full resize-y rounded-xl border border-[var(--om-line)] bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/10 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Evening Reflection & Learnings
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={eveningReview}
-                    onChange={e => setEveningReview(e.target.value)}
-                    placeholder="What worked well? What could be executed better tomorrow?"
-                    className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-ink-soft">
+                      Evening Reflection & Learnings
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={eveningReview}
+                      onChange={e => setEveningReview(e.target.value)}
+                      placeholder="What worked well? What could be better tomorrow?"
+                      className="w-full resize-y rounded-xl border border-[var(--om-line)] bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/10 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
                 </div>
               </div>
               </FormDisclosure>
+
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveToFile}
+                  className="flex items-center gap-1.5 rounded-xl border border-amber-200/80 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50 dark:border-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-950/30 cursor-pointer"
+                  title="Export and download command target as a file (.md)"
+                >
+                  <Download className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
+                  <span>Save to File</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSavePlannerTarget}
+                  className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-transparent px-3.5 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-50 cursor-pointer dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950/30"
+                >
+                  <Save className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
+                  <span>Save Target</span>
+                </button>
+              </div>
             </div>
 
             {/* Saved Command Target Files & Historical Archive (5 cols) */}
-            <div className="lg:col-span-5 space-y-6">
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div className="lg:col-span-5 space-y-5">
+              <div className="rounded-2xl border border-[var(--om-line)] bg-card p-5 sm:p-6 shadow-sm">
+                <div className="flex items-center justify-between border-b border-[var(--om-line)] pb-3">
                   <div className="flex items-center gap-2">
                     <History className="h-4 w-4 text-indigo-500" />
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -1359,15 +1363,18 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
                 <div className="mt-4 space-y-3 max-h-[500px] overflow-y-auto">
                   {savedTargetsArchive.length === 0 ? (
-                    <div className="py-12 text-center text-xs text-slate-400">
-                      No saved files or target history yet.<br/>
-                      Click "Save Target" or "Save to File" to save your first record.
+                    <div className="flex min-h-36 flex-col items-center justify-center rounded-xl bg-card-soft/70 px-5 py-6 text-center">
+                      <History className="mb-2 h-5 w-5 text-amber-700/70 dark:text-amber-300/70" />
+                      <p className="text-sm font-semibold text-ink">No saved targets yet</p>
+                      <p className="mt-1 max-w-xs text-xs text-ink-muted">
+                        Save a target or export it to start your archive.
+                      </p>
                     </div>
                   ) : (
                     savedTargetsArchive.map(rec => (
                       <div
                         key={rec.id}
-                        className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-all space-y-2 group"
+                        className="rounded-xl border border-[var(--om-line)] bg-white/70 p-3.5 text-xs transition-colors hover:bg-white dark:bg-slate-800/60 dark:hover:bg-slate-800 space-y-2 group"
                       >
                         <div className="flex justify-between items-start">
                           <div>
@@ -1387,7 +1394,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleLoadSavedRecord(rec)}
-                            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 cursor-pointer"
+                            className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
                           >
                             Load Into Editor
                           </button>
@@ -1421,7 +1428,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       {activeSubMenu === 'kanban' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Column 1: Open / Backlog */}
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col h-[650px]">
+          <div className=" border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 flex flex-col h-[650px]">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <span className="text-xs font-bold text-slate-900 dark:text-white">To Do / Open</span>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
@@ -1445,6 +1452,15 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   </div>
                 </div>
               ))}
+              {filteredTasks.length > visibleTaskCount && (
+                <div className="col-span-full">
+                  <ShowMoreBar
+                    remaining={filteredTasks.length - visibleTaskCount}
+                    step={120}
+                    onReveal={() => setVisibleTaskCount(c => c + 120)}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -1573,10 +1589,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       key={p.id}
                       type="button"
                       onClick={() => setAlarmPresetChoice(p.id as any)}
-                      className={`rounded-xl py-2 px-1 text-center text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-1 py-2 text-center text-xs font-bold transition-colors cursor-pointer ${
                         alarmPresetChoice === p.id
-                          ? 'bg-amber-500 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                       }`}
                     >
                       {p.label}

@@ -30,8 +30,6 @@ export async function generateImageThumbnail(
 
   return new Promise((resolve) => {
     try {
-      let dataUrl: string;
-
       const processDataUrl = (url: string) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';

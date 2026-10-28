@@ -1,4 +1,5 @@
 import React from 'react';
+import { OmLogoMark } from './OmLogoMark';
 import {
   LayoutDashboard, CheckSquare, Repeat, Target, Timer, FileText,
   BookOpen, Calculator, DollarSign, Heart, Briefcase, Users,
@@ -78,16 +79,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Main Sidebar Component */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200/80 bg-white/90 backdrop-blur-xl transition-transform duration-200 ease-in-out dark:border-white/[0.08] dark:bg-[#0B0F19]/95 lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:shrink-0 lg:translate-x-0 ${
+        className={`sanctuary-sidebar fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-slate-200/80 bg-white/90 backdrop-blur-xl transition-transform duration-200 ease-in-out dark:border-white/[0.08] dark:bg-[#0B0F19]/95 lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:shrink-0 lg:translate-x-0 ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* App Title & Mobile Close (Only visible on mobile drawer to avoid duplicate Om-LifeOS under Header) */}
         <div className="flex h-16 items-center justify-between border-b border-slate-100 px-5 dark:border-white/[0.06] lg:hidden">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 font-serif font-bold text-white shadow-sm shadow-indigo-500/30">
-              ॐ
-            </div>
+            <OmLogoMark className="h-9 w-8" />
             <div>
               <span className="text-sm font-bold tracking-tight text-slate-900 dark:text-white">
                 Om-LifeOS
@@ -120,18 +119,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         type="button"
                         onClick={() => handleSelect(item.id)}
                         aria-current={isActive ? 'page' : undefined}
-                        className={`group flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                        className={`group flex w-full items-center justify-between px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
                           isActive
-                            ? 'bg-indigo-50 text-indigo-600 shadow-2xs dark:bg-indigo-950/50 dark:text-indigo-400'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
+                            ? 'text-indigo-700 dark:text-indigo-300 [&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300'
+                            : 'text-indigo-800 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
                         }`}
                       >
                         <span className="flex min-w-0 items-center gap-2.5">
                           <span
                             className={`shrink-0 transition-colors ${
                               isActive
-                                ? 'text-indigo-600 dark:text-indigo-400'
-                                : 'text-slate-400 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300'
+                                ? 'text-indigo-700 dark:text-indigo-300'
+                                : 'text-indigo-800 group-hover:text-indigo-950 dark:text-indigo-300 dark:group-hover:text-indigo-200'
                             }`}
                           >
                             {item.icon}
@@ -141,10 +140,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                         {Boolean(item.badge && item.badge > 0) && (
                           <span
-                            className={`ml-2 shrink-0 rounded-full px-1.5 py-0.2 text-[10px] font-semibold tabular-nums ${
+                            className={`ml-2 shrink-0 text-[10px] font-semibold tabular-nums ${
                               isActive
-                                ? 'bg-indigo-200 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
-                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                ? 'text-indigo-700 dark:text-indigo-300'
+                                : 'text-slate-500 dark:text-slate-400'
                             }`}
                           >
                             {item.badge}

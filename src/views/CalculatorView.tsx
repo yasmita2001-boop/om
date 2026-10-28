@@ -12,6 +12,7 @@ import {
   Info,
   Sliders
 } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 import {
   CALCULATOR_CATALOG,
   CALC_UNIT_FACTORS,
@@ -268,7 +269,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search 108 calculators..."
-            className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="h-9 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-9 pr-3 text-xs placeholder:text-slate-500 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-400"
           />
           {searchQuery && (
             <button
@@ -300,7 +301,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* Tool Selector + Calculator Engine (8 cols) */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           {/* Tool Pills */}
@@ -336,7 +337,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
           </div>
 
           {/* Calculator Workstation Box */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -511,7 +512,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
 
         {/* Calculation History & Favorites (4 cols) */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <History className="h-4 w-4 text-slate-500" />
@@ -534,9 +535,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
 
             <div className="mt-3 space-y-2.5 max-h-96 overflow-y-auto">
               {history.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-400">
-                  No calculations recorded yet.
-                </div>
+                <EmptyState icon={History} compact title="No calculations yet" hint="Results of your conversions will stack up here." />
               ) : (
                 history
                   .slice()

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, CheckSquare, FileText, BookOpen, Target, DollarSign, User, ArrowRight } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { storage } from '../lib/storage';
 import { NavModule } from '../types';
 
@@ -205,16 +206,21 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 bg-slate-900/60 backdrop-blur-sm sm:pt-20">
-      <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+    <div
+      className="sanctuary-search-overlay fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 bg-slate-900/60 backdrop-blur-sm sm:pt-20"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Global search"
+    >
+      <div className="sanctuary-glass-dialog sanctuary-search-panel w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+        <div className="sanctuary-search-bar flex items-center border-b border-slate-100 px-4 py-3 dark:border-slate-800">
           <Search className="h-4 w-4 text-slate-400 shrink-0" />
           <input
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search tasks, notes, journal, goals, finance, and people..."
-            className="flex-1 bg-transparent px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none dark:text-white"
+            className="sanctuary-search-input flex-1 bg-transparent px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none dark:text-white"
             autoFocus
           />
           {query && (
@@ -243,9 +249,12 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           )}
 
           {!loading && query && results.length === 0 && (
-            <div className="py-12 text-center text-xs text-slate-400">
-              No results found for "{query}".
-            </div>
+            <EmptyState
+              icon={Search}
+              compact
+              title={`No results for "${query}"`}
+              hint="Try a shorter keyword - search covers tasks, goals, notes and finance."
+            />
           )}
 
           {!query && (

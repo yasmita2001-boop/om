@@ -6,6 +6,7 @@ import {
   X
 } from 'lucide-react';
 import { NavModule } from '../types';
+import { OmLogoMark } from './OmLogoMark';
 
 interface MobileBottomNavProps {
   activeModule: NavModule;
@@ -65,15 +66,15 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
   const secondaryModules: { id: NavModule; label: string; icon: React.ReactNode }[] = [
     { id: 'focus', label: 'Focus', icon: <Timer className="h-4 w-4 text-indigo-500" /> },
-    { id: 'notes', label: 'Notes & Wiki', icon: <FileText className="h-4 w-4 text-amber-500" /> },
-    { id: 'journal', label: 'Daily Journal', icon: <BookOpen className="h-4 w-4 text-blue-500" /> },
-    { id: 'finance', label: 'Finance & Ledger', icon: <DollarSign className="h-4 w-4 text-emerald-500" /> },
-    { id: 'calculator', label: 'Calculators', icon: <Calculator className="h-4 w-4 text-purple-500" /> },
-    { id: 'health', label: 'Health & Vitals', icon: <Heart className="h-4 w-4 text-rose-500" /> },
-    { id: 'people', label: 'People & Relations', icon: <Users className="h-4 w-4 text-cyan-500" /> },
+    { id: 'notes', label: 'Notes & Wiki', icon: <FileText className="h-4 w-4 text-indigo-500" /> },
+    { id: 'journal', label: 'Daily Journal', icon: <BookOpen className="h-4 w-4 text-indigo-500" /> },
+    { id: 'finance', label: 'Finance & Ledger', icon: <DollarSign className="h-4 w-4 text-indigo-500" /> },
+    { id: 'calculator', label: 'Calculators', icon: <Calculator className="h-4 w-4 text-indigo-500" /> },
+    { id: 'health', label: 'Health & Vitals', icon: <Heart className="h-4 w-4 text-indigo-500" /> },
+    { id: 'people', label: 'People & Relations', icon: <Users className="h-4 w-4 text-indigo-500" /> },
     { id: 'spiritual', label: 'Values & Mind', icon: <Compass className="h-4 w-4 text-indigo-500" /> },
-    { id: 'things', label: 'Things & Assets', icon: <Folder className="h-4 w-4 text-yellow-500" /> },
-    { id: 'settings', label: 'Settings & Sync', icon: <Settings className="h-4 w-4 text-slate-500" /> },
+    { id: 'things', label: 'Things & Assets', icon: <Folder className="h-4 w-4 text-indigo-500" /> },
+    { id: 'settings', label: 'Settings & Sync', icon: <Settings className="h-4 w-4 text-indigo-500" /> },
   ];
 
   const handleSelect = (id: NavModule) => {
@@ -95,13 +96,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             role="dialog"
             aria-modal="true"
             aria-label="All modules and tools"
-            className="rounded-t-3xl border-t border-slate-200 bg-white p-5 pb-8 shadow-2xl dark:border-white/10 dark:bg-[#111827] animate-in slide-in-from-bottom duration-250 max-h-[80vh] overflow-y-auto"
+            className="sanctuary-mobile-module-sheet rounded-t-3xl border-t border-slate-200 bg-white p-5 pb-8 shadow-2xl dark:border-white/10 dark:bg-[#111827] animate-in slide-in-from-bottom duration-250 max-h-[80vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/[0.08]">
               <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 font-serif font-bold text-white text-xs">
-                  ॐ
-                </div>
+                <OmLogoMark className="h-8 w-7" />
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">All Modules & Tools</h3>
                 </div>
@@ -117,7 +116,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2.5 pt-4">
+            <div className="grid grid-cols-2 gap-2.5 pt-4">
               {secondaryModules.map(mod => {
                 const isActive = activeModule === mod.id;
                 return (
@@ -125,13 +124,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                     key={mod.id}
                     type="button"
                     onClick={() => handleSelect(mod.id)}
-                    className={`flex items-start gap-2.5 rounded-2xl p-3 text-left transition-all border cursor-pointer ${
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`sanctuary-mobile-module-option flex items-start gap-2.5 p-3 text-left transition-colors cursor-pointer ${
                       isActive
-                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-200'
-                        : 'border-slate-200/80 bg-slate-50/60 hover:bg-slate-100 dark:border-white/[0.06] dark:bg-white/[0.03] dark:hover:bg-white/[0.07] text-slate-800 dark:text-slate-200'
+                          ? 'text-indigo-700 dark:text-indigo-300 [&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300'
+                          : 'text-indigo-800 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
                     }`}
                   >
-                    <div className="mt-0.5 rounded-lg p-1.5 bg-white dark:bg-slate-800 shadow-2xs shrink-0">
+                    <div className={`mt-0.5 shrink-0 ${isActive ? 'text-indigo-700 dark:text-indigo-300' : ''}`}>
                       {mod.icon}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -146,7 +146,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       )}
 
       {/* Persistent Bottom Bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex h-16 pb-safe items-center justify-around border-t border-slate-200/80 bg-white px-1 dark:border-white/[0.08] dark:bg-[#0B0F19] md:hidden shadow-lg transition-colors">
+      <nav className="sanctuary-mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-slate-200/80 bg-white px-1 dark:border-white/[0.08] dark:bg-[#0B0F19] md:hidden transition-colors">
         {primaryTabs.map(tab => {
           const isActive = activeModule === tab.id;
           return (
@@ -154,13 +154,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               key={tab.id}
               type="button"
               onClick={() => onNavigate(tab.id)}
-              className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 px-1 transition-all cursor-pointer ${
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex h-14 flex-1 flex-col items-center justify-center gap-1 py-1.5 px-1 transition-colors cursor-pointer ${
                 isActive
-                  ? 'font-bold text-indigo-600 dark:text-indigo-400'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 font-medium'
+                  ? 'font-bold text-indigo-700 dark:text-indigo-300 [&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300'
+                  : 'text-indigo-800 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 font-medium'
               }`}
             >
-              <div className={`transition-transform ${isActive ? 'scale-110' : ''}`}>
+              <div>
                 {tab.icon}
               </div>
               <span className="text-[10px] tracking-normal leading-tight">{tab.label}</span>
@@ -173,14 +174,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           type="button"
           ref={moreButtonRef}
           onClick={() => setIsMoreOpen(true)}
-          className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 px-1 transition-all cursor-pointer ${
+          className={`flex h-14 flex-1 flex-col items-center justify-center gap-1 py-1.5 px-1 transition-colors cursor-pointer ${
             secondaryModules.some(m => m.id === activeModule)
-              ? 'font-bold text-indigo-600 dark:text-indigo-400'
-              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 font-medium'
+            ? 'font-bold text-indigo-700 dark:text-indigo-300 [&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300'
+            : 'text-indigo-800 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 font-medium'
           }`}
           aria-label="More modules"
         >
-          <div className="transition-transform">
+          <div>
             <MoreHorizontal className="h-4 w-4" />
           </div>
           <span className="text-[10px] tracking-normal leading-tight">More</span>

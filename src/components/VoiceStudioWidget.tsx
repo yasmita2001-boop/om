@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Volume2, Play, Pause, Square,
-  Languages, Check, X, Sliders, Zap, RotateCcw, Headphones,
+  X, Sliders, Zap, RotateCcw,
   Waves, ArrowRight, ClipboardPaste
 } from 'lucide-react';
 import { globalTextReader, VoiceLanguage } from '../lib/voiceService';
@@ -23,9 +23,6 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  onRefreshNotes,
-  onRefreshJournal,
-  onRefreshTasks
 }) => {
   const [activeTab, setActiveTab] = useState<'reader' | 'matcher'>('reader');
 
@@ -270,30 +267,30 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
 
             {/* Segmented Tab Switcher */}
             <div className="p-3 sm:px-6 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80">
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => setActiveTab('reader')}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-medium transition-all cursor-pointer truncate ${
+                  className={`flex items-center justify-center gap-1.5 border-b-0 border-transparent py-2 px-2 text-xs font-medium transition-colors cursor-pointer truncate ${
                     activeTab === 'reader'
-                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
-                  <Volume2 className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                  <Volume2 className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">Text Reader</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveTab('matcher')}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-medium transition-all cursor-pointer truncate ${
+                  className={`flex items-center justify-center gap-1.5 border-b-0 border-transparent py-2 px-2 text-xs font-medium transition-colors cursor-pointer truncate ${
                     activeTab === 'matcher'
-                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
-                  <Sliders className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                  <Sliders className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">Voice Tuning</span>
                 </button>
               </div>
@@ -321,7 +318,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                           // Ignored
                         }
                       }}
-                      className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                      className="text-amber-700 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-200 flex items-center gap-1 cursor-pointer font-medium"
                     >
                       <ClipboardPaste className="h-3.5 w-3.5" />
                       <span>Paste</span>
@@ -375,14 +372,14 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                     </select>
                   </div>
 
-                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl text-xs">
+                  <div className="flex items-center gap-3 text-xs">
                     <button
                       type="button"
                       onClick={() => setPersonaGenderFilter('all')}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                      className={`border-b-0 border-transparent px-2 py-1 font-medium transition-colors cursor-pointer ${
                         personaGenderFilter === 'all'
-                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold'
-                          : 'text-slate-600 dark:text-slate-400'
+                          ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                          : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                       }`}
                     >
                       All (10)
@@ -390,10 +387,10 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                     <button
                       type="button"
                       onClick={() => setPersonaGenderFilter('female')}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                      className={`border-b-0 border-transparent px-2 py-1 font-medium transition-colors cursor-pointer ${
                         personaGenderFilter === 'female'
-                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold'
-                          : 'text-slate-600 dark:text-slate-400'
+                          ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                          : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                       }`}
                     >
                       Female
@@ -401,10 +398,10 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                     <button
                       type="button"
                       onClick={() => setPersonaGenderFilter('male')}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                      className={`border-b-0 border-transparent px-2 py-1 font-medium transition-colors cursor-pointer ${
                         personaGenderFilter === 'male'
-                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold'
-                          : 'text-slate-600 dark:text-slate-400'
+                          ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                          : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                       }`}
                     >
                       Male
@@ -437,7 +434,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                           onClick={() => applyPersonaPreset(key as VoicePersona)}
                           className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer text-left ${
                             isSelected
-                              ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20'
+                              ? 'border-amber-500 bg-amber-50/50 dark:border-amber-500 dark:bg-amber-950/30 ring-2 ring-amber-500/20'
                               : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
                           }`}
                         >
@@ -450,10 +447,10 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                                 {p.label}
                               </span>
                               {isSelected && (
-                                <span className="h-2 w-2 rounded-full bg-indigo-600 shrink-0 ml-1.5" />
+                                <span className="h-2 w-2 rounded-full bg-amber-600 shrink-0 ml-1.5" />
                               )}
                             </div>
-                            <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-medium">
+                            <p className={`text-[11px] font-medium ${isSelected ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400'}`}>
                               {p.labelHi}
                             </p>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
@@ -549,7 +546,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                           onClick={() => applyVoiceMatchPreset(preset)}
                           className={`flex items-start gap-2.5 p-2.5 rounded-2xl border text-left transition-all cursor-pointer ${
                             isSelected
-                              ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 ring-2 ring-indigo-500/20'
+                              ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/40 ring-2 ring-amber-500/20'
                               : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
                           }`}
                         >

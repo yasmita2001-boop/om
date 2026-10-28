@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Trash2, RotateCcw, Search, ShieldCheck, AlertTriangle,
-  ArchiveRestore, CheckCircle2, Filter, Layers, Eye, ChevronDown, ChevronUp, Sparkles
+  Trash2, RotateCcw, Search, Eye, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { storage, cleanOrphanedCacheAndTrash } from '../lib/storage';
 import { RecycleBinItem } from '../types';
@@ -25,7 +24,6 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
   isEmbedded = false,
 }) => {
   const [items, setItems] = useState<RecycleBinItem[]>([]);
-  const [guardedCount, setGuardedCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedModule, setSelectedModule] = useState<string>('ALL');
@@ -43,7 +41,6 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
       const activeProf = profileId || storage.getActiveProfileId();
       const binItems = await storage.getRecycleBinItems(activeProf);
       setItems(binItems);
-      setGuardedCount(0);
       setSelectedIds(prev => {
         const validIds = new Set(binItems.map(i => i.id));
         const next = new Set<string>();
@@ -347,7 +344,7 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search deleted records by title, category, or module..."
-                  className="h-8.5 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="h-8.5 w-full rounded-lg border border-amber-200 bg-amber-50/40 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
@@ -377,14 +374,14 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
 
             {/* Module Filter Chips */}
             {modulesList.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 pt-0.5">
+              <div className="flex items-center gap-3 overflow-x-auto pb-0.5 pt-0.5">
                 <button
                   type="button"
                   onClick={() => setSelectedModule('ALL')}
-                  className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  className={`shrink-0 border-b-0 border-transparent px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
                     selectedModule === 'ALL'
-                      ? 'bg-indigo-600 text-white shadow-2xs'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'
+                      ? 'text-amber-700 dark:text-amber-300'
+                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
                   All ({items.length})
@@ -394,10 +391,10 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
                     key={modLabel}
                     type="button"
                     onClick={() => setSelectedModule(modLabel)}
-                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    className={`shrink-0 border-b-0 border-transparent px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
                       selectedModule === modLabel
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     {modLabel} ({count})

@@ -4,8 +4,8 @@ import {
   List, Palette, Highlighter,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Indent, Outdent, RemoveFormatting, Table as TableIcon,
-  ChevronDown, Plus, Minus, Trash2, Sparkles,
-  Grid, Volume2, X, Columns, Check, RotateCcw
+  ChevronDown, Plus, Minus, Trash2,
+  Volume2, X, Columns, RotateCcw
 } from 'lucide-react';
 import { sanitizeHtml } from '../lib/sanitizeHtml';
 import { TextReaderController, VoiceLanguage, isSpeechSynthesisSupported } from '../lib/voiceService';
@@ -433,7 +433,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   const [activeStudio, setActiveStudio] = useState<'color' | 'highlight' | 'bullets' | 'table' | null>(null);
 
   // Custom Colors
-  const [customTextColor, setCustomTextColor] = useState('#4f46e5');
+  const [customTextColor, setCustomTextColor] = useState('#b88648');
   const [customHighlightColor, setCustomHighlightColor] = useState('#fef08a');
 
   // Bullet / Number Tabs
@@ -1099,10 +1099,10 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     let bulletHtml = '';
     if (lines.length > 0) {
       bulletHtml = lines.map(line =>
-        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: bold; user-select: none; flex-shrink: 0;">${escapeHtml(symbol)}</span><span>${escapeHtml(line)}</span></div>`
+        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #b88648; font-weight: bold; user-select: none; flex-shrink: 0;">${escapeHtml(symbol)}</span><span>${escapeHtml(line)}</span></div>`
       ).join('') + '<p><br/></p>';
     } else {
-      bulletHtml = `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: bold; user-select: none; flex-shrink: 0;">${escapeHtml(symbol)}</span><span>List item</span></div><p><br/></p>`;
+      bulletHtml = `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #b88648; font-weight: bold; user-select: none; flex-shrink: 0;">${escapeHtml(symbol)}</span><span>List item</span></div><p><br/></p>`;
     }
 
     let inserted = false;
@@ -1138,13 +1138,13 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     if (customPrefix) {
       const items = lines.length > 0 ? lines : ['First item', 'Second item'];
       listHtml = items.map((line, idx) =>
-        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: 700; user-select: none; flex-shrink: 0;">${escapeHtml(customPrefix)} ${idx + 1}:</span><span>${escapeHtml(line)}</span></div>`
+        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #b88648; font-weight: 700; user-select: none; flex-shrink: 0;">${escapeHtml(customPrefix)} ${idx + 1}:</span><span>${escapeHtml(line)}</span></div>`
       ).join('') + '<p><br/></p>';
     } else if (styleType === 'circled') {
       const circledDigits = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
       const items = lines.length > 0 ? lines : ['First item', 'Second item'];
       listHtml = items.map((line, idx) =>
-        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #6366f1; font-weight: bold; user-select: none; flex-shrink: 0;">${circledDigits[idx] || `(${idx + 1})`}</span><span>${escapeHtml(line)}</span></div>`
+        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #b88648; font-weight: bold; user-select: none; flex-shrink: 0;">${circledDigits[idx] || `(${idx + 1})`}</span><span>${escapeHtml(line)}</span></div>`
       ).join('') + '<p><br/></p>';
     } else {
       const items = lines.length > 0 ? lines : ['First item'];
@@ -1350,12 +1350,12 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   };
 
   return (
-    <div className={`relative rounded-lg border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/80 overflow-hidden ${className}`}>
+    <div className={`relative min-w-0 max-w-full rounded-lg border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/80 overflow-hidden ${className}`}>
       {/* ========================================================================= */}
       {/* 1. PRIMARY DOCKED TOOLBAR                                                */}
       {/* ========================================================================= */}
-      <div className="border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/90 dark:bg-slate-800/60 backdrop-blur-xs px-1.5 py-0.75">
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
+      <div className="journal-reflection-toolbar border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/90 dark:bg-slate-800/60 backdrop-blur-xs px-1.5 py-0.75">
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
           {/* Paragraph Style */}
           <div className="relative shrink-0">
             <select
@@ -1654,7 +1654,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           onMouseDown={(e) => {
             if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
           }}
-          className="border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 py-3 sm:px-4 space-y-3"
+          className="sanctuary-menu-surface border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 py-3 sm:px-4 space-y-3"
         >
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -1770,7 +1770,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
               e.preventDefault();
             }
           }}
-          className="border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 py-2.5 sm:px-4 sm:py-3 shadow-md relative z-20 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150"
+          className="sanctuary-menu-surface border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 py-2.5 sm:px-4 sm:py-3 shadow-md relative z-20 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150"
         >
           {/* ===================================================================== */}
           {/* STUDIO 1: TEXT COLOR PALETTE                                         */}
@@ -1840,7 +1840,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                     type="text"
                     value={customTextColor}
                     onChange={(e) => setCustomTextColor(e.target.value)}
-                    placeholder="#4F46E5"
+                    placeholder="#B88648"
                     className="h-6 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 font-mono text-[11px] uppercase text-slate-900 dark:text-white"
                   />
                   <button
@@ -1976,15 +1976,15 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
 
                 <div className="flex items-center gap-1.5">
                   {/* Segmented Control */}
-                  <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-md text-[10px]">
+                  <div className="flex items-center gap-2 text-[10px]">
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => setBulletTab('symbols')}
-                      className={`px-2 py-0.5 rounded font-semibold transition-all cursor-pointer ${
+                      className={`border-b-0 border-transparent px-2 py-0.5 font-semibold transition-colors cursor-pointer ${
                         bulletTab === 'symbols'
-                          ? 'bg-white dark:bg-slate-700 text-violet-600 dark:text-violet-400 shadow-2xs'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                       }`}
                     >
                       Bullet Symbols
@@ -1993,10 +1993,10 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => setBulletTab('numbered')}
-                      className={`px-2 py-0.5 rounded font-semibold transition-all cursor-pointer ${
+                      className={`border-b-0 border-transparent px-2 py-0.5 font-semibold transition-colors cursor-pointer ${
                         bulletTab === 'numbered'
-                          ? 'bg-white dark:bg-slate-700 text-violet-600 dark:text-violet-400 shadow-2xs'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                       }`}
                     >
                       Numbered Sequences
@@ -2124,7 +2124,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                   </div>
                   <span className="text-xs font-bold text-slate-900 dark:text-white">Table Studio</span>
                   {activeTableLocation ? (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[9px] font-semibold border border-emerald-200/80 dark:border-emerald-800/60">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[9px] font-semibold border border-emerald-200/80 dark:border-emerald-800/60">
                       Row {activeTableLocation.row}/{activeTableLocation.totalRows} · Col {activeTableLocation.col}/{activeTableLocation.totalCols}
                     </span>
                   ) : (
@@ -2152,7 +2152,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                       <Plus className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
                       <span>Create Grid</span>
                     </span>
-                    <span className="font-mono text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.2 rounded border border-indigo-100 dark:border-indigo-900/60">
+                    <span className="font-mono text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/60">
                       {tableGridHover.rows} × {tableGridHover.cols}
                     </span>
                   </div>
@@ -2242,7 +2242,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                       <span>Edit Active Table</span>
                     </span>
                     <span className="text-[9px] text-slate-400">
-                      Shortcut: <kbd className="font-mono bg-white dark:bg-slate-800 px-1 py-0.2 rounded border border-slate-200 dark:border-slate-700">Tab</kbd>
+                      Shortcut: <kbd className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700">Tab</kbd>
                     </span>
                   </div>
 

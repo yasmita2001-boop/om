@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  DollarSign, Plus, ArrowUpRight, ArrowUpDown,
+  DollarSign, Plus, ArrowUpDown,
   ShieldCheck, Trash2, TrendingUp, Landmark,
-  Download, Upload, Paperclip, Receipt, ExternalLink,
-  FileText, X, Eye, Link2, Target, ChevronRight, ChevronDown, Pencil,
+  Download, Paperclip, Receipt, ExternalLink,
+  FileText, X, Eye, ChevronDown, Pencil,
   RefreshCw, AlertCircle, Check
 } from 'lucide-react';
 import {
@@ -15,8 +15,11 @@ import {
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString, getLocalMonthString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { EmptyState } from '../components/EmptyState';
+import { ShowMoreBar } from '../components/ShowMoreBar';
 import { SlideTabs } from '../components/SlideTabs';
 import { LinkModeSelector } from '../components/LinkModeSelector';
+import { FormDisclosure } from '../components/FormDisclosure';
 import { syncGoalProgressFromFinance } from '../lib/goalTaskSync';
 import { addSchedulePeriod, advanceSchedule, getInvestmentMetrics } from '../lib/financeCalculations';
 import { calculatorEngine } from '../lib/calculatorEngine';
@@ -267,7 +270,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   savingsPlans,
   assets = [],
   liabilities = [],
-  financialGoals = [],
   receipts = [],
   goals = [],
   onRefresh,
@@ -359,7 +361,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [txCategory, setTxCategory] = useState('');
   const [txAccount, setTxAccount] = useState(accounts[0]?.id || '');
   const [txToAccount, setTxToAccount] = useState(accounts[1]?.id || accounts[0]?.id || '');
-  const [txRepayLoanId, setTxRepayLoanId] = useState(loans[0]?.id || '');
+  const [txRepayLoanId] = useState(loans[0]?.id || '');
   const [txNote, setTxNote] = useState('');
   const [txDate, setTxDate] = useState(today);
   const txAmountResult = useMemo(() => calculateTransactionAmount(txAmount), [txAmount]);
@@ -412,14 +414,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [assetGoalId, setAssetGoalId] = useState('');
 
   // Transactions Filter by Goal
-  const [txGoalFilter, setTxGoalFilter] = useState('all');
+  const [txGoalFilter] = useState('all');
 
   // Goal Portfolio Alignment Tab state
-  const [goalLevelFilter, setGoalLevelFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
-  const [goalSearch, setGoalSearch] = useState('');
-  const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
-  const [onlyFinanciallyLinked, setOnlyFinanciallyLinked] = useState(false);
-
   // Bill / Receipt Attachment & Things Vault Link state
   const [txAttachedFile, setTxAttachedFile] = useState<{ name: string; size: string; data: string; type: string } | null>(null);
   const [txLinkToReceipt, setTxLinkToReceipt] = useState(false);
@@ -427,6 +424,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [txReceiptTitle, setTxReceiptTitle] = useState('');
   const [txSelectedReceiptId, setTxSelectedReceiptId] = useState('');
   const [previewFile, setPreviewFile] = useState<{ name: string; data: string; type?: string } | null>(null);
+
+  // Progressive rendering for the ledger: slicing beats rendering thousands of rows.
+  const [visibleLedgerCount, setVisibleLedgerCount] = useState(150);
   const MAX_RECEIPT_FILE_BYTES = 500 * 1024 * 1024;
   const ALLOWED_RECEIPT_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp']);
 
@@ -645,6 +645,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [assetSaleDate, setAssetSaleDate] = useState(today);
   const [assetSaleAccountId, setAssetSaleAccountId] = useState(accounts[0]?.id || '');
   const [assetStatusFilter, setAssetStatusFilter] = useState<'active' | 'all'>('active');
+  const [isAssetStatusFilterOpen, setIsAssetStatusFilterOpen] = useState(false);
+  const assetStatusFilterRef = useRef<HTMLDivElement>(null);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [editingTransactionAmount, setEditingTransactionAmount] = useState('');
   const [editingTransactionDate, setEditingTransactionDate] = useState('');
@@ -652,6 +654,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [editingTransactionNote, setEditingTransactionNote] = useState('');
   const [editingTransactionAccountId, setEditingTransactionAccountId] = useState('');
   const [editingTransactionToAccountId, setEditingTransactionToAccountId] = useState('');
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (assetStatusFilterRef.current && !assetStatusFilterRef.current.contains(event.target as Node)) {
+        setIsAssetStatusFilterOpen(false);
+      }
+    };
+    if (isAssetStatusFilterOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isAssetStatusFilterOpen]);
 
   // Transactions Filter
   const [txSearch, setTxSearch] = useState('');
@@ -717,39 +733,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       }
     }
   }, [loans, payLoanId]);
-
-  // Core Financial Mathematics
-  let income = 0;
-  let expense = 0;
-  let investmentFlow = 0;
-  let savingsFlow = 0;
-  let loanReceived = 0;
-  let repaymentFlow = 0;
-  let loanGivenFlow = 0;
-  let loanRecoveryFlow = 0;
-  let adjustmentFlow = 0;
-
-  transactions.forEach(t => {
-    const amt = Number(t.amount) || 0;
-    if (t.type === 'income') income += amt;
-    else if (t.type === 'expense') expense += amt;
-    else if (t.type === 'investment' && !t.ledgerOnly) investmentFlow += amt;
-    else if (t.type === 'savings' && !t.ledgerOnly) savingsFlow += amt;
-    else if (t.type === 'savingsWithdrawal' && !t.ledgerOnly) savingsFlow -= amt;
-    else if (t.type === 'loan') loanReceived += amt;
-    else if (t.type === 'loanGiven') loanGivenFlow += amt;
-    else if (t.type === 'loanReceipt') {
-      loanRecoveryFlow += Number(t.principal) || 0;
-      income += Number(t.interest) || 0;
-    }
-    else if (t.type === 'repayment') repaymentFlow += amt;
-    else if (t.type === 'adjustment') adjustmentFlow += t.adjustmentDirection === 'credit' ? amt : -amt;
-  });
-
-  const operatingCashFlow = income - expense;
-  const investingCashFlow = -investmentFlow;
-  const financingCashFlow = loanReceived - repaymentFlow - loanGivenFlow + loanRecoveryFlow;
-  const netCashFlow = operatingCashFlow + investingCashFlow - savingsFlow + financingCashFlow + adjustmentFlow;
 
   const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   const investmentMetricsById = new Map(investments.map(investment => [
@@ -1368,67 +1351,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       )}
     </div>
   );
-
-  // Compute detailed financial metrics for any goal
-  const getGoalFinancialMetrics = (goalId: string) => {
-    let goalIncome = 0;
-    let goalExpense = 0;
-    let goalTransfer = 0;
-    const goalTxs = transactions.filter(t => t.goalId === goalId);
-    goalTxs.forEach(t => {
-      const amt = Number(t.amount) || 0;
-      if (t.type === 'income') goalIncome += amt;
-      else if (t.type === 'expense') goalExpense += amt;
-      else if (t.type === 'transfer') goalTransfer += amt;
-    });
-
-    const goalInvestments = investments.filter(i => i.goalId === goalId);
-    const goalInvestmentsTotal = goalInvestments.reduce((sum, i) => sum + (Number(i.currentValue ?? i.amount) || 0), 0);
-    const goalInvestedCost = goalInvestments.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
-
-    const goalLoans = loans.filter(l => l.goalId === goalId);
-    const goalLoansTotal = goalLoans.reduce((sum, l) => sum + (Number(l.outstanding) || 0), 0);
-
-    const goalLiabilities = liabilities.filter(l => l.goalId === goalId);
-    const goalLiabilitiesTotal = goalLiabilities.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
-
-    const goalSavings = savingsPlans.filter(s => s.goalId === goalId);
-    const goalSavingsCurrent = goalSavings.reduce((sum, s) => sum + (Number(s.currentAmount) || 0), 0);
-    const goalSavingsTarget = goalSavings.reduce((sum, s) => sum + (Number(s.targetAmount) || 0), 0);
-
-    const goalAssets = assets.filter(a => a.goalId === goalId);
-    const goalAssetsTotal = goalAssets.reduce((sum, a) => sum + (Number(a.value) || 0), 0);
-
-    const netCashFlow = goalIncome - goalExpense;
-    const totalDebt = goalLoansTotal + goalLiabilitiesTotal;
-    const totalGoalAssets = goalSavingsCurrent + goalInvestmentsTotal + goalAssetsTotal;
-    const goalNetWorth = totalGoalAssets - totalDebt;
-    const hasAnyLink = goalTxs.length > 0 || goalInvestments.length > 0 || goalLoans.length > 0 || goalLiabilities.length > 0 || goalSavings.length > 0 || goalAssets.length > 0;
-
-    return {
-      txs: goalTxs,
-      income: goalIncome,
-      expense: goalExpense,
-      transfer: goalTransfer,
-      netCashFlow,
-      investments: goalInvestments,
-      investmentsTotal: goalInvestmentsTotal,
-      investedCost: goalInvestedCost,
-      loans: goalLoans,
-      loansTotal: goalLoansTotal,
-      liabilities: goalLiabilities,
-      liabilitiesTotal: goalLiabilitiesTotal,
-      totalDebt,
-      savings: goalSavings,
-      savingsCurrent: goalSavingsCurrent,
-      savingsTarget: goalSavingsTarget,
-      assets: goalAssets,
-      assetsTotal: goalAssetsTotal,
-      totalGoalAssets,
-      goalNetWorth,
-      hasAnyLink
-    };
-  };
 
   const handleCreateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3889,7 +3811,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
         <div className="flex flex-wrap items-center gap-2">
           {(activeTab === 'overview' || activeTab === 'loans' || activeTab === 'investments' || activeTab === 'savings' || activeTab === 'balanceSheet') && (
-            <div className="flex flex-wrap items-center gap-1.5" aria-label="Cash flow and account tools">
+            <div className="flex flex-wrap items-center gap-3" aria-label="Cash flow and account tools">
               {(activeTab === 'overview'
                 ? [
                     { id: 'transaction', label: 'Record Transaction', icon: Plus },
@@ -3921,10 +3843,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         setSectionActionPanel(current => current === panel.id ? null : panel.id as 'loanActions' | 'investmentActions' | 'savings' | 'asset');
                       }
                     }}
-                    className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 border-b-0 border-transparent px-2 py-2 text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                       isSelected
-                        ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300'
-                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5" />
@@ -3937,10 +3859,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           <button
             type="button"
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 border-b-0 border-transparent px-2 py-2 text-xs font-semibold text-amber-800 transition-colors hover:border-amber-500 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
             title="Export Ledger as CSV"
           >
-            <Download className="h-4 w-4 text-slate-500" />
+            <Download className="h-4 w-4" />
             <span>Export CSV</span>
           </button>
         </div>
@@ -3974,7 +3896,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             tone: 'text-rose-600 dark:text-rose-400'
           }
         ].map(metric => (
-          <section key={metric.label} className="min-w-0 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-xs transition-colors hover:border-slate-300 dark:border-slate-800/80 dark:bg-slate-900 dark:hover:border-slate-700 sm:p-4">
+          <section key={metric.label} className="min-w-0 rounded-xl border-2 border-dashed border-slate-200 p-3 dark:border-slate-800 sm:p-4">
             <div className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{metric.label}</div>
             <div className={`mt-1 truncate font-mono text-lg font-extrabold tracking-tight tabular-nums sm:text-xl ${metric.tone}`}>{metric.value}</div>
             <div className="mt-0.5 truncate text-[10px] font-medium text-slate-400">{metric.note}</div>
@@ -4000,9 +3922,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
       {/* Tab: Overview & Accounts */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Record Transaction is opened from the compact toolbar beside Export CSV. */}
-          {overviewPanel === 'transaction' && <div ref={transactionPanelRef} className="lg:col-span-6 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {overviewPanel === 'transaction' && <div ref={transactionPanelRef} className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -4016,14 +3938,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
             <form onSubmit={handleCreateTransaction} className="mt-4 space-y-4">
               {/* Segmented Transaction Type Selector */}
-              <div className="grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 p-1 text-xs">
+              <div className="grid grid-cols-3 gap-3 text-xs">
                 <button
                   type="button"
                   onClick={() => setTxType('expense')}
-                  className={`flex h-9 sm:h-9.5 items-center justify-center rounded-xl font-semibold transition-all cursor-pointer ${
+                  className={`flex h-9 sm:h-9.5 items-center justify-center border-b-0 border-transparent px-2 font-semibold transition-colors cursor-pointer ${
                     txType === 'expense'
-                      ? 'bg-white text-rose-600 shadow-xs dark:bg-slate-700 dark:text-rose-400'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                      ? 'text-amber-700 dark:text-amber-300'
+                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
                   Expense
@@ -4031,10 +3953,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setTxType('income')}
-                  className={`flex h-9 sm:h-9.5 items-center justify-center rounded-xl font-semibold transition-all cursor-pointer ${
+                  className={`flex h-9 sm:h-9.5 items-center justify-center border-b-0 border-transparent px-2 font-semibold transition-colors cursor-pointer ${
                     txType === 'income'
-                      ? 'bg-white text-emerald-600 shadow-xs dark:bg-slate-700 dark:text-emerald-400'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                      ? 'text-amber-700 dark:text-amber-300'
+                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
                   Income
@@ -4042,10 +3964,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setTxType('transfer')}
-                  className={`flex h-9 sm:h-9.5 items-center justify-center rounded-xl font-semibold transition-all cursor-pointer ${
+                  className={`flex h-9 sm:h-9.5 items-center justify-center border-b-0 border-transparent px-2 font-semibold transition-colors cursor-pointer ${
                     txType === 'transfer'
-                      ? 'bg-white text-indigo-600 shadow-xs dark:bg-slate-700 dark:text-indigo-400'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                      ? 'text-amber-700 dark:text-amber-300'
+                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
                   Transfer
@@ -4081,7 +4003,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         }
                       }}
                       placeholder="0.00"
-                      className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs sm:text-sm font-semibold text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
+                      className="finance-transaction-field h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs sm:text-sm font-semibold text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
                     />
                   </div>
                   {txAmountHasCalculation && txAmountResult !== null && (
@@ -4101,7 +4023,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     max={today}
                     value={txDate}
                     onChange={e => setTxDate(e.target.value)}
-                    className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
+                    className="finance-transaction-field h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
                   />
                 </div>
               </div>
@@ -4160,7 +4082,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             ? 'Select or type (Default: Income)'
                             : 'Select or type (e.g. Food, Groceries)'
                         }
-                        className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 pl-3 pr-16 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
+                        className="finance-transaction-field h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 pl-3 pr-16 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
                       />
                       <div className="absolute inset-y-0 right-0 flex items-center pr-1.5 gap-0.5">
                         {txCategory && (
@@ -4191,7 +4113,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
                     {/* Combobox Dropdown Popover */}
                     {isCategoryDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1.5 max-h-56 overflow-y-auto rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800 z-50 animate-in fade-in slide-in-from-top-1">
+                      <div className="sanctuary-menu-surface absolute left-0 right-0 top-full mt-1.5 max-h-56 overflow-y-auto rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800 z-50 animate-in fade-in slide-in-from-top-1">
                         {/* Custom Typing Chip/Action if input doesn't match standard */}
                         {txCategory.trim() &&
                           !categoryList.some(b => b.toLowerCase() === txCategory.trim().toLowerCase()) && (
@@ -4223,14 +4145,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                     setTxCategory(cat);
                                     setIsCategoryDropdownOpen(false);
                                   }}
-                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-xl text-left transition-colors cursor-pointer ${
+                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-left transition-colors cursor-pointer ${
                                     isSelected
-                                      ? 'bg-indigo-50 font-semibold text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400'
-                                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                                      ? 'font-semibold text-amber-700 dark:text-amber-300'
+                                      : 'text-amber-800 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-200'
                                   }`}
                                 >
                                   <span>{cat}</span>
-                                  {isSelected && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                                  {isSelected && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                                 </button>
                               );
                             })}
@@ -4253,10 +4175,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <select
                         value={txAccount || accounts[0]?.id || ''}
                         onChange={e => setTxAccount(e.target.value)}
+                        title={accounts.length === 0 ? 'A default account will be created automatically when you save this transaction.' : undefined}
                         className="h-10 sm:h-10.5 min-w-0 w-full appearance-none truncate rounded-xl border border-slate-200 py-0 pl-2.5 pr-8 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
                       >
                         {accounts.length === 0 ? (
-                          <option value="">Default Account (will be auto-created)</option>
+                          <option value="">Default Account (auto)</option>
                         ) : (
                           accounts.map(a => (
                             <option key={a.id} value={a.id}>
@@ -4291,7 +4214,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               {/* Compact Document Attach & Vault Sync: Side-by-Side (2 Columns) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                 {/* Left: Compact Bill / Receipt Attachment */}
-                <div className="h-10 sm:h-10.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 px-2.5 sm:px-3 flex items-center justify-between gap-2 transition-all hover:border-slate-300 dark:hover:border-slate-600">
+                <div className="h-10 sm:h-10.5 flex min-w-0 items-center justify-between gap-2">
                   <input
                     type="file"
                     className="hidden"
@@ -4301,7 +4224,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   />
                   <label
                     htmlFor="tx-form-file"
-                    className="flex flex-1 items-center gap-2 cursor-pointer min-w-0 text-xs sm:text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className="sanctuary-upload-control flex flex-1 items-center gap-2 cursor-pointer min-w-0 rounded-lg border px-2.5 py-2 text-xs sm:text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                     title={txAttachedFile ? txAttachedFile.name : 'Attach Bill'}
                   >
                     <Paperclip className="h-4 w-4 text-indigo-500 shrink-0" />
@@ -4332,16 +4255,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
 
                 {/* Right: Compact Vault Receipt Link */}
-                <div className={`rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 px-2.5 sm:px-3 transition-all ${
+                <div className={`sanctuary-link-panel rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 px-2.5 sm:px-3 transition-all ${
                   txLinkToReceipt ? 'py-2' : 'h-10 sm:h-10.5 flex items-center'
                 }`}>
                   <div className="flex w-full items-center justify-between gap-2">
                     <button
                       type="button"
                       onClick={() => { setTxLinkToReceipt(!txLinkToReceipt); if (!txLinkToReceipt) setTxReceiptMode('link_existing'); }}
-                      className="flex items-center gap-2 text-xs sm:text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer select-none transition-colors"
+                      className="flex items-center gap-2 text-xs sm:text-[13px] font-medium text-amber-800 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-200 cursor-pointer select-none transition-colors"
                     >
-                      <Receipt className="h-4 w-4 text-purple-500 shrink-0" />
+                      <Receipt className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0" />
                       <span>Link Vault Receipt</span>
                     </button>
 
@@ -4352,7 +4275,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       aria-checked={txLinkToReceipt}
                       onClick={() => { setTxLinkToReceipt(!txLinkToReceipt); if (!txLinkToReceipt) setTxReceiptMode('link_existing'); }}
                       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        txLinkToReceipt ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
+                        txLinkToReceipt ? 'bg-amber-600' : 'bg-slate-300 dark:bg-slate-700'
                       }`}
                     >
                       <span
@@ -4369,7 +4292,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <select
                         value={txSelectedReceiptId}
                         onChange={e => setTxSelectedReceiptId(e.target.value)}
-                        className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer"
+                        className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 focus:border-amber-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer"
                       >
                         <option value="">-- Choose Vault Receipt --</option>
                         {receipts?.map(r => (
@@ -4411,7 +4334,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </div>}
 
           {/* Top Right: Operating & Cash Flow Summary */}
-          <div className={`${overviewPanel === 'transaction' ? 'lg:col-span-6' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between`}>
+          <div className={`${overviewPanel === 'transaction' ? 'lg:col-span-6' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 flex flex-col justify-between`}>
             <div>
               <h2 className="flex items-center justify-between border-b border-slate-100 pb-3 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-white">
                 <span>Cash Flow Statement</span>
@@ -4515,7 +4438,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </div>
 
           {/* Bottom Full-Width (Single Column): Liquid Accounts Manager (12 cols) */}
-          {overviewPanel === 'accounts' && <div ref={accountsPanelRef} className="lg:col-span-12 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {overviewPanel === 'accounts' && <div ref={accountsPanelRef} className="lg:col-span-12 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Landmark className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
@@ -4624,8 +4547,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               })}
             </div>
 
-            <details className="finance-details mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
-            <summary className="cursor-pointer text-xs font-semibold text-indigo-600 dark:text-indigo-400">Add account</summary>
+            <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <FormDisclosure
+              label="Add account"
+              floating={false}
+              header={
+                <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Create a finance account
+                </h3>
+              }
+            >
             <form onSubmit={handleCreateAccount} className="mt-3 flex flex-wrap gap-2 items-center">
               <input
                 type="text"
@@ -4659,14 +4590,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 + Add Account
               </button>
             </form>
-            </details>
+            </FormDisclosure>
+            </div>
           </div>}
-          {overviewPanel === 'scheduled' && <details ref={scheduledPanelRef} open className="finance-details lg:col-span-12 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 text-sm font-bold text-slate-900 dark:text-white">
+          {overviewPanel === 'scheduled' && <details ref={scheduledPanelRef} open className="finance-details finance-schedule-panel lg:col-span-12 p-5 sm:p-6">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 border-b border-amber-900/10 pb-3.5 text-sm font-bold text-slate-900 dark:border-amber-200/10 dark:text-white">
               <span>Scheduled Cash Flow</span>
               <div className="flex flex-wrap gap-3 text-[10px]">
                 {[7, 30, 90].map(days => (
-                  <div key={days} className="rounded-lg bg-slate-50 px-2.5 py-1.5 dark:bg-slate-800">
+                  <div key={days} className="rounded-lg border border-amber-900/10 bg-amber-50/60 px-2.5 py-1.5 dark:border-amber-200/10 dark:bg-amber-100/5">
                     <span className="text-slate-400">{days}d est.</span>
                     <strong className={`ml-1.5 font-mono ${getForecastNetChange(days) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {getForecastNetChange(days) >= 0 ? '+' : ''}NPR {getForecastNetChange(days).toLocaleString('en-IN')}
@@ -4676,18 +4608,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </div>
             </summary>
             <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-12">
-              <form onSubmit={handleCreateCashFlowSchedule} className="lg:col-span-5 grid grid-cols-2 gap-2.5">
-                <input required value={scheduleName} onChange={event => setScheduleName(event.target.value)} placeholder="Name (e.g. House rent)" className="col-span-2 h-9 rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
-                <select value={scheduleType} onChange={event => setScheduleType(event.target.value as 'income' | 'expense')} className="h-9 rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="expense">Expected expense</option><option value="income">Expected income</option></select>
-                <select value={scheduleFrequency} onChange={event => setScheduleFrequency(event.target.value as CashFlowScheduleFrequency)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="once">One time</option><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>
-                <input required value={scheduleCategory} onChange={event => setScheduleCategory(event.target.value)} placeholder="Category (e.g. Rent)" className="h-9 rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
-                <input required type="number" min="0.01" step="0.01" value={scheduleAmount} onChange={event => setScheduleAmount(event.target.value)} placeholder="Amount NPR" className="h-9 rounded-lg border border-slate-200 px-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
-                <input required type="date" value={scheduleNextDueDate} onChange={event => setScheduleNextDueDate(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
-                <select value={scheduleAccountId} onChange={event => setScheduleAccountId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="">No tracked account</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select>
-                <button type="submit" className="col-span-2 h-9 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500">+ Save expected schedule</button>
+              <form onSubmit={handleCreateCashFlowSchedule} className="lg:col-span-5 grid grid-cols-2 gap-3">
+                <input required value={scheduleName} onChange={event => setScheduleName(event.target.value)} placeholder="Name (e.g. House rent)" className="col-span-2 h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <select value={scheduleType} onChange={event => setScheduleType(event.target.value as 'income' | 'expense')} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="expense">Expected expense</option><option value="income">Expected income</option></select>
+                <select value={scheduleFrequency} onChange={event => setScheduleFrequency(event.target.value as CashFlowScheduleFrequency)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="once">One time</option><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>
+                <input required value={scheduleCategory} onChange={event => setScheduleCategory(event.target.value)} placeholder="Category (e.g. Rent)" className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input required type="number" min="0.01" step="0.01" value={scheduleAmount} onChange={event => setScheduleAmount(event.target.value)} placeholder="Amount NPR" className="h-10 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input required type="date" value={scheduleNextDueDate} onChange={event => setScheduleNextDueDate(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <select value={scheduleAccountId} onChange={event => setScheduleAccountId(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="">No tracked account</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select>
+                <button type="submit" className="sanctuary-flat-primary col-span-2 h-10 rounded-xl px-3 text-xs font-semibold">+ Save expected schedule</button>
               </form>
               <div className="lg:col-span-7 divide-y divide-slate-100 dark:divide-slate-800">
-                {cashFlowSchedules.length === 0 ? <p className="py-8 text-center text-xs text-slate-400">No expected bills or recurring income scheduled.</p> : (
+                {cashFlowSchedules.length === 0 ? <EmptyState icon={ArrowUpDown} compact title="No schedules yet" hint="Register expected bills and recurring income to see them on a timeline." /> : (
                   [...cashFlowSchedules].sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate)).map(schedule => (
                     <div key={schedule.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                       <div className="min-w-0">
@@ -4723,7 +4655,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* Tab: Loans & Liabilities */}
       {activeTab === 'loans' && (
         <div className="space-y-5">
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+        <section className="finance-summary-card rounded-2xl border-2 border-solid border-amber-200/80 bg-white p-4 dark:border-amber-900/50 dark:bg-slate-900 sm:p-5">
           <button
             type="button"
             aria-expanded={showLoanSummary}
@@ -4742,7 +4674,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             type="button"
             aria-expanded={showLoanInfo}
             onClick={() => setShowLoanInfo(open => !open)}
-            className="mt-3 text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+            className="mt-3 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200"
           >
             {showLoanInfo ? 'Hide supporting info' : 'Show supporting info'}
           </button>
@@ -4763,7 +4695,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               { label: 'Closure amount', value: totalLoanClosureEstimate, suffix: 'Estimate · excludes bank quote' },
               { label: 'Total repayment', value: totalLoanRepayment, suffix: `Closed ${closedLoanCount} · Overdue est. ${overdueInstallments}` }
             ].map(metric => (
-              <div key={metric.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div
+                key={metric.label}
+                className="finance-summary-metric min-w-0 rounded-xl border border-solid border-slate-200 bg-slate-50 px-2.5 py-2.5 dark:border-slate-800 dark:bg-slate-950/40"
+              >
                 <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
                 <div className="mt-1 truncate font-mono text-xs font-bold tabular-nums text-slate-900 dark:text-white">
                   NPR {metric.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
@@ -4788,12 +4723,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </span>
           )}
         </div>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Left Forms: Create Loan, Record Payment & Add Liability */}
           <div ref={loanActionsPanelRef} className={sectionActionPanel === 'loanActions' ? 'lg:col-span-5' : 'hidden'}>
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+            <div className=" border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">Loan actions</h2>
-              <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+              <div className="mt-4 flex flex-wrap gap-3">
                 {([
                   ['payment', 'EMI / Payment'],
                   ['newLoan', 'New Loan'],
@@ -4804,10 +4739,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     type="button"
                     onClick={() => setActiveLoanAction(action)}
                     aria-pressed={activeLoanAction === action}
-                    className={`min-h-9 rounded-lg px-2 text-[10px] font-semibold transition-colors sm:text-xs ${
+                    className={`min-h-9 border-b-0 border-transparent px-2 text-[10px] font-semibold transition-colors sm:text-xs ${
                       activeLoanAction === action
-                        ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     {label}
@@ -5238,7 +5173,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           {/* Right Lists: Active Loans and Other Liabilities */}
           <div className={`${sectionActionPanel === 'loanActions' ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-6`}>
             {/* Active Loans List with Amortization */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <h2 className="shrink-0 text-sm font-bold text-slate-900 dark:text-white">
@@ -5258,11 +5193,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
               <div className="mt-4 space-y-3">
                 {visibleLoanMetrics.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-slate-400">
-                    {loans.length ? 'No loans match these filters.' : 'No loans registered in system.'}
-                  </div>
+                  <EmptyState
+                    icon={Landmark}
+                    compact
+                    title={loans.length ? 'No loans match these filters' : 'No loans registered yet'}
+                    hint={loans.length ? 'Loosen or clear a filter to see all loans.' : 'Register your first loan to track installments, interest and closure.'}
+                  />
                 ) : (
-                  visibleLoanMetrics.map(({ loan: l, installment, monthlyInstallment, remainingInterest, nextDue, overdueCount, schedule, closureEstimate }) => {
+                  visibleLoanMetrics.map(({ loan: l, installment, remainingInterest, nextDue, overdueCount, schedule, closureEstimate }) => {
                     const isLent = l.direction === 'lent';
                     const isClosed = l.status === 'closed' || Number(l.outstanding) <= 0;
                     const linkedDisbursementTx = transactions.find(t => t.linkedLoanId === l.id && (t.type === 'loan' || t.type === 'loanGiven'));
@@ -5388,7 +5326,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </div>
 
             {/* Other Liabilities List */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <h2 className="min-w-0 text-sm font-bold text-slate-900 dark:text-white">
                   Other liabilities ({liabilities.length})
@@ -5400,9 +5338,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
               <div className="mt-4 space-y-2.5">
                 {liabilities.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400">
-                    No short-term liabilities recorded.
-                  </div>
+                  <EmptyState icon={AlertCircle} compact title="No short-term liabilities" hint="Log dues, EMIs and obligations to keep the balance honest." />
                 ) : (
                   liabilities.map(l => (
                     <div key={l.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 group">
@@ -5479,7 +5415,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
             {/* Loan Payment History */}
             {loanPayments.length > 0 && (
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
                   Recent Repayment Receipts ({loanPayments.length})
                 </h2>
@@ -5507,11 +5443,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
       {/* Tab: Investments Portfolio */}
       {activeTab === 'investments' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           <div ref={investmentActionsPanelRef} className={sectionActionPanel === 'investmentActions' ? 'lg:col-span-5' : 'hidden'}>
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+          <div className=" border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Investment actions</h2>
-            <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+            <div className="mt-4 flex flex-wrap gap-3">
               {([
                 ['asset', 'Add investment'],
                 ['activity', 'Record activity']
@@ -5521,10 +5457,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   type="button"
                   onClick={() => setActiveInvestmentAction(action)}
                   aria-pressed={activeInvestmentAction === action}
-                  className={`min-h-9 rounded-lg px-2 text-xs font-semibold transition-colors ${
+                  className={`min-h-9 border-b-0 border-transparent px-2 text-xs font-semibold transition-colors ${
                     activeInvestmentAction === action
-                      ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                      ? 'text-amber-700 dark:text-amber-300'
+                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   }`}
                 >
                   {label}
@@ -5673,7 +5609,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </div>
           </div>
 
-          <div className={`${sectionActionPanel === 'investmentActions' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${sectionActionPanel === 'investmentActions' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 Investment Portfolio ({investments.length})
@@ -5685,7 +5621,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
             <div className="mt-4 space-y-3">
               {investments.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No investment assets recorded yet.</div>
+                <EmptyState icon={TrendingUp} compact title="No investment assets yet" hint="Record holdings to track value, gains and allocation." />
               ) : (
                 investments.map(i => {
                   const metrics = investmentMetricsById.get(i.id) || getInvestmentMetrics(i, []);
@@ -5823,7 +5759,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* Tab: Savings & Goals */}
       {activeTab === 'savings' && (
         <div className="space-y-4">
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+        <section className="finance-summary-card rounded-2xl border-2 border-solid border-amber-200/80 bg-white p-4 dark:border-amber-900/50 dark:bg-slate-900 sm:p-5">
           <button
             type="button"
             aria-expanded={showSavingsSummary}
@@ -5842,12 +5778,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             type="button"
             aria-expanded={showSavingsInfo}
             onClick={() => setShowSavingsInfo(open => !open)}
-            className="mt-3 text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+            className="mt-3 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200"
           >
             {showSavingsInfo ? 'Hide supporting info' : 'Show supporting info'}
           </button>
           {showSavingsInfo && (
-            <div className="mt-2 text-right font-mono text-xs text-indigo-600 dark:text-indigo-400">
+            <div className="mt-2 text-right font-mono text-xs text-amber-700 dark:text-amber-300">
               NPR {totalSavings.toLocaleString('en-IN', { maximumFractionDigits: 2 })} · {activeSavingsPlans.length} active
             </div>
           )}
@@ -5865,7 +5801,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               { label: 'Upcoming Maturity', value: `${upcomingSavingsMaturities.length} plans`, tone: 'text-slate-700 dark:text-slate-200' },
               { label: 'Active Plans', value: `${activeSavingsPlans.length} plans`, tone: 'text-slate-700 dark:text-slate-200' }
             ].map(metric => (
-              <div key={metric.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div key={metric.label} className="finance-summary-metric min-w-0 rounded-xl border border-solid border-slate-200 bg-slate-50 px-2.5 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
                 <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
                 <div className={`mt-1 truncate font-mono text-[11px] font-bold tabular-nums ${metric.tone}`}>{metric.value}</div>
               </div>
@@ -5882,8 +5818,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           <span>This year <strong className="font-mono text-slate-800 dark:text-slate-200">NPR {savingsThisYear.toLocaleString('en-IN')}</strong></span>
         </div>
         )}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <div ref={savingsPanelRef} className={`${sectionActionPanel === 'savings' ? 'lg:col-span-5' : 'hidden'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div ref={savingsPanelRef} className={`${sectionActionPanel === 'savings' ? 'lg:col-span-5' : 'hidden'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Register Savings / Deposit
             </h2>
@@ -5891,7 +5827,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Savings category</label>
-                  <div className="flex rounded-lg border border-slate-200 p-0.5 text-[10px] dark:border-slate-700">
+                  <div className="flex gap-3 text-[10px]">
                     {(['simple', 'bank'] as const).map(category => (
                       <button
                         key={category}
@@ -5900,10 +5836,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           setSaveCategory(category);
                           setSaveProductType(category === 'bank' ? 'bank_savings' : 'reserve');
                         }}
-                        className={`rounded-md px-2.5 py-1 font-semibold capitalize transition-colors ${
+                        className={`border-b-0 border-transparent px-2 py-1 font-semibold capitalize transition-colors ${
                           saveCategory === category
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
                         {category === 'simple' ? 'Simple Savings' : 'Bank Deposits'}
@@ -6317,7 +6253,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </form>
           </div>
 
-          <div className={`${sectionActionPanel === 'savings' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${sectionActionPanel === 'savings' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               My Savings ({visibleSavingsPlans.length}{visibleSavingsPlans.length !== savingsPlans.length ? ` / ${savingsPlans.length}` : ''})
             </h2>
@@ -6327,12 +6263,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 value={savingsSearch}
                 onChange={event => setSavingsSearch(event.target.value)}
                 placeholder="Search name, bank or reference"
-                className="h-8 rounded-lg border border-slate-200 px-2.5 text-[11px] dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="h-8 rounded-lg border border-amber-200 bg-amber-50/40 px-2.5 text-[11px] focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
               />
               <select
                 value={savingsCategoryFilter}
                 onChange={event => setSavingsCategoryFilter(event.target.value as 'all' | 'simple' | 'bank')}
-                className="h-8 rounded-lg border border-slate-200 px-2 text-[11px] dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="h-8 rounded-lg border border-amber-200 bg-amber-50/40 px-2 text-[11px] focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
               >
                 <option value="all">All savings categories</option>
                 <option value="simple">Simple savings</option>
@@ -6341,7 +6277,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               <select
                 value={savingsStatusFilter}
                 onChange={event => setSavingsStatusFilter(event.target.value as 'all' | 'active' | 'closed')}
-                className="h-8 rounded-lg border border-slate-200 px-2 text-[11px] dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="h-8 rounded-lg border border-amber-200 bg-amber-50/40 px-2 text-[11px] focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
               >
                 <option value="active">Active plans</option>
                 <option value="closed">Closed plans</option>
@@ -6351,9 +6287,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <div className="mt-4 space-y-4">
               {visibleSavingsPlans.length === 0 ? (
                 savingsPlans.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No savings plans registered.</div>
+                <EmptyState icon={Receipt} compact title="No savings plans yet" hint="Register a plan to track deposits, targets and withdrawals." />
                 ) : (
-                  <div className="py-12 text-center text-xs text-slate-400">No savings match these filters.</div>
+                  <EmptyState icon={Receipt} compact title="No savings match these filters" hint="Adjust or clear the active filters to see all plans." />
                 )
               ) : (
                 visibleSavingsPlans.map(sp => {
@@ -6525,7 +6461,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* Tab: Assets & Balance Sheet */}
       {activeTab === 'balanceSheet' && (
         <div className="space-y-4">
-        <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:px-5">
+        <section className="finance-summary-card rounded-2xl border-2 border-solid border-amber-200/80 bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-slate-900 sm:px-5">
           <div>
             <button
               type="button"
@@ -6534,7 +6470,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 if (open) setShowAssetInfo(false);
                 return !open;
               })}
-              className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] font-semibold text-indigo-600 dark:text-indigo-400"
+              className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] font-semibold text-amber-700 dark:text-amber-300"
             >
               <span>Asset summary</span>
               <span aria-hidden="true" className="text-base leading-none text-slate-400">{showAssetSummary ? '−' : '+'}</span>
@@ -6545,7 +6481,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               type="button"
               aria-expanded={showAssetInfo}
               onClick={() => setShowAssetInfo(open => !open)}
-              className="mt-3 text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+              className="mt-3 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200"
             >
               {showAssetInfo ? 'Hide supporting info' : 'Show supporting info'}
             </button>
@@ -6562,7 +6498,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 { label: 'Unrealized gain / loss', value: physicalAssetGainLoss, note: 'Market value minus recorded cost' },
                 { label: 'Depreciation estimate', value: physicalAssetDepreciationEstimate, note: 'Straight-line book estimate only' }
               ].map(metric => (
-                <div key={metric.label} className="min-w-0 rounded-2xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div key={metric.label} className="finance-summary-metric min-w-0 rounded-xl border border-solid border-slate-200 bg-slate-50 px-2.5 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
                   <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
                   <div className={`mt-0.5 truncate font-mono text-[11px] font-semibold tabular-nums ${metric.label === 'Unrealized gain / loss' ? (metric.value >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-900 dark:text-white'}`}>
                     NPR {metric.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
@@ -6575,9 +6511,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             )}
           </div>
         </section>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Add Asset Form */}
-          <div ref={assetPanelRef} className={`${sectionActionPanel === 'asset' ? 'lg:col-span-5' : 'hidden'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div ref={assetPanelRef} className={`${sectionActionPanel === 'asset' ? 'lg:col-span-5' : 'hidden'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               {editingAssetId ? 'Edit Asset' : 'Add Asset'}
             </h2>
@@ -6719,7 +6655,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </div>
 
           {/* Full Sovereign Balance Sheet */}
-          <div className={`${sectionActionPanel === 'asset' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4`}>
+          <div className={`${sectionActionPanel === 'asset' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4`}>
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
               <span>Sovereign Balance Sheet</span>
               <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
@@ -6756,103 +6692,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
               </div>
 
-              <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-bold uppercase tracking-wider text-[10px] text-slate-700 dark:text-slate-300">
-                    Physical asset register ({visiblePhysicalAssets.length})
-                  </h3>
-                  <select value={assetStatusFilter} onChange={event => setAssetStatusFilter(event.target.value as 'active' | 'all')} className="h-7 rounded-lg border border-slate-200 bg-white px-2 text-[10px] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-                    <option value="active">Active only</option><option value="all">All statuses</option>
-                  </select>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {Object.entries(physicalAssetCategoryTotals).map(([category, value]) => (
-                    <span key={category} className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                      {PHYSICAL_ASSET_CATEGORIES.find(item => item.value === category)?.label || category} · NPR {value.toLocaleString('en-IN')}
-                    </span>
-                  ))}
-                </div>
-                <div className="mt-3 space-y-2">
-                  {visiblePhysicalAssets.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400 dark:border-slate-700">
-                      No {assetStatusFilter === 'active' ? 'active ' : ''}physical assets recorded.
-                    </div>
-                  ) : visiblePhysicalAssets.map(asset => {
-                    const costBasis = getAssetCostBasis(asset);
-                    const value = Number(asset.value) || 0;
-                    const gain = value - costBasis;
-                    const depreciation = getAssetDepreciation(asset);
-                    const categoryLabel = PHYSICAL_ASSET_CATEGORIES.find(category => category.value === asset.category)?.label || asset.category || 'Other asset';
-                    const status = asset.status || 'active';
-                    return (
-                      <article key={asset.id} className="rounded-xl border border-slate-100 p-3 dark:border-slate-800">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">
-                              <span>{asset.name}</span>{renderGoalBadge(asset.goalId)}
-                            </div>
-                            <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-                              {categoryLabel}{asset.quantity ? ` · ${asset.quantity}${asset.unit ? ` ${asset.unit}` : ' unit(s)'}` : ''}{asset.location ? ` · ${asset.location}` : ''}{asset.condition ? ` · ${asset.condition}` : ''}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <select aria-label={`Status for ${asset.name}`} value={status === 'sold' ? 'sold' : status} disabled={status === 'sold'} onChange={event => void handleChangeAssetStatus(asset, event.target.value as NonNullable<Asset['status']>)} className="h-7 max-w-28 rounded-lg border border-slate-200 bg-white px-1.5 text-[10px] capitalize dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-                              <option value="active">Active</option><option value="disposed">Disposed</option><option value="lost">Lost</option><option value="archived">Archived</option>{status === 'sold' && <option value="sold">Sold</option>}
-                            </select>
-                            <button type="button" onClick={() => handleEditAsset(asset)} className="rounded-md p-1 text-slate-400 hover:text-indigo-600" title="Edit asset" aria-label={`Edit ${asset.name}`}><Pencil className="h-3.5 w-3.5" /></button>
-                            <button type="button" onClick={() => setDeleteTarget({ store: 'assets', id: asset.id, name: asset.name })} className="rounded-md p-1 text-slate-300 hover:text-rose-500" title="Delete asset" aria-label={`Delete ${asset.name}`}><Trash2 className="h-3.5 w-3.5" /></button>
-                          </div>
-                        </div>
-                        <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-4">
-                          <div><span className="text-slate-400">Cost basis</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">NPR {costBasis.toLocaleString('en-IN')}</div></div>
-                          <div><span className="text-slate-400">Market value · {asset.valuationDate || 'date not set'}</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">NPR {value.toLocaleString('en-IN')}</div></div>
-                          <div><span className="text-slate-400">Unrealized gain / loss</span><div className={`font-mono font-semibold ${gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{gain >= 0 ? '+' : ''}NPR {gain.toLocaleString('en-IN')}</div></div>
-                          <div><span className="text-slate-400">Depreciation estimate</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">NPR {depreciation.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div></div>
-                        </div>
-                                        {status === 'sold' && <div className="mt-2 text-[10px] font-medium text-slate-500">Sold {asset.saleDate || ''} · Actual proceeds NPR {(Number(asset.salePrice) || 0).toLocaleString('en-IN')} · Gross realized gain/loss before selling costs or tax NPR {((Number(asset.salePrice) || 0) - costBasis).toLocaleString('en-IN')}</div>}
-                        {asset.notes && <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">{asset.notes}</p>}
-                        {(asset.valueHistory?.length || 0) > 0 && (
-                          <details className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
-                            <summary className="cursor-pointer text-[10px] font-semibold text-slate-500">Valuation history ({asset.valueHistory?.length})</summary>
-                            <div className="mt-1 space-y-1">
-                              {[...(asset.valueHistory || [])].sort((left, right) => right.date.localeCompare(left.date)).map((entry, index) => (
-                                <div key={`${entry.date}-${index}`} className="flex justify-between gap-3 text-[10px] text-slate-500">
-                                  <span>{entry.date}{entry.note ? ` · ${entry.note}` : ''}</span>
-                                  <span className="font-mono">NPR {Number(entry.value).toLocaleString('en-IN')}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
-                        {status === 'active' && (
-                          <div className="mt-2">
-                            {sellingAssetId === asset.id ? (
-                              <form onSubmit={event => void handleSellAsset(event, asset)} className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50">
-                                <label className="text-[10px] text-slate-500">Actual sale proceeds (NPR)
-                                  <input required min="0" step="0.01" type="number" value={assetSalePrice} onChange={event => setAssetSalePrice(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
-                                </label>
-                                <label className="text-[10px] text-slate-500">Sale date
-                                  <input required min={asset.purchaseDate} max={today} type="date" value={assetSaleDate} onChange={event => setAssetSaleDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
-                                </label>
-                                <label className="col-span-2 text-[10px] text-slate-500">Proceeds received into
-                                  <select value={assetSaleAccountId} onChange={event => setAssetSaleAccountId(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white">
-                                    <option value="">Choose account (required for proceeds above zero)</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
-                                  </select>
-                                </label>
-                                <button type="submit" className="h-8 rounded-lg bg-emerald-600 px-2 text-[10px] font-semibold text-white">Record sale</button>
-                                <button type="button" onClick={() => setSellingAssetId(null)} className="h-8 rounded-lg border border-slate-200 px-2 text-[10px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">Cancel</button>
-                              </form>
-                            ) : (
-                              <button type="button" onClick={() => { setSellingAssetId(asset.id); setAssetSalePrice(''); setAssetSaleDate(today); setAssetSaleAccountId(accounts[0]?.id || ''); }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] font-semibold text-slate-600 hover:border-emerald-300 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-300">Record sale / disposal</button>
-                            )}
-                          </div>
-                        )}
-                      </article>
-                    );
-                  })}
-                </div>
-              </div>
-
               <div className="pt-2">
                 <h3 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px] mb-2">
                   Total Liabilities (NPR {totalLiabilities.toLocaleString('en-IN')})
@@ -6868,6 +6707,150 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </div>
                 </div>
               </div>
+
+              <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-bold uppercase tracking-wider text-[10px] text-slate-700 dark:text-slate-300">
+                      Physical asset register ({visiblePhysicalAssets.length})
+                    </h3>
+                    <div className="relative" ref={assetStatusFilterRef}>
+                      <button
+                        type="button"
+                        aria-haspopup="listbox"
+                        aria-expanded={isAssetStatusFilterOpen}
+                        aria-controls="finance-asset-status-options"
+                        onClick={() => setIsAssetStatusFilterOpen(open => !open)}
+                        onKeyDown={event => {
+                          if (event.key === 'Escape') setIsAssetStatusFilterOpen(false);
+                          if (event.key === 'ArrowDown') {
+                            event.preventDefault();
+                            setIsAssetStatusFilterOpen(true);
+                          }
+                        }}
+                        className="inline-flex h-7 items-center gap-1 rounded-full border border-amber-700/35 bg-amber-50/40 px-2.5 text-[10px] font-medium text-slate-700 shadow-none transition-colors hover:border-amber-700/55 hover:bg-amber-100/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-amber-300/35 dark:bg-slate-800/45 dark:text-slate-200 dark:hover:bg-slate-800/70"
+                      >
+                        {assetStatusFilter === 'active' ? 'Active only' : 'All statuses'}
+                        <ChevronDown className={`h-3 w-3 text-amber-800 transition-transform dark:text-amber-300 ${isAssetStatusFilterOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isAssetStatusFilterOpen && (
+                        <div
+                          id="finance-asset-status-options"
+                          role="listbox"
+                          aria-label="Physical asset status filter"
+                          className="absolute right-0 z-20 mt-1 min-w-full rounded-xl border border-amber-700/25 bg-[#fffaf1] p-1 text-[10px] text-slate-700 shadow-none dark:border-amber-300/25 dark:bg-slate-900 dark:text-slate-200"
+                        >
+                          {([
+                            { value: 'active', label: 'Active only' },
+                            { value: 'all', label: 'All statuses' }
+                          ] as const).map(option => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              role="option"
+                              aria-selected={assetStatusFilter === option.value}
+                              onClick={() => {
+                                setAssetStatusFilter(option.value);
+                                setIsAssetStatusFilterOpen(false);
+                              }}
+                              className={`block w-full rounded-lg px-2 py-1.5 text-left hover:bg-amber-100/70 dark:hover:bg-slate-800 ${assetStatusFilter === option.value ? 'font-semibold text-amber-900 dark:text-amber-200' : ''}`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {Object.entries(physicalAssetCategoryTotals).map(([category, value]) => (
+                      <span key={category} className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                        {PHYSICAL_ASSET_CATEGORIES.find(item => item.value === category)?.label || category} · NPR {value.toLocaleString('en-IN')}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {visiblePhysicalAssets.length === 0 ? (
+                      <EmptyState
+                        icon={Landmark}
+                        compact
+                        title={`No ${assetStatusFilter === 'active' ? 'active ' : ''}physical assets recorded.`}
+                        hint="Register assets with cost basis to follow total wealth."
+                      />
+                    ) : visiblePhysicalAssets.map(asset => {
+                      const costBasis = getAssetCostBasis(asset);
+                      const value = Number(asset.value) || 0;
+                      const gain = value - costBasis;
+                      const depreciation = getAssetDepreciation(asset);
+                      const categoryLabel = PHYSICAL_ASSET_CATEGORIES.find(category => category.value === asset.category)?.label || asset.category || 'Other asset';
+                      const status = asset.status || 'active';
+                      return (
+                        <article key={asset.id} className="rounded-xl border border-slate-100 p-3 dark:border-slate-800">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">
+                                <span>{asset.name}</span>{renderGoalBadge(asset.goalId)}
+                              </div>
+                              <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                {categoryLabel}{asset.quantity ? ` · ${asset.quantity}${asset.unit ? ` ${asset.unit}` : ' unit(s)'}` : ''}{asset.location ? ` · ${asset.location}` : ''}{asset.condition ? ` · ${asset.condition}` : ''}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <select aria-label={`Status for ${asset.name}`} value={status === 'sold' ? 'sold' : status} disabled={status === 'sold'} onChange={event => void handleChangeAssetStatus(asset, event.target.value as NonNullable<Asset['status']>)} className="h-7 max-w-28 rounded-lg border border-slate-200 bg-white px-1.5 text-[10px] capitalize dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                                <option value="active">Active</option><option value="disposed">Disposed</option><option value="lost">Lost</option><option value="archived">Archived</option>{status === 'sold' && <option value="sold">Sold</option>}
+                              </select>
+                              <button type="button" onClick={() => handleEditAsset(asset)} className="rounded-md p-1 text-slate-400 hover:text-indigo-600" title="Edit asset" aria-label={`Edit ${asset.name}`}><Pencil className="h-3.5 w-3.5" /></button>
+                              <button type="button" onClick={() => setDeleteTarget({ store: 'assets', id: asset.id, name: asset.name })} className="rounded-md p-1 text-slate-300 hover:text-rose-500" title="Delete asset" aria-label={`Delete ${asset.name}`}><Trash2 className="h-3.5 w-3.5" /></button>
+                            </div>
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-4">
+                            <div><span className="text-slate-400">Cost basis</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">NPR {costBasis.toLocaleString('en-IN')}</div></div>
+                            <div><span className="text-slate-400">Market value · {asset.valuationDate || 'date not set'}</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">NPR {value.toLocaleString('en-IN')}</div></div>
+                            <div><span className="text-slate-400">Unrealized gain / loss</span><div className={`font-mono font-semibold ${gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{gain >= 0 ? '+' : ''}NPR {gain.toLocaleString('en-IN')}</div></div>
+                            <div><span className="text-slate-400">Depreciation estimate</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">NPR {depreciation.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div></div>
+                          </div>
+                          {status === 'sold' && <div className="mt-2 text-[10px] font-medium text-slate-500">Sold {asset.saleDate || ''} · Actual proceeds NPR {(Number(asset.salePrice) || 0).toLocaleString('en-IN')} · Gross realized gain/loss before selling costs or tax NPR {((Number(asset.salePrice) || 0) - costBasis).toLocaleString('en-IN')}</div>}
+                          {asset.notes && <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">{asset.notes}</p>}
+                          {(asset.valueHistory?.length || 0) > 0 && (
+                            <details className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                              <summary className="cursor-pointer text-[10px] font-semibold text-slate-500">Valuation history ({asset.valueHistory?.length})</summary>
+                              <div className="mt-1 space-y-1">
+                                {[...(asset.valueHistory || [])].sort((left, right) => right.date.localeCompare(left.date)).map((entry, index) => (
+                                  <div key={`${entry.date}-${index}`} className="flex justify-between gap-3 text-[10px] text-slate-500">
+                                    <span>{entry.date}{entry.note ? ` · ${entry.note}` : ''}</span>
+                                    <span className="font-mono">NPR {Number(entry.value).toLocaleString('en-IN')}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
+                          {status === 'active' && (
+                            <div className="mt-2">
+                              {sellingAssetId === asset.id ? (
+                                <form onSubmit={event => void handleSellAsset(event, asset)} className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50">
+                                  <label className="text-[10px] text-slate-500">Actual sale proceeds (NPR)
+                                    <input required min="0" step="0.01" type="number" value={assetSalePrice} onChange={event => setAssetSalePrice(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                                  </label>
+                                  <label className="text-[10px] text-slate-500">Sale date
+                                    <input required min={asset.purchaseDate} max={today} type="date" value={assetSaleDate} onChange={event => setAssetSaleDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                                  </label>
+                                  <label className="col-span-2 text-[10px] text-slate-500">Proceeds received into
+                                    <select value={assetSaleAccountId} onChange={event => setAssetSaleAccountId(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                                      <option value="">Choose account (required for proceeds above zero)</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+                                    </select>
+                                  </label>
+                                  <button type="submit" className="h-8 rounded-lg bg-emerald-600 px-2 text-[10px] font-semibold text-white">Record sale</button>
+                                  <button type="button" onClick={() => setSellingAssetId(null)} className="h-8 rounded-lg border border-slate-200 px-2 text-[10px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">Cancel</button>
+                                </form>
+                              ) : (
+                                <button type="button" onClick={() => { setSellingAssetId(asset.id); setAssetSalePrice(''); setAssetSaleDate(today); setAssetSaleAccountId(accounts[0]?.id || ''); }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] font-semibold text-slate-600 hover:border-emerald-300 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-300">Record sale / disposal</button>
+                              )}
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
             </div>
           </div>
         </div>
@@ -6876,7 +6859,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
       {/* Tab: Transactions List */}
       {activeTab === 'transactions' && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">
               Ledger Transactions ({filteredTransactions.length})
@@ -6888,23 +6871,19 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 placeholder="Search ledger..."
                 value={txSearch}
                 onChange={e => setTxSearch(e.target.value)}
-                className="h-8 w-full sm:w-44 rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="h-8 w-full sm:w-44 rounded-xl border border-amber-200 bg-amber-50/40 px-2.5 text-xs placeholder:text-slate-500 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-400"
               />
               {/* Filter & Sort Dropdown Menu (Option A) */}
               <div className="relative" ref={filterDropdownRef}>
                 <button
                   type="button"
                   onClick={() => setIsFilterDropdownOpen(prev => !prev)}
-                  className={`flex items-center gap-1.5 h-8 rounded-xl border px-3 text-xs font-semibold cursor-pointer transition-colors ${
-                    isFilterDropdownOpen || dateFilterMode !== 'all'
-                      ? 'border-indigo-300 bg-indigo-50/80 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                  }`}
+                  className="flex items-center gap-1.5 h-8 px-2 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                   title="Filter by date and change sort order"
                 >
-                  <ArrowUpDown className="h-3 w-3 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <ArrowUpDown className="h-3 w-3 shrink-0" />
                   <span>{txSortOrder === 'desc' ? 'Newest First' : 'Oldest First'}</span>
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                  <span className="text-[10px] font-medium">
                     {dateFilterMode === 'all'
                       ? 'All Time'
                       : dateFilterMode === 'this_month'
@@ -6913,11 +6892,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       ? 'Last 30 Days'
                       : 'Custom Range'}
                   </span>
-                  <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-3 w-3 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isFilterDropdownOpen && (
-                  <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-64 max-w-[calc(100vw-2.5rem)] z-30 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-xl dark:border-slate-700 dark:bg-slate-900 animate-in fade-in duration-100">
+                  <div className="sanctuary-menu-surface absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-64 max-w-[calc(100vw-2.5rem)] z-30 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-xl dark:border-slate-700 dark:bg-slate-900 animate-in fade-in duration-100">
                     {/* Sort Order Section */}
                     <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Sort Order
@@ -6928,24 +6907,24 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         onClick={() => { setTxSortOrder('desc'); }}
                         className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                           txSortOrder === 'desc'
-                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                            ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                            : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
                         <span>Newest First</span>
-                        {txSortOrder === 'desc' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                        {txSortOrder === 'desc' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setTxSortOrder('asc'); }}
                         className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                           txSortOrder === 'asc'
-                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                            ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                            : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
                         <span>Oldest First</span>
-                        {txSortOrder === 'asc' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                        {txSortOrder === 'asc' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                       </button>
                     </div>
 
@@ -6962,48 +6941,48 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         onClick={() => { setDateFilterMode('all'); }}
                         className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                           dateFilterMode === 'all'
-                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                            ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                            : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
                         <span>All Time</span>
-                        {dateFilterMode === 'all' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                        {dateFilterMode === 'all' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setDateFilterMode('this_month'); }}
                         className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                           dateFilterMode === 'this_month'
-                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                            ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                            : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
                         <span>This Month</span>
-                        {dateFilterMode === 'this_month' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                        {dateFilterMode === 'this_month' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setDateFilterMode('last_30_days'); }}
                         className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                           dateFilterMode === 'last_30_days'
-                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                            ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                            : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
                         <span>Last 30 Days</span>
-                        {dateFilterMode === 'last_30_days' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                        {dateFilterMode === 'last_30_days' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setDateFilterMode('custom'); }}
                         className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                           dateFilterMode === 'custom'
-                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                            ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                            : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
                         <span>Custom Range</span>
-                        {dateFilterMode === 'custom' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                        {dateFilterMode === 'custom' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                       </button>
                     </div>
 
@@ -7052,7 +7031,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               <button
                 type="button"
                 onClick={handleExportCSV}
-                className="flex items-center gap-1.5 h-8 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
+                className="flex items-center gap-1.5 h-8 border-b-0 border-transparent px-3 text-xs font-semibold text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors"
               >
                 <Download className="h-3 w-3" />
                 <span>Export CSV</span>
@@ -7088,7 +7067,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             {/* Active Date Filter Indicator & Quick Reset if filtered */}
             {dateFilterMode !== 'all' && (
               <div className="flex items-center gap-2 self-start lg:self-auto">
-                <span className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
                   <span>Filtered:</span>
                   <span className="font-semibold">
                     {dateFilterMode === 'this_month'
@@ -7118,11 +7097,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[600px] overflow-y-auto">
             {filteredTransactions.length === 0 ? (
-              <div className="py-16 text-center text-xs text-slate-400">
-                No transactions match your current search or filter.
-              </div>
+              <EmptyState
+                icon={TrendingUp}
+                compact
+                title="No transactions found"
+                hint="Adjust the search or filters, or capture a new transaction above."
+              />
             ) : (
-              filteredTransactions.map(tx => {
+              filteredTransactions.slice(0, visibleLedgerCount).map(tx => {
                 const linkedRec = tx.linkedReceiptId ? receipts.find(r => r.id === tx.linkedReceiptId) : undefined;
                 const attachName = tx.fileName;
                 const attachData = tx.fileData;
@@ -7339,6 +7321,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </div>
                 );
               })
+            )}
+            {filteredTransactions.length > visibleLedgerCount && (
+              <ShowMoreBar
+                remaining={filteredTransactions.length - visibleLedgerCount}
+                step={150}
+                onReveal={() => setVisibleLedgerCount(c => c + 150)}
+              />
             )}
           </div>
         </section>

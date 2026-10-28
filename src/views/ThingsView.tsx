@@ -4,6 +4,7 @@ import {
   Upload, Edit3, Download, Paperclip, Search,
   X, Landmark, ExternalLink, Plus, Eye
 } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 import {
   ThingItem, DocumentItem, WarrantyItem, ReceiptItem, CertificateItem, ImportantRecordItem,
   FinanceAccount, FinanceTransaction, NavModule
@@ -51,7 +52,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   receipts = [],
   certificates = [],
   importantRecords = [],
-  financeAccounts = [],
   financeTransactions = [],
   onRefresh,
   onSuccess,
@@ -65,7 +65,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
   // File import input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const formFileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete & Edit Modal States
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -99,8 +98,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   // Link Receipt with Finance & Ledger Transaction
   const [recLinkToFinance, setRecLinkToFinance] = useState(false);
   const [recFinanceMode, setRecFinanceMode] = useState<'create_new' | 'link_existing'>('link_existing');
-  const [recFinanceAccountId, setRecFinanceAccountId] = useState(financeAccounts[0]?.id || '');
-  const [recFinanceCategory, setRecFinanceCategory] = useState('Shopping & Assets');
   const [recSelectedTxId, setRecSelectedTxId] = useState('');
 
   const [certTitle, setCertTitle] = useState('');
@@ -452,7 +449,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       setAttachedFile(null);
       setRecLinkToFinance(false);
       setRecFinanceMode('link_existing');
-      setRecFinanceCategory('Shopping & Assets');
       setRecSelectedTxId('');
       onRefresh();
     } catch (err: any) {
@@ -668,16 +664,16 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       return <FormToggleButton label="Add Item" open={openThingsForm === 'things'} onClick={() => setOpenThingsForm(openThingsForm === 'things' ? null : 'things')} />;
     }
     if (activeTab === 'documents') {
-      return <FormToggleButton label="Add Document" open={openThingsForm === 'documents'} onClick={() => setOpenThingsForm(openThingsForm === 'documents' ? null : 'documents')} colorClassName="border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/70" />;
+      return <FormToggleButton label="Add Document" open={openThingsForm === 'documents'} onClick={() => setOpenThingsForm(openThingsForm === 'documents' ? null : 'documents')} />;
     }
     if (activeTab === 'warranties') {
-      return <FormToggleButton label="Add Warranty" open={openThingsForm === 'warranties'} onClick={() => setOpenThingsForm(openThingsForm === 'warranties' ? null : 'warranties')} colorClassName="border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:border-amber-700 dark:hover:bg-amber-950/70" />;
+      return <FormToggleButton label="Add Warranty" open={openThingsForm === 'warranties'} onClick={() => setOpenThingsForm(openThingsForm === 'warranties' ? null : 'warranties')} />;
     }
     if (activeTab === 'receipts') {
       return <FormToggleButton label="Add Receipt" open={openThingsForm === 'receipts'} onClick={() => setOpenThingsForm(openThingsForm === 'receipts' ? null : 'receipts')} />;
     }
     if (activeTab === 'certificates') {
-      return <FormToggleButton label="Add Certificate" open={openThingsForm === 'certificates'} onClick={() => setOpenThingsForm(openThingsForm === 'certificates' ? null : 'certificates')} colorClassName="border-purple-200 bg-purple-50 text-purple-700 hover:border-purple-300 hover:bg-purple-100 dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:border-purple-700 dark:hover:bg-purple-950/70" />;
+      return <FormToggleButton label="Add Certificate" open={openThingsForm === 'certificates'} onClick={() => setOpenThingsForm(openThingsForm === 'certificates' ? null : 'certificates')} />;
     }
     return <FormToggleButton label="Add Record" open={openThingsForm === 'records'} onClick={() => setOpenThingsForm(openThingsForm === 'records' ? null : 'records')} />;
   };
@@ -706,7 +702,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-500 active:scale-95 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
             title="Import a file (PDF, Image, Doc, Receipt, Scan) into current sub-menu"
           >
             <Upload className="h-3.5 w-3.5" />
@@ -740,7 +736,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder={`Search ${activeTab}...`}
-            className="h-8 w-full rounded-xl border border-slate-200 pl-8 pr-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            className="h-8 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-8 pr-3 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
           />
         </div>
 
@@ -751,7 +747,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+            className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 transition-colors cursor-pointer"
           >
             <Upload className="h-3 w-3" />
             <span>Import File to {activeTab}</span>
@@ -761,9 +757,9 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 1: THINGS & HARDWARE */}
       {activeTab === 'things' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
           {/* Add Item Form */}
-          {openThingsForm === 'things' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'things' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <Folder className="h-4 w-4 text-indigo-500" />
               <span>Register Physical Item</span>
@@ -833,7 +829,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   <div className="flex items-center gap-2">
                     <label
                       htmlFor="thing-form-file"
-                      className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer transition-colors"
+                      className="sanctuary-upload-control flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer transition-colors"
                     >
                       <Paperclip className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                       <span className="truncate">{attachedFile ? attachedFile.name : 'Choose File'}</span>
@@ -852,14 +848,14 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 </div>
               </div>
 
-              <button type="submit" className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 cursor-pointer">
+              <button type="submit" className="sanctuary-flat-primary w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 cursor-pointer">
                 + Register Thing
               </button>
             </form>
           </div>}
 
           {/* Items Registry List */}
-          <div className={`${openThingsForm === 'things' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${openThingsForm === 'things' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 Physical Inventory ({things.length})
@@ -875,7 +871,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               {things
                 .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.category.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">No items found matching criteria.</div>
+                <div className="col-span-full"><EmptyState icon={Folder} compact title="No items found" hint="Search matches item names and categories." /></div>
               ) : (
                 [...things]
                   .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.category.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -952,9 +948,9 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 2: DOCUMENTS */}
       {activeTab === 'documents' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
           {/* Add Document Form */}
-          {openThingsForm === 'documents' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'documents' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <FileCheck className="h-4 w-4 text-emerald-500" />
               <span>Add Official Document</span>
@@ -1016,7 +1012,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     />
                     <label
                       htmlFor="doc-form-file"
-                      className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+                      className="sanctuary-upload-control flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
                     >
                       <Paperclip className="h-3.5 w-3.5" />
                       <span className="truncate">{attachedFile ? attachedFile.name : 'Choose File'}</span>
@@ -1043,7 +1039,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Documents Registry List */}
-          <div className={`${openThingsForm === 'documents' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${openThingsForm === 'documents' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 Official Documents ({documents.length})
@@ -1054,7 +1050,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               {documents
                 .filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()) || (d.type && d.type.toLowerCase().includes(searchQuery.toLowerCase())))
                 .length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">No documents registered.</div>
+                <div className="col-span-full"><EmptyState icon={FileCheck} compact title="No documents yet" hint="Register documents to keep everything discoverable." /></div>
               ) : (
                 [...documents]
                   .filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()) || (d.type && d.type.toLowerCase().includes(searchQuery.toLowerCase())))
@@ -1116,9 +1112,9 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 3: WARRANTIES */}
       {activeTab === 'warranties' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
           {/* Add Warranty Form */}
-          {openThingsForm === 'warranties' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'warranties' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <Shield className="h-4 w-4 text-amber-500" />
               <span>Register Warranty</span>
@@ -1168,7 +1164,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   />
                   <label
                     htmlFor="war-form-file"
-                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+                    className="sanctuary-upload-control flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                     <span className="truncate">{attachedFile ? attachedFile.name : 'Choose File'}</span>
@@ -1183,7 +1179,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Warranties List */}
-          <div className={`${openThingsForm === 'warranties' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${openThingsForm === 'warranties' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Active Warranties ({warranties.length})
             </h2>
@@ -1191,7 +1187,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               {warranties
                 .filter(w => w.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">No warranties registered.</div>
+                <div className="col-span-full"><EmptyState icon={Shield} compact title="No warranties yet" hint="Track coverage windows and expiry dates here." /></div>
               ) : (
                 [...warranties]
                   .filter(w => w.title.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -1254,9 +1250,9 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 4: RECEIPTS */}
       {activeTab === 'receipts' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
           {/* Add Receipt Form */}
-          {openThingsForm === 'receipts' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'receipts' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -1264,7 +1260,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white">Add Purchase Receipt</h2>
-                  <p className="text-[11px] text-slate-400">Vault archiving with optional ledger expense sync</p>
                 </div>
               </div>
             </div>
@@ -1332,7 +1327,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   <div className="flex items-center gap-2">
                     <label
                       htmlFor="rec-form-file"
-                      className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer transition-colors"
+                      className="sanctuary-upload-control flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer transition-colors"
                     >
                       <Paperclip className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                       <span className="truncate">{attachedFile ? attachedFile.name : 'Choose File'}</span>
@@ -1376,10 +1371,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </div>
 
               {/* Sync with Finance & Ledger (Custom Switch Panel) */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3.5 space-y-3 transition-colors">
+              <div className="sanctuary-link-panel rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3.5 space-y-3 transition-colors">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 shrink-0">
                       <Landmark className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
@@ -1449,13 +1444,12 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Receipts Archive List */}
-          <div className={`${openThingsForm === 'receipts' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col`}>
+          <div className={`${openThingsForm === 'receipts' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 flex flex-col`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800 gap-2">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                   Receipts Archive ({receipts.length})
                 </h2>
-                <p className="text-[11px] text-slate-400">Total cataloged purchase proofs and invoice records</p>
               </div>
               <span className="font-mono text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
                 Total Value: ₹{totalReceiptsValue.toLocaleString('en-IN')}
@@ -1466,8 +1460,8 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               {receipts
                 .filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="col-span-full py-16 text-center text-xs text-slate-400">
-                  No receipts found matching your search.
+                <div className="col-span-full">
+                  <EmptyState icon={Receipt} compact title="No receipts found" hint="Search matches receipt titles only." />
                 </div>
               ) : (
                 [...receipts]
@@ -1573,9 +1567,9 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 5: CERTIFICATES & CREDENTIALS */}
       {activeTab === 'certificates' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
           {/* Add Certificate Form */}
-          {openThingsForm === 'certificates' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'certificates' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <Award className="h-4 w-4 text-purple-500" />
               <span>Register Certificate</span>
@@ -1626,7 +1620,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   />
                   <label
                     htmlFor="cert-form-file"
-                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+                    className="sanctuary-upload-control flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                     <span className="truncate">{attachedFile ? attachedFile.name : 'Choose File'}</span>
@@ -1652,7 +1646,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Certificates Registry List */}
-          <div className={`${openThingsForm === 'certificates' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${openThingsForm === 'certificates' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Certificates & Credentials ({certificates.length})
             </h2>
@@ -1661,7 +1655,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               {certificates
                 .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">No certificates registered.</div>
+                <div className="col-span-full"><EmptyState icon={Award} compact title="No certificates yet" hint="Store credentials with expiry tracking." /></div>
               ) : (
                 [...certificates]
                   .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -1722,9 +1716,9 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
       {/* SUB MENU 6: IMPORTANT RECORDS */}
       {activeTab === 'records' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
           {/* Add Record Form */}
-          {openThingsForm === 'records' && <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {openThingsForm === 'records' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
               <FileText className="h-4 w-4 text-slate-600 dark:text-slate-300" />
               <span>Save Important Record</span>
@@ -1763,7 +1757,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   />
                   <label
                     htmlFor="recrd-form-file"
-                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+                    className="sanctuary-upload-control flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                     <span className="truncate">{attachedFile ? attachedFile.name : 'Choose File'}</span>
@@ -1789,7 +1783,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Important Records List */}
-          <div className={`${openThingsForm === 'records' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900`}>
+          <div className={`${openThingsForm === 'records' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Important Records ({importantRecords.length})
             </h2>
@@ -1798,7 +1792,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               {importantRecords
                 .filter(ir => ir.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">No records found.</div>
+                <div className="col-span-full"><EmptyState icon={FileText} compact title="No records found" hint="Search matches record titles only." /></div>
               ) : (
                 [...importantRecords]
                   .filter(ir => ir.title.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -1867,9 +1861,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white capitalize">
                     Edit {editTarget.store.replace(/([A-Z])/g, ' $1')}
                   </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Update metadata, notes, values, or file attachment.
-                  </p>
                 </div>
               </div>
               <button
@@ -1975,7 +1966,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   />
                   <label
                     htmlFor="edit-modal-file"
-                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+                    className="sanctuary-upload-control flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                     <span>{editAttachedFile ? 'Replace File' : 'Upload File'}</span>

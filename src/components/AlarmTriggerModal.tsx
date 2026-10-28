@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { Bell, Clock, Volume2, RotateCcw, Check, Sparkles, AlertCircle } from 'lucide-react';
-import { TriggeredAlarmData, alarmService } from '../lib/alarmService';
-import { alarmAudio, BUILTIN_RINGTONES } from '../lib/alarmAudio';
+import { Bell, Clock, Volume2, RotateCcw, Check } from 'lucide-react';
+import { TriggeredAlarmData } from '../lib/alarmService';
+import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 
 interface AlarmTriggerModalProps {
   alarm: TriggeredAlarmData | null;

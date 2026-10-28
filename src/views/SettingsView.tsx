@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Download, Database, Trash2,
   Palette, ChevronDown, RefreshCw,
-  Volume2, VolumeX, Smartphone
+  Volume2, Smartphone
 } from 'lucide-react';
 import {
   storage,
@@ -14,6 +14,9 @@ import { UniversalDataManagerCard } from '../components/UniversalDataManagerCard
 import { SlideTabs } from '../components/SlideTabs';
 import { RecycleBinView } from './RecycleBinView';
 import { soundEngine } from '../lib/soundEngine';
+import { applyAccent, rememberAccentChoice, resolveSavedAccent } from '../lib/accentTheme';
+import { AppearanceCustomizer } from '../components/AppearanceCustomizer';
+import { AppearancePreferences } from '../lib/appearance';
 
 interface SettingsViewProps {
   settings?: AppState;
@@ -22,6 +25,8 @@ interface SettingsViewProps {
   onError: (msg: string) => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  appearance: AppearancePreferences;
+  onApplyAppearance: (value: AppearancePreferences) => Promise<void>;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -31,6 +36,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onError,
   theme,
   onToggleTheme,
+  appearance,
+  onApplyAppearance
 }) => {
   const [activeTab, setActiveTab] = useState<'system' | 'exports'>('system');
   const [storageStats, setStorageStats] = useState<{
@@ -43,7 +50,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isPurgeDefaultOpen, setIsPurgeDefaultOpen] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
-  const [accentColor, setAccentColor] = useState<string>(settings?.accentColor || '#6366f1');
+  const [accentColor, setAccentColor] = useState<string>(resolveSavedAccent(settings?.accentColor || '#b88648'));
   const [isAccentDropdownOpen, setIsAccentDropdownOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => soundEngine.isSoundEnabled());
   const [hapticEnabled, setHapticEnabled] = useState(() => soundEngine.isHapticEnabled());
@@ -51,7 +58,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   useEffect(() => {
     if (settings?.accentColor) {
-      setAccentColor(settings.accentColor);
+      setAccentColor(resolveSavedAccent(settings.accentColor));
     }
   }, [settings?.accentColor]);
 
@@ -199,10 +206,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Tab: System & Appearance */}
       {activeTab === 'system' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-stretch">
+        <div className="grid items-start gap-6 lg:grid-cols-2">
           {/* Left Column: Appearance & Theme + Storage Health & Quota (6 cols) */}
-          <div className="lg:col-span-6 flex flex-col">
-            <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-6 flex flex-col justify-between h-full">
+          <div className="w-full lg:col-span-2">
+            <AppearanceCustomizer
+              value={appearance}
+              onApply={onApplyAppearance}
+              onSuccess={onSuccess}
+              onError={onError}
+            />
+            <div className="hidden flex-1 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-6 flex-col h-full">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
                   <Palette className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
@@ -213,12 +226,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="min-w-[140px]">
                   <div className="text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">Color Mode</div>
                 </div>
-              <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs dark:border-slate-700 dark:bg-slate-800 shrink-0">
+              <div className="flex gap-3 text-xs shrink-0">
                 <button
                   type="button"
                   onClick={theme === 'dark' ? onToggleTheme : undefined}
-                  className={`rounded-lg px-3 py-1 font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                    theme === 'light' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
+                  className={`border-b-0 border-transparent px-2 py-1 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    theme === 'light' ? 'text-indigo-700 dark:text-indigo-300' : 'text-indigo-800 hover:border-indigo-500 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
                   }`}
                 >
                   ☀ Light
@@ -226,8 +239,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <button
                   type="button"
                   onClick={theme === 'light' ? onToggleTheme : undefined}
-                  className={`rounded-lg px-3 py-1 font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                    theme === 'dark' ? 'bg-slate-700 shadow-sm text-white' : 'text-slate-500'
+                  className={`border-b-0 border-transparent px-2 py-1 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    theme === 'dark' ? 'text-indigo-700 dark:text-indigo-300' : 'text-indigo-800 hover:border-indigo-500 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
                   }`}
                 >
                   ☾ Dark
@@ -236,9 +249,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
 
             {/* Accent Theme Colors Dropdown */}
-            <div className="border-t border-slate-100 pt-4 dark:border-slate-800 relative">
+            <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
               {(() => {
                 const ACCENT_PRESETS = [
+                  { name: 'Sanctuary Amber', hex: '#b88648' },
                   { name: 'Indigo', hex: '#6366f1' },
                   { name: 'Cobalt', hex: '#2563eb' },
                   { name: 'Sky', hex: '#0284c7' },
@@ -267,11 +281,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <div className="text-xs font-bold text-slate-900 dark:text-white shrink-0">Accent Theme Highlight</div>
                       </div>
 
-                      <div className="relative shrink-0">
+                      <div className="shrink-0">
                         <button
                           type="button"
                           onClick={() => setIsAccentDropdownOpen(prev => !prev)}
-                          className="flex items-center gap-1.5 sm:gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-2xs hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-all whitespace-nowrap"
+                          className="flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                         >
                           <span
                             className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full border border-white/40 shadow-2xs shrink-0"
@@ -285,134 +299,137 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             {accentColor.toUpperCase()}
                           </span>
                           <ChevronDown
-                            className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-150 ${
+                            className={`h-3.5 w-3.5 text-indigo-700 dark:text-indigo-300 transition-transform duration-150 ${
                               isAccentDropdownOpen ? 'rotate-180' : ''
                             }`}
                           />
                         </button>
 
                         {isAccentDropdownOpen && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-40"
-                              onClick={() => setIsAccentDropdownOpen(false)}
-                            />
-                            <div className="absolute right-0 top-full z-50 mt-2 w-72 sm:w-80 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 space-y-3 animate-in fade-in zoom-in-95 duration-150">
-                              <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
-                                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                                  Select Accent Theme
-                                </span>
-                                <span
-                                  className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-2xs"
-                                  style={{ backgroundColor: accentColor }}
-                                >
-                                  {accentColor.toUpperCase()}
-                                </span>
-                              </div>
-
-                              {/* 16 Curated Designer Swatches Grid inside Dropdown */}
-                              <div className="grid grid-cols-4 gap-1.5 max-h-56 overflow-y-auto pr-0.5">
-                                {ACCENT_PRESETS.map(acc => {
-                                  const isSelected = accentColor.toLowerCase() === acc.hex.toLowerCase();
-                                  return (
-                                    <button
-                                      key={acc.name}
-                                      type="button"
-                                      onClick={async () => {
-                                        setAccentColor(acc.hex);
-                                        document.documentElement.style.setProperty('--color-brand', acc.hex);
-                                        const appSettings = await storage.getSingleton<any>('appSettings') || {};
-                                        appSettings.accentColor = acc.hex;
-                                        await storage.setSingleton('appSettings', appSettings);
-                                        onSuccess(`${acc.name} theme accent applied`);
-                                        setIsAccentDropdownOpen(false);
-                                        onRefresh();
-                                      }}
-                                      className={`group flex items-center gap-1.5 rounded-xl px-2 py-1.5 text-left transition-colors cursor-pointer border ${
-                                        isSelected
-                                          ? 'border-slate-300 bg-slate-100/90 dark:border-slate-600 dark:bg-slate-800'
-                                          : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                                      }`}
-                                      title={`${acc.name} (${acc.hex})`}
-                                    >
-                                      <span
-                                        className="h-4 w-4 rounded-full shrink-0 flex items-center justify-center text-white text-[9px] font-bold shadow-2xs"
-                                        style={{ backgroundColor: acc.hex }}
-                                      >
-                                        {isSelected ? '✓' : ''}
-                                      </span>
-                                      <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate">
-                                        {acc.name}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-
-                              {/* Custom Hex Accent Row inside Dropdown */}
-                              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Custom:</span>
-                                  <label className="relative flex items-center justify-center cursor-pointer">
-                                    <input
-                                      type="color"
-                                      value={accentColor.startsWith('#') ? accentColor : '#6366f1'}
-                                      onChange={async (e) => {
-                                        const newHex = e.target.value;
-                                        setAccentColor(newHex);
-                                        document.documentElement.style.setProperty('--color-brand', newHex);
-                                        const appSettings = await storage.getSingleton<any>('appSettings') || {};
-                                        appSettings.accentColor = newHex;
-                                        await storage.setSingleton('appSettings', appSettings);
-                                      }}
-                                      className="h-6 w-6 rounded-lg border-0 p-0 cursor-pointer overflow-hidden opacity-0 absolute inset-0"
-                                      title="Choose custom hex color"
-                                    />
-                                    <span
-                                      className="h-6 w-6 rounded-lg border border-slate-300 dark:border-slate-600 shadow-2xs block transition-transform hover:scale-110"
-                                      style={{ backgroundColor: accentColor }}
-                                    />
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={accentColor}
-                                    onChange={async (e) => {
-                                      const newHex = e.target.value;
-                                      setAccentColor(newHex);
-                                      if (/^#[0-9A-Fa-f]{6}$/.test(newHex)) {
-                                        document.documentElement.style.setProperty('--color-brand', newHex);
-                                        const appSettings = await storage.getSingleton<any>('appSettings') || {};
-                                        appSettings.accentColor = newHex;
-                                        await storage.setSingleton('appSettings', appSettings);
-                                      }
-                                    }}
-                                    placeholder="#6366F1"
-                                    className="h-6 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 font-mono text-[11px] uppercase text-slate-900 dark:text-white"
-                                  />
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const defaultHex = '#6366f1';
-                                    setAccentColor(defaultHex);
-                                    document.documentElement.style.setProperty('--color-brand', defaultHex);
-                                    const appSettings = await storage.getSingleton<any>('appSettings') || {};
-                                    appSettings.accentColor = defaultHex;
-                                    await storage.setSingleton('appSettings', appSettings);
-                                    onSuccess('Default Indigo accent restored');
-                                    setIsAccentDropdownOpen(false);
-                                    onRefresh();
-                                  }}
-                                  className="text-[11px] text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-medium cursor-pointer whitespace-nowrap"
-                                >
-                                  Reset Default
-                                </button>
-                              </div>
-                            </div>
-                          </>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setIsAccentDropdownOpen(false)}
+                          />
                         )}
                       </div>
                     </div>
+
+                    {isAccentDropdownOpen && (
+                      <div className="sanctuary-menu-surface relative z-50 mt-3 w-full sm:w-80 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            Select Accent Theme
+                          </span>
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-2xs"
+                            style={{ backgroundColor: accentColor }}
+                          >
+                            {accentColor.toUpperCase()}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-60 overflow-y-auto pr-0.5">
+                          {ACCENT_PRESETS.map(acc => {
+                            const isSelected = accentColor.toLowerCase() === acc.hex.toLowerCase();
+                            return (
+                              <button
+                                key={acc.name}
+                                type="button"
+                                onClick={async () => {
+                                  setAccentColor(acc.hex);
+                                  rememberAccentChoice(true);
+                                  applyAccent(acc.hex);
+                                  const appSettings = await storage.getSingleton<any>('appSettings') || {};
+                                  appSettings.accentColor = acc.hex;
+                                  await storage.setSingleton('appSettings', appSettings);
+                                  onSuccess(`${acc.name} theme accent applied`);
+                                  setIsAccentDropdownOpen(false);
+                                  onRefresh();
+                                }}
+                                className={`group flex min-w-0 items-center gap-1 rounded-xl px-1.5 py-1 text-left transition-colors cursor-pointer border ${
+                                  isSelected
+                                    ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/40'
+                                    : 'border-transparent hover:border-indigo-300 hover:bg-indigo-50/60 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/20'
+                                }`}
+                                title={`${acc.name} (${acc.hex})`}
+                              >
+                                <span
+                                  className="h-4 w-4 rounded-full shrink-0 flex items-center justify-center text-white text-[9px] font-bold shadow-2xs"
+                                  style={{ backgroundColor: acc.hex }}
+                                >
+                                  {isSelected ? '✓' : ''}
+                                </span>
+                                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                                  {acc.name}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Custom:</span>
+                            <label className="relative flex items-center justify-center cursor-pointer">
+                              <input
+                                type="color"
+                                value={accentColor.startsWith('#') ? accentColor : '#b88648'}
+                                onChange={async (e) => {
+                                  const newHex = e.target.value;
+                                  setAccentColor(newHex);
+                                  rememberAccentChoice(true);
+                                  applyAccent(newHex);
+                                  const appSettings = await storage.getSingleton<any>('appSettings') || {};
+                                  appSettings.accentColor = newHex;
+                                  await storage.setSingleton('appSettings', appSettings);
+                                }}
+                                className="h-6 w-6 rounded-lg border-0 p-0 cursor-pointer overflow-hidden opacity-0 absolute inset-0"
+                                title="Choose custom hex color"
+                              />
+                              <span
+                                className="h-6 w-6 rounded-lg border border-slate-300 dark:border-slate-600 shadow-2xs block transition-transform hover:scale-110"
+                                style={{ backgroundColor: accentColor }}
+                              />
+                            </label>
+                            <input
+                              type="text"
+                              value={accentColor}
+                              onChange={async (e) => {
+                                const newHex = e.target.value;
+                                setAccentColor(newHex);
+                                if (/^#[0-9A-Fa-f]{6}$/.test(newHex)) {
+                                  rememberAccentChoice(true);
+                                  applyAccent(newHex);
+                                  const appSettings = await storage.getSingleton<any>('appSettings') || {};
+                                  appSettings.accentColor = newHex;
+                                  await storage.setSingleton('appSettings', appSettings);
+                                }
+                              }}
+                              placeholder="#B88648"
+                              className="h-6 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 font-mono text-[11px] uppercase text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const defaultHex = '#b88648';
+                              setAccentColor(defaultHex);
+                              rememberAccentChoice(false);
+                              applyAccent(defaultHex);
+                              const appSettings = await storage.getSingleton<any>('appSettings') || {};
+                              appSettings.accentColor = defaultHex;
+                              await storage.setSingleton('appSettings', appSettings);
+                              onSuccess('Default Sanctuary Amber accent restored');
+                              setIsAccentDropdownOpen(false);
+                              onRefresh();
+                            }}
+                            className="text-[11px] text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-medium cursor-pointer whitespace-nowrap"
+                          >
+                            Reset Default
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 );
               })()}
@@ -421,17 +438,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* Storage Health & Quota Section (Integrated into Left Column) */}
           <div className="border-t border-slate-100 pt-5 dark:border-slate-800 space-y-3.5">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex items-center gap-2 min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2">
                 <Database className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">Storage Health & Quota</h2>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Storage Health & Quota</h2>
               </div>
 
               <button
                 type="button"
                 disabled={isAuditing}
                 onClick={handleRunIntegrityAudit}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer shrink-0 whitespace-nowrap shadow-2xs transition-all active:scale-98"
+                className="ml-auto flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer shrink-0 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
                 title="Check task goals and finance account links"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
@@ -469,8 +486,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* Tactile Sound & Micro-Interactions Card (6 cols) */}
-      <div className="lg:col-span-6 flex flex-col">
-        <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-5 flex flex-col justify-between h-full">
+      <div className="w-full">
+        <div className="flex flex-col space-y-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
               <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <div className="flex items-center gap-2 min-w-0">
                   <Volume2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
@@ -569,36 +586,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 {/* Interactive Sound Previews */}
-                <div className="border-t border-slate-100 pt-3 dark:border-slate-800 space-y-2">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <div className="rounded-xl border-2 border-dashed border-slate-200 p-3 dark:border-slate-800 space-y-2">
+                  <div className="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
                     Sound Previews (Click to test)
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                     <button
                       type="button"
                       onClick={() => soundEngine.play('taskComplete')}
-                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer transition-all active:scale-95 text-center"
+                      className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
                       ✓ Task Tick
                     </button>
                     <button
                       type="button"
                       onClick={() => soundEngine.play('habitComplete')}
-                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer transition-all active:scale-95 text-center"
+                      className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
                       ✦ Habit Ring
                     </button>
                     <button
                       type="button"
                       onClick={() => soundEngine.play('calcKey')}
-                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer transition-all active:scale-95 text-center"
+                      className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
                       ⌨ Key Tap
                     </button>
                     <button
                       type="button"
                       onClick={() => soundEngine.play('successChime')}
-                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer transition-all active:scale-95 text-center"
+                      className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
                       ♫ Success
                     </button>
@@ -609,7 +626,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {/* Recycle Bin & Deletion Guard (Positioned at the end of System & Appearance) */}
-          <div className="lg:col-span-12" id="system-recycle-bin-section">
+          <div id="system-recycle-bin-section">
             <RecycleBinView
               profileId={settings?.profileId || settings?.profiles?.[0]?.id || 'om-master-profile'}
               onRefresh={onRefresh}
@@ -649,7 +666,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="button"
                 disabled={isCleaningCache}
                 onClick={handleCleanCache}
-                className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-2xs hover:bg-amber-50 hover:text-amber-900 dark:border-amber-900/60 dark:bg-slate-800 dark:text-amber-300 dark:hover:bg-amber-950/40 cursor-pointer transition-all active:scale-98 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors disabled:opacity-50"
                 title="Safely remove browser cache and orphaned temporary files without deleting active data or recycle bin items"
               >
                 <RefreshCw className={`h-3 w-3 text-amber-600 dark:text-amber-400 ${isCleaningCache ? 'animate-spin' : ''}`} />
@@ -659,7 +676,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <button
                 type="button"
                 onClick={handlePurgeDefaultData}
-                className="flex items-center gap-1.5 rounded-xl border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-2xs hover:bg-rose-50 hover:text-rose-900 dark:border-rose-900/60 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/40 cursor-pointer transition-all active:scale-98"
+                className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-rose-700 hover:text-rose-900 dark:text-rose-300 dark:hover:text-rose-200 cursor-pointer transition-colors"
                 title="Permanently delete all default/seed records and sources"
               >
                 <Trash2 className="h-3 w-3 text-rose-600 dark:text-rose-400" />
@@ -669,7 +686,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <button
                 type="button"
                 onClick={handleResetData}
-                className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-rose-500 cursor-pointer transition-all active:scale-98"
+                className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-rose-700 hover:text-rose-900 dark:text-rose-300 dark:hover:text-rose-200 cursor-pointer transition-colors"
               >
                 <Trash2 className="h-3 w-3" />
                 <span>Reset Database</span>

@@ -1,6 +1,27 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /users/{userId}/preferences/appearance {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      function hasValidAppearance() {
+        return request.resource.data.keys().hasOnly(['settings', 'updatedAt'])
+          && request.resource.data.settings is map
+          && request.resource.data.settings.keys().hasOnly([
+            'presetId', 'colorMode', 'accentColor', 'backgroundId', 'backgroundImage',
+            'positionX', 'positionY', 'zoom', 'overlay', 'blur'
+          ])
+          && request.resource.data.settings.backgroundImage is string
+          && request.resource.data.settings.backgroundImage.size() <= 500000;
+      }
+
+      allow read: if isOwner();
+      allow create, update: if isOwner() && hasValidAppearance();
+      allow delete: if isOwner();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

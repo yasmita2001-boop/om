@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Phone, Calendar, Trash2, Edit2, Bell, ChevronDown, ChevronUp, Check, X } from 'lucide-react';
+import { Plus, Phone, Calendar, Trash2, Edit2, Bell, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 import { Person, Interaction, ReminderItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
@@ -175,9 +176,6 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
             People & Relationships
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Manage key people, interaction touchpoints, and milestone celebrations aligned with your life missions.
-          </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <FormToggleButton label="Add Person" open={openPeopleForm === 'person'} onClick={() => {
@@ -189,12 +187,12 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
             const next = openPeopleForm === 'interaction' ? null : 'interaction';
             setOpenPeopleForm(next);
             setActiveAction('interaction');
-          }} colorClassName="border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:border-rose-700 dark:hover:bg-rose-950/70" />
+          }} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-        {openPeopleForm && <section className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+      <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+        {openPeopleForm && <section className="lg:col-span-5  border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
           <div className={activeAction === 'person' ? 'mt-4' : 'hidden'}>
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
               <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
@@ -268,7 +266,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   <>
                     <Edit2 className="h-4 w-4 text-amber-600" />
                     <span>Edit Touchpoint</span>
-                    <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.2 rounded font-mono">
+                    <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.5 rounded font-mono">
                       Editing
                     </span>
                   </>
@@ -343,15 +341,20 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
 
         {/* Contacts Directory */}
         <div className={`${openPeopleForm ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-4`}>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className=" border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               <span>Relationships Directory ({people.length})</span>
             </h2>
 
             <div className="adaptive-card-grid mt-4 gap-3">
               {people.length === 0 ? (
-                <div className="col-span-full py-12 text-center text-xs text-slate-400">
-                  No contacts recorded yet. Add your first connection using the button above.
+                <div className="col-span-full">
+                  <EmptyState
+                    icon={Phone}
+                    compact
+                    title="No contacts yet"
+                    hint="Add your first connection using the button above."
+                  />
                 </div>
               ) : (
                 [...people].sort((a, b) => (a.name || '').localeCompare(b.name || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(p => {
@@ -400,7 +403,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                                 <Calendar className="h-3 w-3 text-indigo-500 shrink-0" />
                                 <span className="font-medium font-mono truncate">{p.importantDate}</span>
                                 {countdown && (
-                                  <span className={`px-1.5 py-0.2 rounded text-[9px] shrink-0 ${countdown.style}`}>
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] shrink-0 ${countdown.style}`}>
                                     {countdown.label}
                                   </span>
                                 )}

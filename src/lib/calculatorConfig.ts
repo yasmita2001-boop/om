@@ -100,7 +100,11 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
       { label: 'Comma-separated numbers', type: 'text', default: '45, 88, 72, 95, 60, 83', placeholder: 'e.g. 10, 20, 30' }
     ],
     calculate: (f1) => {
-      const arr = f1.split(/[\s,]+/).map(x => Number(x.trim())).filter(Number.isFinite);
+      const values = f1.trim().split(/[\s,]+/);
+      if (!f1.trim() || values.some(value => !Number.isFinite(Number(value)))) {
+        throw new Error('Enter a comma-separated list of valid numbers');
+      }
+      const arr = values.map(Number);
       const res = calculatorEngine.average(arr);
       return `Mean (Avg): ${res.avg.toFixed(2)} | Median: ${res.median} | Sum: ${res.sum} | Range: [${res.min} - ${res.max}] (Count: ${res.count})`;
     }
@@ -888,7 +892,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
   'Currency': {
     name: 'Currency',
     category: 'converter',
-    description: 'Convert between USD, INR, NPR, EUR, GBP, AUD, CAD, AED, and JPY',
+    description: 'Estimate conversions using illustrative fixed rates (not live financial quotes)',
     isConverter: true,
     unitType: 'currency',
     defaultUnitFrom: 'USD',
@@ -1149,7 +1153,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
   'Travel Currency': {
     name: 'Travel Currency',
     category: 'travel',
-    description: 'Estimate currency exchange with card markup or conversion fee',
+    description: 'Estimate travel conversions using illustrative fixed rates (not live), with card markup or conversion fee',
     fields: [
       { label: 'Amount to Convert', type: 'number', default: '50000' },
       {

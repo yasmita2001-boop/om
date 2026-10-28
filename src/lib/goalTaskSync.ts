@@ -189,7 +189,7 @@ export function createHabitGoalResolver(routines: Routine[]): (habit: Habit) => 
   const routineGoals = new Map(routines.filter(routine => routine.goalId).map(routine => [routine.id, routine.goalId!]));
   return habit => {
     const linkedRoutineId = habit.routineId || habit.linkedRoutineId;
-    return habit.goalId || (linkedRoutineId ? routineGoals.get(linkedRoutineId) : undefined);
+    return linkedRoutineId ? routineGoals.get(linkedRoutineId) : undefined;
   };
 }
 
@@ -1214,20 +1214,27 @@ export async function syncGoalProgressDirect(
 
   const updatedGoalsList: Goal[] = [updatedTarget];
 
-  // Rollup hierarchy
-  let currentParentId = targetGoal.parentId;
-  const visited = new Set<string>([targetGoal.id]);
-  while (currentParentId && !visited.has(currentParentId)) {
-    visited.add(currentParentId);
-    const parentGoal = goalMap.get(currentParentId);
-    if (!parentGoal) break;
+  // Rollup hierarchy. A goal can contribute to several parents (parentIds), so walk every
+  // parent chain instead of only the primary parentId.
+  const pendingParentIds: string[] = [];
+  const enqueueParents = (goal: Goal) => {
+    if (goal.parentId) pendingParentIds.push(goal.parentId);
+    (goal.parentIds || []).forEach(id => { if (id) pendingParentIds.push(id); });
+  };
+  enqueueParents(targetGoal);
 
-    const res = await recalculateGoalAggregateProgress(parentGoal.id);
+  const visited = new Set<string>([targetGoal.id]);
+  while (pendingParentIds.length > 0) {
+    const parentId = pendingParentIds.shift();
+    if (!parentId || visited.has(parentId)) continue;
+    visited.add(parentId);
+    if (!goalMap.has(parentId)) continue;
+
+    const res = await recalculateGoalAggregateProgress(parentId);
     if (res.targetGoal) {
       updatedGoalsList.push(res.targetGoal);
-      currentParentId = res.targetGoal.parentId;
-    } else {
-      break;
+      goalMap.set(res.targetGoal.id, res.targetGoal);
+      enqueueParents(res.targetGoal);
     }
   }
 
@@ -1242,27 +1249,26 @@ export async function recalculateAllGoalsProgress(): Promise<Goal[]> {
   const allGoals = await storage.getAll<Goal>('goals');
   if (allGoals.length === 0) return [];
 
-  // Group goals into Level 5, Level 4, Level 3, Level 2, Level 1
-  const level5 = allGoals.filter(g => g.level === 5);
-  const level4 = allGoals.filter(g => g.level === 4);
-  const level3 = allGoals.filter(g => g.level === 3);
-  const level2 = allGoals.filter(g => g.level === 2);
-  const level1 = allGoals.filter(g => !g.level || g.level === 1 || !g.parentId);
+  // Derive depth from the parent chain rather than the stored `level`, which can drift when a
+  // goal is re-parented. Deepest goals must be recalculated first so parents see fresh children.
+  const byId = new Map(allGoals.map(g => [g.id, g]));
+  const depthOf = (goal: Goal): number => {
+    let depth = 1;
+    let currentParentId = goal.parentId;
+    const seen = new Set<string>([goal.id]);
+    while (currentParentId && !seen.has(currentParentId)) {
+      const parent = byId.get(currentParentId);
+      if (!parent) break;
+      seen.add(currentParentId);
+      depth++;
+      currentParentId = parent.parentId;
+    }
+    return depth;
+  };
 
-  // Recalculate bottom-up
-  for (const g of level5) {
-    await recalculateGoalAggregateProgress(g.id);
-  }
-  for (const g of level4) {
-    await recalculateGoalAggregateProgress(g.id);
-  }
-  for (const g of level3) {
-    await recalculateGoalAggregateProgress(g.id);
-  }
-  for (const g of level2) {
-    await recalculateGoalAggregateProgress(g.id);
-  }
-  for (const g of level1) {
+  const orderedDeepestFirst = [...allGoals].sort((a, b) => depthOf(b) - depthOf(a));
+
+  for (const g of orderedDeepestFirst) {
     await recalculateGoalAggregateProgress(g.id);
   }
 

@@ -1,14 +1,13 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Target, Plus, TrendingUp, ShieldCheck, Flame, Trash2,
-  Zap, Check, GitBranch, Layers, ChevronRight, ChevronDown,
-  CornerDownRight, CheckCircle2, Edit2, Link2, ListTree,
-  ArrowRight, Sparkles, FolderTree, Info, CheckSquare, X,
-  BarChart2, ArrowUp, ArrowDown, Unlink
+  Zap, Check, Layers, ChevronDown,
+  Edit2, ListTree,
+  ArrowRight, FolderTree, X,
+  ArrowUp, ArrowDown, Unlink
 } from 'lucide-react';
 import {
-  Goal, Milestone, Strategy, KPI, Mission, MentorRule,
-  MentorQuote, CapitalStrategy, MentorProfile, FinanceAccount,
+  Goal, Milestone, Strategy, KPI, Mission, MentorProfile, FinanceAccount,
   Task, Habit, HabitLog, Routine, WorkProject, LearningItem, Skill,
   ReminderItem, Note, JournalEntry,
   FinanceTransaction, Loan, Investment, SavingsPlan, Liability, Asset,
@@ -20,7 +19,8 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { ProjectTimelinePlan, computeItemDelay } from '../components/ProjectTimelinePlan';
 import { SlideTabs } from '../components/SlideTabs';
 import { ProgressiveActions } from '../components/ProgressiveActions';
-import { FormDisclosure } from '../components/FormDisclosure';
+import { FormDisclosure, FormDisclosureToggle } from '../components/FormDisclosure';
+import { EmptyState } from '../components/EmptyState';
 import {
   computeGoalAggregateBreakdown,
   GoalProgressBreakdown,
@@ -135,7 +135,7 @@ function GoalLinkedBreakdownWidget({
       </div>
 
       {/* Progress Bar Track */}
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800/90">
+      <div className="goal-progress-track h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800/90">
         <div
           className={`h-full rounded-full transition-all duration-500 ease-out ${
             goal.progress >= 100
@@ -373,7 +373,7 @@ function GoalLinkedBreakdownWidget({
                   <span className="text-[10px] text-slate-400 font-mono">
                     {item.weightPercent > 0 ? `~${item.weightPercent}%` : 'Reference'}
                   </span>
-                  <span className={`font-mono text-[11px] font-semibold rounded px-1.5 py-0.2 ${
+                  <span className={`font-mono text-[11px] font-semibold rounded px-1.5 py-0.5 ${
                     item.progress >= 100
                       ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
                       : item.progress > 0
@@ -392,15 +392,137 @@ function GoalLinkedBreakdownWidget({
   );
 }
 
+type GoalLevel = 1 | 2 | 3 | 4 | 5;
+type GoalsTab = 'goals' | 'timeline' | 'strategies' | 'milestones' | 'kpis' | 'missions' | 'mentor';
+const MAX_GOAL_LEVEL: GoalLevel = 5;
+
+/**
+ * Extracts a natural sequence index from a goal title ("01 ...", "1. ...", "1st", "[1]", "Goal 1").
+ * Year-like numbers (>= 1000) are ignored so a title such as "Launch MVP 2027" does not silently
+ * become an explicit sibling order of 2027.
+ */
+const extractGoalSequenceNumber = (title: string): number | null => {
+  if (!title) return null;
+  const normalized = title.trim().replace(/[\u0966-\u096F]/g, d => String(d.charCodeAt(0) - 2406));
+  const rawNumber = extractRawGoalSequenceNumber(normalized);
+  if (rawNumber === null) return null;
+  return rawNumber >= 1 && rawNumber <= 999 ? rawNumber : null;
+};
+
+const extractRawGoalSequenceNumber = (normalized: string): number | null => {
+  const hierarchicalPrefix = normalized.match(/^(?:#|no\.?\s*)?(\d+(?:\.\d+)+)[\.\)\:\-\s]/i);
+  if (hierarchicalPrefix) {
+    const parts = hierarchicalPrefix[1].split('.');
+    const num = parseInt(parts[parts.length - 1], 10);
+    if (!Number.isNaN(num)) return num;
+  }
+
+  // 1. Ordinals at start: "1st", "2nd", "3rd", "4th", "1st.", "1st -"
+  const ordinalMatch = normalized.match(/^(\d+)(?:st|nd|rd|th)\b/i);
+  if (ordinalMatch) {
+    const num = parseInt(ordinalMatch[1], 10);
+    if (!Number.isNaN(num)) return num;
+  }
+
+  // 2. Prefix with brackets or punctuation: "[1]", "(1)", "1.", "1)", "1:", "1-", "#1", "No. 1", "Step 1", "Goal 1"
+  const prefixWordMatch = normalized.match(/^(?:#|no\.?\s*|step\s*|goal\s*|sub\s*goal\s*|part\s*|phase\s*)?\[?\(?(\d+)[\.\)\:\-\]\}\s]/i);
+  if (prefixWordMatch) {
+    const num = parseInt(prefixWordMatch[1], 10);
+    if (!Number.isNaN(num)) return num;
+  }
+
+  // 3. Simple leading number: "1 Physical", "01 Physical", "1"
+  const leadMatch = normalized.match(/^\[?\(?(\d+)\]?\)?(?:\s|$)/);
+  if (leadMatch) {
+    const num = parseInt(leadMatch[1], 10);
+    if (!Number.isNaN(num)) return num;
+  }
+
+  // 4. Roman numerals at start: "I.", "II.", "III.", "IV.", "V."
+  const romanMatch = normalized.match(/^(i|ii|iii|iv|v|vi|vii|viii|ix|x)[\.\)\:\-\s]/i);
+  if (romanMatch) {
+    const romanMap: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
+    const r = romanMatch[1].toLowerCase();
+    if (romanMap[r]) return romanMap[r];
+  }
+
+  // 5. Suffix number at the end of title: "Physical Development 1", "Physical Development - 1"
+  const suffixOrdinalMatch = normalized.match(/(?:^|\s)(\d+)(?:st|nd|rd|th)$/i);
+  if (suffixOrdinalMatch) {
+    const num = parseInt(suffixOrdinalMatch[1], 10);
+    if (!Number.isNaN(num)) return num;
+  }
+
+  const suffixMatch = normalized.match(/(?:^|[\s\-\:\(\[\#])(\d+)\)?\]?$/);
+  if (suffixMatch) {
+    const num = parseInt(suffixMatch[1], 10);
+    if (!Number.isNaN(num)) return num;
+  }
+
+  return null;
+};
+
+// Stable sibling ordering: explicit order, natural title sequence, then creation time.
+const sortGoals = (list: Goal[]) => {
+  return [...list].sort((a, b) => {
+    // Explicit order is also what Move Up / Move Down updates.
+    const ordA = a.order;
+    const ordB = b.order;
+    if (ordA !== undefined && ordB !== undefined && ordA !== null && ordB !== null) {
+      if (ordA !== ordB) return ordA - ordB;
+    } else if (ordA !== undefined && ordA !== null) {
+      return -1;
+    } else if (ordB !== undefined && ordB !== null) {
+      return 1;
+    }
+
+    const numA = extractGoalSequenceNumber(a.title);
+    const numB = extractGoalSequenceNumber(b.title);
+    if (numA !== null && numB !== null && numA !== numB) return numA - numB;
+    if (numA !== null && numB === null) return -1;
+    if (numB !== null && numA === null) return 1;
+
+    return (a.createdAt || 0) - (b.createdAt || 0);
+  });
+};
+
+/** Depth of a goal in the parent chain (1 = Main ... 5 = Atomic). */
+const computeGoalLevel = (goal: Goal, byId: Map<string, Goal>): GoalLevel => {
+  let depth = 1;
+  let currParentId: string | undefined = goal.parentId || undefined;
+  const visited = new Set<string>([goal.id]);
+  while (currParentId && !visited.has(currParentId) && depth < MAX_GOAL_LEVEL) {
+    visited.add(currParentId);
+    const parent = byId.get(currParentId);
+    if (!parent) return 1;
+    depth++;
+    currParentId = parent.parentId || undefined;
+  }
+  if (currParentId && visited.has(currParentId)) return 1;
+  return depth as GoalLevel;
+};
+
+/** Height of a goal's subtree (0 = leaf). Used to keep hierarchies within 5 levels. */
+const getSubtreeHeight = (goalId: string, allGoals: Goal[]): number => {
+  let height = 0;
+  const walk = (parentId: string, depth: number) => {
+    for (const child of allGoals) {
+      if (child.parentId !== parentId) continue;
+      const nextDepth = depth + 1;
+      if (nextDepth > height) height = nextDepth;
+      walk(child.id, nextDepth);
+    }
+  };
+  walk(goalId, 0);
+  return height;
+};
+
 interface GoalsViewProps {
   goals: Goal[];
   milestones?: Milestone[];
   strategies?: Strategy[];
   kpis?: KPI[];
   missions?: Mission[];
-  mentorRules?: MentorRule[];
-  mentorQuotes?: MentorQuote[];
-  capitalStrategies?: CapitalStrategy[];
   mentor?: MentorProfile;
   accounts: FinanceAccount[];
   transactions?: FinanceTransaction[];
@@ -437,9 +559,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   strategies = [],
   kpis = [],
   missions = [],
-  mentorRules = [],
-  mentorQuotes = [],
-  capitalStrategies = [],
   mentor,
   accounts,
   transactions = [],
@@ -469,37 +588,53 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   onRefresh,
   onSuccess
 }) => {
+  const goalData = useMemo(() => ({
+    goals,
+    tasks,
+    milestones,
+    habits,
+    habitLogs,
+    routines,
+    workProjects,
+    learningItems,
+    skills,
+    notes,
+    journal,
+    savingsPlans,
+    loans,
+    investments,
+    assets,
+    liabilities,
+    transactions,
+    appointments,
+    healthNotes,
+    meetings,
+    values,
+    practices,
+    commitments,
+    focusSessions,
+    reminders
+  }), [
+    goals, tasks, milestones, habits, habitLogs, routines, workProjects, learningItems,
+    skills, notes, journal, savingsPlans, loans, investments, assets, liabilities,
+    transactions, appointments, healthNotes, meetings, values, practices, commitments,
+    focusSessions, reminders
+  ]);
+
+  // Lazy per-goal breakdown cache: recomputes only when the underlying data changes,
+  // instead of on every render (e.g. each keystroke in a form).
+  const breakdownCache = useMemo(() => new Map<string, GoalProgressBreakdown>(), [goalData]);
+
   const getGoalBreakdown = (targetGoalId: string): GoalProgressBreakdown => {
-    return computeGoalAggregateBreakdown(targetGoalId, {
-      goals,
-      tasks,
-      milestones,
-      habits,
-      habitLogs,
-      routines,
-      workProjects,
-      learningItems,
-      skills,
-      notes,
-      journal,
-      savingsPlans,
-      loans,
-      investments,
-      assets,
-      liabilities,
-      transactions,
-      appointments,
-      healthNotes,
-      meetings,
-      values,
-      practices,
-      commitments,
-      focusSessions,
-      reminders
-    });
+    const cached = breakdownCache.get(targetGoalId);
+    if (cached) return cached;
+    const computed = computeGoalAggregateBreakdown(targetGoalId, goalData);
+    breakdownCache.set(targetGoalId, computed);
+    return computed;
   };
 
-  const [activeTab, setActiveTab] = useState<'goals' | 'timeline' | 'strategies' | 'milestones' | 'kpis' | 'missions' | 'mentor'>('goals');
+  const [activeTab, setActiveTab] = useState<GoalsTab>('goals');
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Hierarchy form state
   const [goalTitle, setGoalTitle] = useState('');
@@ -519,14 +654,43 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const [levelFilter, setLevelFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 
+  const reportError = (message: string) => setFormError(message);
+
+  // Local error surface: validation/storage failures must not look like success toasts.
+  useEffect(() => {
+    if (!formError) return;
+    const timer = window.setTimeout(() => setFormError(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [formError]);
+
+  // Guards against double-submits / double-clicks on the same item.
+  const pendingRef = useRef<Set<string>>(new Set());
+  // Serializes manual progress writes per goal so rapid +/- clicks are not lost.
+  const progressQueueRef = useRef<Map<string, Promise<void>>>(new Map());
+
+  const withPending = async (key: string, action: () => Promise<void>) => {
+    if (pendingRef.current.has(key)) return;
+    pendingRef.current.add(key);
+    try {
+      await action();
+    } catch (error) {
+      console.error(error);
+      reportError('Could not save your change. Please try again.');
+    } finally {
+      pendingRef.current.delete(key);
+    }
+  };
+
   const toggleBreakdown = (id: string) => {
     setExpandedBreakdownGoalIds(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleQuickToggleTask = async (taskId: string) => {
-    const allT = tasks.length > 0 ? tasks : await storage.getAll<Task>('tasks');
-    const task = allT.find(t => t.id === taskId);
-    if (!task) return;
+  const handleQuickToggleTask = (taskId: string) => withPending(`task:${taskId}`, async () => {
+    const task = await storage.get<Task>('tasks', taskId);
+    if (!task) {
+      reportError('That task no longer exists. Refresh the page and try again.');
+      return;
+    }
     const nextDone = !task.done;
     const updated: Task = {
       ...task,
@@ -535,9 +699,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       updatedAt: Date.now()
     };
     await storage.put('tasks', updated);
-    const linkedGoalId = resolveTaskGoalId(task, { workProjects, routines, skills, learningItems });
+    const linkedGoalId = resolveTaskGoalId(updated, { workProjects, routines, skills, learningItems });
     if (linkedGoalId) {
-      const res = await syncGoalProgressFromTasks(linkedGoalId, task.id, nextDone);
+      const res = await syncGoalProgressFromTasks(linkedGoalId, updated.id, nextDone);
       if (res.targetGoal) {
         onSuccess(
           nextDone
@@ -547,18 +711,23 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       }
     }
     onRefresh();
-  };
+  });
 
-  const handleQuickToggleMilestone = async (milestoneId: string) => {
-    const m = milestones.find(item => item.id === milestoneId);
-    if (!m) return;
-    await handleToggleMilestoneStatus(m);
-  };
+  const handleQuickToggleMilestone = (milestoneId: string) => withPending(`milestone:${milestoneId}`, async () => {
+    const milestone = await storage.get<Milestone>('milestones', milestoneId);
+    if (!milestone) {
+      reportError('That milestone no longer exists. Refresh the page and try again.');
+      return;
+    }
+    await handleToggleMilestoneStatus(milestone);
+  });
 
-  const handleQuickToggleAppointment = async (appointmentId: string) => {
-    const allA = appointments.length > 0 ? appointments : await storage.getAll<HealthAppointment>('healthAppointments');
-    const appt = allA.find(a => a.id === appointmentId);
-    if (!appt) return;
+  const handleQuickToggleAppointment = (appointmentId: string) => withPending(`appointment:${appointmentId}`, async () => {
+    const appt = await storage.get<HealthAppointment>('healthAppointments', appointmentId);
+    if (!appt) {
+      reportError('That appointment no longer exists. Refresh the page and try again.');
+      return;
+    }
     const isComp = Boolean(appt.completed || appt.status === 'completed');
     const nextCompleted = !isComp;
     const nextStatus: 'scheduled' | 'completed' = nextCompleted ? 'completed' : 'scheduled';
@@ -580,12 +749,14 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       }
     }
     onRefresh();
-  };
+  });
 
-  const handleQuickToggleMeeting = async (meetingId: string) => {
-    const allM = meetings.length > 0 ? meetings : await storage.getAll<Meeting>('meetings');
-    const meet = allM.find(m => m.id === meetingId);
-    if (!meet) return;
+  const handleQuickToggleMeeting = (meetingId: string) => withPending(`meeting:${meetingId}`, async () => {
+    const meet = await storage.get<Meeting>('meetings', meetingId);
+    if (!meet) {
+      reportError('That meeting no longer exists. Refresh the page and try again.');
+      return;
+    }
     const isComp = Boolean(meet.completed || meet.status === 'completed');
     const nextCompleted = !isComp;
     const nextStatus: 'scheduled' | 'completed' = nextCompleted ? 'completed' : 'scheduled';
@@ -607,7 +778,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       }
     }
     onRefresh();
-  };
+  });
 
   const goalFormRef = useRef<HTMLDivElement>(null);
 
@@ -616,130 +787,56 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     goalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [goalFormOpen, activeTab]);
 
-  const goalsById = new Map(goals.map(goal => [goal.id, goal]));
+  const goalsById = useMemo(() => new Map(goals.map(goal => [goal.id, goal])), [goals]);
 
   // Hierarchy depth follows the direct parent relationship, not a potentially stale saved level.
-  const getGoalLevel = (g: Goal): 1 | 2 | 3 | 4 | 5 => {
-    let depth = 1;
-    let currParentId: string | undefined = g.parentId || undefined;
-    const visited = new Set<string>([g.id]);
-    while (currParentId && !visited.has(currParentId) && depth < 5) {
-      visited.add(currParentId);
-      const parent = goalsById.get(currParentId);
-      if (!parent) return 1;
-      depth++;
-      currParentId = parent.parentId || undefined;
-    }
-    if (currParentId && visited.has(currParentId)) return 1;
-    return depth as 1 | 2 | 3 | 4 | 5;
+  const levelByGoalId = useMemo(() => {
+    const levels = new Map<string, GoalLevel>();
+    goals.forEach(goal => levels.set(goal.id, computeGoalLevel(goal, goalsById)));
+    return levels;
+  }, [goals, goalsById]);
+
+  // Memoized depth for persisted goals, live walk for unsaved copies (e.g. the goal being edited).
+  const getGoalLevel = (g: Goal): GoalLevel => {
+    const cached = levelByGoalId.get(g.id);
+    if (cached && goalsById.get(g.id)?.parentId === g.parentId) return cached;
+    return computeGoalLevel(g, goalsById);
   };
 
-  // Extracts natural sequence index from goal title (supports "01 ...", "1. ...", "1st", "2nd", "[1]", "Goal 1", "Physical 1", "१. ...")
-  const extractGoalSequenceNumber = (title: string): number | null => {
-    if (!title) return null;
-    const raw = title.trim();
-    // Normalize Devnagari numerals (०-९) to Latin digits (0-9)
-    const normalized = raw.replace(/[०-९]/g, d => String(d.charCodeAt(0) - 2406));
+  const { hierarchySequenceById, flatHierarchyGoals } = useMemo(() => {
+    const sequenceById = new Map<string, string>();
+    const flat: Goal[] = [];
+    const visited = new Set<string>();
+    const walk = (goal: Goal, sequence: string) => {
+      if (visited.has(goal.id)) return;
+      visited.add(goal.id);
+      sequenceById.set(goal.id, sequence);
+      flat.push(goal);
+      sortGoals(goals.filter(child => child.parentId === goal.id))
+        .forEach((child, index) => walk(child, `${sequence}.${index + 1}`));
+    };
+    const roots = sortGoals(goals.filter(goal => !goal.parentId || !goalsById.has(goal.parentId)));
+    roots.forEach((goal, index) => walk(goal, String(index + 1)));
+    sortGoals(goals.filter(goal => !visited.has(goal.id)))
+      .forEach((goal, index) => walk(goal, String(roots.length + index + 1)));
+    return { hierarchySequenceById: sequenceById, flatHierarchyGoals: flat };
+  }, [goals, goalsById]);
 
-    const hierarchicalPrefix = normalized.match(/^(?:#|no\.?\s*)?(\d+(?:\.\d+)+)[\.\)\:\-\s]/i);
-    if (hierarchicalPrefix) {
-      const parts = hierarchicalPrefix[1].split('.');
-      const num = parseInt(parts[parts.length - 1], 10);
-      if (!Number.isNaN(num)) return num;
-    }
+  const mainGoals = useMemo(() => sortGoals(goals.filter(g => levelByGoalId.get(g.id) === 1)), [goals, levelByGoalId]);
+  const subGoals = useMemo(() => sortGoals(goals.filter(g => levelByGoalId.get(g.id) === 2)), [goals, levelByGoalId]);
+  const microGoals = useMemo(() => sortGoals(goals.filter(g => levelByGoalId.get(g.id) === 3)), [goals, levelByGoalId]);
+  const nanoGoals = useMemo(() => sortGoals(goals.filter(g => levelByGoalId.get(g.id) === 4)), [goals, levelByGoalId]);
+  const atomicGoals = useMemo(() => sortGoals(goals.filter(g => levelByGoalId.get(g.id) === 5)), [goals, levelByGoalId]);
 
-    // 1. Ordinals at start: "1st", "2nd", "3rd", "4th", "1st.", "1st -"
-    const ordinalMatch = normalized.match(/^(\d+)(?:st|nd|rd|th)\b/i);
-    if (ordinalMatch) {
-      const num = parseInt(ordinalMatch[1], 10);
-      if (!Number.isNaN(num)) return num;
-    }
+  // Delayed-item counters are needed by both the tab badge and the alert banner; compute once.
+  const delayCounts = useMemo(() => ({
+    tasks: tasks.filter(t => !t.done && computeItemDelay(t).isDelayed).length,
+    milestones: milestones.filter(m => m.status !== 'completed' && (m.progress || 0) < 100 && computeItemDelay({ dueDate: m.dueDate, status: m.status, progress: m.progress }).isDelayed).length,
+    projects: workProjects.filter(p => p.status !== 'Completed' && computeItemDelay({ ...p, dueAt: p.due }).isDelayed).length,
+    routines: routines.filter(r => computeItemDelay(r).isDelayed).length
+  }), [tasks, milestones, workProjects, routines]);
 
-    // 2. Prefix with brackets or punctuation: "[1]", "(1)", "{1}", "1.", "1)", "1:", "1-", "1 -", "#1", "No. 1", "No 1", "Step 1", "Goal 1", "Part 1", "Phase 1"
-    const prefixWordMatch = normalized.match(/^(?:#|no\.?\s*|step\s*|goal\s*|sub\s*goal\s*|part\s*|phase\s*)?\[?\(?(\d+)[\.\)\:\-\]\}\s]/i);
-    if (prefixWordMatch) {
-      const num = parseInt(prefixWordMatch[1], 10);
-      if (!Number.isNaN(num)) return num;
-    }
-
-    // 3. Simple leading number: "1 Physical", "01 Physical", "1"
-    const leadMatch = normalized.match(/^\[?\(?(\d+)\]?\)?(?:\s|$)/);
-    if (leadMatch) {
-      const num = parseInt(leadMatch[1], 10);
-      if (!Number.isNaN(num)) return num;
-    }
-
-    // 4. Roman numerals at start: "I.", "II.", "III.", "IV.", "V."
-    const romanMatch = normalized.match(/^(i|ii|iii|iv|v|vi|vii|viii|ix|x)[\.\)\:\-\s]/i);
-    if (romanMatch) {
-      const romanMap: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
-      const r = romanMatch[1].toLowerCase();
-      if (romanMap[r]) return romanMap[r];
-    }
-
-    // 5. Suffix number at the end of title: "Physical Development 1", "Physical Development - 1", "Physical Development (1)", "Physical Development #1", "Physical 1st"
-    const suffixOrdinalMatch = normalized.match(/(?:^|\s)(\d+)(?:st|nd|rd|th)$/i);
-    if (suffixOrdinalMatch) {
-      const num = parseInt(suffixOrdinalMatch[1], 10);
-      if (!Number.isNaN(num)) return num;
-    }
-
-    const suffixMatch = normalized.match(/(?:^|[\s\-\:\(\[\#])(\d+)\)?\]?$/);
-    if (suffixMatch) {
-      const num = parseInt(suffixMatch[1], 10);
-      if (!Number.isNaN(num)) return num;
-    }
-
-    return null;
-  };
-
-  // Stable sibling ordering: explicit order, natural title sequence, then creation time.
-  const sortGoals = (list: Goal[]) => {
-    return [...list].sort((a, b) => {
-      // Explicit order is also what Move Up / Move Down updates.
-      const ordA = a.order;
-      const ordB = b.order;
-      if (ordA !== undefined && ordB !== undefined && ordA !== null && ordB !== null) {
-        if (ordA !== ordB) return ordA - ordB;
-      } else if (ordA !== undefined && ordA !== null) {
-        return -1;
-      } else if (ordB !== undefined && ordB !== null) {
-        return 1;
-      }
-
-      const numA = extractGoalSequenceNumber(a.title);
-      const numB = extractGoalSequenceNumber(b.title);
-      if (numA !== null && numB !== null && numA !== numB) return numA - numB;
-      if (numA !== null && numB === null) return -1;
-      if (numB !== null && numA === null) return 1;
-
-      return (a.createdAt || 0) - (b.createdAt || 0);
-    });
-  };
-
-  const hierarchySequenceById = new Map<string, string>();
-  const flatHierarchyGoals: Goal[] = [];
-  const visitedGoalIds = new Set<string>();
-  const walkGoalTree = (goal: Goal, sequence: string) => {
-    if (visitedGoalIds.has(goal.id)) return;
-    visitedGoalIds.add(goal.id);
-    hierarchySequenceById.set(goal.id, sequence);
-    flatHierarchyGoals.push(goal);
-    sortGoals(goals.filter(child => child.parentId === goal.id))
-      .forEach((child, index) => walkGoalTree(child, `${sequence}.${index + 1}`));
-  };
-  const rootGoals = sortGoals(goals.filter(goal => !goal.parentId || !goalsById.has(goal.parentId)));
-  rootGoals.forEach((goal, index) => walkGoalTree(goal, String(index + 1)));
-  sortGoals(goals.filter(goal => !visitedGoalIds.has(goal.id)))
-    .forEach((goal, index) => walkGoalTree(goal, String(rootGoals.length + index + 1)));
-
-  const mainGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 1));
-  const subGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 2));
-  const microGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 3));
-  const nanoGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 4));
-  const atomicGoals = sortGoals(goals.filter(g => getGoalLevel(g) === 5));
-
-  const selectGoalLevel = (level: 1 | 2 | 3 | 4 | 5) => {
+  const totalDelays = delayCounts.tasks + delayCounts.milestones + delayCounts.projects + delayCounts.routines;  const selectGoalLevel = (level: 1 | 2 | 3 | 4 | 5) => {
     setGoalLevel(level);
     if (level === 1) {
       setGoalParentId('');
@@ -771,6 +868,27 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   };
   const editingDescendantIds = editingGoal ? getDescendantIds(editingGoal.id) : new Set<string>();
 
+  // A level is only reachable when at least one eligible parent exists at level - 1.
+  const eligibleParentCountForLevel = (level: GoalLevel): number => {
+    if (level === 1) return 1;
+    if (!editingGoal) return 0;
+    return goals.filter(g =>
+      g.id !== editingGoal.id &&
+      !editingDescendantIds.has(g.id) &&
+      getGoalLevel(g) === level - 1
+    ).length;
+  };
+
+  // Close the edit modal with Escape as well as the close button.
+  useEffect(() => {
+    if (!editingGoal) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEditingGoal(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingGoal]);
+
   const getSubGoalsOf = (mainGoalId: string) => {
     return sortGoals(goals.filter(g => g.parentId === mainGoalId));
   };
@@ -799,19 +917,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     if (swapIndex < 0 || swapIndex >= sorted.length) return;
 
-    sorted.forEach((item, idx) => {
-      item.order = idx;
-    });
+    // Never mutate props: build copies with a stable 0..n-1 order, then swap the two rows.
+    const reordered = sorted.map((item, idx) => ({ ...item, order: idx }));
+    const currentOrder = reordered[index].order ?? index;
+    reordered[index].order = reordered[swapIndex].order ?? swapIndex;
+    reordered[swapIndex].order = currentOrder;
+    const stamp = Date.now();
+    const payload = reordered.map(item => ({ ...item, updatedAt: stamp }));
 
-    const currentOrder = sorted[index].order ?? index;
-    const targetOrder = sorted[swapIndex].order ?? swapIndex;
-
-    sorted[index].order = targetOrder;
-    sorted[swapIndex].order = currentOrder;
-
-    for (const item of sorted) {
-      await storage.put('goals', item);
-    }
+    await storage.bulkPut('goals', payload);
     onRefresh();
   };
 
@@ -839,7 +953,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
   const startAddChildGoal = (parentGoal: Goal, targetLevel?: 1 | 2 | 3 | 4 | 5) => {
     const parentLvl = getGoalLevel(parentGoal);
-    const nextLvl = (targetLevel || Math.min(5, parentLvl + 1)) as 1 | 2 | 3 | 4 | 5;
+    if (parentLvl >= MAX_GOAL_LEVEL) {
+      reportError(`"${parentGoal.title}" is an Atomic (Level 5) goal - the hierarchy stops at 5 levels.`);
+      return;
+    }
+    // The level is always parent depth + 1, even if the clicked button asked for another tier.
+    const nextLvl = Math.min(targetLevel || parentLvl + 1, parentLvl + 1) as GoalLevel;
     setGoalLevel(nextLvl);
     setGoalParentId(parentGoal.id);
     setGoalCategory(parentGoal.category || 'Career');
@@ -880,73 +999,97 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const [missionTarget, setMissionTarget] = useState('');
   const [missionAction, setMissionAction] = useState('Daily core routine execution');
 
-  // Mentor Strategy state
+  // Mentor Strategy state (strings so the inputs can be cleared while typing)
   const [mentorMission, setMentorMission] = useState(mentor?.mission || '');
-  const [survivalReserve, setSurvivalReserve] = useState(mentor?.survivalReserve ?? 100000);
-  const [emergencyReserve, setEmergencyReserve] = useState(mentor?.emergencyReserve ?? 50000);
-  const [dailyBurn, setDailyBurn] = useState(mentor?.dailyBurn ?? 800);
-  const [savingGoal, setSavingGoal] = useState(mentor?.savingGoalAmount ?? 500000);
+  const [survivalReserve, setSurvivalReserve] = useState(String(mentor?.survivalReserve ?? 100000));
+  const [emergencyReserve, setEmergencyReserve] = useState(String(mentor?.emergencyReserve ?? 50000));
+  const [dailyBurn, setDailyBurn] = useState(String(mentor?.dailyBurn ?? 800));
+  const [savingGoal, setSavingGoal] = useState(String(mentor?.savingGoalAmount ?? 500000));
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<{ store: string; id: string; name: string } | null>(null);
 
   // Auto-sync dropdowns when goals asynchronously load
   useEffect(() => {
-    if (goals.length > 0) {
-      if (!stratGoalId || !goals.some(g => g.id === stratGoalId)) {
-        setStratGoalId(goals[0].id);
-      }
-      if (!msGoalId || !goals.some(g => g.id === msGoalId)) {
-        setMsGoalId(goals[0].id);
-      }
-      if (!kpiGoalId || !goals.some(g => g.id === kpiGoalId)) {
-        setKpiGoalId(goals[0].id);
-      }
+    if (goals.length === 0) return;
+    const defaultGoalId = sortGoals(goals)[0].id;
+    if (!stratGoalId || !goals.some(g => g.id === stratGoalId)) {
+      setStratGoalId(defaultGoalId);
+    }
+    if (!msGoalId || !goals.some(g => g.id === msGoalId)) {
+      setMsGoalId(defaultGoalId);
+    }
+    if (!kpiGoalId || !goals.some(g => g.id === kpiGoalId)) {
+      setKpiGoalId(defaultGoalId);
     }
   }, [goals, stratGoalId, msGoalId, kpiGoalId]);
 
-  // Keep mentor state synced with prop
+  // App re-creates the `mentor` object on every data refresh, so hydrate the form only when the
+  // saved profile stamp actually changes. Otherwise unsaved edits were being wiped.
+  const appliedMentorRef = useRef<{ loaded: boolean; stamp?: number }>({
+    loaded: Boolean(mentor),
+    stamp: mentor?.updatedAt
+  });
+
   useEffect(() => {
-    if (mentor) {
-      if (mentor.mission !== undefined) setMentorMission(mentor.mission);
-      if (mentor.survivalReserve !== undefined) setSurvivalReserve(mentor.survivalReserve);
-      if (mentor.emergencyReserve !== undefined) setEmergencyReserve(mentor.emergencyReserve);
-      if (mentor.dailyBurn !== undefined) setDailyBurn(mentor.dailyBurn);
-      if (mentor.savingGoalAmount !== undefined) setSavingGoal(mentor.savingGoalAmount);
-    }
+    if (!mentor) return;
+    const applied = appliedMentorRef.current;
+    if (applied.loaded && applied.stamp === mentor.updatedAt) return;
+    appliedMentorRef.current = { loaded: true, stamp: mentor.updatedAt };
+    if (mentor.mission !== undefined) setMentorMission(mentor.mission);
+    if (mentor.survivalReserve !== undefined) setSurvivalReserve(String(mentor.survivalReserve));
+    if (mentor.emergencyReserve !== undefined) setEmergencyReserve(String(mentor.emergencyReserve));
+    if (mentor.dailyBurn !== undefined) setDailyBurn(String(mentor.dailyBurn));
+    if (mentor.savingGoalAmount !== undefined) setSavingGoal(String(mentor.savingGoalAmount));
   }, [mentor]);
 
   const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
-  const totalReserves = Number(survivalReserve) + Number(emergencyReserve);
+  // Dashboard reflects the *saved* mentor profile, not unsaved form edits.
+  const savedSurvivalReserve = Number(mentor?.survivalReserve ?? 0) || 0;
+  const savedEmergencyReserve = Number(mentor?.emergencyReserve ?? 0) || 0;
+  const savedDailyBurn = Number(mentor?.dailyBurn ?? 0) || 0;
+  const totalReserves = savedSurvivalReserve + savedEmergencyReserve;
   const hasReserveTargets = mentor?.survivalReserve !== undefined && mentor?.emergencyReserve !== undefined;
   const hasSavedDailyBurn = mentor?.dailyBurn !== undefined;
-  const hasRunwayEstimate = hasSavedDailyBurn && dailyBurn > 0;
+  const hasRunwayEstimate = hasSavedDailyBurn && savedDailyBurn > 0;
   const flexibleSavings = savingsPlans
     .filter(plan => plan.productType !== 'fixed_deposit')
     .reduce((sum, plan) => sum + (Number(plan.currentAmount) || 0), 0);
   const accessibleReserveCapital = liquidCash + flexibleSavings;
-  const runwayDays = dailyBurn > 0 ? Math.max(0, Math.floor(accessibleReserveCapital / dailyBurn)) : 0;
+  const runwayDays = savedDailyBurn > 0 ? Math.max(0, Math.floor(accessibleReserveCapital / savedDailyBurn)) : 0;
   const runwayMonths = (runwayDays / 30).toFixed(1);
 
   const handleAddGoal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!goalTitle.trim()) return;
+    if (!goalTitle.trim()) {
+      reportError('Enter a goal title before saving.');
+      return;
+    }
 
     const now = Date.now();
     const parentGoal = goalParentId ? goals.find(g => g.id === goalParentId) : null;
 
-    // Detect level based on parent and user selection
-    let effectiveLevel: 1 | 2 | 3 | 4 | 5 = goalLevel;
-    if (goalParentId && parentGoal) {
-      const pLvl = getGoalLevel(parentGoal);
-      effectiveLevel = Math.min(5, pLvl + 1) as 1 | 2 | 3 | 4 | 5;
-    } else {
-      effectiveLevel = 1;
+    if (goalLevel > 1 && !parentGoal) {
+      reportError(`Select a Level ${goalLevel - 1} parent goal before saving a Level ${goalLevel} goal.`);
+      return;
     }
 
-    const parsedOrder = goalOrder.trim() !== ''
+    // Level is always derived from the chosen parent, never trusted from stale form state.
+    let effectiveLevel: GoalLevel = 1;
+    if (parentGoal) {
+      const parentLevel = getGoalLevel(parentGoal);
+      if (parentLevel >= MAX_GOAL_LEVEL) {
+        reportError(`"${parentGoal.title}" is already an Atomic (Level 5) goal, so it cannot have child goals.`);
+        return;
+      }
+      effectiveLevel = (parentLevel + 1) as GoalLevel;
+    }
+
+    // Only an explicitly entered order is persisted. Deriving it from the title used to turn
+    // trailing year-like numbers ("Launch MVP 2027") into sibling order 2027.
+    const parsedOrder = goalOrder.trim() !== '' && Number.isFinite(Number(goalOrder))
       ? Number(goalOrder)
-      : (extractGoalSequenceNumber(goalTitle) ?? undefined);
+      : undefined;
 
     const newGoalId = generateUUID();
     const newGoal: Goal = {
@@ -957,7 +1100,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       description: goalDescription.trim() || undefined,
       progress: goalProgress,
       status: goalProgress >= 100 ? 'completed' : 'active',
-      parentId: goalParentId || null,
+      parentId: parentGoal?.id || null,
       level: effectiveLevel,
       order: parsedOrder,
       autoRollupProgress: true,
@@ -986,6 +1129,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     setGoalDescription('');
     setGoalOrder('');
     setGoalProgress(0);
+    setGoalParentId('');
+    setGoalLevel(1);
+    setGoalCategory('Career');
+    setTargetDate('');
     setGoalFormOpen(false);
     onRefresh();
   };
@@ -994,7 +1141,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     e.preventDefault();
     if (!stratTitle.trim()) return;
 
-    const targetGoal = stratGoalId || goals[0]?.id || '';
+    if (goals.length === 0) {
+      reportError('Create a strategic goal first - a strategy must belong to a goal.');
+      return;
+    }
+    const targetGoal = stratGoalId || sortGoals(goals)[0].id;
     const newStrategy: Strategy = {
       id: generateUUID(),
       goalId: targetGoal,
@@ -1016,7 +1167,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     e.preventDefault();
     if (!msTitle.trim()) return;
 
-    const targetGoal = msGoalId || goals[0]?.id || '';
+    if (goals.length === 0) {
+      reportError('Create a strategic goal first - a milestone must belong to a goal.');
+      return;
+    }
+    const targetGoal = msGoalId || sortGoals(goals)[0].id;
     const ms: Milestone = {
       id: generateUUID(),
       goalId: targetGoal,
@@ -1028,12 +1183,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       updatedAt: Date.now()
     };
     await storage.put('milestones', ms);
-    if (targetGoal) {
-      const res = await syncGoalProgressFromMilestones(targetGoal);
-      onSuccess(`✓ Milestone added! Goal "${res.targetGoal?.title || ''}" progress updated to ${res.targetGoal?.progress || 0}%`);
-    } else {
-      onSuccess('Milestone added');
-    }
+    const res = await syncGoalProgressFromMilestones(targetGoal);
+    onSuccess(`✓ Milestone added! Goal "${res.targetGoal?.title || ''}" progress updated to ${res.targetGoal?.progress || 0}%`);
     setMsTitle('');
     setMsDueDate('');
     onRefresh();
@@ -1044,11 +1195,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     const target = Number(kpiTarget);
     const current = kpiCurrent.trim() === '' ? 0 : Number(kpiCurrent);
     if (!kpiName.trim() || !Number.isFinite(target) || target <= 0 || !Number.isFinite(current) || current < 0) {
-      onSuccess('Enter a KPI name, target greater than zero, and current progress of zero or more.');
+      reportError('Enter a KPI name, a target greater than zero, and current progress of zero or more.');
       return;
     }
 
-    const targetGoal = kpiGoalId || goals[0]?.id || '';
+    const targetGoal = kpiGoalId || sortGoals(goals)[0]?.id || '';
     const k: KPI = {
       id: generateUUID(),
       goalId: targetGoal || undefined,
@@ -1091,13 +1242,33 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   };
 
   // Real-Time Aggregate Progress Engine (Proportional Reflection across 3 tiers)
-  const handleProgressChange = async (targetGoal: Goal, newProgressOrDelta: number, isDirect = false) => {
-    const calculatedProgress = isDirect
-      ? Math.max(0, Math.min(100, newProgressOrDelta))
-      : Math.max(0, Math.min(100, targetGoal.progress + newProgressOrDelta));
-
-    await syncGoalProgressDirect(targetGoal.id, calculatedProgress);
-    onRefresh();
+  // Writes are queued per goal and based on the freshest stored value, so rapid +/- clicks
+  // accumulate instead of overwriting each other with a stale base value.
+  const handleProgressChange = (targetGoal: Goal, newProgressOrDelta: number, isDirect = false) => {
+    const goalId = targetGoal.id;
+    const previous = progressQueueRef.current.get(goalId) ?? Promise.resolve();
+    const next = previous.then(async () => {
+      const fresh = await storage.get<Goal>('goals', goalId);
+      if (!fresh) {
+        reportError('That goal no longer exists. Refresh the page and try again.');
+        return;
+      }
+      if (isDirect) {
+        const linked = computeGoalAggregateBreakdown(goalId, goalData).progressItemCount;
+        if (linked > 0) {
+          reportError('This goal\'s progress is calculated from its linked items, so it cannot be set manually. Complete the linked items instead.');
+          return;
+        }
+      }
+      const base = Number(fresh.progress) || 0;
+      const calculatedProgress = isDirect
+        ? Math.max(0, Math.min(100, newProgressOrDelta))
+        : Math.max(0, Math.min(100, base + newProgressOrDelta));
+      await syncGoalProgressDirect(goalId, calculatedProgress);
+      onRefresh();
+    });
+    progressQueueRef.current.set(goalId, next.catch(() => undefined));
+    return next;
   };
 
   const handleSaveEditedGoal = async (e: React.FormEvent) => {
@@ -1105,21 +1276,40 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     if (!editingGoal || !editingGoal.title.trim()) return;
 
     const originalGoal = goals.find(g => g.id === editingGoal.id);
-    const oldParentId = originalGoal?.parentId;
-    const newParentId = editingGoal.parentId;
-    const parentGoal = newParentId ? goalsById.get(newParentId) : null;
-    const effectiveLevel = parentGoal ? Math.min(5, getGoalLevel(parentGoal) + 1) as 1 | 2 | 3 | 4 | 5 : 1;
+    const parentGoal = editingGoal.parentId ? goalsById.get(editingGoal.parentId) : null;
+    const newParentId = parentGoal?.id ?? null;
+    const effectiveLevel: GoalLevel = parentGoal
+      ? Math.min(MAX_GOAL_LEVEL, getGoalLevel(parentGoal) + 1) as GoalLevel
+      : 1;
 
-    const parsedOrder = editingGoal.order !== undefined && editingGoal.order !== null && String(editingGoal.order).trim() !== ''
-      ? Number(editingGoal.order)
-      : (extractGoalSequenceNumber(editingGoal.title) ?? undefined);
+    if (effectiveLevel >= MAX_GOAL_LEVEL && getSubtreeHeight(editingGoal.id, goals) > 0) {
+      reportError('An Atomic (Level 5) goal cannot have child goals. Choose a higher-level parent first.');
+      return;
+    }
+
+    const hasOrder = editingGoal.order !== undefined
+      && editingGoal.order !== null
+      && String(editingGoal.order).trim() !== ''
+      && Number.isFinite(Number(editingGoal.order));
+
+    // Merge over the freshest stored record so a background refresh is not clobbered by the
+    // snapshot captured when the modal opened.
+    const fresh = await storage.get<Goal>('goals', editingGoal.id);
+    const base = fresh ?? originalGoal ?? editingGoal;
+    const oldParentId = base.parentId ?? null;
 
     await storage.put('goals', {
-      ...editingGoal,
+      ...base,
       title: editingGoal.title.trim(),
+      category: editingGoal.category,
+      targetDate: editingGoal.targetDate || undefined,
+      description: editingGoal.description || undefined,
       level: effectiveLevel,
-      parentId: parentGoal?.id || null,
-      order: parsedOrder,
+      parentId: newParentId,
+      // Drop the previous primary parent from the multi-parent list so the goal no longer
+      // rolls up into a branch it was moved out of.
+      parentIds: (base.parentIds || []).filter(id => id !== oldParentId),
+      order: hasOrder ? Number(editingGoal.order) : undefined,
       updatedAt: Date.now()
     });
 
@@ -1187,19 +1377,25 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
   const handleSaveMentor = async (e: React.FormEvent) => {
     e.preventDefault();
-    const reserveValues = [Number(survivalReserve), Number(emergencyReserve), Number(dailyBurn), Number(savingGoal)];
-    if (reserveValues.some(value => !Number.isFinite(value) || value < 0)) {
-      onSuccess('Reserve targets, daily burn, and annual savings goal must be zero or greater.');
+    const parseNumber = (value: string) => {
+      const trimmed = value.trim();
+      return trimmed === '' ? Number.NaN : Number(trimmed);
+    };
+    const parsedValues = [survivalReserve, emergencyReserve, dailyBurn, savingGoal].map(parseNumber);
+    if (parsedValues.some(value => !Number.isFinite(value) || value < 0)) {
+      reportError('Reserve targets, daily burn, and the annual savings goal must be numbers zero or greater.');
       return;
     }
+    const [survival, emergency, burn, annualGoal] = parsedValues;
+
     const appSettings = (await storage.getSingleton<any>('appSettings')) || {};
     const updatedMentor: MentorProfile = {
       mission: mentorMission,
-      survivalReserve: Number(survivalReserve),
-      emergencyReserve: Number(emergencyReserve),
-      dailyBurn: Number(dailyBurn),
-      monthlyBurn: Number(dailyBurn) * 30,
-      savingGoalAmount: Number(savingGoal),
+      survivalReserve: survival,
+      emergencyReserve: emergency,
+      dailyBurn: burn,
+      monthlyBurn: burn * 30,
+      savingGoalAmount: annualGoal,
       updatedAt: Date.now()
     };
     appSettings.mentor = updatedMentor;
@@ -1212,7 +1408,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     if (!deleteTarget) return;
 
     if (deleteTarget.store === 'milestones') {
-      const ms = milestones.find(m => m.id === deleteTarget.id);
+      const ms = await storage.get<Milestone>('milestones', deleteTarget.id);
       await storage.delete('milestones', deleteTarget.id);
       if (ms?.goalId) {
         await syncGoalProgressFromMilestones(ms.goalId);
@@ -1233,6 +1429,27 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       };
       findDescendants(deleteTarget.id);
 
+      // Unlink records that point at the deleted subtree instead of leaving dangling goalIds.
+      const orphanMilestones = milestones.filter(m => toDeleteIds.has(m.goalId));
+      const orphanStrategies = strategies.filter(s => toDeleteIds.has(s.goalId));
+      const orphanKpis = kpis.filter(k => k.goalId ? toDeleteIds.has(k.goalId) : false);
+      const orphanTasks = tasks.filter(t => t.goalId ? toDeleteIds.has(t.goalId) : false);
+      const unlinkStamp = Date.now();
+      await Promise.all([
+        orphanMilestones.length > 0
+          ? storage.bulkPut('milestones', orphanMilestones.map(m => ({ ...m, goalId: '', updatedAt: unlinkStamp })))
+          : Promise.resolve(),
+        orphanStrategies.length > 0
+          ? storage.bulkPut('strategies', orphanStrategies.map(s => ({ ...s, goalId: '', updatedAt: unlinkStamp })))
+          : Promise.resolve(),
+        orphanKpis.length > 0
+          ? storage.bulkPut('kpis', orphanKpis.map(k => ({ ...k, goalId: undefined, updatedAt: unlinkStamp })))
+          : Promise.resolve(),
+        orphanTasks.length > 0
+          ? storage.bulkPut('tasks', orphanTasks.map(t => ({ ...t, goalId: null, updatedAt: unlinkStamp })))
+          : Promise.resolve()
+      ]);
+
       for (const id of toDeleteIds) {
         await storage.delete('goals', id);
       }
@@ -1242,7 +1459,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       if (deletedGoal?.parentId && !toDeleteIds.has(deletedGoal.parentId)) {
         await recalculateGoalAggregateProgress(deletedGoal.parentId);
       }
-      onSuccess(`✓ Removed "${deleteTarget.name}" and linked sub-goals`);
+
+      const unlinkedCount = orphanMilestones.length + orphanStrategies.length + orphanKpis.length + orphanTasks.length;
+      const removedSubGoals = toDeleteIds.size - 1;
+      const removedParts = [`"${deleteTarget.name}"`];
+      if (removedSubGoals > 0) removedParts.push(`${removedSubGoals} sub-goal(s)`);
+      if (unlinkedCount > 0) removedParts.push(`${unlinkedCount} linked item(s) unlinked`);
+      onSuccess(`✓ Removed ${removedParts.join(' + ')}`);
       setDeleteTarget(null);
       onRefresh();
       return;
@@ -1253,6 +1476,25 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     setDeleteTarget(null);
     onRefresh();
   };
+
+  // Explicit consequence text for the confirmation modal (sub-goals removed, links unlinked).
+  const deleteImpact = useMemo(() => {
+    if (!deleteTarget) return '';
+    if (deleteTarget.store !== 'goals') return 'This action cannot be undone.';
+    const ids = new Set<string>([deleteTarget.id, ...getDescendantIds(deleteTarget.id)]);
+    const subGoalCount = ids.size - 1;
+    const linkedCount =
+      milestones.filter(m => ids.has(m.goalId)).length +
+      strategies.filter(s => ids.has(s.goalId)).length +
+      kpis.filter(k => Boolean(k.goalId) && ids.has(k.goalId!)).length +
+      tasks.filter(t => Boolean(t.goalId) && ids.has(t.goalId!)).length;
+    const parts: string[] = [];
+    if (subGoalCount > 0) parts.push(`${subGoalCount} sub-goal(s) will also be removed`);
+    if (linkedCount > 0) parts.push(`${linkedCount} linked item(s) will be unlinked (not deleted)`);
+    return parts.length > 0
+      ? `${parts.join(' and ')}. This action cannot be undone.`
+      : 'This action cannot be undone.';
+  }, [deleteTarget, goals, milestones, strategies, kpis, tasks]);
 
   const getGoalTitleById = (id?: string) => {
     if (!id) return 'Independent';
@@ -1270,6 +1512,24 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           Goals & Strategy
         </h1>
       </div>
+
+      {/* Validation / storage error banner (local, because onSuccess is a success channel) */}
+      {formError && (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-3 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+        >
+          <span className="min-w-0 break-words">{formError}</span>
+          <button
+            type="button"
+            onClick={() => setFormError(null)}
+            aria-label="Dismiss error"
+            className="shrink-0 rounded-md p-0.5 text-rose-500 hover:bg-rose-100 hover:text-rose-700 dark:hover:bg-rose-900/60"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Capital Position Dashboard */}
       <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -1324,11 +1584,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <TrendingUp className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {hasSavedDailyBurn ? `NPR ${Number(dailyBurn).toLocaleString('en-IN')}/d` : 'Not set'}
+            {hasSavedDailyBurn ? `NPR ${savedDailyBurn.toLocaleString('en-IN')}/d` : 'Not set'}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
             {hasSavedDailyBurn
-              ? `NPR ${(Number(dailyBurn) * 30).toLocaleString('en-IN')}/mo`
+              ? `NPR ${(savedDailyBurn * 30).toLocaleString('en-IN')}/mo`
               : 'Enter an estimate in Mentor & Reserves'}
           </div>
         </div>
@@ -1336,12 +1596,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
       {/* Delayed Tasks Alert Banner in GoalsView */}
       {(() => {
-        const delayedTasksCount = tasks.filter(t => !t.done && computeItemDelay(t).isDelayed).length;
-        const delayedMilestonesCount = milestones.filter(m => m.status !== 'completed' && (m.progress || 0) < 100 && computeItemDelay({ dueDate: m.dueDate, status: m.status, progress: m.progress }).isDelayed).length;
-        const delayedProjectsCount = workProjects.filter(p => p.status !== 'Completed' && computeItemDelay({ ...p, dueAt: p.due }).isDelayed).length;
-        const delayedRoutinesCount = routines.filter(r => computeItemDelay(r).isDelayed).length;
-        const totalDelays = delayedTasksCount + delayedMilestonesCount + delayedProjectsCount + delayedRoutinesCount;
-
         if (totalDelays > 0 && activeTab !== 'timeline') {
           return (
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border-2 border-rose-500/40 bg-gradient-to-r from-rose-500/15 via-rose-500/10 to-amber-500/15 p-4 dark:border-rose-900/60 dark:bg-rose-950/30">
@@ -1357,7 +1611,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     {totalDelays} {totalDelays === 1 ? 'item is delayed' : 'items are delayed'} across Deliverables, Milestones, Routines, and Tasks!
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
-                    {delayedTasksCount} tasks, {delayedMilestonesCount} milestones, {delayedProjectsCount} projects, {delayedRoutinesCount} routines behind schedule. Open timeline for Task Genesis & Alarms.
+                    {delayCounts.tasks} tasks, {delayCounts.milestones} milestones, {delayCounts.projects} projects, {delayCounts.routines} routines behind schedule. Open timeline for Task Genesis & Alarms.
                   </p>
                 </div>
               </div>
@@ -1380,29 +1634,21 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
         <SlideTabs
           activeId={activeTab}
-          onChange={(id) => setActiveTab(id as any)}
-          tabs={(() => {
-            const delayedTasksCount = tasks.filter(t => !t.done && computeItemDelay(t).isDelayed).length;
-            const delayedMilestonesCount = milestones.filter(m => m.status !== 'completed' && (m.progress || 0) < 100 && computeItemDelay({ dueDate: m.dueDate, status: m.status, progress: m.progress }).isDelayed).length;
-            const delayedProjectsCount = workProjects.filter(p => p.status !== 'Completed' && computeItemDelay({ ...p, dueAt: p.due }).isDelayed).length;
-            const delayedRoutinesCount = routines.filter(r => computeItemDelay(r).isDelayed).length;
-            const totalDelays = delayedTasksCount + delayedMilestonesCount + delayedProjectsCount + delayedRoutinesCount;
-
-            return [
-              {
-                id: 'timeline',
-                label: 'Timeline & Plan',
-                shortLabel: 'Timeline',
-                delayed: totalDelays
-              },
-              { id: 'goals', label: 'Strategic Goals', shortLabel: 'Goals', badge: goals.length },
-              { id: 'strategies', label: 'Strategies', badge: strategies.length },
-              { id: 'milestones', label: 'Milestones', badge: milestones.length },
-              { id: 'kpis', label: 'KPIs', badge: kpis.length },
-              { id: 'missions', label: 'Missions', badge: missions.length },
-              { id: 'mentor', label: 'Mentor & Reserves', shortLabel: 'Mentor' }
-            ];
-          })()}
+          onChange={(id) => setActiveTab(id as GoalsTab)}
+          tabs={[
+            {
+              id: 'timeline',
+              label: 'Timeline & Plan',
+              shortLabel: 'Timeline',
+              delayed: totalDelays
+            },
+            { id: 'goals', label: 'Strategic Goals', shortLabel: 'Goals', badge: goals.length },
+            { id: 'strategies', label: 'Strategies', badge: strategies.length },
+            { id: 'milestones', label: 'Milestones', badge: milestones.length },
+            { id: 'kpis', label: 'KPIs', badge: kpis.length },
+            { id: 'missions', label: 'Missions', badge: missions.length },
+            { id: 'mentor', label: 'Mentor & Reserves', shortLabel: 'Mentor' }
+          ]}
         />
       </div>
 
@@ -1443,7 +1689,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           <div className="flex flex-col gap-6 w-full">
             {/* Add Goal Form (Single Column - Upper) */}
             {goalFormOpen && <div ref={goalFormRef} className="w-full flex flex-col">
-              <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex-1  border-slate-200/80 bg-white p-4 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
                 <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
                   <div className="flex min-w-0 flex-1 items-start gap-2">
                     <Plus className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
@@ -1479,14 +1725,14 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
                       Hierarchy Level (5 Branches)
                     </label>
-                    <div className="grid grid-cols-5 gap-1">
+                    <div className="grid grid-cols-5 gap-2">
                       <button
                         type="button"
                         onClick={() => selectGoalLevel(1)}
-                        className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 1
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                         title="Main Goal (Level 1)"
                       >
@@ -1496,10 +1742,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => selectGoalLevel(2)}
-                        className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 2
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                         title="Sub Goal (Level 2)"
                       >
@@ -1509,10 +1755,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => selectGoalLevel(3)}
-                        className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 3
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                         title="Micro Goal (Level 3)"
                       >
@@ -1522,10 +1768,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => selectGoalLevel(4)}
-                        className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 4
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                         title="Nano Goal (Level 4)"
                       >
@@ -1535,10 +1781,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => selectGoalLevel(5)}
-                        className={`rounded-xl px-1 py-2 text-center text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 5
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                         title="Atomic Goal (Level 5)"
                       >
@@ -1722,7 +1968,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
             {/* Strategic Goals Portfolio (Single Column - Lower) */}
             <div className="w-full flex flex-col">
-              <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="goal-portfolio-shell flex-1 rounded-2xl border border-slate-200/90 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900/90">
                 <div className="space-y-3 border-b border-slate-100 pb-3.5 dark:border-slate-800">
                   {/* Top Row: Title on Left, Hierarchy Counts on Right (Full Width) */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full">
@@ -1734,88 +1980,89 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     </div>
 
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 rounded-xl bg-slate-50 px-2.5 sm:px-3 py-1 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 text-[11px] sm:text-xs">
-                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{mainGoals.length} Main</span>
-                        <span className="text-slate-300 dark:text-slate-600">·</span>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{subGoals.length} Sub</span>
-                        <span className="text-slate-300 dark:text-slate-600">·</span>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{microGoals.length} Micro</span>
-                        <span className="text-slate-300 dark:text-slate-600">·</span>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{nanoGoals.length} Nano</span>
-                        <span className="text-slate-300 dark:text-slate-600">·</span>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{atomicGoals.length} Atomic</span>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs">
+                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{mainGoals.length} Main</span>
+                      <span className="text-amber-300 dark:text-amber-700">·</span>
+                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{subGoals.length} Sub</span>
+                      <span className="text-amber-300 dark:text-amber-700">·</span>
+                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{microGoals.length} Micro</span>
+                      <span className="text-amber-300 dark:text-amber-700">·</span>
+                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{nanoGoals.length} Nano</span>
+                      <span className="text-amber-300 dark:text-amber-700">·</span>
+                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{atomicGoals.length} Atomic</span>
                       </div>
-                      <button
-                        type="button"
-                        aria-expanded={goalFormOpen}
-                        onClick={() => setGoalFormOpen(open => !open)}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        <span className="hidden md:inline">
-                          {goalFormOpen ? 'Close Goal Form' : goalLevel === 1 ? 'Add Strategic Main Goal' : goalLevel === 2 ? 'Add Sub Goal' : goalLevel === 3 ? 'Add Micro Goal' : goalLevel === 4 ? 'Add Nano Goal' : 'Add Atomic Goal'}
-                        </span>
-                        <span className="md:hidden">{goalFormOpen ? 'Close' : 'Add Goal'}</span>
-                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${goalFormOpen ? 'rotate-180' : ''}`} />
-                      </button>
+                      <FormDisclosureToggle
+                        label={goalLevel === 1 ? 'Add Strategic Main Goal' : goalLevel === 2 ? 'Add Sub Goal' : goalLevel === 3 ? 'Add Micro Goal' : goalLevel === 4 ? 'Add Nano Goal' : 'Add Atomic Goal'}
+                        openLabel="Close Goal Form"
+                        compactLabel="Add Goal"
+                        compactOpenLabel="Close"
+                        isOpen={goalFormOpen}
+                        onToggle={() => setGoalFormOpen(open => !open)}
+                        icon={<Plus className="h-3.5 w-3.5" />}
+                      />
                     </div>
                   </div>
 
                   {/* Bottom Row: Tree/Flat Toggle + Level Filter Stretched Full Width End-to-End */}
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 w-full">
+                  <div className="goal-portfolio-controls flex flex-wrap items-center gap-x-5 gap-y-1 w-full">
                     {/* Tree View / Flat View Toggle (4 cols) */}
-                    <div className="sm:col-span-4 grid grid-cols-2 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1 text-xs dark:border-slate-700 dark:bg-slate-800 w-full">
+                    <div className="flex items-center justify-start gap-2 text-xs">
                       <button
                         type="button"
                         onClick={() => setGoalViewMode('tree')}
-                        className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 font-semibold transition-all cursor-pointer whitespace-nowrap w-full ${
+                        className={`flex items-center justify-center px-1.5 py-1.5 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalViewMode === 'tree'
-                            ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-700 dark:text-white'
-                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
-                        <FolderTree className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
                         <span>Tree</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setGoalViewMode('flat')}
-                        className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 font-semibold transition-all cursor-pointer whitespace-nowrap w-full ${
+                        className={`flex items-center justify-center px-1.5 py-1.5 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalViewMode === 'flat'
-                            ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-700 dark:text-white'
-                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
-                        <ListTree className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
                         <span>Flat</span>
                       </button>
                     </div>
 
                     {/* Level Filter: All | Main | Sub | Micro | Nano | Atomic (8 cols) */}
-                    <div className="sm:col-span-8 grid grid-cols-6 gap-0.5 sm:gap-1 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1 dark:border-slate-700 dark:bg-slate-800 text-xs w-full">
+                    <div className="flex items-center justify-start gap-1 overflow-x-auto text-xs">
                       {(['all', '1', '2', '3', '4', '5'] as const).map(lvl => (
-                        <button
-                          key={lvl}
-                          type="button"
-                          onClick={() => setLevelFilter(lvl)}
-                          className={`flex items-center justify-center rounded-lg px-1 sm:px-1.5 py-1.5 text-[10px] sm:text-xs font-semibold transition-all cursor-pointer truncate w-full text-center ${
-                            levelFilter === lvl
-                              ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-700 dark:text-white'
-                              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                          }`}
-                        >
-                          {lvl === 'all'
-                            ? 'All'
-                            : lvl === '1'
-                            ? 'Main'
-                            : lvl === '2'
-                            ? 'Sub'
-                            : lvl === '3'
-                            ? 'Micro'
-                            : lvl === '4'
-                            ? 'Nano'
-                            : 'Atomic'}
-                        </button>
+                        <React.Fragment key={lvl}>
+                          {lvl !== 'all' && <span aria-hidden="true" className="shrink-0 text-amber-300 dark:text-amber-700">·</span>}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLevelFilter(lvl);
+                              // The tree view only renders Level 1 branches, so a deeper filter
+                              // would show an empty tree. Switch to the flat list instead.
+                              if (lvl !== 'all' && lvl !== '1') setGoalViewMode('flat');
+                            }}
+                            className={`shrink-0 px-1 py-1.5 text-[10px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                              levelFilter === lvl
+                                ? 'text-amber-700 dark:text-amber-300'
+                                : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                            }`}
+                          >
+                            {lvl === 'all'
+                              ? 'All'
+                              : lvl === '1'
+                              ? 'Main'
+                              : lvl === '2'
+                              ? 'Sub'
+                              : lvl === '3'
+                              ? 'Micro'
+                              : lvl === '4'
+                              ? 'Nano'
+                              : 'Atomic'}
+                          </button>
+                        </React.Fragment>
                       ))}
                     </div>
                   </div>
@@ -1823,13 +2070,24 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                 <div className="mt-4 space-y-4">
                   {goals.length === 0 ? (
-                    <div className="py-12 text-center text-xs text-slate-400">
-                      No strategic goals created yet. Use the form to register your first Main Goal.
-                    </div>
+                    <EmptyState
+                      icon={Target}
+                      title="No strategic goals yet"
+                      hint="Register your first Main Goal with the form above - sub-goals, milestones and progress rollups build from there."
+                    />
                   ) : goalViewMode === 'tree' ? (
                     /* 3-TIER HIERARCHY TREE VIEW */
-                    mainGoals
-                      .filter(m => levelFilter === 'all' || levelFilter === '1')
+                    <>
+                    {mainGoals.filter(() => levelFilter === 'all' || levelFilter === '1').length === 0 && (
+                      <EmptyState
+                        icon={FolderTree}
+                        compact
+                        title="No goals match this filter"
+                        hint="Switch to Flat view or pick 'All' to see the full portfolio."
+                      />
+                    )}
+                    {mainGoals
+                      .filter(() => levelFilter === 'all' || levelFilter === '1')
                       .map((mainGoal, mainIndex) => {
                         const childSubGoals = getSubGoalsOf(mainGoal.id);
                         const isMainCollapsed = Boolean(collapsedGoalIds[mainGoal.id]);
@@ -1842,7 +2100,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         return (
                           <div
                             key={mainGoal.id}
-                            className="group rounded-2xl border border-slate-200/90 bg-white p-2.5 sm:p-5 shadow-xs hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700 transition-all space-y-2.5 sm:space-y-3 min-w-0"
+                            className="goal-tree-card goal-tree-card--main group rounded-2xl border border-slate-200/90 bg-white p-2.5 sm:p-5 shadow-xs hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700 transition-all space-y-2.5 sm:space-y-3 min-w-0"
                           >
                             {/* LEVEL 1: MAIN GOAL HEADER */}
                             <div className="space-y-1.5 min-w-0">
@@ -1930,6 +2188,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   {mainGoal.description}
                                 </p>
                               )}
+                              </div>
                             </div>
 
                             {/* MAIN GOAL LINKED PROGRESS BAR & REAL-TIME BREAKDOWN */}
@@ -1976,7 +2235,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   return (
                                     <div
                                       key={subGoal.id}
-                                      className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-2 sm:p-3.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-2 sm:space-y-2.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
+                                      className="goal-tree-card goal-tree-card--sub rounded-xl border border-slate-200/80 bg-slate-50/50 p-2 sm:p-3.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-2 sm:space-y-2.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                     >
                                       {/* Sub Goal Header */}
                                       <div className="space-y-1 min-w-0">
@@ -2099,7 +2358,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                             return (
                                               <div
                                                 key={microGoal.id}
-                                                className="rounded-lg border border-slate-200/80 bg-slate-50/50 p-2 sm:p-3 dark:border-slate-800 dark:bg-slate-800/30 space-y-1.5 sm:space-y-2 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
+                                                className="goal-tree-card goal-tree-card--micro rounded-lg border border-slate-200/80 bg-slate-50/50 p-2 sm:p-3 dark:border-slate-800 dark:bg-slate-800/30 space-y-1.5 sm:space-y-2 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                               >
                                                 {/* Micro Goal Header */}
                                                 <div className="space-y-1 min-w-0">
@@ -2215,7 +2474,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                           return (
                                                             <div
                                                               key={nanoGoal.id}
-                                                              className="rounded-lg border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-1 sm:space-y-1.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
+                                                              className="goal-tree-card goal-tree-card--nano rounded-lg border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-1 sm:space-y-1.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                                             >
                                                               {/* Nano Goal Header */}
                                                               <div className="space-y-1 min-w-0">
@@ -2329,27 +2588,31 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                         return (
                                                                           <div
                                                                             key={atomicGoal.id}
-                                                                            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 rounded-md border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/30 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all min-w-0"
+                                                                            className="goal-tree-card goal-tree-card--atomic group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 rounded-md border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/30 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all min-w-0"
                                                                           >
                                                                             <div className="flex items-start sm:items-center gap-2 min-w-0 w-full sm:flex-1">
-                                                                              <button
-                                                                                type="button"
-                                                                                onClick={() =>
-                                                                                  handleProgressChange(
-                                                                                    atomicGoal,
-                                                                                    atomicGoal.progress >= 100 ? 0 : 100,
-                                                                                    true
-                                                                                  )
-                                                                                }
-                                                                                className={`mt-0.5 sm:mt-0 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
-                                                                                  atomicGoal.progress >= 100
-                                                                                    ? 'border-indigo-600 bg-indigo-600 text-white'
-                                                                                    : 'border-slate-300 bg-white text-transparent hover:border-indigo-500 dark:border-slate-600 dark:bg-slate-800'
-                                                                                }`}
-                                                                                title={atomicGoal.progress >= 100 ? 'Mark Incomplete' : 'Mark Complete (100%)'}
-                                                                              >
-                                                                                ✓
-                                                                              </button>
+                                                                              {/* Manual completion only makes sense for atomic goals with no productive
+                                                                                  linked items; otherwise progress is aggregated from those items. */}
+                                                                              {atomicBreakdown.progressItemCount === 0 && (
+                                                                                <button
+                                                                                  type="button"
+                                                                                  onClick={() =>
+                                                                                    handleProgressChange(
+                                                                                      atomicGoal,
+                                                                                      atomicGoal.progress >= 100 ? 0 : 100,
+                                                                                      true
+                                                                                    )
+                                                                                  }
+                                                                                  className={`mt-0.5 sm:mt-0 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
+                                                                                    atomicGoal.progress >= 100
+                                                                                      ? 'border-indigo-600 bg-indigo-600 text-white'
+                                                                                      : 'border-slate-300 bg-white text-transparent hover:border-indigo-500 dark:border-slate-600 dark:bg-slate-800'
+                                                                                  }`}
+                                                                                  title={atomicGoal.progress >= 100 ? 'Mark Incomplete' : 'Mark Complete (100%)'}
+                                                                                >
+                                                                                  ✓
+                                                                                </button>
+                                                                              )}
                                                                               <div className="min-w-0 flex-1">
                                                                                 <div
                                                                                   className={`text-xs font-semibold leading-snug break-words ${
@@ -2372,7 +2635,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                             </div>
 
                                                                             <div className="flex items-center justify-between sm:justify-end gap-1.5 shrink-0 w-full sm:w-auto pt-1.5 sm:pt-0 border-t border-slate-200 sm:border-t-0 dark:border-slate-800">
-                                                                              {atomicBreakdown.hasLinkedItems ? (
+                                                                              {atomicBreakdown.progressItemCount > 0 ? (
                                                                                 <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-slate-600 dark:text-slate-400 shrink-0 whitespace-nowrap">
                                                                                   <span>{atomicGoal.progress}%</span>
                                                                                 </span>
@@ -2461,12 +2724,21 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                               </div>
                             )}
                           </div>
-                          </div>
                         );
-                      })
+                      })}
+                    </>
                   ) : (
                     /* FLAT LIST VIEW */
-                    flatHierarchyGoals
+                    <>
+                    {flatHierarchyGoals.filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter).length === 0 && (
+                      <EmptyState
+                        icon={ListTree}
+                        compact
+                        title="No goals at this level yet"
+                        hint="Pick another level or create one from the form above."
+                      />
+                    )}
+                    {flatHierarchyGoals
                       .filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter)
                       .map(g => {
                         const lvl = getGoalLevel(g);
@@ -2549,7 +2821,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                             </div>
                           </div>
                         );
-                      })
+                      })}
+                    </>
                   )}
                 </div>
               </div>
@@ -2560,15 +2833,18 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
       {/* Tab 2: Strategies & Tactics (New & Fully Implemented!) */}
       {activeTab === 'strategies' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Add Strategy Form (5 cols) */}
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
-              <Zap className="h-4 w-4 text-amber-500" />
-              <span>Declare Tactical Strategy</span>
-            </h2>
-
-            <FormDisclosure label="Create a strategy">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          {/* Add Strategy Form (6 cols) */}
+          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+            <FormDisclosure
+              label="Create a strategy"
+              header={
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                  <Zap className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span>Declare Tactical Strategy</span>
+                </h2>
+              }
+            >
             <form onSubmit={handleAddStrategy} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
@@ -2642,8 +2918,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          {/* Strategies List (7 cols) */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          {/* Strategies List (6 cols) */}
+          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
               <span>Operational Strategies ({strategies.length})</span>
               <span className="text-[10px] text-slate-400 font-normal">Click status pill to cycle</span>
@@ -2651,9 +2927,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
             <div className="mt-4 space-y-3">
               {strategies.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">
-                  No strategies defined yet. Connect a tactic to your strategic goals.
-                </div>
+                <EmptyState
+                  icon={Layers}
+                  compact
+                  title="No strategies yet"
+                  hint="Connect a tactic to your strategic goals to map execution."
+                />
               ) : (
                 [...strategies].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(s => (
                   <div key={s.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 group transition-all hover:border-slate-200 dark:hover:border-slate-700 space-y-2">
@@ -2705,12 +2984,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
       {/* Tab 3: Milestones */}
       {activeTab === 'milestones' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Add Milestone to Strategic Goal
-            </h2>
-            <FormDisclosure label="Add a milestone">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+            <FormDisclosure
+              label="Add a milestone"
+              header={
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Add Milestone to Strategic Goal
+                </h2>
+              }
+            >
             <form onSubmit={handleAddMilestone} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Milestone Title</label>
@@ -2759,13 +3042,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Milestones Overview ({milestones.length})
             </h2>
             <div className="mt-4 space-y-2.5">
               {milestones.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No milestones yet.</div>
+                <EmptyState icon={Layers} compact title="No milestones yet" hint="Milestones break a goal into phased, progress-tracking steps." />
               ) : (
                 [...milestones].sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
                   <div key={m.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center gap-3 group">
@@ -2820,15 +3103,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
       {/* Tab 4: KPIs */}
       {activeTab === 'kpis' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Register Quantitative KPI
-            </h2>
-            <p className="mt-2 text-[10px] text-slate-400">
-              KPI current/target tracks goal progress only; it does not create a deposit or change Finance balances.
-            </p>
-            <FormDisclosure label="Add a KPI">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+            <FormDisclosure
+              label="Add a KPI"
+              header={
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Register Quantitative KPI
+                </h2>
+              }
+            >
             <form onSubmit={handleAddKPI} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">KPI Metric Name</label>
@@ -2902,13 +3186,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Tracked Metrics ({kpis.length})
             </h2>
             <div className="mt-4 space-y-3">
               {kpis.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No KPIs registered yet.</div>
+                <EmptyState icon={Target} compact title="No KPIs yet" hint="Register measurable KPIs to track goal success." />
               ) : (
                 [...kpis].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(k => {
                   const target = Number(k.target) || 1;
@@ -2974,12 +3258,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
       {/* Tab 5: Missions */}
       {activeTab === 'missions' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-5 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Declare Mission / Monthly Focus
-            </h2>
-            <FormDisclosure label="Create a mission">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+            <FormDisclosure
+              label="Create a mission"
+              header={
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Declare Mission / Monthly Focus
+                </h2>
+              }
+            >
             <form onSubmit={handleAddMission} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Mission Title</label>
@@ -3034,13 +3322,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Active Missions ({missions.length})
             </h2>
             <div className="mt-4 space-y-3">
               {missions.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">No active missions declared.</div>
+                <EmptyState icon={Flame} compact title="No active missions" hint="Declare a mission to give this period a sharpened focus." />
               ) : (
                 [...missions].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
                   <div key={m.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 group">
@@ -3077,15 +3365,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
       {/* Tab 6: Mentor & Reserves */}
       {activeTab === 'mentor' && (
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 max-w-2xl">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-            Mentor Strategy & Capital Preservation
-          </h2>
-          <p className="mt-2 text-[10px] text-slate-400">
-            Reserve amounts below are planning targets, not extra assets. Runway uses account cash plus flexible Finance reserves at your entered daily burn; it excludes fixed deposits and is not auto-derived from expenses.
-          </p>
-
-          <FormDisclosure label="Edit mentor strategy and reserves">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 max-w-2xl">
+          <FormDisclosure
+            label="Edit mentor strategy and reserves"
+            header={
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Mentor Strategy & Capital Preservation
+                </h2>
+              </div>
+            }
+          >
           <form onSubmit={handleSaveMentor} className="mt-4 space-y-4">
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
@@ -3110,7 +3400,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   min="0"
                   step="0.01"
                   value={survivalReserve}
-                  onChange={e => setSurvivalReserve(Number(e.target.value))}
+                  onChange={e => setSurvivalReserve(e.target.value)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -3124,10 +3414,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   min="0"
                   step="0.01"
                   value={dailyBurn}
-                  onChange={e => setDailyBurn(Number(e.target.value))}
+                  onChange={e => setDailyBurn(e.target.value)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
-                <p className="mt-1 text-[10px] text-slate-400">Manually entered estimate used for runway; not auto-calculated from expenses.</p>
               </div>
             </div>
 
@@ -3141,7 +3430,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   min="0"
                   step="0.01"
                   value={emergencyReserve}
-                  onChange={e => setEmergencyReserve(Number(e.target.value))}
+                  onChange={e => setEmergencyReserve(e.target.value)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -3155,10 +3444,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   min="0"
                   step="0.01"
                   value={savingGoal}
-                  onChange={e => setSavingGoal(Number(e.target.value))}
+                  onChange={e => setSavingGoal(e.target.value)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
-                <p className="mt-1 text-[10px] text-slate-400">Planning target only; track actual contributions in Finance or with a KPI.</p>
               </div>
             </div>
 
@@ -3175,12 +3463,21 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
       {/* EDIT GOAL MODAL */}
       {editingGoal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 space-y-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs"
+          onClick={() => setEditingGoal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 space-y-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-goal-title"
+            onClick={event => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Edit2 className="h-4 w-4 text-indigo-600" />
-                <span>Edit Goal Details</span>
+                <span id="edit-goal-title">Edit Goal Details</span>
               </h3>
               <button
                 type="button"
@@ -3213,11 +3510,14 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   <select
                     value={getGoalLevel(editingGoal)}
                     onChange={e => {
-                      const lvl = Number(e.target.value) as 1 | 2 | 3 | 4 | 5;
-                      const descendants = getDescendantIds(editingGoal.id);
+                      const lvl = Number(e.target.value) as GoalLevel;
+                      if (lvl > 1 && eligibleParentCountForLevel(lvl) === 0) {
+                        reportError(`Create a Level ${lvl - 1} goal first - Level ${lvl} needs a parent.`);
+                        return;
+                      }
                       const validParents = sortGoals(goals.filter(g =>
                         g.id !== editingGoal.id &&
-                        !descendants.has(g.id) &&
+                        !editingDescendantIds.has(g.id) &&
                         getGoalLevel(g) === lvl - 1
                       ));
                       const currentParent = validParents.find(g => g.id === editingGoal.parentId);
@@ -3227,14 +3527,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         parentId: lvl === 1 ? null : (currentParent || validParents[0])?.id || null
                       });
                     }}
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50"
                   >
                     <option value={1}>Level 1: Main Goal</option>
-                    <option value={2}>Level 2: Sub Goal</option>
-                    <option value={3}>Level 3: Micro Goal</option>
-                    <option value={4}>Level 4: Nano Goal</option>
-                    <option value={5}>Level 5: Atomic Goal</option>
+                    <option value={2} disabled={eligibleParentCountForLevel(2) === 0}>Level 2: Sub Goal</option>
+                    <option value={3} disabled={eligibleParentCountForLevel(3) === 0}>Level 3: Micro Goal</option>
+                    <option value={4} disabled={eligibleParentCountForLevel(4) === 0}>Level 4: Nano Goal</option>
+                    <option value={5} disabled={eligibleParentCountForLevel(5) === 0}>Level 5: Atomic Goal</option>
                   </select>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Level is derived from the parent you choose below.
+                  </p>
                 </div>
 
                 <div>
@@ -3256,7 +3559,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     }}
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50"
                   >
-                    <option value="">None (Independent Main Goal)</option>
+                    {getGoalLevel(editingGoal) === 1 && (
+                      <option value="">None (Independent Main Goal)</option>
+                    )}
                     {sortGoals(goals.filter(g =>
                       g.id !== editingGoal.id &&
                       !editingDescendantIds.has(g.id) &&
@@ -3352,7 +3657,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       <ConfirmModal
         isOpen={Boolean(deleteTarget)}
         title="Confirm Removal"
-        message={deleteTarget ? `Are you sure you want to remove "${deleteTarget.name}"?` : ''}
+        message={deleteTarget ? `Are you sure you want to remove "${deleteTarget.name}"? ${deleteImpact}` : ''}
         cloudNotice="With Google Drive Auto-Sync enabled and online, deleting this goal or milestone updates your Drive backup."
         confirmText="Remove"
         cancelText="Cancel"

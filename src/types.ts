@@ -1026,8 +1026,9 @@ export interface AppState {
     provider?: 'local' | 'google';
     avatarUrl?: string;
   };
-  themeMode: 'light' | 'dark';
+  themeMode: 'light' | 'dark' | 'system';
   accentColor: string;
+  appearance?: import('./lib/appearance').AppearancePreferences;
   notificationsEnabled: boolean;
   storageEstimate?: {
     usage: number;

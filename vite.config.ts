@@ -100,7 +100,7 @@ export default defineConfig(() => {
       modulePreload: isSingleFile ? (false as const) : undefined,
       rollupOptions: {
         output: {
-          ...(isSingleFile ? { inlineDynamicImports: true } : {}),
+          ...(isSingleFile ? { codeSplitting: false } : {}),
           chunkFileNames: 'assets/[name]-[hash].js',
           entryFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash].[ext]',

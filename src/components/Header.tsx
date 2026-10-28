@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Zap, Moon, Sun, Calendar, ChevronDown, Clock } from 'lucide-react';
+import { Search, Plus, Zap, Moon, Sun, Calendar, ChevronDown, Clock, Sparkles } from 'lucide-react';
 import { NavModule } from '../types';
 import { adToBs, getTodayIso } from '../lib/nepaliDate';
 import { PWAInstallButton } from './PWAInstallButton';
 import { soundEngine } from '../lib/soundEngine';
+import { OmLogoMark } from './OmLogoMark';
 
 interface HeaderProps {
   activeModule: NavModule;
@@ -14,6 +15,8 @@ interface HeaderProps {
   onOpenVoiceStudio: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  environmentEnabled: boolean;
+  onToggleEnvironment: () => void;
   onOpenMobileMenu: () => void;
   onShowToast?: (msg: string) => void;
 }
@@ -26,8 +29,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenVoiceStudio,
   theme,
   onToggleTheme,
-  onOpenMobileMenu,
-  onShowToast
+  environmentEnabled,
+  onToggleEnvironment,
+  onOpenMobileMenu
 }) => {
   const [bsDateInfo, setBsDateInfo] = useState(() => {
     const adIso = getTodayIso();
@@ -76,6 +80,17 @@ export const Header: React.FC<HeaderProps> = ({
     return () => clearInterval(timer);
   }, [bsDateInfo.adIso]);
 
+  useEffect(() => {
+    if (!isActionsOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsActionsOpen(false);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isActionsOpen]);
+
   const formattedTimeFull = currentTime.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -89,14 +104,14 @@ export const Header: React.FC<HeaderProps> = ({
   });
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full items-center justify-between border-b border-slate-200/80 bg-white/95 px-2 sm:px-3 lg:px-6 shadow-[0_2px_12px_rgb(15_23_42/0.035)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0B0F19]/95 dark:shadow-black/10 gap-1 sm:gap-1.5 lg:gap-3">
+    <header className="command-bar sticky top-0 z-30 flex h-14 sm:h-16 w-full items-center justify-between border-b border-slate-200/80 bg-white/95 px-2 sm:px-3 lg:px-6 shadow-[0_2px_12px_rgb(15_23_42/0.035)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0B0F19]/95 dark:shadow-black/10 gap-1 sm:gap-1.5 lg:gap-3">
       {/* Zone 1: Left - Brand Identity & Nepali BS / Gregorian AD Date (Date is placed where search was) */}
       <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 shrink-0 select-none">
         {/* Mobile & Tablet Hamburger Drawer Trigger */}
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 lg:hidden cursor-pointer shrink-0 transition-colors"
+          className="flex h-9 w-9 items-center justify-center text-indigo-700 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 lg:hidden cursor-pointer shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           aria-label="Open Navigation Menu"
         >
           <span className="text-lg leading-none">☰</span>
@@ -109,11 +124,10 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center gap-1.5 sm:gap-2.5 text-left focus:outline-none group cursor-pointer shrink-0"
           title="Om-LifeOS Dashboard"
         >
-          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 font-serif font-bold text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform text-sm sm:text-base shrink-0">
-            ॐ
-          </div>
-          <span className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white whitespace-nowrap shrink-0 hidden min-[540px]:inline">
-            Om-LifeOS
+          <OmLogoMark className="h-9 w-8 sm:h-10 sm:w-9 group-hover:scale-105 transition-transform shrink-0" />
+          <span className="brand-wordmark hidden md:flex md:flex-col text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white whitespace-nowrap shrink-0">
+            <span>Om-LifeOS</span>
+            <small>Plan · Focus · Manifest</small>
           </span>
         </button>
 
@@ -121,19 +135,19 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenBsModal}
-          className="hidden sm:inline-flex items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/60 px-2.5 lg:px-3 py-1.5 transition-all hover:border-amber-300 hover:bg-white dark:border-amber-900/50 dark:bg-amber-950/20 dark:hover:border-amber-700 dark:hover:bg-slate-800 shrink-0 cursor-pointer shadow-2xs group h-10"
+          className="header-date-chip hidden md:inline-flex items-center gap-2 px-2.5 lg:px-3 py-1.5 transition-colors shrink-0 cursor-pointer group h-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           title={`Nepal Bikram Sambat: ${bsDateInfo.bsIso} | Gregorian: ${bsDateInfo.adIso}. Click for converter.`}
           aria-label="Nepal Bikram Sambat and Gregorian AD Calendar Converter"
         >
-          <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 group-hover:scale-105 transition-transform" />
+          <Calendar className="header-chip-icon h-4 w-4 shrink-0 group-hover:scale-105 transition-transform" />
           <div className="flex min-w-0 flex-col items-start leading-tight">
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-bold tracking-tight">
+              <span className="header-chip-label rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide">
                 BS
               </span>
               <span>{bsDateInfo.bsFormattedNe || bsDateInfo.bsIso}</span>
             </span>
-            <span className="mt-0.5 flex items-center gap-1 text-[9px] font-medium text-slate-500 dark:text-slate-400">
+            <span className="header-chip-subtitle mt-0.5 flex items-center gap-1 text-[9px] font-medium">
               <span className="font-bold uppercase tracking-wide">AD</span>
               <span>{bsDateInfo.adIso}</span>
             </span>
@@ -144,15 +158,15 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenBsModal}
-          className="inline-flex sm:hidden items-center gap-1 rounded-xl border border-amber-200/80 bg-amber-50/60 px-1.5 text-slate-700 transition-all hover:border-amber-400 hover:bg-white dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-slate-200 cursor-pointer shadow-2xs shrink-0 h-9"
+          className="header-date-chip header-date-chip--compact inline-flex md:hidden items-center gap-1 px-1.5 transition-colors shrink-0 cursor-pointer h-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           title={`Nepal BS: ${bsDateInfo.bsIso} | AD: ${bsDateInfo.adIso} (Click to open converter)`}
           aria-label="Nepal Bikram Sambat Date Converter"
         >
-          <Calendar className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-          <span className="hidden min-[360px]:inline rounded bg-amber-100/90 dark:bg-amber-950/80 px-1 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase leading-none">
+          <Calendar className="header-chip-icon h-3.5 w-3.5 shrink-0" />
+          <span className="header-chip-label hidden min-[400px]:inline rounded px-1 py-0.5 text-[10px] font-bold uppercase leading-none">
             BS
           </span>
-          <span className="font-mono text-[10px] font-semibold text-slate-800 dark:text-slate-200 hidden min-[400px]:inline">
+          <span className="header-chip-value font-mono text-[10px] font-semibold hidden min-[400px]:inline">
             {bsDateInfo.bsIso ? bsDateInfo.bsIso.slice(8) : ''}
           </span>
         </button>
@@ -164,7 +178,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenSearch}
-          className="flex lg:hidden h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 bg-slate-50/90 text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:bg-white dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-300 cursor-pointer shadow-2xs shrink-0 transition-all"
+          className="flex lg:hidden h-9 w-9 items-center justify-center text-indigo-700 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           aria-label="Global Search"
           title="Global Search (⌘K / Ctrl+K)"
         >
@@ -175,14 +189,14 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenSearch}
-          className="hidden lg:flex h-9 w-full max-w-md xl:max-w-xl items-center gap-2 rounded-xl border border-slate-200/90 bg-slate-50/90 px-3 text-xs sm:text-sm text-slate-500 transition-all hover:border-indigo-400 hover:bg-white dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-400 dark:hover:border-indigo-500 dark:hover:bg-slate-800 cursor-pointer shadow-2xs group overflow-hidden"
+          className="hidden lg:flex h-9 w-full max-w-md xl:max-w-xl items-center gap-2 px-3 text-xs sm:text-sm text-indigo-800 transition-colors hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer group overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           aria-label="Global Search (Press to search)"
           title="Global Search (⌘K / Ctrl+K)"
         >
-          <Search className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-indigo-500 transition-colors" />
+          <Search className="h-4 w-4 shrink-0 text-indigo-700 dark:text-indigo-300 transition-colors" />
           <span className="truncate hidden xl:inline">Search notes, tasks, finance, goals...</span>
           <span className="truncate inline xl:hidden">Search notes, tasks...</span>
-          <kbd className="ml-auto hidden lg:inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-400 dark:border-slate-700 dark:bg-slate-900 shrink-0">
+          <kbd className="ml-auto hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium text-indigo-700/70 dark:text-indigo-300/70 shrink-0">
             ⌘K
           </kbd>
         </button>
@@ -194,15 +208,15 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => setIs24Hour(prev => !prev)}
-          className="flex h-9 items-center gap-1 sm:gap-2 rounded-xl border border-slate-200/90 bg-slate-50/80 px-1 sm:px-2.5 text-left transition-all hover:border-indigo-400 hover:bg-white dark:border-slate-800 dark:bg-slate-800/80 dark:hover:border-indigo-500 dark:hover:bg-slate-800 shrink-0 cursor-pointer shadow-2xs group"
+          className="header-clock-chip flex h-9 items-center gap-1 sm:gap-2 px-1 sm:px-2.5 text-left transition-colors shrink-0 cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           title={`Live System Clock (${is24Hour ? '24h' : '12h'} - Click to toggle)`}
           aria-label={`Current time ${formattedTimeFull}. Toggle 12/24 hour time format`}
         >
-          <Clock className="hidden min-[360px]:block h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-          <span className="inline sm:hidden font-mono text-[9px] min-[360px]:text-[10px] font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
+          <Clock className="header-chip-icon hidden min-[360px]:block h-3.5 w-3.5 shrink-0" />
+          <span className="header-chip-value inline md:hidden font-mono text-[9px] min-[360px]:text-[10px] font-bold tracking-tight tabular-nums whitespace-nowrap">
             {formattedTimeCompact}
           </span>
-          <span className="hidden font-mono text-[11px] sm:inline sm:text-xs md:text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums whitespace-nowrap">
+          <span className="header-chip-value hidden font-mono text-[11px] md:inline md:text-sm font-bold tracking-tight tabular-nums whitespace-nowrap">
             {formattedTimeFull}
           </span>
         </button>
@@ -212,23 +226,23 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setIsActionsOpen(!isActionsOpen)}
-            className="flex h-9 items-center gap-1 sm:gap-1.5 rounded-xl border border-slate-200 bg-white px-2 sm:px-2.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer shrink-0"
+            className="flex h-9 items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 text-xs font-medium text-indigo-700 transition-colors hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             aria-label="Quick Actions"
             title="Fast Action Shortcuts"
           >
-            <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-            <span className="hidden sm:inline">Actions</span>
-            <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
+            <Zap className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+            <span className="hidden md:inline">Actions</span>
+            <ChevronDown className="h-3 w-3 shrink-0" />
           </button>
 
           {isActionsOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setIsActionsOpen(false)} />
-              <div className="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-900 animate-in fade-in zoom-in-95">
+              <div className="sanctuary-menu-surface absolute right-0 top-full z-50 mt-1.5 w-56 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-800 dark:bg-slate-900 animate-in fade-in zoom-in-95">
                 <button
                   type="button"
                   onClick={() => { onOpenQuickCapture(); setIsActionsOpen(false); }}
-                  className="flex w-full items-center gap-2 rounded-xl bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer mb-1"
+                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer mb-1"
                 >
                   <Plus className="h-3.5 w-3.5" /> Quick Capture
                 </button>
@@ -282,6 +296,18 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="w-0.5 rounded-full bg-indigo-600 dark:bg-indigo-400 wave-bar-4" />
                   </div>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleEnvironment();
+                    setIsActionsOpen(false);
+                  }}
+                  aria-pressed={environmentEnabled}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <Sparkles className={`h-3.5 w-3.5 ${environmentEnabled ? 'text-indigo-500' : 'text-slate-400'}`} />
+                  {environmentEnabled ? 'Disable sanctuary environment' : 'Enable sanctuary environment'}
+                </button>
               </div>
             </>
           )}
@@ -297,7 +323,7 @@ export const Header: React.FC<HeaderProps> = ({
             soundEngine.play('switchToggle');
             onToggleTheme();
           }}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 shrink-0 cursor-pointer"
+          className="flex h-9 w-9 items-center justify-center text-indigo-700 transition-colors hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
           aria-label="Toggle Dark/Light Mode"
         >

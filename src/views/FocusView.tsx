@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Play, Pause, RotateCcw, Check, Sparkles, Volume2,
-  VolumeX, Clock, Target, Bell, Plus, Trash2,
-  Upload, Music, Radio, CheckCircle2, Sliders,
+  VolumeX, Clock, Bell, Plus, Trash2,
+  Upload, Music, Sliders,
   Link2
 } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 import { FocusSession, Task, Goal, Routine } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
@@ -14,6 +15,7 @@ import { syncGoalProgressFromFocus } from '../lib/goalTaskSync';
 import { SlideTabs } from '../components/SlideTabs';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
+import { FormDisclosureToggle } from '../components/FormDisclosure';
 
 interface FocusViewProps {
   sessions: FocusSession[];
@@ -424,15 +426,13 @@ export const FocusView: React.FC<FocusViewProps> = ({
   };
 
   const alarmFormAction = (
-    <button
-      type="button"
-      aria-expanded={isAddingAlarm}
-      onClick={() => setIsAddingAlarm(open => !open)}
-      className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-indigo-500"
-    >
-      <Plus className="h-4 w-4" />
-      <span>{isAddingAlarm ? 'Close Form' : 'New Alarm'}</span>
-    </button>
+    <FormDisclosureToggle
+      label="New Alarm"
+      openLabel="Close Form"
+      isOpen={isAddingAlarm}
+      onToggle={() => setIsAddingAlarm(open => !open)}
+      icon={<Plus className="h-3.5 w-3.5" />}
+    />
   );
 
   const totalFocusSeconds = sessions.reduce((sum, s) => sum + (Number(s.durationSeconds) || 0), 0);
@@ -451,7 +451,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl flex items-center gap-2">
             <span>Focus & Alarm Center</span>
-            <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
+            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">
               Audio Chimes Active
             </span>
           </h1>
@@ -466,10 +466,10 @@ export const FocusView: React.FC<FocusViewProps> = ({
               if (next) handlePreview(selectedDefaultRingtone);
               onSuccess(next ? '🔔 Chime enabled' : 'Muted');
             }}
-            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
               soundEnabled
-                ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300'
-                : 'border-slate-200 text-slate-500 dark:border-slate-800'
+                ? 'text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200'
+                : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
             }`}
           >
             {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
@@ -501,10 +501,10 @@ export const FocusView: React.FC<FocusViewProps> = ({
       {/* TAB 1: Deep Work Sprint Timer                                 */}
       {/* ============================================================== */}
       {activeMenuTab === 'timer' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Focus Clock Main Card (7 cols) */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+          <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-6 text-center shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-8 flex flex-col items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
               <Sparkles className="h-4 w-4" />
               <span>Active Deep Work Cycle</span>
             </div>
@@ -524,7 +524,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   cx="100"
                   cy="100"
                   r="90"
-                  className="stroke-indigo-600 dark:stroke-indigo-500 transition-all duration-500"
+                  className="stroke-amber-600 dark:stroke-amber-400 transition-all duration-500"
                   strokeWidth="8"
                   strokeDasharray="565.48"
                   strokeDashoffset={strokeDashoffset}
@@ -544,7 +544,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
             </div>
 
             {/* Preset Buttons */}
-            <div className="flex flex-wrap justify-center gap-2">
+            <div className="flex flex-wrap justify-center gap-3">
               {[
                 { m: 25, label: '25m Pomodoro' },
                 { m: 50, label: '50m Deep Work' },
@@ -556,10 +556,10 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   type="button"
                   onClick={() => handleSetPreset(p.m)}
                   disabled={isRunning}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                  className={`border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                     totalSeconds === p.m * 60
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                      ? 'text-amber-700 dark:text-amber-300'
+                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   } ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {p.label}
@@ -568,12 +568,12 @@ export const FocusView: React.FC<FocusViewProps> = ({
             </div>
 
             {/* Play / Pause / Reset Controls */}
-            <div className="mt-6 flex items-center justify-center gap-3">
+            <div className="focus-timer-controls mt-6 flex items-center justify-center gap-3">
               {!isRunning ? (
                 <button
                   type="button"
                   onClick={handleStart}
-                  className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-500 active:scale-95 transition-all cursor-pointer"
+                  className="focus-timer-primary-action flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-bold cursor-pointer"
                 >
                   <Play className="h-4 w-4 fill-current" />
                   <span>Start Sprint</span>
@@ -582,7 +582,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                 <button
                   type="button"
                   onClick={handlePause}
-                  className="flex items-center gap-2 rounded-2xl bg-amber-500 px-6 py-3 text-sm font-bold text-white shadow-md shadow-amber-500/30 hover:bg-amber-600 active:scale-95 transition-all cursor-pointer"
+                  className="focus-timer-primary-action flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-bold cursor-pointer"
                 >
                   <Pause className="h-4 w-4 fill-current" />
                   <span>Pause Session</span>
@@ -592,7 +592,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
               <button
                 type="button"
                 onClick={handleReset}
-                className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+                className="focus-timer-reset-action flex h-12 w-12 items-center justify-center rounded-lg cursor-pointer"
                 title="Reset Timer"
               >
                 <RotateCcw className="h-4 w-4" />
@@ -615,7 +615,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
           {/* Task Linkage & Focus Telemetry (5 cols) */}
           <div className="lg:col-span-5 flex flex-col gap-5">
             {/* Link Task Form */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
                 Focus Session Target
               </h2>
@@ -692,13 +692,13 @@ export const FocusView: React.FC<FocusViewProps> = ({
             </div>
 
             {/* Telemetry Stats Card */}
-            <div className="flex-1 rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
                 Focus Telemetry
               </h2>
 
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-indigo-50/60 p-4 dark:bg-indigo-950/30">
+                <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                     Today's Deep Work
                   </div>
@@ -708,7 +708,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   <div className="text-[10px] text-slate-400 mt-0.5">{todaySessions.length} sprints today</div>
                 </div>
 
-                <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
+                <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     All-Time Hours
                   </div>
@@ -727,12 +727,12 @@ export const FocusView: React.FC<FocusViewProps> = ({
       {/* TAB 2: Alarm Clock & Scheduled Alarms                          */}
       {/* ============================================================== */}
       {activeMenuTab === 'alarms' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Alarms Roster */}
-          <div className="lg:col-span-12 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+          <div className="focus-alarm-panel lg:col-span-12 space-y-4 rounded-2xl border p-5 sm:p-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400">
+                <div className="focus-alarm-icon flex h-9 w-9 items-center justify-center rounded-xl">
                   <Clock className="h-5 w-5" />
                 </div>
                 <div>
@@ -749,7 +749,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
 
             {/* Quick Add Alarm Form */}
             {isAddingAlarm && (
-              <form onSubmit={handleCreateAlarm} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 dark:bg-slate-800/60 dark:border-slate-700/60 space-y-3 animate-in fade-in duration-150">
+              <form onSubmit={handleCreateAlarm} className="focus-alarm-form space-y-3 rounded-2xl border p-4 animate-in fade-in duration-150">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
@@ -760,7 +760,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                       required
                       value={newAlarmTime}
                       onChange={e => setNewAlarmTime(e.target.value)}
-                      className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 font-mono text-sm font-bold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                      className="focus-alarm-field mt-1 h-10 w-full rounded-xl border px-3 font-mono text-sm font-bold"
                     />
                   </div>
 
@@ -771,7 +771,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                     <select
                       value={newAlarmRingtone}
                       onChange={e => setNewAlarmRingtone(e.target.value)}
-                      className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                      className="focus-alarm-field mt-1 h-10 w-full rounded-xl border px-3 text-xs font-medium"
                     >
                       {BUILTIN_RINGTONES.map(r => (
                         <option key={r.id} value={r.id}>{r.name}</option>
@@ -792,6 +792,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                     <LinkModeSelector
                       value={alarmTitleMode}
                       ariaLabel="Alarm routine link mode"
+                      className="focus-alarm-mode"
                       options={[{ value: 'routine', label: 'Link Routine' }, { value: 'manual', label: 'Manual' }]}
                       onChange={mode => {
                         if (mode === 'manual') {
@@ -838,7 +839,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                             <select
                               value={selectedRoutineId}
                               onChange={handleSelectRoutine}
-                              className="h-10 w-full rounded-xl border border-indigo-300 bg-indigo-50/40 px-3 text-xs font-semibold text-slate-900 focus:border-indigo-500 focus:outline-hidden dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer"
+                              className="focus-alarm-field h-10 w-full rounded-xl border px-3 text-xs font-semibold cursor-pointer"
                             >
                               <option value="">-- Choose a Routine to Link --</option>
                               {availableRoutines.map(r => (
@@ -863,7 +864,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                               value={newAlarmLabel}
                               onChange={e => setNewAlarmLabel(e.target.value)}
                               placeholder="Routine alarm label"
-                              className="h-9 w-full rounded-xl border border-slate-300 bg-white px-3 text-xs text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                              className="focus-alarm-field h-9 w-full rounded-xl border px-3 text-xs"
                             />
                           </div>
                         </>
@@ -876,7 +877,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         value={newAlarmLabel}
                         onChange={e => setNewAlarmLabel(e.target.value)}
                         placeholder="e.g. Morning Sprint, Standup, Medicine"
-                        className="h-9 w-full rounded-xl border border-slate-300 bg-white px-3 text-xs text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                        className="focus-alarm-field h-9 w-full rounded-xl border px-3 text-xs"
                       />
                     </div>
                   )}
@@ -894,11 +895,12 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         <button
                           key={dayName}
                           type="button"
+                          aria-pressed={isSelected}
                           onClick={() => toggleDaySelection(idx)}
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all cursor-pointer ${
+                          className={`focus-alarm-day rounded-lg border px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer ${
                             isSelected
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300'
+                              ? 'text-amber-700 dark:text-amber-300'
+                              : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                           }`}
                         >
                           {dayName}
@@ -908,17 +910,17 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                <div className="focus-alarm-actions flex items-center justify-end gap-2 border-t pt-2">
                   <button
                     type="button"
                     onClick={() => setIsAddingAlarm(false)}
-                    className="rounded-xl px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                    className="focus-alarm-cancel rounded-xl px-3 py-1.5 text-xs cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-xl bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-500 cursor-pointer"
+                    className="focus-alarm-save rounded-xl border px-4 py-1.5 text-xs font-bold cursor-pointer"
                   >
                     Save Alarm
                   </button>
@@ -929,9 +931,12 @@ export const FocusView: React.FC<FocusViewProps> = ({
             {/* Alarms List */}
             <div className="grid gap-3 pt-1 [grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr))]">
               {alarmsList.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">
-                  No alarms scheduled yet. Click "+ New Alarm" to create one.
-                </div>
+                <EmptyState
+                  icon={Bell}
+                  compact
+                  title="No alarms scheduled"
+                  hint={'Click "+ New Alarm" to create your first one.'}
+                />
               ) : (
                 [...alarmsList].sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(alarm => {
                   const ringtoneMeta = BUILTIN_RINGTONES.find(r => r.id === alarm.ringtone) || {
@@ -1030,17 +1035,14 @@ export const FocusView: React.FC<FocusViewProps> = ({
       {/* TAB 3: Ringtone & Audio Studio ("khud se ringtone rakhne ka")  */}
       {/* ============================================================== */}
       {activeMenuTab === 'ringtones' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Preset Ringtones Catalog (7 cols) */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+          <div className="lg:col-span-7  border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
             <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Music className="h-4 w-4 text-indigo-600" />
                 <span>Built-in Synthesizer Ringtones</span>
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Pure harmonic tones crafted via Web Audio API. Zero external downloads, 100% offline reliable.
-              </p>
             </div>
 
             <div className="space-y-2.5">
@@ -1052,7 +1054,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                     key={r.id}
                     className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
                       isSelected
-                        ? 'border-indigo-500 bg-indigo-50/40 dark:border-indigo-500 dark:bg-indigo-950/30 ring-1 ring-indigo-500/20'
+                        ? 'border-amber-500 bg-amber-50/50 dark:border-amber-500 dark:bg-amber-950/20 ring-1 ring-amber-500/20'
                         : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800/60'
                     }`}
                   >
@@ -1073,7 +1075,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
                           <span>{r.name}</span>
                           {isSelected && (
-                            <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-bold text-white">
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
                               Active Default
                             </span>
                           )}
@@ -1084,16 +1086,17 @@ export const FocusView: React.FC<FocusViewProps> = ({
 
                     <button
                       type="button"
+                      aria-pressed={isSelected}
                       onClick={() => {
                         setSelectedDefaultRingtone(r.id);
                         alarmAudio.setDefaultRingtoneId(r.id);
                         onSuccess(`Default ringtone set to "${r.name}"`);
                         handlePreview(r.id);
                       }}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all ${
+                      className={`border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold cursor-pointer transition-colors ${
                         isSelected
-                          ? 'bg-indigo-600 text-white'
-                          : 'border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300'
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                       }`}
                     >
                       {isSelected ? 'Selected' : 'Set as Default'}
@@ -1116,9 +1119,6 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                     Custom Ringtone Uploader
                   </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Apni manpasand MP3, WAV ya OGG audio file upload karein.
-                  </p>
                 </div>
               </div>
 
@@ -1168,17 +1168,17 @@ export const FocusView: React.FC<FocusViewProps> = ({
                       alarmAudio.setDefaultRingtoneId('custom');
                       onSuccess(`Default ringtone set to your custom audio!`);
                     }}
-                    className={`w-full py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full py-1.5 text-xs font-bold transition-colors cursor-pointer ${
                       selectedDefaultRingtone === 'custom'
-                        ? 'bg-emerald-600 text-white'
-                        : 'border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:bg-slate-800 dark:text-indigo-300'
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     {selectedDefaultRingtone === 'custom' ? '✓ Set as Default Alarm Ringtone' : 'Make this Default Ringtone'}
                   </button>
                 </div>
               ) : (
-                <div className="rounded-2xl border-2 border-dashed border-slate-200 p-6 text-center dark:border-slate-700">
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-6 text-center dark:border-slate-700 dark:bg-slate-900">
                   <Music className="mx-auto h-8 w-8 text-slate-400" />
                   <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
                     No custom audio uploaded yet
@@ -1202,7 +1202,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
             </div>
 
             {/* Volume Control Card */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-4">
+            <div className=" border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Sliders className="h-4 w-4 text-indigo-600" />

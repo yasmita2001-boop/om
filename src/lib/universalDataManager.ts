@@ -14,15 +14,15 @@
  */
 
 import { SYSTEM_METADATA_STORES, ENTITY_STORES, DB_VERSION } from './db';
-import { isRecordActive, filterActiveRecords } from './recycleBin';
+import { isRecordActive } from './recycleBin';
 import { generateCompleteStandaloneHtml } from './exportHtml';
 import { createLightweightEntities } from './thumbnailService';
 import { storage } from './storage';
 import { getLocalDateString, getLocalMonthString } from './dateUtils';
+import { omitDeviceAppearanceSettings } from './appearance';
 import {
   ManualUpdateBundle,
   BundleDiffInspection,
-  BundleConflictItem,
   ApplyBundleResult,
   AppState
 } from '../types';
@@ -831,7 +831,7 @@ export class UniversalDataManager {
       }
 
       case 'html': {
-        const { cleanData, totalActiveCount } = await this.extractCanonicalWorkspaceData({
+        const { cleanData } = await this.extractCanonicalWorkspaceData({
           profileId,
           profileName,
           includeFullMedia: false
@@ -1132,8 +1132,7 @@ export class UniversalDataManager {
     const {
       mode,
       conflictStrategy = 'keep_both',
-      targetProfileId,
-      targetProfileName
+      targetProfileId
     } = options;
 
     // 1. Fetch local tombstones to block resurrection of soft-deleted records
@@ -1168,7 +1167,7 @@ export class UniversalDataManager {
           const currentSettings = (await storage.getSingleton<AppState>('appSettings', targetProfileId)) || ({} as AppState);
           await storage.setSingleton('appSettings', {
             ...currentSettings,
-            ...validation.settings,
+            ...omitDeviceAppearanceSettings(validation.settings),
             profileId: targetProfileId
           }, targetProfileId);
         } catch (e) {
@@ -1292,7 +1291,7 @@ export class UniversalDataManager {
         const currentSettings = (await storage.getSingleton<AppState>('appSettings', targetProfileId)) || ({} as AppState);
         await storage.setSingleton('appSettings', {
           ...currentSettings,
-          ...validation.settings,
+          ...omitDeviceAppearanceSettings(validation.settings),
           profileId: targetProfileId
         }, targetProfileId);
       } catch (err) {

@@ -2,7 +2,7 @@
  * db.ts
  *
  * Core IndexedDB initialization, store schemas, version upgrades, and migrations.
- * Preserves all 54 canonical entity stores, singletons, system stores, and legacy indices.
+ * Preserves all 64 canonical entity stores, singletons, system stores, and legacy indices.
  */
 
 export const DB_NAME = 'om-lifeos-canonical-v4';
@@ -46,6 +46,11 @@ export const STORE_LABELS: Record<string, { label: string; module: string }> = {
   strategies: { label: 'Strategy', module: 'Goals & Strategy' },
   kpis: { label: 'KPI Metric', module: 'Goals & Strategy' },
   missions: { label: 'Mission', module: 'Goals & Strategy' },
+  mentorRules: { label: 'Mentor Rule', module: 'Goals & Strategy' },
+  mentorQuotes: { label: 'Mentor Quote', module: 'Goals & Strategy' },
+  capitalStrategy: { label: 'Capital Strategy', module: 'Finance & Ledger' },
+  capital: { label: 'Capital Position', module: 'Finance & Ledger' },
+  capitalRecords: { label: 'Capital Record', module: 'Finance & Ledger' },
   focus: { label: 'Focus Session', module: 'Focus (Deep Work)' },
   notes: { label: 'Note', module: 'Notes & Notebooks' },
   journal: { label: 'Journal Entry', module: 'Daily Journal' },
@@ -61,6 +66,7 @@ export const STORE_LABELS: Record<string, { label: string; module: string }> = {
   liabilities: { label: 'Liability', module: 'Finance & Ledger' },
   financialGoals: { label: 'Financial Goal', module: 'Finance & Ledger' },
   healthMeasurements: { label: 'Health Measurement', module: 'Health & Wellness' },
+  healthActivities: { label: 'Health Activity', module: 'Health & Wellness' },
   sleepRecords: { label: 'Sleep Record', module: 'Health & Wellness' },
   waterRecords: { label: 'Water Log', module: 'Health & Wellness' },
   nutritionRecords: { label: 'Nutrition Log', module: 'Health & Wellness' },
@@ -71,19 +77,27 @@ export const STORE_LABELS: Record<string, { label: string; module: string }> = {
   learningItems: { label: 'Learning Item', module: 'Work & Skill Trees' },
   skills: { label: 'Skill Tree', module: 'Work & Skill Trees' },
   courses: { label: 'Course', module: 'Work & Skill Trees' },
+  learningProgress: { label: 'Learning Progress', module: 'Work & Skill Trees' },
   meetings: { label: 'Meeting', module: 'Work & Skill Trees' },
   people: { label: 'Contact / Person', module: 'People & Relations' },
+  relationships: { label: 'Relationship', module: 'People & Relations' },
   interactions: { label: 'Interaction Log', module: 'People & Relations' },
+  importantDates: { label: 'Important Date', module: 'People & Relations' },
+  relationshipReminders: { label: 'Relationship Reminder', module: 'People & Relations' },
   values: { label: 'Core Value', module: 'Values & Spiritual' },
+  principles: { label: 'Principle', module: 'Values & Spiritual' },
   spiritualPractices: { label: 'Spiritual Practice', module: 'Values & Spiritual' },
   commitments: { label: 'Commitment', module: 'Values & Spiritual' },
   things: { label: 'Inventory Item', module: 'Things & Documents' },
   documents: { label: 'Document', module: 'Things & Documents' },
+  documentCollections: { label: 'Document Collection', module: 'Things & Documents' },
   warranties: { label: 'Warranty', module: 'Things & Documents' },
   receipts: { label: 'Receipt', module: 'Things & Documents' },
   certificates: { label: 'Certificate', module: 'Things & Documents' },
   importantRecords: { label: 'Important Record', module: 'Things & Documents' },
   reminders: { label: 'Reminder', module: 'Tasks & Planner' },
+  notifications: { label: 'Notification', module: 'Tasks & Planner' },
+  achievements: { label: 'Achievement', module: 'Goals & Strategy' },
   calcHistory: { label: 'Calculation', module: 'Calculator & Tools' },
   attachments: { label: 'Attachment', module: 'Things & Documents' },
   customFonts: { label: 'Custom Font', module: 'Notes & Notebooks' }

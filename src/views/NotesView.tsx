@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Search, Trash2, Edit3,
-  Star, Copy, Check, Download, Pin, X,
-  Folder, BookOpen, Sparkles, Volume2, Plus,
-  ChevronDown, Hash, Calendar, CheckCircle2, Bookmark,
+  Copy, Check, Download, X,
+  Folder, BookOpen, Volume2, Plus,
+  ChevronDown, Hash, CheckCircle2,
   Target
 } from 'lucide-react';
 import { Note, Goal } from '../types';
@@ -17,6 +17,7 @@ import { globalTextReader } from '../lib/voiceService';
 import { htmlToPlainText, plainTextToHtml, sanitizeHtml } from '../lib/sanitizeHtml';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
+import { FormDisclosureToggle } from '../components/FormDisclosure';
 
 interface NotesViewProps {
   notes: Note[];
@@ -35,7 +36,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [colorFilter, setColorFilter] = useState<string>('all');
+  const [colorFilter] = useState<string>('all');
   const [noteFiltersOpen, setNoteFiltersOpen] = useState(false);
   const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(false);
   
@@ -45,7 +46,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [newCategoryName, setNewCategoryName] = useState('');
 
   // Left-panel Inline Editor state
-  const [isEditingInline, setIsEditingInline] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [noteInputMode, setNoteInputMode] = useState<'manual' | 'link'>('manual');
@@ -54,8 +54,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [tags, setTags] = useState('');
   const [colorTheme, setColorTheme] = useState('slate');
-  const [customColor, setCustomColor] = useState('#8b5cf6');
-  const [isPinned, setIsPinned] = useState(false);
+  const [customColor, setCustomColor] = useState('#b88648');
   const [editorText, setEditorText] = useState('');
   const [editorHtml, setEditorHtml] = useState('');
   const [attachments, setAttachments] = useState<StoredAttachmentMeta[]>([]);
@@ -74,8 +73,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [modalCustomCat, setModalCustomCat] = useState('');
   const [modalTags, setModalTags] = useState('');
   const [modalColor, setModalColor] = useState('slate');
-  const [modalCustomColor, setModalCustomColor] = useState('#8b5cf6');
-  const [modalPinned, setModalPinned] = useState(false);
+  const [modalCustomColor, setModalCustomColor] = useState('#b88648');
   const [modalContent, setModalContent] = useState('');
   const [modalHtml, setModalHtml] = useState('');
   const [modalAttachments, setModalAttachments] = useState<StoredAttachmentMeta[]>([]);
@@ -214,8 +212,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     setModalCustomCat('');
     setModalTags(note.tags || '');
     setModalColor(note.color && themePalettes[note.color] ? note.color : note.color?.startsWith('#') ? 'custom' : 'slate');
-    setModalCustomColor(note.color?.startsWith('#') ? note.color : '#8b5cf6');
-    setModalPinned(Boolean(note.pinned));
+    setModalCustomColor(note.color?.startsWith('#') ? note.color : '#b88648');
     const content = note.body || htmlToPlainText(note.html || '');
     const htmlContent = note.html || plainTextToHtml(note.body || '');
     setModalContent(content);
@@ -228,35 +225,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
       }
     });
     setModalAttachments(parsedAtts);
-  };
-
-  // Inline edit handler (populates form and focuses)
-  const handleEditInline = (note: Note) => {
-    setIsEditingInline(true);
-    setIsNoteEditorOpen(true);
-    setEditingNoteId(note.id);
-    setTitle(note.title);
-    setNoteGoalId(note.goalId || '');
-    setNoteInputMode(note.goalId ? 'link' : 'manual');
-    setCategory(note.category || 'General');
-    setCustomCategoryInput('');
-    setTags(note.tags || '');
-    setColorTheme(note.color && themePalettes[note.color] ? note.color : note.color?.startsWith('#') ? 'custom' : 'slate');
-    setCustomColor(note.color?.startsWith('#') ? note.color : '#8b5cf6');
-    setIsPinned(Boolean(note.pinned));
-    const content = note.body || htmlToPlainText(note.html || '');
-    const htmlContent = note.html || plainTextToHtml(note.body || '');
-    setEditorText(content);
-    setEditorHtml(htmlContent);
-    const parsedAtts: StoredAttachmentMeta[] = (note.attachments || []).map(a => {
-      try {
-        return typeof a === 'string' ? JSON.parse(a) : a;
-      } catch {
-        return { id: a, name: a, type: 'file', size: 0 };
-      }
-    });
-    setAttachments(parsedAtts);
-
   };
 
   useEffect(() => {
@@ -313,7 +281,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
           category: finalCategory,
           tags: tags.trim() || undefined,
           color: colorTheme === 'custom' ? customColor : colorTheme,
-          pinned: isPinned,
+          pinned: undefined,
           goalId: effectiveGoalId,
           attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
           updatedAt: now
@@ -336,7 +304,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
         category: finalCategory,
         tags: tags.trim() || undefined,
         color: colorTheme === 'custom' ? customColor : colorTheme,
-        pinned: isPinned,
         goalId: effectiveGoalId,
         attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
         date: getLocalDateString(),
@@ -380,7 +347,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       category: finalCategory,
       tags: modalTags.trim() || undefined,
       color: modalColor === 'custom' ? modalCustomColor : modalColor,
-      pinned: modalPinned,
+      pinned: undefined,
       goalId: effectiveGoalId,
       attachments: serializedModalAttachments.length > 0 ? serializedModalAttachments : undefined,
       updatedAt: now
@@ -395,18 +362,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
     }
     onSuccess(effectiveGoalId ? '✓ Note updated & linked to Goal' : '✓ Note updated in vault');
     setEditingModalNote(null);
-    onRefresh();
-  };
-
-  const handleTogglePin = async (note: Note, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    const updated: Note = {
-      ...note,
-      pinned: !note.pinned,
-      updatedAt: Date.now()
-    };
-    await storage.put('notes', updated);
-    onSuccess(note.pinned ? 'Note unpinned' : '📌 Note pinned to top');
     onRefresh();
   };
 
@@ -467,7 +422,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
   };
 
   const resetForm = () => {
-    setIsEditingInline(false);
     setEditingNoteId(null);
     setIsNoteEditorOpen(false);
     setTitle('');
@@ -475,8 +429,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     setNoteInputMode('manual');
     setTags('');
     setColorTheme('slate');
-    setCustomColor('#8b5cf6');
-    setIsPinned(false);
+    setCustomColor('#b88648');
     setEditorText('');
     setEditorHtml('');
     setCustomCategoryInput('');
@@ -498,8 +451,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
     }
     return true;
   }).sort((a, b) => {
-    if (a.pinned && !b.pinned) return -1;
-    if (!a.pinned && b.pinned) return 1;
     if (a.date && b.date && a.date !== b.date) {
       return b.date.localeCompare(a.date);
     }
@@ -559,9 +510,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
           <div className="flex items-start justify-between gap-2 pt-0.5">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                {n.pinned && (
-                  <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />
-                )}
                 <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
                   {n.title}
                 </h3>
@@ -584,14 +532,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
             </div>
 
             <ProgressiveActions label={`More actions for ${n.title}`} className="shrink-0">
-              <button
-                type="button"
-                onClick={e => handleTogglePin(n, e)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 transition-colors"
-                title={n.pinned ? 'Unpin note' : 'Pin note to top'}
-              >
-                <Star className={`h-3.5 w-3.5 ${n.pinned ? 'text-amber-500 fill-amber-500' : ''}`} />
-              </button>
               <button
                 type="button"
                 onClick={e => handleCopyNote(n, e)}
@@ -701,24 +641,26 @@ export const NotesView: React.FC<NotesViewProps> = ({
             aria-expanded={noteFiltersOpen}
             aria-controls="note-archive-filters"
             onClick={() => setNoteFiltersOpen(open => !open)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:text-indigo-300"
+            className={`inline-flex items-center gap-2 border-b-0 border-transparent px-2 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+              noteFiltersOpen
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+            }`}
           >
             <span>Search & Filters</span>
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${noteFiltersOpen ? 'rotate-180' : ''}`} />
           </button>
-          <button
-            type="button"
-            aria-expanded={isNoteEditorOpen}
-            onClick={() => setIsNoteEditorOpen(open => !open)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 shadow-2xs transition-colors hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/70"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>{isNoteEditorOpen ? 'Close New Note' : 'New Note'}</span>
-          </button>
+          <FormDisclosureToggle
+            label="New Note"
+            openLabel="Close New Note"
+            isOpen={isNoteEditorOpen}
+            onToggle={() => setIsNoteEditorOpen(open => !open)}
+            icon={<Plus className="h-3.5 w-3.5" />}
+          />
           <button
             type="button"
             onClick={() => setIsAddingCategory(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 shadow-2xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 border-b-0 border-transparent px-2 py-2 text-xs font-semibold text-amber-800 transition-colors hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
           >
             <Folder className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>New Notebook</span>
@@ -761,7 +703,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         </form>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
         {/* ========================================================================= */}
         {/* LEFT PANEL: LUXURY NOTEBOOK EDITOR (5 cols)                                */}
         {/* ========================================================================= */}
@@ -783,9 +725,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
                   {editingNoteId ? 'Edit Note' : 'New Note'}
                 </h2>
-                <p className="text-[11px] text-slate-400">
-                  {editingNoteId ? 'Saving changes will update the existing entry' : 'Write and capture into your personal vault'}
-                </p>
               </div>
             </div>
             {editingNoteId && (
@@ -928,28 +867,16 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
             </div>
 
-            {/* Note Theme Palettes & Pin to top */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
-              <div className="flex items-center justify-between gap-2">
+            {/* Note Theme Palette */}
+            <div className="space-y-1.5">
+              <div>
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Notebook Spine & Theme
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setIsPinned(!isPinned)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all cursor-pointer ${
-                    isPinned
-                      ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300/80 dark:bg-amber-950/70 dark:text-amber-300 dark:ring-amber-700/70'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Star className={`h-3 w-3 ${isPinned ? 'fill-amber-500 text-amber-500' : ''}`} />
-                  <span>{isPinned ? 'Pinned to top' : 'Pin to top'}</span>
-                </button>
               </div>
 
-              <div className="pt-2">
-                <div className="flex flex-wrap items-center gap-2.5">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
                   {selectedThemeOptions.map((k) => {
                     const t = themePalettes[k];
                     const isSelected = colorTheme === k;
@@ -960,25 +887,25 @@ export const NotesView: React.FC<NotesViewProps> = ({
                         onClick={() => setColorTheme(k)}
                         aria-label={t.label}
                         aria-pressed={isSelected}
-                        className={`group relative flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-200 cursor-pointer ${
+                        className={`group relative flex h-7 w-7 items-center justify-center rounded-full border transition-colors cursor-pointer ${
                           isSelected
-                            ? 'border-white shadow-[0_0_0_2px_rgba(99,102,241,0.9),0_4px_12px_rgba(15,23,42,0.12)] scale-[1.04]'
-                            : 'border-white/80 hover:scale-[1.06] shadow-sm dark:border-slate-700'
+                            ? 'border-amber-500 bg-amber-100/60 ring-2 ring-amber-500/30'
+                            : 'border-amber-800/20 bg-amber-50/50 hover:border-amber-700/45 dark:border-amber-200/20 dark:bg-slate-800/60 dark:hover:border-amber-200/45'
                         }`}
                         title={t.label}
                       >
                         <span
-                          className="h-5 w-5 rounded-full"
+                          className="h-4 w-4 rounded-full"
                           style={{ backgroundColor: t.swatch }}
                         />
                       </button>
                     );
                   })}
                   <label
-                    className={`group relative flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-200 cursor-pointer ${
+                    className={`group relative flex h-7 w-7 items-center justify-center rounded-full border transition-colors cursor-pointer ${
                       colorTheme === 'custom'
-                        ? 'border-white shadow-[0_0_0_2px_rgba(99,102,241,0.9),0_4px_12px_rgba(15,23,42,0.12)] scale-[1.04]'
-                        : 'border-white/80 hover:scale-[1.06] shadow-sm dark:border-slate-700'
+                        ? 'border-amber-500 bg-amber-100/60 ring-2 ring-amber-500/30'
+                        : 'border-amber-800/20 bg-amber-50/50 hover:border-amber-700/45 dark:border-amber-200/20 dark:bg-slate-800/60 dark:hover:border-amber-200/45'
                     }`}
                     title="Custom color"
                     aria-label="Custom color"
@@ -990,7 +917,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                         setCustomColor(e.target.value);
                         setColorTheme('custom');
                       }}
-                      className="h-5 w-5 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                      className="h-4 w-4 cursor-pointer rounded-full border-0 bg-transparent p-0"
                     />
                   </label>
                 </div>
@@ -1050,7 +977,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
           <div
             ref={noteFiltersRef}
             id="note-archive-filters"
-            className={noteFiltersOpen ? 'rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 space-y-3.5' : 'hidden'}
+            className={noteFiltersOpen ? ' border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-3.5' : 'hidden'}
           >
             {/* Search Input */}
             <div className="relative">
@@ -1060,7 +987,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search notes by title, notebook, tags, or content..."
-                className="h-9.5 w-full rounded-xl border border-slate-200/90 pl-10 pr-9 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white transition-all shadow-2xs"
+                className="h-9.5 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-10 pr-9 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white transition-all shadow-2xs"
               />
               {searchQuery && (
                 <button
@@ -1074,14 +1001,14 @@ export const NotesView: React.FC<NotesViewProps> = ({
             </div>
 
             {/* Notebook Filter Pills */}
-            <div className="flex overflow-x-auto pb-1 gap-1.5 no-scrollbar">
+            <div className="flex overflow-x-auto pb-1 gap-3 no-scrollbar">
               <button
                 type="button"
                 onClick={() => setSelectedCategory('all')}
-                className={`rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`shrink-0 border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   selectedCategory === 'all'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/80'
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                 }`}
               >
                 All Notebooks ({notes.length})
@@ -1089,10 +1016,10 @@ export const NotesView: React.FC<NotesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSelectedCategory('__linked_goals__')}
-                className={`flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`flex shrink-0 items-center gap-1 border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   selectedCategory === '__linked_goals__'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900/60'
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                 }`}
               >
                 <Target className="h-3.5 w-3.5" />
@@ -1106,10 +1033,10 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     key={cat}
                     type="button"
                     onClick={() => setSelectedCategory(cat)}
-                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    className={`shrink-0 border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                       isActive
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/80'
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     {cat} ({count})
@@ -1160,9 +1087,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                     Edit Note
                   </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Modify title, notebook, content, points, and tags.
-                  </p>
                 </div>
               </div>
               <button
@@ -1281,7 +1205,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 </div>
               </div>
 
-              {/* Theme & Pin */}
+              {/* Theme */}
               <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div>
                   <span className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
@@ -1299,7 +1223,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                           aria-pressed={modalColor === k}
                           className={`flex h-7.5 w-7.5 items-center justify-center rounded-xl border transition-all cursor-pointer ${
                             modalColor === k
-                              ? 'border-indigo-600 ring-2 ring-indigo-500/30 scale-105'
+                              ? 'border-amber-500 ring-2 ring-amber-500/30 scale-105'
                               : 'border-slate-200 dark:border-slate-700 hover:scale-105'
                           }`}
                           title={t.label}
@@ -1314,7 +1238,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     <label
                       className={`flex h-7.5 w-7.5 items-center justify-center rounded-xl border transition-all cursor-pointer ${
                         modalColor === 'custom'
-                          ? 'border-indigo-600 ring-2 ring-indigo-500/30 scale-105'
+                          ? 'border-amber-500 ring-2 ring-amber-500/30 scale-105'
                           : 'border-slate-200 dark:border-slate-700 hover:scale-105'
                       }`}
                       title="Custom color"
@@ -1332,18 +1256,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setModalPinned(!modalPinned)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer mt-2 sm:mt-0 ${
-                    modalPinned
-                      ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/70 dark:text-amber-300 ring-1 ring-amber-400/50'
-                      : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                  }`}
-                >
-                  <Star className={`h-3 w-3 ${modalPinned ? 'fill-amber-500 text-amber-500' : ''}`} />
-                  <span>{modalPinned ? 'Pinned to top' : 'Pin note to top'}</span>
-                </button>
               </div>
 
               {/* Note Content Writing Canvas */}
@@ -1420,9 +1332,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
             <div className="flex items-start justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="min-w-0 pr-4">
                 <div className="flex items-center gap-2">
-                  {viewingNote.pinned && (
-                    <Star className="h-4 w-4 text-amber-500 fill-amber-500 shrink-0" />
-                  )}
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     {viewingNote.title}
                   </h3>

@@ -187,6 +187,27 @@ const n = (v: any): number => {
   return x;
 };
 
+const parseIntegerInBase = (value: unknown, baseValue: unknown): bigint => {
+  const base = n(baseValue);
+  if (!Number.isInteger(base) || base < 2 || base > 36) {
+    throw new Error('Base must be an integer from 2 to 36');
+  }
+
+  const match = /^([+-]?)([0-9a-z]+)$/i.exec(String(value).trim());
+  if (!match) throw new Error(`Invalid integer for base ${base}`);
+
+  let result = 0n;
+  for (const character of match[2].toLowerCase()) {
+    const digit = character >= '0' && character <= '9'
+      ? character.charCodeAt(0) - 48
+      : character.charCodeAt(0) - 87;
+    if (digit >= base) throw new Error(`Invalid digit "${character}" for base ${base}`);
+    result = result * BigInt(base) + BigInt(digit);
+  }
+
+  return match[1] === '-' ? -result : result;
+};
+
 const pos = (v: any): number => {
   const x = n(v);
   if (x <= 0) throw new Error('Value must be greater than zero');
@@ -212,6 +233,22 @@ const gcd = (a: number, b: number): number => {
 
 const dateObj = (v: any): Date => {
   if (!v) throw new Error('Date is required');
+  if (typeof v === 'string') {
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (dateOnly) {
+      const [, yearText, monthText, dayText] = dateOnly;
+      const year = Number(yearText);
+      const month = Number(monthText);
+      const day = Number(dayText);
+      const d = new Date(0);
+      d.setHours(0, 0, 0, 0);
+      d.setFullYear(year, month - 1, day);
+      if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) {
+        throw new Error('Invalid date/time format');
+      }
+      return d;
+    }
+  }
   const d = v instanceof Date ? new Date(v.getTime()) : new Date(v);
   if (Number.isNaN(d.getTime())) throw new Error('Invalid date/time format');
   return d;
@@ -727,9 +764,9 @@ export class CalculatorEngine {
 
   pace(distanceKm: any, timeMinutes: any): string {
     const d = pos(distanceKm), t = pos(timeMinutes);
-    const sec = (t * 60) / d;
-    const min = Math.floor(sec / 60);
-    const remSec = Math.round(sec % 60);
+    const totalSeconds = Math.round((t * 60) / d);
+    const min = Math.floor(totalSeconds / 60);
+    const remSec = totalSeconds % 60;
     const kmh = d / (t / 60);
     return `Pace: ${min}:${remSec < 10 ? '0' : ''}${remSec} /km | Average Speed: ${kmh.toFixed(1)} km/h`;
   }
@@ -965,7 +1002,9 @@ export class CalculatorEngine {
   vehicleLoan(price: any, downPayment: any, ratePct: any, months = 60): string {
     const p = pos(price);
     const dp = nonNeg(downPayment);
-    const loan = Math.max(0, p - dp);
+    if (dp > p) throw new Error('Down payment cannot exceed vehicle price');
+    const loan = p - dp;
+    if (loan === 0) return `No loan required | Loan Amount: ₹${loan.toFixed(2)}`;
     return this.emi(loan, ratePct, months) + ` | Loan Amount: ₹${loan.toFixed(2)}`;
   }
 
@@ -1008,35 +1047,44 @@ export class CalculatorEngine {
 
   travelTime(distanceKm: any, speedKmh: any): string {
     const d = pos(distanceKm), s = pos(speedKmh);
-    const hours = d / s;
-    const h = Math.floor(hours);
-    const m = Math.round((hours - h) * 60);
+    const totalMinutes = Math.round((d / s) * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
     return `Travel Time: ${h} hours and ${m} minutes`;
   }
 
   // ===================== PROGRAMMER & COMPUTER =====================
   baseConvert(value: any, fromBase: any, toBase: any): string {
-    const dec = parseInt(String(value).trim(), n(fromBase));
-    if (Number.isNaN(dec)) throw new Error(`Invalid number for base ${fromBase}`);
-    return dec.toString(n(toBase)).toUpperCase();
+    const dec = parseIntegerInBase(value, fromBase);
+    const targetBase = n(toBase);
+    if (!Number.isInteger(targetBase) || targetBase < 2 || targetBase > 36) {
+      throw new Error('Base must be an integer from 2 to 36');
+    }
+    return dec.toString(targetBase).toUpperCase();
   }
 
   programmerAllBases(value: any, currentBase = 10): { bin: string; oct: string; dec: string; hex: string; char: string } {
-    const dec = parseInt(String(value).trim(), n(currentBase));
-    if (Number.isNaN(dec)) throw new Error('Invalid numeric input');
+    const dec = parseIntegerInBase(value, currentBase);
+    const unsigned = BigInt.asUintN(32, dec);
     return {
-      bin: (dec >>> 0).toString(2).padStart(8, '0'),
-      oct: (dec >>> 0).toString(8),
+      bin: unsigned.toString(2).padStart(8, '0'),
+      oct: unsigned.toString(8),
       dec: dec.toString(10),
-      hex: (dec >>> 0).toString(16).toUpperCase(),
-      char: dec >= 32 && dec <= 126 ? String.fromCharCode(dec) : 'N/A'
+      hex: unsigned.toString(16).toUpperCase(),
+      char: dec >= 32n && dec <= 126n ? String.fromCharCode(Number(dec)) : 'N/A'
     };
   }
 
   bitwise(a: any, op: string, b: any): string {
-    const na = parseInt(String(a), 10);
-    const nb = parseInt(String(b), 10);
-    if (Number.isNaN(na)) throw new Error('First operand is invalid');
+    const na = n(a);
+    if (!Number.isInteger(na)) throw new Error('First operand must be an integer');
+    const nb = op === 'NOT' || op === '~' ? 0 : n(b);
+    if (op !== 'NOT' && op !== '~' && !Number.isInteger(nb)) {
+      throw new Error('Second operand must be an integer');
+    }
+    if ((op === '<<' || op === '>>') && (nb < 0 || nb > 31)) {
+      throw new Error('Shift amount must be an integer from 0 to 31');
+    }
     let res = 0;
     if (op === 'AND' || op === '&') res = na & nb;
     else if (op === 'OR' || op === '|') res = na | nb;
@@ -1058,9 +1106,13 @@ export class CalculatorEngine {
   }
 
   ipSubnet(ip: string, cidr: any): string {
-    const parts = String(ip).trim().split('.').map(Number);
+    const octets = String(ip).trim().split('.');
+    const parts = octets.map(Number);
     const c = n(cidr);
-    if (parts.length !== 4 || parts.some(x => x < 0 || x > 255 || Number.isNaN(x)) || c < 0 || c > 32) {
+    if (parts.length !== 4 ||
+      octets.some(octet => !/^\d{1,3}$/.test(octet)) ||
+      parts.some(x => x < 0 || x > 255) ||
+      !Number.isInteger(c) || c < 0 || c > 32) {
       throw new Error('Invalid IPv4 address or CIDR mask (0-32)');
     }
     const val = parts.reduce((a, x) => (a * 256 + x) >>> 0, 0);

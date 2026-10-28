@@ -55,7 +55,6 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
 
   // Storage Stats
   const [activeRecordsCount, setActiveRecordsCount] = useState<number>(0);
-  const [activeStoresCount, setActiveStoresCount] = useState<number>(0);
   const [attachmentCount, setAttachmentCount] = useState<number>(0);
   const [mediaBytes, setMediaBytes] = useState<number>(0);
   const [totalBytes, setTotalBytes] = useState<number>(0);
@@ -85,7 +84,6 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
         includeFullMedia: false
       });
       setActiveRecordsCount(canonical.totalActiveCount);
-      setActiveStoresCount(canonical.activeStoresCount);
     } catch (err: any) {
       console.warn('[UniversalDataManager Stats]', err);
     }
@@ -266,7 +264,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
           type="button"
           onClick={loadStats}
           title="Refresh storage statistics"
-          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer px-2 py-1 transition-colors"
         >
           <RefreshCw className="h-3 w-3" />
           <span className="hidden sm:inline">Refresh Stats</span>
@@ -285,15 +283,15 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
       {/* Section 1: Full Backup & Restore (Balanced Side-by-Side Symmetrical Cards) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
         {/* Left: Export Full Backup */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40 flex flex-col justify-between">
+        <div className="rounded-xl border-2 border-dashed border-slate-200 p-4 dark:border-slate-800 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <ShieldCheck className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0" />
                 <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
                   Full System Snapshot
                 </span>
-                <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-mono shrink-0">
+                <span className="rounded bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 font-mono shrink-0">
                   .omlifeos
                 </span>
               </div>
@@ -301,13 +299,13 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-200/70 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="mt-4 pt-3 border-t border-amber-200/70 dark:border-amber-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={includeFullMedia}
                 onChange={(e) => setIncludeFullMedia(e.target.checked)}
-                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-700 h-3.5 w-3.5"
+                className="rounded border-amber-300 text-amber-700 focus:ring-amber-500 dark:border-amber-800 dark:text-amber-400 dark:focus:ring-amber-400 h-3.5 w-3.5"
               />
               <span className="truncate">
                 Include media ({attachmentCount} files, {formatBytes(mediaBytes)})
@@ -318,7 +316,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
               type="button"
               onClick={() => handleExport('omlifeos')}
               disabled={exportingFormat !== null}
-              className="flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-indigo-500 disabled:opacity-50 cursor-pointer shrink-0 transition-all active:scale-98"
+              className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 disabled:opacity-50 cursor-pointer shrink-0 transition-colors"
             >
               {exportingFormat === 'omlifeos' ? (
                 <>
@@ -374,7 +372,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
               </span>
               <button
                 type="button"
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer shrink-0 transition-all"
+                className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer shrink-0 transition-colors"
               >
                 {validating ? (
                   <>
@@ -383,7 +381,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                   </>
                 ) : (
                   <>
-                    <Upload className="h-3 w-3 text-slate-500" />
+                    <Upload className="h-3 w-3" />
                     <span>Choose Backup File</span>
                   </>
                 )}
@@ -427,7 +425,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                   <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block">
                     Conflict Strategy:
                   </span>
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-3">
                     {[
                       { id: 'keep_both', label: 'Keep Both' },
                       { id: 'accept_remote', label: 'Overwrite Local' },
@@ -437,10 +435,10 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                         key={opt.id}
                         type="button"
                         onClick={() => setConflictStrategy(opt.id as any)}
-                        className={`px-2 py-0.5 rounded text-[11px] cursor-pointer transition-colors ${
+                        className={`border-b-0 border-transparent px-2 py-0.5 text-[11px] cursor-pointer transition-colors ${
                           conflictStrategy === opt.id
-                            ? 'bg-indigo-600 text-white font-bold'
-                            : 'bg-white border border-slate-200 dark:bg-slate-700 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                            ? 'border-amber-500 text-amber-700 font-bold dark:text-amber-400'
+                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                         }`}
                       >
                         {opt.label}
@@ -493,7 +491,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                   type="button"
                   onClick={() => setShowConfirmRestoreModal(true)}
                   disabled={isRestoring}
-                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow-2xs hover:bg-indigo-500 disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 disabled:opacity-50 cursor-pointer"
                 >
                   {isRestoring ? (
                     <>
@@ -521,7 +519,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
               Document & Table Exports
             </span>
             {dateFilterMode !== 'all' && (
-              <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
                 <span>Scope:</span>
                 <span>
                   {dateFilterMode === 'this_month'
@@ -553,15 +551,15 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
             <button
               type="button"
               onClick={() => setIsDateDropdownOpen(prev => !prev)}
-              className={`flex items-center gap-1.5 h-7 rounded-lg border px-2.5 text-xs font-medium cursor-pointer transition-colors ${
+              className={`flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium cursor-pointer transition-colors ${
                 isDateDropdownOpen || dateFilterMode !== 'all'
-                  ? 'border-indigo-300 bg-indigo-50/80 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                  ? 'font-semibold text-amber-700 dark:text-amber-300'
+                  : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
               }`}
               title="Filter export data by date range"
             >
-              <Calendar className="h-3 w-3 text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">Date Filter:</span>
+              <Calendar className="h-3 w-3 shrink-0" />
+              <span className="text-[11px]">Date Filter:</span>
               <span className="text-[11px] font-semibold">
                 {dateFilterMode === 'all'
                   ? 'All Time'
@@ -571,11 +569,11 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                   ? 'Last 30 Days'
                   : 'Custom Range'}
               </span>
-              <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${isDateDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`h-3 w-3 transition-transform ${isDateDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isDateDropdownOpen && (
-              <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-60 max-w-[calc(100vw-2.5rem)] z-30 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900 animate-in fade-in duration-100">
+              <div className="sanctuary-menu-surface absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-60 max-w-[calc(100vw-2.5rem)] z-30 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900 animate-in fade-in duration-100">
                 <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Export Date Scope
                 </div>
@@ -585,48 +583,48 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                     onClick={() => { setDateFilterMode('all'); setIsDateDropdownOpen(false); }}
                     className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                       dateFilterMode === 'all'
-                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                        : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     <span>All Time (Complete Data)</span>
-                    {dateFilterMode === 'all' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                    {dateFilterMode === 'all' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setDateFilterMode('this_month'); setIsDateDropdownOpen(false); }}
                     className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                       dateFilterMode === 'this_month'
-                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                        : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     <span>This Month</span>
-                    {dateFilterMode === 'this_month' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                    {dateFilterMode === 'this_month' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setDateFilterMode('last_30_days'); setIsDateDropdownOpen(false); }}
                     className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                       dateFilterMode === 'last_30_days'
-                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                        : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     <span>Last 30 Days</span>
-                    {dateFilterMode === 'last_30_days' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                    {dateFilterMode === 'last_30_days' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setDateFilterMode('custom'); }}
                     className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
                       dateFilterMode === 'custom'
-                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold'
-                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        ? 'text-amber-700 dark:text-amber-300 font-semibold'
+                        : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
                     <span>Custom Range</span>
-                    {dateFilterMode === 'custom' && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
+                    {dateFilterMode === 'custom' && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
                   </button>
                 </div>
 
@@ -681,7 +679,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
             return (
               <div
                 key={fmt.id}
-                className="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between gap-3 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800 flex flex-col justify-between gap-3"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${fmt.bgColor} ${fmt.iconColor} shrink-0`}>
@@ -703,7 +701,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                   type="button"
                   onClick={() => handleExport(fmt.id)}
                   disabled={exportingFormat !== null}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer transition-colors disabled:opacity-40"
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors disabled:opacity-40"
                 >
                   {isCurrentExporting ? (
                     <>
@@ -712,7 +710,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                     </>
                   ) : (
                     <>
-                      <Download className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+                      <Download className="h-3 w-3" />
                       <span>Export {fmt.ext}</span>
                     </>
                   )}

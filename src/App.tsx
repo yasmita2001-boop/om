@@ -253,7 +253,7 @@ function LifeOSApp() {
       const requestedProfileId = overrideProfileId || activeProfileIdRef.current || storage.getActiveProfileId();
       if (requestedProfileId) storage.setActiveProfile(requestedProfileId);
       let settingsData = await storage.getSingleton<AppState>('appSettings', requestedProfileId || undefined);
-      if (!settingsData && IS_GUEST_MODE && requestedProfileId === GUEST_PROFILE_ID) {
+      if (!settingsData && requestedProfileId === GUEST_PROFILE_ID) {
         settingsData = await ensureDefaultProfiles();
       }
       const activeId = requestedProfileId || settingsData?.profileId;
@@ -572,6 +572,18 @@ function LifeOSApp() {
     }
   };
 
+  const handleGuestUnlock = () => {
+    setGoogleUnlockError(null);
+    setDataLoadError(null);
+    setGoogleUser(null);
+    setAppSettings(undefined);
+    storage.setActiveProfile(GUEST_PROFILE_ID);
+    activeProfileIdRef.current = GUEST_PROFILE_ID;
+    setActiveProfileId(GUEST_PROFILE_ID);
+    setActiveModule('dashboard');
+    setIsGoogleLocked(false);
+  };
+
   // Load all data whenever activeProfileId updates
   useEffect(() => {
     if (activeProfileId) {
@@ -721,32 +733,42 @@ function LifeOSApp() {
 
   if (isGoogleLocked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 text-slate-900 dark:bg-[#0B0F19] dark:text-slate-100">
-        <section className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-xl dark:border-slate-800 dark:bg-slate-900">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
-            <LockKeyhole className="h-7 w-7" />
+      <div className="sanctuary-shell lock-screen">
+        <section className="lock-screen__card" aria-labelledby="lock-screen-title">
+          <div className="lock-screen__icon">
+            <LockKeyhole className="h-6 w-6" aria-hidden="true" />
           </div>
-          <h1 className="mt-5 text-xl font-bold">Om-LifeOS is locked</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+          <p className="lock-screen__eyebrow">OM LIFEOS <span /> PRIVATE WORKSPACE</p>
+          <h1 id="lock-screen-title" className="lock-screen__title">Your space, safely yours.</h1>
+          <p className="lock-screen__description">
             Sign in with your Google account to unlock your workspace.
           </p>
           <button
             type="button"
             onClick={handleGoogleUnlock}
             disabled={isUnlockingGoogle}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="lock-screen__button"
           >
-            <ShieldCheck className="h-4 w-4" />
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
             {isUnlockingGoogle ? 'Signing in…' : 'Unlock with Google'}
           </button>
+          <div className="lock-screen__divider"><span>or</span></div>
+          <button
+            type="button"
+            onClick={handleGuestUnlock}
+            className="lock-screen__guest-button"
+          >
+            Continue as guest
+          </button>
           {googleUnlockError && (
-            <p role="alert" className="mt-4 text-left text-xs font-medium text-rose-600 dark:text-rose-400">
+            <p role="alert" className="lock-screen__error">
               {googleUnlockError}
             </p>
           )}
-          <p className="mt-5 text-[11px] text-slate-400">
-            Your workspace remains locked until Google sign-in succeeds.
-          </p>
+          <div className="lock-screen__privacy">
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+            <p>Guest data stays on this device. Sign in to open your Google workspace.</p>
+          </div>
         </section>
       </div>
     );

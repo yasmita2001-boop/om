@@ -1118,6 +1118,20 @@ a, button, input, select, textarea, label, [role="button"], summary {
   will-change: transform, opacity;
 }
 
+.sanctuary-foreground-dimmer {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  background: rgb(0 0 0 / var(--om-foreground-dim-alpha, 0));
+  pointer-events: none;
+  transition: background-color 120ms linear;
+}
+
+html[data-foreground-contrast="true"] .sanctuary-shell :is(button, input, select, textarea),
+html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctuary-sidebar, .sanctuary-mobile-bottom-nav, .sanctuary-mobile-module-sheet) {
+  filter: contrast(var(--om-foreground-contrast, 1));
+}
+
 @keyframes sanctuary-landscape-drift {
   0% { background-position: 0 0, 48% 47%; }
   100% { background-position: 0 0, 52% 49%; }

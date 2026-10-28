@@ -31,6 +31,7 @@ import {
 
 const IS_GUEST_MODE = import.meta.env.DEV || import.meta.env.MODE === 'local-test';
 const GUEST_PROFILE_ID = 'om-master-profile';
+const LOW_POWER_VIEWPORT_QUERY = '(max-width: 767px), (pointer: coarse)';
 
 // Components
 import { Header } from './components/Header';
@@ -86,6 +87,9 @@ function LifeOSApp() {
       return true;
     }
   });
+  const [isLowPowerViewport, setIsLowPowerViewport] = useState(() =>
+    window.matchMedia(LOW_POWER_VIEWPORT_QUERY).matches
+  );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [dataLoadError, setDataLoadError] = useState<string | null>(null);
@@ -122,6 +126,12 @@ function LifeOSApp() {
       localStorage.setItem('om_theme_mode', appearance.colorMode);
     } catch {}
   }, [appearance]);
+  useEffect(() => {
+    const media = window.matchMedia(LOW_POWER_VIEWPORT_QUERY);
+    const updateViewportMode = () => setIsLowPowerViewport(media.matches);
+    media.addEventListener('change', updateViewportMode);
+    return () => media.removeEventListener('change', updateViewportMode);
+  }, []);
   useEffect(() => {
     if (appearance.backgroundId !== 'custom' || !appearance.backgroundImage.startsWith('idb-background:')) return;
     let cancelled = false;
@@ -608,25 +618,39 @@ function LifeOSApp() {
   // Multi-tab cross-device broadcast listener & storage event listener
   useEffect(() => {
     const channel = storage.getChannel();
+    let refreshTimeout: number | undefined;
+    const scheduleDataRefresh = () => {
+      if (!activeProfileIdRef.current) return;
+      window.clearTimeout(refreshTimeout);
+      refreshTimeout = window.setTimeout(() => {
+        void loadAllData();
+      }, 150);
+    };
     const refreshActions = new Set([
       'delete', 'recycle', 'clear', 'empty', 'restore', 'purge',
       'restoreWorkspaceBackup', 'importFullBackup', 'purgeDefaultData'
     ]);
     const unsub = storage.onStorageChange((_store, action) => {
       if (action && refreshActions.has(action) && activeProfileIdRef.current) {
-        loadAllData(activeProfileIdRef.current);
+        scheduleDataRefresh();
       }
     });
 
-    if (!channel) return unsub;
+    if (!channel) {
+      return () => {
+        window.clearTimeout(refreshTimeout);
+        unsub();
+      };
+    }
 
     const handleMessage = (e: MessageEvent) => {
       if (e.data?.sourceDevice !== storage.deviceId && activeProfileId) {
-        loadAllData();
+        scheduleDataRefresh();
       }
     };
     channel.addEventListener('message', handleMessage);
     return () => {
+      window.clearTimeout(refreshTimeout);
       unsub();
       channel.removeEventListener('message', handleMessage);
     };
@@ -772,11 +796,12 @@ function LifeOSApp() {
       className="sanctuary-shell isolate flex min-h-screen flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white dark:text-slate-100 bg-transparent"
     >
       <style>{'@supports (appearance: base-select) { .sanctuary-shell select::picker(select)::backdrop { background: transparent; } }'}</style>
-      {environmentEnabled && (
+      {environmentEnabled && !isLowPowerViewport && (
         <Suspense fallback={null}>
           <SanctuaryEnvironment />
         </Suspense>
       )}
+      <div className="sanctuary-foreground-dimmer" aria-hidden="true" />
       {/* Top Bar */}
       <Header
         activeModule={activeModule}

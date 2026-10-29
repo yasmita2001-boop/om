@@ -7,6 +7,10 @@ export interface AppearancePreferences {
   presetId: string;
   colorMode: AppearanceColorMode;
   accentColor: string;
+  customThemeBackgroundColor: string;
+  customThemeSurfaceColor: string;
+  customThemeTextColor: string;
+  customThemeBorderColor: string;
   backgroundId: string;
   backgroundImage: string;
   transparentBackground: boolean;
@@ -100,6 +104,10 @@ export const DEFAULT_APPEARANCE: AppearancePreferences = {
   presetId: 'sanctuary',
   colorMode: 'dark',
   accentColor: '#b88648',
+  customThemeBackgroundColor: '#eee5d9',
+  customThemeSurfaceColor: '#ffffff',
+  customThemeTextColor: '#1e293b',
+  customThemeBorderColor: '#d1d5db',
   backgroundId: 'sanctuary',
   backgroundImage: '',
   transparentBackground: false,
@@ -145,7 +153,11 @@ const clamp = (value: unknown, min: number, max: number, fallback: number): numb
 };
 
 export function normalizeAppearance(value?: Partial<AppearancePreferences> | null): AppearancePreferences {
-  const preset = APPEARANCE_PRESETS.find(item => item.id === value?.presetId) || APPEARANCE_PRESETS[0];
+  const selectedPreset = APPEARANCE_PRESETS.find(item => item.id === value?.presetId);
+  const presetId = value?.presetId === 'custom'
+    ? 'custom'
+    : selectedPreset?.id || APPEARANCE_PRESETS[0].id;
+  const preset = selectedPreset || APPEARANCE_PRESETS[0];
   const colorMode = value?.colorMode === 'light' || value?.colorMode === 'dark' || value?.colorMode === 'system'
     ? value.colorMode
     : DEFAULT_APPEARANCE.colorMode;
@@ -155,6 +167,29 @@ export function normalizeAppearance(value?: Partial<AppearancePreferences> | nul
       ? `#${rawAccent[1]}${rawAccent[1]}${rawAccent[2]}${rawAccent[2]}${rawAccent[3]}${rawAccent[3]}`.toLowerCase()
       : rawAccent.toLowerCase()
     : preset.accentColor;
+  const normalizeHexColor = (rawValue: unknown, fallback: string): string => {
+    const raw = typeof rawValue === 'string' ? rawValue.trim() : '';
+    if (!HEX_PATTERN.test(raw)) return fallback;
+    return raw.length === 4
+      ? `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`.toLowerCase()
+      : raw.toLowerCase();
+  };
+  const customThemeBackgroundColor = normalizeHexColor(
+    value?.customThemeBackgroundColor,
+    DEFAULT_APPEARANCE.customThemeBackgroundColor
+  );
+  const customThemeSurfaceColor = normalizeHexColor(
+    value?.customThemeSurfaceColor,
+    DEFAULT_APPEARANCE.customThemeSurfaceColor
+  );
+  const customThemeTextColor = normalizeHexColor(
+    value?.customThemeTextColor,
+    DEFAULT_APPEARANCE.customThemeTextColor
+  );
+  const customThemeBorderColor = normalizeHexColor(
+    value?.customThemeBorderColor,
+    DEFAULT_APPEARANCE.customThemeBorderColor
+  );
   const backgroundId = value?.backgroundId === 'custom'
     && typeof value.backgroundImage === 'string'
     && ((IMAGE_DATA_PATTERN.test(value.backgroundImage)
@@ -170,9 +205,13 @@ export function normalizeAppearance(value?: Partial<AppearancePreferences> | nul
   const transparentBackground = Boolean(value?.transparentBackground);
 
   return {
-    presetId: preset.id,
+    presetId,
     colorMode,
     accentColor,
+    customThemeBackgroundColor,
+    customThemeSurfaceColor,
+    customThemeTextColor,
+    customThemeBorderColor,
     backgroundId,
     backgroundImage,
     transparentBackground,
@@ -213,11 +252,69 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
     ? backgroundObjectUrls.get(appearance.backgroundImage)
       || (IMAGE_DATA_PATTERN.test(appearance.backgroundImage) ? appearance.backgroundImage : '')
     : '';
-  root.style.setProperty('--om-wallpaper-image', appearance.backgroundId === 'custom' && customImageUrl
-    ? `url("${customImageUrl}")`
-    : preset.backgroundImage);
-  root.style.setProperty('--om-wallpaper-color', isTransparentBackground ? 'transparent' : preset.backgroundColor);
-  root.style.setProperty('--om-preset-background', coordinatedPreset.backgroundColor);
+  const usesCustomThemeWallpaper = appearance.presetId === 'custom' && appearance.backgroundId !== 'custom';
+  root.style.setProperty(
+    '--om-wallpaper-image',
+    appearance.backgroundId === 'custom' && customImageUrl
+      ? `url("${customImageUrl}")`
+      : usesCustomThemeWallpaper
+        ? `linear-gradient(135deg, ${appearance.customThemeBackgroundColor} 0%, ${appearance.customThemeBackgroundColor} 100%)`
+        : preset.backgroundImage
+  );
+  root.style.setProperty(
+    '--om-wallpaper-color',
+    isTransparentBackground
+      ? 'transparent'
+      : usesCustomThemeWallpaper
+        ? appearance.customThemeBackgroundColor
+        : preset.backgroundColor
+  );
+  root.style.setProperty(
+    '--om-preset-background',
+    appearance.presetId === 'custom' ? appearance.customThemeBackgroundColor : coordinatedPreset.backgroundColor
+  );
+  if (appearance.presetId === 'custom') {
+    root.style.setProperty('--om-custom-background', appearance.customThemeBackgroundColor);
+    root.style.setProperty('--om-custom-surface', appearance.customThemeSurfaceColor);
+    root.style.setProperty('--om-custom-text', appearance.customThemeTextColor);
+    root.style.setProperty('--om-custom-border', appearance.customThemeBorderColor);
+    root.style.setProperty('--om-card-base', appearance.customThemeSurfaceColor);
+    root.style.setProperty(
+      '--om-card-soft-base',
+      `color-mix(in srgb, ${appearance.customThemeSurfaceColor} 88%, ${appearance.customThemeBackgroundColor})`
+    );
+    root.style.setProperty(
+      '--om-shell-surface',
+      `color-mix(in srgb, ${appearance.customThemeSurfaceColor} 84%, ${appearance.customThemeBackgroundColor} 16%)`
+    );
+    root.style.setProperty(
+      '--om-shell-surface-soft',
+      `color-mix(in srgb, ${appearance.customThemeSurfaceColor} 68%, ${appearance.customThemeBackgroundColor} 32%)`
+    );
+    root.style.setProperty('--om-ink', appearance.customThemeTextColor);
+    root.style.setProperty('--om-line', appearance.customThemeBorderColor);
+    root.style.setProperty(
+      '--om-ink-soft',
+      `color-mix(in srgb, ${appearance.customThemeTextColor} 72%, ${appearance.customThemeSurfaceColor})`
+    );
+    root.style.setProperty(
+      '--om-ink-muted',
+      `color-mix(in srgb, ${appearance.customThemeTextColor} 54%, ${appearance.customThemeSurfaceColor})`
+    );
+  } else {
+    root.style.removeProperty('--om-custom-background');
+    root.style.removeProperty('--om-custom-surface');
+    root.style.removeProperty('--om-custom-text');
+    root.style.removeProperty('--om-custom-border');
+    root.style.removeProperty('--om-card-base');
+    root.style.removeProperty('--om-card-soft-base');
+    root.style.removeProperty('--om-shell-surface');
+    root.style.removeProperty('--om-shell-surface-soft');
+    root.style.removeProperty('--om-ink');
+    root.style.removeProperty('--om-line');
+    root.style.removeProperty('--om-ink-soft');
+    root.style.removeProperty('--om-ink-muted');
+  }
   root.style.setProperty('--om-wallpaper-position', `${appearance.positionX}% ${appearance.positionY}%`);
   root.style.setProperty('--om-wallpaper-zoom', String(appearance.zoom / 100));
   root.style.setProperty('--om-wallpaper-overlay', String(isTransparentBackground ? 0 : appearance.overlay / 100));
@@ -240,6 +337,7 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
   root.dataset.wallpaperId = appearance.backgroundId;
   root.dataset.wallpaperCustom = String(appearance.backgroundId === 'custom');
   root.dataset.eyeComfort = String(isEyeComfort);
+  root.dataset.customTheme = String(appearance.presetId === 'custom');
   return appearance;
 }
 

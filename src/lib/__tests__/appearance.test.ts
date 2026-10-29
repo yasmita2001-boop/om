@@ -16,6 +16,7 @@ describe('appearance preferences', () => {
     delete document.documentElement.dataset.wallpaperCustom;
     delete document.documentElement.dataset.wallpaperTransparent;
     delete document.documentElement.dataset.eyeComfort;
+    delete document.documentElement.dataset.customTheme;
   });
 
   it('normalizes invalid values and clamps background controls', () => {
@@ -23,6 +24,10 @@ describe('appearance preferences', () => {
       presetId: 'unknown',
       colorMode: 'auto' as never,
       accentColor: 'bad',
+      customThemeBackgroundColor: 'bad',
+      customThemeSurfaceColor: 'bad',
+      customThemeTextColor: 'bad',
+      customThemeBorderColor: 'bad',
       positionX: 140,
       positionY: -10,
       zoom: 300,
@@ -40,6 +45,10 @@ describe('appearance preferences', () => {
       presetId: 'sanctuary',
       colorMode: DEFAULT_APPEARANCE.colorMode,
       accentColor: '#b88648',
+      customThemeBackgroundColor: DEFAULT_APPEARANCE.customThemeBackgroundColor,
+      customThemeSurfaceColor: DEFAULT_APPEARANCE.customThemeSurfaceColor,
+      customThemeTextColor: DEFAULT_APPEARANCE.customThemeTextColor,
+      customThemeBorderColor: DEFAULT_APPEARANCE.customThemeBorderColor,
       positionX: 100,
       positionY: 0,
       zoom: 150,
@@ -183,6 +192,73 @@ describe('appearance preferences', () => {
     });
 
     expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe(ocean.backgroundColor);
+  });
+
+  it('normalizes and applies a custom theme color to the wallpaper and surfaces', () => {
+    const appearance = applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: 'custom',
+      backgroundId: 'ocean',
+      accentColor: '#123',
+      customThemeBackgroundColor: '#abc',
+      customThemeSurfaceColor: '#345',
+      customThemeTextColor: '#789',
+      customThemeBorderColor: '#def'
+    });
+
+    expect(appearance).toMatchObject({
+      presetId: 'custom',
+      backgroundId: 'ocean',
+      accentColor: '#112233',
+      customThemeBackgroundColor: '#aabbcc',
+      customThemeSurfaceColor: '#334455',
+      customThemeTextColor: '#778899',
+      customThemeBorderColor: '#ddeeff'
+    });
+    expect(document.documentElement.style.getPropertyValue('--color-brand')).toBe('#112233');
+    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe('#aabbcc');
+    expect(document.documentElement.style.getPropertyValue('--om-custom-surface')).toBe('#334455');
+    expect(document.documentElement.style.getPropertyValue('--om-custom-text')).toBe('#778899');
+    expect(document.documentElement.style.getPropertyValue('--om-custom-border')).toBe('#ddeeff');
+    expect(document.documentElement.style.getPropertyValue('--om-card-base')).toBe('#334455');
+    expect(document.documentElement.style.getPropertyValue('--om-line')).toBe('#ddeeff');
+    expect(document.documentElement.dataset.customTheme).toBe('true');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-color')).toBe('#aabbcc');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toContain('#aabbcc');
+  });
+
+  it('keeps an uploaded wallpaper when a custom theme is active', () => {
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: 'custom',
+      backgroundId: 'custom',
+      backgroundImage: 'data:image/jpeg;base64,ZmFrZQ==',
+      customThemeBackgroundColor: '#123456'
+    });
+
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-color')).toBe('#eee5d9');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toContain('data:image/jpeg;base64,ZmFrZQ==');
+  });
+
+  it('removes custom color tokens when switching back to a coordinated theme', () => {
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: 'custom',
+      customThemeBackgroundColor: '#123456',
+      customThemeSurfaceColor: '#234567',
+      customThemeTextColor: '#345678',
+      customThemeBorderColor: '#456789'
+    });
+
+    applyAppearance({ ...DEFAULT_APPEARANCE, presetId: 'ocean' });
+
+    expect(document.documentElement.dataset.customTheme).toBe('false');
+    expect(document.documentElement.style.getPropertyValue('--om-custom-background')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--om-custom-surface')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--om-custom-text')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--om-custom-border')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--om-card-base')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--om-line')).toBe('');
   });
 
   it('applies low-distraction light and dark eye-comfort themes', () => {

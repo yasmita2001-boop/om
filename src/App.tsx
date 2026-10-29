@@ -734,9 +734,15 @@ function LifeOSApp() {
   if (isGoogleLocked) {
     return (
       <div className="sanctuary-shell lock-screen">
+        <div className="lock-screen__scene" aria-hidden="true">
+          <div className="lock-screen__nebula" />
+          <div className="lock-screen__orbit lock-screen__orbit--one" />
+          <div className="lock-screen__orbit lock-screen__orbit--two" />
+        </div>
         <section className="lock-screen__card" aria-labelledby="lock-screen-title">
-          <div className="lock-screen__icon">
-            <LockKeyhole className="h-6 w-6" aria-hidden="true" />
+          <div className="lock-screen__portal" aria-hidden="true">
+            <span className="lock-screen__portal-core" />
+            <LockKeyhole className="h-14 w-14" />
           </div>
           <p className="lock-screen__eyebrow">OM LIFEOS <span /> PRIVATE WORKSPACE</p>
           <h1 id="lock-screen-title" className="lock-screen__title">Your space, safely yours.</h1>

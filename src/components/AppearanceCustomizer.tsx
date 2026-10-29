@@ -37,11 +37,6 @@ const ACCENT_PRESETS = [
   { name: 'Slate', hex: '#475569' }
 ];
 
-const EYE_COMFORT_PRESETS = [
-  { id: 'comfort-light', label: 'Soft light', description: 'Muted background and warm surfaces' },
-  { id: 'comfort-dark', label: 'Low-glare dark', description: 'Quiet charcoal surfaces for dim rooms' }
-] as const;
-
 const isValidHex = (value: string) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
 
 export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
@@ -51,6 +46,9 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
   onError
 }) => {
   const [draft, setDraft] = useState(() => normalizeAppearance(value));
+  const [isCustomThemeEditorOpen, setIsCustomThemeEditorOpen] = useState(
+    () => normalizeAppearance(value).presetId === 'custom'
+  );
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const committedAppearance = useRef(normalizeAppearance(value));
@@ -73,34 +71,6 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
     setDraft(current => normalizeAppearance({ ...current, ...updates }));
   };
 
-  const selectEyeComfort = (presetId: typeof EYE_COMFORT_PRESETS[number]['id']) => {
-    const preset = APPEARANCE_PRESETS.find(item => item.id === presetId);
-    if (!preset) {
-      onError(`Eye-comfort preset "${presetId}" is unavailable.`);
-      return;
-    }
-
-    updateDraft({
-      presetId: preset.id,
-      colorMode: preset.colorMode,
-      accentColor: preset.accentColor,
-      backgroundId: preset.id,
-      backgroundImage: '',
-      transparentBackground: false,
-      foregroundTransparency: 0,
-      foregroundBrightness: 100,
-      foregroundContrast: 100,
-      backgroundBrightness: 100,
-      backgroundContrast: 100,
-      textClarity: 0,
-      positionX: 50,
-      positionY: 50,
-      zoom: 100,
-      overlay: 0,
-      blur: 0
-    });
-  };
-
   const commitSlider = (key: keyof AppearancePreferences, value: number) => {
     const next = normalizeAppearance({ ...draft, [key]: value });
     setDraft(next);
@@ -108,8 +78,14 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
   };
 
   const handleApply = async (next = draft) => {
-    if (!isValidHex(next.accentColor)) {
-      onError('Enter a valid HEX color, for example #B88648.');
+    if (!isValidHex(next.accentColor)
+      || (next.presetId === 'custom' && [
+        next.customThemeBackgroundColor,
+        next.customThemeSurfaceColor,
+        next.customThemeTextColor,
+        next.customThemeBorderColor
+      ].some(color => !isValidHex(color)))) {
+      onError('Enter valid HEX colors, for example #B88648.');
       return;
     }
     const normalized = normalizeAppearance(next);
@@ -144,7 +120,14 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
     }
   };
 
-  const canApply = !isSaving && isValidHex(draft.accentColor);
+  const canApply = !isSaving
+    && isValidHex(draft.accentColor)
+    && (draft.presetId !== 'custom' || [
+      draft.customThemeBackgroundColor,
+      draft.customThemeSurfaceColor,
+      draft.customThemeTextColor,
+      draft.customThemeBorderColor
+    ].every(isValidHex));
 
   return (
     <section className="space-y-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
@@ -160,36 +143,6 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,1fr)]">
         <div className="space-y-5">
           <div className="space-y-2.5">
-            <div>
-              <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Eye comfort</div>
-              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                Choose softer colors with a quiet background and less decorative motion.
-              </p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {EYE_COMFORT_PRESETS.map(option => {
-                const selected = draft.presetId === option.id;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => selectEyeComfort(option.id)}
-                    className={`rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-                      selected
-                        ? 'border-indigo-500 bg-indigo-50 text-slate-900 dark:border-indigo-400 dark:bg-indigo-950/40 dark:text-white'
-                        : 'border-slate-200 bg-white/50 text-slate-700 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:border-slate-500'
-                    }`}
-                  >
-                    <span className="block text-xs font-bold">{option.label}</span>
-                    <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">{option.description}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-2.5">
             <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Coordinated themes</div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {APPEARANCE_PRESETS.map(preset => {
@@ -199,13 +152,31 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                     key={preset.id}
                     type="button"
                     aria-pressed={selected}
-                    onClick={() => updateDraft({
-                      presetId: preset.id,
-                      backgroundId: preset.id,
-                      backgroundImage: '',
-                      accentColor: preset.accentColor,
-                      colorMode: preset.colorMode
-                    })}
+                    onClick={() => {
+                      const isEyeComfort = preset.id === 'comfort-light' || preset.id === 'comfort-dark';
+                      updateDraft({
+                        presetId: preset.id,
+                        backgroundId: preset.id,
+                        backgroundImage: '',
+                        accentColor: preset.accentColor,
+                        colorMode: preset.colorMode,
+                        ...(isEyeComfort ? {
+                          transparentBackground: false,
+                          foregroundTransparency: 0,
+                          foregroundBrightness: 100,
+                          foregroundContrast: 100,
+                          backgroundBrightness: 100,
+                          backgroundContrast: 100,
+                          textClarity: 0,
+                          positionX: 50,
+                          positionY: 50,
+                          zoom: 100,
+                          overlay: 0,
+                          blur: 0
+                        } : {})
+                      });
+                      setIsCustomThemeEditorOpen(false);
+                    }}
                     className={`overflow-hidden rounded-xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                       selected
                         ? 'border-indigo-500 ring-1 ring-indigo-500 dark:border-indigo-400'
@@ -223,6 +194,36 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                   </button>
                 );
               })}
+              <button
+                type="button"
+                aria-pressed={draft.presetId === 'custom'}
+                aria-expanded={isCustomThemeEditorOpen}
+                onClick={() => {
+                  if (draft.presetId !== 'custom') {
+                    updateDraft({ presetId: 'custom' });
+                    setIsCustomThemeEditorOpen(true);
+                    return;
+                  }
+                  setIsCustomThemeEditorOpen(open => !open);
+                }}
+                className={`overflow-hidden rounded-xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                  draft.presetId === 'custom'
+                    ? 'border-indigo-500 ring-1 ring-indigo-500 dark:border-indigo-400'
+                    : 'border-slate-200 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-500'
+                }`}
+              >
+                <span
+                  className="block h-12"
+                  style={{ background: `linear-gradient(135deg, ${draft.customThemeBackgroundColor}, ${draft.accentColor})` }}
+                />
+                <span className="flex items-center justify-between gap-1 px-2.5 py-2">
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-bold text-slate-800 dark:text-slate-100">Custom</span>
+                    <span className="block truncate text-[10px] text-slate-500 dark:text-slate-400">Your colors, your workspace</span>
+                  </span>
+                  {draft.presetId === 'custom' && <Check className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -232,7 +233,8 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
               <select
                 value={draft.colorMode}
                 onChange={event => updateDraft({ colorMode: event.target.value as AppearanceColorMode })}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                aria-label="Color mode"
+                className="w-full rounded-lg border border-dashed border-slate-300 bg-transparent px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:border-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:text-slate-200 dark:hover:border-indigo-500"
               >
                 <option value="system">System preference</option>
                 <option value="light">Light</option>
@@ -308,6 +310,54 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
               </div>
             </div>
           </div>
+          {draft.presetId === 'custom' && isCustomThemeEditorOpen && (
+            <div className="space-y-3">
+              <div>
+                <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">Custom theme colors</span>
+                <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">
+                  Choose the main colors used throughout the workspace. Changes preview live.
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {([
+                  ['Page background', 'customThemeBackgroundColor'],
+                  ['Cards & surfaces', 'customThemeSurfaceColor'],
+                  ['Text', 'customThemeTextColor'],
+                  ['Borders', 'customThemeBorderColor']
+                ] as const).map(([label, key]) => (
+                  <label key={key} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-dashed border-slate-300 bg-transparent px-2.5 py-2 dark:border-slate-700">
+                    <span className="min-w-0 text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+                    <span className="flex shrink-0 items-center gap-1">
+                      <input
+                        type="color"
+                        value={isValidHex(draft[key]) ? draft[key] : DEFAULT_APPEARANCE[key]}
+                        onChange={event => updateDraft({ [key]: event.target.value })}
+                        aria-label={`Choose custom ${label.toLowerCase()} color`}
+                        className="h-7 w-7 cursor-pointer rounded border-0 bg-transparent p-0"
+                      />
+                      <input
+                        type="text"
+                        value={draft[key]}
+                        onChange={event => setDraft(current => ({ ...current, [key]: event.target.value }))}
+                        placeholder={DEFAULT_APPEARANCE[key]}
+                        aria-label={`Custom ${label.toLowerCase()} HEX`}
+                        aria-invalid={!isValidHex(draft[key])}
+                        className="h-8 w-[5.5rem] rounded-none border-0 bg-transparent px-1.5 font-mono text-[11px] uppercase text-slate-900 shadow-none focus-visible:outline-none dark:text-white"
+                      />
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleApply()}
+                disabled={!canApply}
+                className="w-full rounded-lg border border-dashed border-slate-300 bg-transparent px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-indigo-400 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:border-indigo-500 dark:hover:text-indigo-300"
+              >
+                {isSaving ? 'Saving…' : 'Save custom theme'}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3">

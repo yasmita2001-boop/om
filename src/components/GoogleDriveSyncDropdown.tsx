@@ -468,15 +468,15 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
       {isOpen && (
         <div className="sanctuary-drive-panel absolute bottom-full left-0 right-0 mb-1.5 z-50 rounded-xl border border-slate-200/90 bg-white p-3 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900 space-y-2.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
-            <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 items-center justify-between gap-1 border-b border-slate-100 pb-2 dark:border-slate-800">
+          <div className="flex min-w-0 items-center gap-1">
               <Cloud className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span className="text-xs font-bold text-slate-900 dark:text-white">
+            <span className="whitespace-nowrap text-[10px] font-bold text-slate-900 dark:text-white">
                 Google Drive Sync
               </span>
             </div>
             {user && (
-              <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            <span className="shrink-0 whitespace-nowrap rounded-full bg-emerald-50 px-1 py-0.5 text-[8px] font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                 Connected
               </span>
             )}
@@ -577,17 +577,17 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+              <div className="grid min-w-0 grid-cols-2 gap-1.5 pt-0.5">
                 {/* Sync Now */}
                 <button
                   type="button"
                   disabled={isSyncing || !isOnline}
                   onClick={handleSyncNow}
-                  className="flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 py-1.5 px-2 text-xs font-semibold text-white hover:bg-indigo-500 active:scale-95 shadow-2xs transition-all cursor-pointer disabled:opacity-60"
+                  className="flex min-w-0 items-center justify-center gap-1 rounded-lg bg-indigo-600 px-1 py-1.5 text-[10px] font-semibold text-white hover:bg-indigo-500 active:scale-95 shadow-2xs transition-all cursor-pointer disabled:opacity-60"
                   title="Upload latest active workspace records to Google Drive"
                 >
-                  <CloudUpload className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+                  <CloudUpload className={`h-3 w-3 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span className="whitespace-nowrap">{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
                 </button>
 
                 {/* Restore from Drive */}
@@ -595,17 +595,17 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
                   type="button"
                   disabled={isRestoring || isSyncing || !isOnline}
                   onClick={handleInitiateRestore}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-1.5 px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 transition-all cursor-pointer disabled:opacity-60"
+                  className="flex min-w-0 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-1.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 transition-all cursor-pointer disabled:opacity-60"
                   title="Download and restore backup from Google Drive"
                 >
-                  <CloudDownload className={`h-3.5 w-3.5 ${isRestoring ? 'animate-spin' : ''}`} />
-                  <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
+                  <CloudDownload className={`h-3 w-3 shrink-0 ${isRestoring ? 'animate-spin' : ''}`} />
+                  <span className="whitespace-nowrap">{isRestoring ? 'Restoring...' : 'Restore'}</span>
                 </button>
               </div>
 
               {/* Auto Sync Toggle */}
               <div className="flex items-center justify-between border-t border-slate-100 pt-2 dark:border-slate-800 text-[11px]">
-                <span className="text-slate-600 dark:text-slate-400">Auto-Sync on changes</span>
+                <span className="whitespace-nowrap text-[10px] text-slate-600 dark:text-slate-400">Auto-Sync on changes</span>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
@@ -618,15 +618,15 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
               </div>
 
               {/* Sign Out Row */}
-              <div className="border-t border-slate-100 pt-2 dark:border-slate-800 flex items-center justify-between">
+              <div className="min-w-0 border-t border-slate-100 pt-2 dark:border-slate-800 flex items-center justify-between">
                 <button
                   type="button"
                   disabled={isSyncing || isRestoring}
                   onClick={handleSignOut}
-                  className="w-full flex items-center justify-center gap-1.5 text-[11px] font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 py-1 rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full min-w-0 flex items-center justify-center gap-1.5 whitespace-nowrap text-[10px] font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 py-1 rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <LogOut className="h-3 w-3" />
-                  <span>Sign Out & Switch to Guest</span>
+                  <span className="whitespace-nowrap">Sign Out & Switch to Guest</span>
                 </button>
               </div>
             </div>

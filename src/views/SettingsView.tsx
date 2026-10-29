@@ -27,6 +27,8 @@ interface SettingsViewProps {
   onToggleTheme: () => void;
   appearance: AppearancePreferences;
   onApplyAppearance: (value: AppearancePreferences) => Promise<void>;
+  wallpaperVideoMuted: boolean;
+  onToggleWallpaperVideoSound: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -37,7 +39,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   theme,
   onToggleTheme,
   appearance,
-  onApplyAppearance
+  onApplyAppearance,
+  wallpaperVideoMuted,
+  onToggleWallpaperVideoSound
 }) => {
   const [activeTab, setActiveTab] = useState<'system' | 'exports'>('system');
   const [storageStats, setStorageStats] = useState<{
@@ -214,6 +218,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               onApply={onApplyAppearance}
               onSuccess={onSuccess}
               onError={onError}
+              wallpaperVideoMuted={wallpaperVideoMuted}
+              onToggleWallpaperVideoSound={onToggleWallpaperVideoSound}
             />
             <div className="hidden flex-1 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-6 flex-col h-full">
               <div className="space-y-4">

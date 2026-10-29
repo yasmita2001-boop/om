@@ -1651,6 +1651,36 @@ a, button, input, select, textarea, label, [role="button"], summary {
   will-change: background-position;
 }
 
+html[data-wallpaper-video="true"] .sanctuary-shell::before {
+  background-image: linear-gradient(
+    180deg,
+    rgb(15 23 42 / calc(var(--om-wallpaper-overlay, 0.22) * 0.45)) 0%,
+    rgb(15 23 42 / var(--om-wallpaper-overlay, 0.22)) 100%
+  );
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: none;
+  transform: none;
+  animation: none;
+}
+
+.sanctuary-wallpaper-video {
+  position: fixed;
+  z-index: -2;
+  inset: -1rem;
+  width: calc(100% + 2rem);
+  height: calc(100% + 2rem);
+  object-fit: cover;
+  object-position: var(--om-wallpaper-position, center 48%);
+  filter: blur(var(--om-wallpaper-blur, 0px))
+    brightness(var(--om-wallpaper-brightness, 100%))
+    contrast(var(--om-wallpaper-contrast, 100%));
+  transform: scale(var(--om-wallpaper-zoom, 1));
+  transform-origin: var(--om-wallpaper-position, center);
+  pointer-events: none;
+}
+
 .sanctuary-shell[data-wallpaper-custom="true"]::before {
   animation: none;
 }

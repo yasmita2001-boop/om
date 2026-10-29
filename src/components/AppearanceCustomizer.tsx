@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, ImagePlus, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Check, Film, ImagePlus, RotateCcw, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import {
   APPEARANCE_PRESETS,
   AppearanceColorMode,
@@ -7,7 +7,8 @@ import {
   applyAppearance,
   DEFAULT_APPEARANCE,
   normalizeAppearance,
-  storeOriginalBackgroundImage
+  storeOriginalBackgroundImage,
+  storeBackgroundVideo
 } from '../lib/appearance';
 
 interface AppearanceCustomizerProps {
@@ -15,6 +16,8 @@ interface AppearanceCustomizerProps {
   onApply: (value: AppearancePreferences) => Promise<void>;
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
+  wallpaperVideoMuted: boolean;
+  onToggleWallpaperVideoSound: () => void;
 }
 
 const ACCENT_PRESETS = [
@@ -43,7 +46,9 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
   value,
   onApply,
   onSuccess,
-  onError
+  onError,
+  wallpaperVideoMuted,
+  onToggleWallpaperVideoSound
 }) => {
   const [draft, setDraft] = useState(() => normalizeAppearance(value));
   const [isCustomThemeEditorOpen, setIsCustomThemeEditorOpen] = useState(
@@ -107,13 +112,16 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
     void handleApply(reset);
   };
 
-  const handleImageSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBackgroundSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
     try {
-      const backgroundImage = await storeOriginalBackgroundImage(file);
-      updateDraft({ backgroundId: 'custom', backgroundImage });
+      const isVideo = file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mp4');
+      const backgroundImage = isVideo
+        ? await storeBackgroundVideo(file)
+        : await storeOriginalBackgroundImage(file);
+      updateDraft({ backgroundId: 'custom', backgroundImage, backgroundIsVideo: isVideo });
       onSuccess('Custom background ready to preview. Apply to save.');
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Could not use that image as a background.');
@@ -158,6 +166,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                         presetId: preset.id,
                         backgroundId: preset.id,
                         backgroundImage: '',
+                        backgroundIsVideo: false,
                         accentColor: preset.accentColor,
                         colorMode: preset.colorMode,
                         ...(isEyeComfort ? {
@@ -244,22 +253,48 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
 
             <div className="space-y-1.5">
               <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">Custom background</span>
+              <span className="block text-[10px] text-slate-500 dark:text-slate-400">
+                Images up to 12 MB or MP4 videos up to 50 MB.
+              </span>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
-                onChange={event => void handleImageSelected(event)}
+                accept="image/*,video/mp4,.mp4"
+                onChange={event => void handleBackgroundSelected(event)}
                 className="sr-only"
-                aria-label="Upload a custom background image"
+                aria-label="Upload a custom background image or MP4 video"
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-indigo-500 dark:hover:text-indigo-300"
-              >
-                <ImagePlus className="h-4 w-4" />
-                {draft.backgroundId === 'custom' ? 'Choose another image' : 'Upload an image'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-indigo-500 dark:hover:text-indigo-300"
+                >
+                  {draft.backgroundIsVideo
+                    ? <Film className="h-4 w-4 shrink-0" />
+                    : <ImagePlus className="h-4 w-4 shrink-0" />}
+                  <span className="truncate">
+                    {draft.backgroundId === 'custom'
+                      ? `Choose another ${draft.backgroundIsVideo ? 'video' : 'image'}`
+                      : 'Upload image or MP4'}
+                  </span>
+                </button>
+                {draft.backgroundIsVideo && (
+                  <button
+                    type="button"
+                    onClick={onToggleWallpaperVideoSound}
+                    className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-indigo-400 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:text-slate-200 dark:hover:border-indigo-500 dark:hover:text-indigo-300"
+                    aria-label={wallpaperVideoMuted ? 'Turn wallpaper video sound on' : 'Mute wallpaper video'}
+                    aria-pressed={!wallpaperVideoMuted}
+                    title={wallpaperVideoMuted ? 'Turn video sound on' : 'Mute video'}
+                  >
+                    {wallpaperVideoMuted
+                      ? <VolumeX className="h-4 w-4" aria-hidden="true" />
+                      : <Volume2 className="h-4 w-4" aria-hidden="true" />}
+                    <span>{wallpaperVideoMuted ? 'Sound off' : 'Sound on'}</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

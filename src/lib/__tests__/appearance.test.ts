@@ -127,6 +127,18 @@ describe('appearance preferences', () => {
 
     expect(appearance.backgroundId).toBe('custom');
     expect(appearance.backgroundImage).toBe(backgroundImage);
+    expect(appearance.backgroundIsVideo).toBe(false);
+  });
+
+  it('accepts a stored MP4 asset as a custom video background', () => {
+    const appearance = normalizeAppearance({
+      backgroundId: 'custom',
+      backgroundImage: 'idb-background:123e4567-e89b-12d3-a456-426614174000',
+      backgroundIsVideo: true
+    });
+
+    expect(appearance.backgroundId).toBe('custom');
+    expect(appearance.backgroundIsVideo).toBe(true);
   });
 
   it('keeps device appearance out of portable workspace settings', () => {
@@ -326,5 +338,16 @@ describe('appearance preferences', () => {
     });
 
     expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).not.toContain('idb-background:');
+  });
+
+  it('marks custom video wallpapers so the video layer can render behind the workspace', () => {
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      backgroundId: 'custom',
+      backgroundImage: 'idb-background:123e4567-e89b-12d3-a456-426614174000',
+      backgroundIsVideo: true
+    });
+
+    expect(document.documentElement.dataset.wallpaperVideo).toBe('true');
   });
 });

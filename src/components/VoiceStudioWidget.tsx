@@ -68,7 +68,8 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
     };
     updateVoices();
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = updateVoices;
+      window.speechSynthesis.addEventListener('voiceschanged', updateVoices);
+      return () => window.speechSynthesis.removeEventListener('voiceschanged', updateVoices);
     }
   }, []);
 
@@ -684,7 +685,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                   {availableVoices.length > 0 && (
                     <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
                       <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        <span>Installed System Voice:</span>
+                        <span>Installed System Voice (Microsoft, Google, etc.):</span>
                         <span className="text-[10px] text-slate-400 font-normal">
                           {availableVoices.length} detected
                         </span>
@@ -696,9 +697,8 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                       >
                         <option value="">Auto Optimal System Voice</option>
                         {availableVoices
-                          .filter((v) => v.lang.startsWith('hi') || v.lang.startsWith('en'))
                           .map((v) => (
-                            <option key={v.name} value={v.name}>
+                            <option key={`${v.voiceURI}-${v.lang}`} value={v.voiceURI || v.name}>
                               {v.name} ({v.lang})
                             </option>
                           ))}

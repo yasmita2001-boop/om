@@ -13,6 +13,7 @@ export interface AppearancePreferences {
   customThemeBorderColor: string;
   backgroundId: string;
   backgroundImage: string;
+  backgroundIsVideo: boolean;
   transparentBackground: boolean;
   foregroundTransparency: number;
   foregroundBrightness: number;
@@ -110,6 +111,7 @@ export const DEFAULT_APPEARANCE: AppearancePreferences = {
   customThemeBorderColor: '#d1d5db',
   backgroundId: 'sanctuary',
   backgroundImage: '',
+  backgroundIsVideo: false,
   transparentBackground: false,
   foregroundTransparency: 0,
   foregroundBrightness: 100,
@@ -130,7 +132,8 @@ const MAX_BACKGROUND_DATA_URL_LENGTH = 1_500_000;
 const BACKGROUND_ASSET_PREFIX = 'idb-background:';
 const BACKGROUND_DATABASE_NAME = 'om-appearance-assets';
 const BACKGROUND_STORE_NAME = 'backgrounds';
-const MAX_BACKGROUND_FILE_SIZE = 12 * 1024 * 1024;
+const MAX_BACKGROUND_IMAGE_FILE_SIZE = 12 * 1024 * 1024;
+const MAX_BACKGROUND_VIDEO_FILE_SIZE = 50 * 1024 * 1024;
 const backgroundObjectUrls = new Map<string, string>();
 
 const isStoredBackgroundAsset = (value: string): boolean =>
@@ -202,6 +205,9 @@ export function normalizeAppearance(value?: Partial<AppearancePreferences> | nul
   const backgroundImage = backgroundId === 'custom' && typeof value?.backgroundImage === 'string'
     ? value.backgroundImage
     : '';
+  const backgroundIsVideo = backgroundId === 'custom'
+    && isStoredBackgroundAsset(backgroundImage)
+    && value?.backgroundIsVideo === true;
   const transparentBackground = Boolean(value?.transparentBackground);
 
   return {
@@ -214,6 +220,7 @@ export function normalizeAppearance(value?: Partial<AppearancePreferences> | nul
     customThemeBorderColor,
     backgroundId,
     backgroundImage,
+    backgroundIsVideo,
     transparentBackground,
     foregroundTransparency: clamp(value?.foregroundTransparency, 0, 100, DEFAULT_APPEARANCE.foregroundTransparency),
     foregroundBrightness: clamp(value?.foregroundBrightness, 55, 100, DEFAULT_APPEARANCE.foregroundBrightness),
@@ -249,6 +256,7 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
   root.dataset.wallpaperTransparent = String(isTransparentBackground);
   root.style.backgroundColor = isTransparentBackground ? 'transparent' : effectiveColorMode === 'dark' ? '#0B0F19' : '#F8FAFC';
   const customImageUrl = appearance.backgroundId === 'custom'
+    && !appearance.backgroundIsVideo
     ? backgroundObjectUrls.get(appearance.backgroundImage)
       || (IMAGE_DATA_PATTERN.test(appearance.backgroundImage) ? appearance.backgroundImage : '')
     : '';
@@ -336,8 +344,15 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
   root.dataset.foregroundContrast = String(appearance.foregroundContrast !== 100);
   root.dataset.wallpaperId = appearance.backgroundId;
   root.dataset.wallpaperCustom = String(appearance.backgroundId === 'custom');
+  root.dataset.wallpaperVideo = String(appearance.backgroundIsVideo);
   root.dataset.eyeComfort = String(isEyeComfort);
   root.dataset.customTheme = String(appearance.presetId === 'custom');
+  document.dispatchEvent(new CustomEvent('om-wallpaper-change', {
+    detail: {
+      isVideo: appearance.backgroundIsVideo,
+      url: appearance.backgroundIsVideo ? backgroundObjectUrls.get(appearance.backgroundImage) || '' : ''
+    }
+  }));
   return appearance;
 }
 
@@ -381,11 +396,30 @@ export function saveLocalAppearance(value: AppearancePreferences): void {
   }
 }
 
+async function storeBackgroundAsset(file: File): Promise<string> {
+  const assetId = `${BACKGROUND_ASSET_PREFIX}${crypto.randomUUID()}`;
+  const database = await openBackgroundDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(BACKGROUND_STORE_NAME, 'readwrite');
+      transaction.objectStore(BACKGROUND_STORE_NAME).put(file, assetId);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error('Could not save the background media.'));
+      transaction.onabort = () => reject(transaction.error || new Error('Could not save the background media.'));
+    });
+  } finally {
+    database.close();
+  }
+
+  backgroundObjectUrls.set(assetId, URL.createObjectURL(file));
+  return assetId;
+}
+
 export async function storeOriginalBackgroundImage(file: File): Promise<string> {
   if (!file.type.startsWith('image/')) {
     throw new Error('Choose an image file to use as your background.');
   }
-  if (file.size > MAX_BACKGROUND_FILE_SIZE) {
+  if (file.size > MAX_BACKGROUND_IMAGE_FILE_SIZE) {
     throw new Error('Choose an image smaller than 12 MB.');
   }
 
@@ -401,28 +435,31 @@ export async function storeOriginalBackgroundImage(file: File): Promise<string> 
       throw new Error('This image has invalid dimensions. Choose a different image.');
     }
 
-    const assetId = `${BACKGROUND_ASSET_PREFIX}${crypto.randomUUID()}`;
-    const database = await openBackgroundDatabase();
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const transaction = database.transaction(BACKGROUND_STORE_NAME, 'readwrite');
-        transaction.objectStore(BACKGROUND_STORE_NAME).put(file, assetId);
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error || new Error('Could not save the original image.'));
-        transaction.onabort = () => reject(transaction.error || new Error('Could not save the original image.'));
-      });
-    } finally {
-      database.close();
-    }
-
-    backgroundObjectUrls.set(assetId, URL.createObjectURL(file));
-    return assetId;
+    return await storeBackgroundAsset(file);
   } finally {
     bitmap.close();
   }
 }
 
-export async function restoreBackgroundImage(assetId: string): Promise<void> {
+export async function storeBackgroundVideo(file: File): Promise<string> {
+  // Browsers and operating systems often report MP4 files as application/octet-stream.
+  if (!file.name.toLowerCase().endsWith('.mp4') && file.type !== 'video/mp4') {
+    throw new Error('Choose an MP4 video file to use as your background.');
+  }
+  if (file.size > MAX_BACKGROUND_VIDEO_FILE_SIZE) {
+    throw new Error('Choose an MP4 video smaller than 50 MB.');
+  }
+  if (file.size === 0) {
+    throw new Error('That MP4 video is empty. Choose a different file.');
+  }
+  return storeBackgroundAsset(file);
+}
+
+export function getBackgroundAssetUrl(assetId: string): string {
+  return backgroundObjectUrls.get(assetId) || '';
+}
+
+export async function restoreBackgroundAsset(assetId: string): Promise<void> {
   if (!isStoredBackgroundAsset(assetId) || backgroundObjectUrls.has(assetId)) return;
 
   const database = await openBackgroundDatabase();
@@ -433,12 +470,12 @@ export async function restoreBackgroundImage(assetId: string): Promise<void> {
         .objectStore(BACKGROUND_STORE_NAME)
         .get(assetId);
       request.onsuccess = () => resolve(request.result as Blob | undefined);
-      request.onerror = () => reject(request.error || new Error('Could not load the saved background image.'));
+      request.onerror = () => reject(request.error || new Error('Could not load the saved background media.'));
     });
   } finally {
     database.close();
   }
 
-  if (!image) throw new Error('The saved background image is no longer available on this device.');
+  if (!image) throw new Error('The saved background media is no longer available on this device.');
   backgroundObjectUrls.set(assetId, URL.createObjectURL(image));
 }

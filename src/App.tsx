@@ -25,7 +25,7 @@ import {
   hasSavedAppearance,
   normalizeAppearance,
   readSavedAppearance,
-  restoreBackgroundImage,
+  restoreBackgroundAsset,
   saveLocalAppearance
 } from './lib/appearance';
 
@@ -78,6 +78,9 @@ export default function App() {
 function LifeOSApp() {
   const [activeModule, setActiveModule] = useState<NavModule>('dashboard');
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => readSavedAppearance());
+  const [wallpaperVideoUrl, setWallpaperVideoUrl] = useState('');
+  const [isWallpaperVideoMuted, setIsWallpaperVideoMuted] = useState(true);
+  const wallpaperVideoRef = useRef<HTMLVideoElement>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => getEffectiveColorMode(readSavedAppearance().colorMode));
   const appearanceRef = useRef(appearance);
   const [environmentEnabled, setEnvironmentEnabled] = useState(() => {
@@ -119,6 +122,14 @@ function LifeOSApp() {
 
   // Restore appearance immediately so local preferences remain available offline.
   useEffect(() => {
+    const handleWallpaperChange = (event: Event) => {
+      const { isVideo, url } = (event as CustomEvent<{ isVideo: boolean; url: string }>).detail;
+      setWallpaperVideoUrl(isVideo ? url : '');
+    };
+    document.addEventListener('om-wallpaper-change', handleWallpaperChange);
+    return () => document.removeEventListener('om-wallpaper-change', handleWallpaperChange);
+  }, []);
+  useEffect(() => {
     appearanceRef.current = appearance;
     applyAppearance(appearance);
     setTheme(getEffectiveColorMode(appearance.colorMode));
@@ -135,12 +146,12 @@ function LifeOSApp() {
   useEffect(() => {
     if (appearance.backgroundId !== 'custom' || !appearance.backgroundImage.startsWith('idb-background:')) return;
     let cancelled = false;
-    restoreBackgroundImage(appearance.backgroundImage)
+    restoreBackgroundAsset(appearance.backgroundImage)
       .then(() => {
         if (!cancelled) applyAppearance(appearance);
       })
       .catch(error => {
-        console.error('Could not restore the saved background image.', error);
+        console.error('Could not restore the saved background media.', error);
       });
     return () => {
       cancelled = true;
@@ -224,6 +235,26 @@ function LifeOSApp() {
       setToastMessage(prev => (prev === msg ? null : prev));
     }, 2500);
   }, []);
+
+  const toggleWallpaperVideoSound = useCallback(() => {
+    const video = wallpaperVideoRef.current;
+    if (!video) {
+      showToast('Apply the video background before turning its sound on.');
+      return;
+    }
+
+    const shouldUnmute = video.muted;
+    video.muted = !shouldUnmute;
+    if (shouldUnmute) video.volume = 1;
+    setIsWallpaperVideoMuted(!shouldUnmute);
+
+    video.play().catch(error => {
+      video.muted = true;
+      setIsWallpaperVideoMuted(true);
+      console.error('Could not play the wallpaper video with sound.', error);
+      showToast('Browser could not play the video sound. Try clicking Sound on again.');
+    });
+  }, [showToast]);
 
   const handleApplyAppearance = useCallback(async (value: AppearancePreferences) => {
     const nextAppearance = applyAppearance(value);
@@ -824,6 +855,25 @@ function LifeOSApp() {
       className="sanctuary-shell isolate flex min-h-screen flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white dark:text-slate-100 bg-transparent"
     >
       <style>{'@supports (appearance: base-select) { .sanctuary-shell select::picker(select)::backdrop { background: transparent; } }'}</style>
+      {wallpaperVideoUrl && (
+        <>
+          <video
+            ref={wallpaperVideoRef}
+            className="sanctuary-wallpaper-video"
+            src={wallpaperVideoUrl}
+            autoPlay
+            muted={isWallpaperVideoMuted}
+            loop
+            playsInline
+            preload="metadata"
+            aria-hidden="true"
+            onError={() => {
+              console.error('Could not play the selected MP4 background video.');
+              document.documentElement.dataset.wallpaperVideo = 'false';
+            }}
+          />
+        </>
+      )}
       {environmentEnabled && !isLowPowerViewport && (
         <Suspense fallback={null}>
           <SanctuaryEnvironment />
@@ -1122,6 +1172,8 @@ function LifeOSApp() {
                 onToggleTheme={toggleTheme}
                 appearance={appearance}
                 onApplyAppearance={handleApplyAppearance}
+                wallpaperVideoMuted={isWallpaperVideoMuted}
+                onToggleWallpaperVideoSound={toggleWallpaperVideoSound}
               />
             )}
             </Suspense>

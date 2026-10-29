@@ -383,6 +383,39 @@ export interface SpeechUnit {
   pitchOffset: number;
 }
 
+const MAX_SPEECH_UNIT_LENGTH = 180;
+
+function splitLongSpeechUnit(unit: SpeechUnit): SpeechUnit[] {
+  const characters = Array.from(unit.text);
+  if (characters.length <= MAX_SPEECH_UNIT_LENGTH) return [unit];
+
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < characters.length) {
+    let end = Math.min(start + MAX_SPEECH_UNIT_LENGTH, characters.length);
+    if (end < characters.length) {
+      const minimumBreak = start + Math.floor(MAX_SPEECH_UNIT_LENGTH / 2);
+      for (let index = end; index > minimumBreak; index--) {
+        if (/\s/.test(characters[index - 1])) {
+          end = index - 1;
+          break;
+        }
+      }
+    }
+
+    const chunk = characters.slice(start, end).join('').trim();
+    if (chunk) chunks.push(chunk);
+    start = end;
+    while (start < characters.length && /\s/.test(characters[start])) start++;
+  }
+
+  return chunks.map((text, index) => ({
+    text,
+    trailingPauseMs: index === chunks.length - 1 ? unit.trailingPauseMs : 180,
+    pitchOffset: index === chunks.length - 1 ? unit.pitchOffset : 0
+  }));
+}
+
 export function splitIntoSpeechUnits(text: string, pauseMultiplier: number = 1.0): SpeechUnit[] {
   if (!text) return [];
 
@@ -437,7 +470,7 @@ export function splitIntoSpeechUnits(text: string, pauseMultiplier: number = 1.0
     }
   }
 
-  return units;
+  return units.flatMap(splitLongSpeechUnit);
 }
 
 /**
@@ -517,7 +550,7 @@ export function pickOptimalVoice(
   if (!voices || voices.length === 0) return null;
 
   if (exactVoiceName) {
-    const found = voices.find(v => v.name === exactVoiceName);
+    const found = voices.find(v => v.name === exactVoiceName || v.voiceURI === exactVoiceName);
     if (found) return found;
   }
 
@@ -564,4 +597,3 @@ export function pickOptimalVoice(
 
   return sorted.length > 0 ? sorted[0].voice : voices[0];
 }
-

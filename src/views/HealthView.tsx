@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState } from 'react';
 import {
   Heart, Activity, Moon, Droplet, Calendar, Trash2,
@@ -887,7 +888,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     placeholder="Doctor / Clinic"
                     className="h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={apptDate}
                     onChange={e => setApptDate(e.target.value)}
@@ -1061,7 +1062,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Date of Birth</label>
-                <input
+                <ThemedDateTimeInput
                   type="date"
                   value={dob}
                   onChange={e => setDob(e.target.value)}
@@ -1140,7 +1141,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
             <form onSubmit={handleSaveEdit} className="mt-4 space-y-3.5">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Date</label>
-                <input
+                <ThemedDateTimeInput
                   type="date"
                   value={editDate}
                   onChange={e => setEditDate(e.target.value)}

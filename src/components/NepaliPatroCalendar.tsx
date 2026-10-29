@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from './ThemedDateTimeInput';
 import React, { useState, useMemo } from 'react';
 import {
   ChevronLeft,
@@ -740,7 +741,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
                     <span className="text-[10px] font-mono text-gray-400">YYYY-MM-DD</span>
                   </div>
 
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={adDateInput}
                     onChange={e => setAdDateInput(e.target.value)}

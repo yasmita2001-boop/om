@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   CheckSquare, Trash2, Calendar, Target, CheckCircle2,
@@ -21,6 +22,7 @@ import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { FormDisclosure, FormDisclosureToggle } from '../components/FormDisclosure';
+import { GoalPicker } from '../components/GoalPicker';
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 
@@ -823,25 +825,13 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <select
+                    <GoalPicker
+                      goals={goals}
                       value={goalId}
-                      onChange={e => handleSelectGoalForTask(e.target.value)}
+                      onChange={handleSelectGoalForTask}
+                      placeholder="-- Choose Goal --"
                       className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer"
-                    >
-                      <option value="">-- Choose Goal (Main 🎯, Sub 🔹, Micro ▫️, Nano 🔸, Atomic ⚡) --</option>
-                      {goals.map(g => {
-                        const lvlLabel =
-                          g.level === 5 ? '⚡ Level 5 Atomic' :
-                          g.level === 4 ? '🔸 Level 4 Nano' :
-                          g.level === 3 ? '▫️ Level 3 Micro' :
-                          g.level === 2 ? '🔹 Level 2 Sub' : '🎯 Level 1 Main';
-                        return (
-                          <option key={g.id} value={g.id}>
-                            {lvlLabel}: {g.title} ({g.progress}%)
-                          </option>
-                        );
-                      })}
-                    </select>
+                    />
 
                     {goalId && (
                       <span className="block text-[10px] text-indigo-700 dark:text-indigo-300">
@@ -903,7 +893,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                     Due Date
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={dueAt}
                     onChange={e => setDueAt(e.target.value)}
@@ -956,7 +946,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
                       <div>
                         <label className="text-slate-500 font-semibold">Alarm Time</label>
-                        <input
+                        <ThemedDateTimeInput
                           type="time"
                           value={taskGenesisAlarmTime}
                           onChange={e => setTaskGenesisAlarmTime(e.target.value)}
@@ -1605,7 +1595,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-500">Date</label>
-                    <input
+                    <ThemedDateTimeInput
                       type="date"
                       value={quickCustomDate}
                       onChange={e => setQuickCustomDate(e.target.value)}
@@ -1614,7 +1604,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-500">Time</label>
-                    <input
+                    <ThemedDateTimeInput
                       type="time"
                       value={quickCustomTime}
                       onChange={e => setQuickCustomTime(e.target.value)}

@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useRef } from 'react';
 import {
   Folder, FileCheck, Shield, Trash2, Receipt, Award, FileText,
@@ -994,7 +995,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Issue / Registration Date</label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={docDate}
                     onChange={e => setDocDate(e.target.value)}
@@ -1134,7 +1135,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Expiry Date</label>
-                <input
+                <ThemedDateTimeInput
                   type="date"
                   value={warExpiry}
                   onChange={e => setWarExpiry(e.target.value)}
@@ -1303,7 +1304,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                     Purchase Date
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={recDate}
                     onChange={e => setRecDate(e.target.value)}
@@ -1600,7 +1601,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Expiry Date</label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={certExpiry}
                     onChange={e => setCertExpiry(e.target.value)}
@@ -1738,7 +1739,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Date Recorded</label>
-                <input
+                <ThemedDateTimeInput
                   type="date"
                   value={recrdDate}
                   onChange={e => setRecrdDate(e.target.value)}
@@ -1919,7 +1920,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                     {editTarget.store === 'warranties' || editTarget.store === 'certificates' ? 'Expiry Date' : 'Record Date'}
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={editDate}
                     onChange={e => setEditDate(e.target.value)}

@@ -15,6 +15,7 @@ describe('appearance preferences', () => {
     delete document.documentElement.dataset.wallpaperId;
     delete document.documentElement.dataset.wallpaperCustom;
     delete document.documentElement.dataset.wallpaperTransparent;
+    delete document.documentElement.dataset.eyeComfort;
   });
 
   it('normalizes invalid values and clamps background controls', () => {
@@ -182,6 +183,35 @@ describe('appearance preferences', () => {
     });
 
     expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe(ocean.backgroundColor);
+  });
+
+  it('applies low-distraction light and dark eye-comfort themes', () => {
+    const light = APPEARANCE_PRESETS.find(preset => preset.id === 'comfort-light')!;
+    const dark = APPEARANCE_PRESETS.find(preset => preset.id === 'comfort-dark')!;
+
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: light.id,
+      backgroundId: light.id,
+      colorMode: light.colorMode,
+      accentColor: light.accentColor
+    });
+    expect(document.documentElement.dataset.eyeComfort).toBe('true');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toContain('linear-gradient');
+
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: dark.id,
+      backgroundId: dark.id,
+      colorMode: dark.colorMode,
+      accentColor: dark.accentColor
+    });
+    expect(document.documentElement.dataset.eyeComfort).toBe('true');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+    applyAppearance(DEFAULT_APPEARANCE);
+    expect(document.documentElement.dataset.eyeComfort).toBe('false');
   });
 
   it('makes the document transparent when transparent custom wallpaper is enabled', () => {

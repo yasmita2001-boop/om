@@ -37,6 +37,11 @@ const ACCENT_PRESETS = [
   { name: 'Slate', hex: '#475569' }
 ];
 
+const EYE_COMFORT_PRESETS = [
+  { id: 'comfort-light', label: 'Soft light', description: 'Muted background and warm surfaces' },
+  { id: 'comfort-dark', label: 'Low-glare dark', description: 'Quiet charcoal surfaces for dim rooms' }
+] as const;
+
 const isValidHex = (value: string) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
 
 export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
@@ -66,6 +71,34 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
 
   const updateDraft = (updates: Partial<AppearancePreferences>) => {
     setDraft(current => normalizeAppearance({ ...current, ...updates }));
+  };
+
+  const selectEyeComfort = (presetId: typeof EYE_COMFORT_PRESETS[number]['id']) => {
+    const preset = APPEARANCE_PRESETS.find(item => item.id === presetId);
+    if (!preset) {
+      onError(`Eye-comfort preset "${presetId}" is unavailable.`);
+      return;
+    }
+
+    updateDraft({
+      presetId: preset.id,
+      colorMode: preset.colorMode,
+      accentColor: preset.accentColor,
+      backgroundId: preset.id,
+      backgroundImage: '',
+      transparentBackground: false,
+      foregroundTransparency: 0,
+      foregroundBrightness: 100,
+      foregroundContrast: 100,
+      backgroundBrightness: 100,
+      backgroundContrast: 100,
+      textClarity: 0,
+      positionX: 50,
+      positionY: 50,
+      zoom: 100,
+      overlay: 0,
+      blur: 0
+    });
   };
 
   const commitSlider = (key: keyof AppearancePreferences, value: number) => {
@@ -126,6 +159,36 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,1fr)]">
         <div className="space-y-5">
+          <div className="space-y-2.5">
+            <div>
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Eye comfort</div>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Choose softer colors with a quiet background and less decorative motion.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {EYE_COMFORT_PRESETS.map(option => {
+                const selected = draft.presetId === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => selectEyeComfort(option.id)}
+                    className={`rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                      selected
+                        ? 'border-indigo-500 bg-indigo-50 text-slate-900 dark:border-indigo-400 dark:bg-indigo-950/40 dark:text-white'
+                        : 'border-slate-200 bg-white/50 text-slate-700 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:border-slate-500'
+                    }`}
+                  >
+                    <span className="block text-xs font-bold">{option.label}</span>
+                    <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">{option.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="space-y-2.5">
             <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Coordinated themes</div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

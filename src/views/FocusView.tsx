@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Play, Pause, RotateCcw, Check, Sparkles, Volume2,
@@ -755,7 +756,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                     <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
                       Alarm Time (24h)
                     </label>
-                    <input
+                    <ThemedDateTimeInput
                       type="time"
                       required
                       value={newAlarmTime}

@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState } from 'react';
 import { Plus, Phone, Calendar, Trash2, Edit2, Bell, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
@@ -229,7 +230,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Important Date</label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={importantDate}
                     onChange={e => setImportantDate(e.target.value)}

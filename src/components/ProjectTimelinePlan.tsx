@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from './ThemedDateTimeInput';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Calendar, AlertTriangle, Bell, BellRing, CheckCircle2,
@@ -4074,7 +4075,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                     Target Execution Date
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     required
                     value={genesisModal.dueAt}
@@ -4125,7 +4126,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                       <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400">
                         Alarm Time on Due Date
                       </label>
-                      <input
+                      <ThemedDateTimeInput
                         type="time"
                         value={genesisModal.alarmTime}
                         onChange={e => setGenesisModal({ ...genesisModal, alarmTime: e.target.value })}

@@ -864,15 +864,31 @@ html {
 
 /* Keep primary form actions consistent across every module and submenu. */
 form button[type="submit"] {
-  background-color: var(--color-brand, #b88648) !important;
-  border-color: transparent !important;
-  color: var(--om-on-accent, #fff) !important;
-  box-shadow: 0 1px 3px rgb(15 23 42 / 12%) !important;
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 36%, transparent) !important;
+  color: var(--color-indigo-700) !important;
+  box-shadow: none !important;
 }
 
 form button[type="submit"]:hover:not(:disabled) {
-  background-color: color-mix(in srgb, var(--color-brand, #b88648) 85%, white) !important;
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 54%, transparent) !important;
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 18%, transparent) !important;
+  color: var(--color-indigo-950) !important;
 }
+
+.dark form button[type="submit"] {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 30%, transparent) !important;
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 8%, transparent) !important;
+  color: var(--color-indigo-300) !important;
+  box-shadow: none !important;
+}
+
+.dark form button[type="submit"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 48%, transparent) !important;
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 14%, transparent) !important;
+  color: var(--color-indigo-200) !important;
+}
+
 a, button, input, select, textarea, label, [role="button"], summary {
   touch-action: manipulation;
 }
@@ -1304,6 +1320,14 @@ a, button, input, select, textarea, label, [role="button"], summary {
   animation: none;
 }
 
+html[data-eye-comfort="true"] .sanctuary-shell::before {
+  animation: none;
+}
+
+html[data-eye-comfort="true"] .sanctuary-shell::after {
+  display: none;
+}
+
 .sanctuary-shell[data-wallpaper-custom="true"]::after {
   opacity: 0.08;
 }
@@ -1663,7 +1687,215 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   }
 }
 
-/* Keep native form controls in the sanctuary accent. */
+/* Use app-owned date/time popovers so browser-native picker colors cannot diverge from the theme. */
+.om-datetime-trigger {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  z-index: 1;
+  display: inline-flex;
+  height: 1.75rem;
+  width: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--om-ink-muted);
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.om-datetime-trigger:hover,
+.om-datetime-trigger:focus-visible {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 14%, transparent);
+  color: var(--color-brand, #b88648);
+  outline: none;
+}
+
+.om-datetime-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.om-datetime-popover {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 120;
+  width: min(19rem, calc(100vw - 2rem));
+  overflow: hidden;
+  border: 1px solid var(--om-glass-border, var(--om-line));
+  border-radius: 0.9rem;
+  background: var(--om-glass-surface, var(--om-card));
+  color: var(--om-ink);
+  box-shadow: var(--om-glass-shadow, 0 16px 38px rgb(15 23 42 / 18%));
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  animation: om-datetime-enter 120ms ease-out;
+}
+
+.om-datetime-popover.is-above {
+  top: auto;
+  bottom: calc(100% + 0.35rem);
+}
+
+@keyframes om-datetime-enter {
+  from { opacity: 0; transform: translateY(-3px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.om-datetime-header,
+.om-datetime-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.om-datetime-header {
+  border-bottom: 1px solid var(--om-line);
+  background: color-mix(in srgb, var(--color-brand, #b88648) 7%, var(--om-card));
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.om-datetime-footer {
+  border-top: 1px solid var(--om-line);
+}
+
+.om-datetime-footer button,
+.om-datetime-nav button {
+  display: inline-flex;
+  min-height: 2rem;
+  min-width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--color-brand, #b88648);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.om-datetime-footer button:hover,
+.om-datetime-nav button:hover {
+  border-color: var(--om-line);
+  background: color-mix(in srgb, var(--color-brand, #b88648) 10%, var(--om-card));
+}
+
+.om-datetime-nav {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.om-datetime-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.15rem;
+  padding: 0.55rem;
+}
+
+.om-datetime-weekday {
+  display: grid;
+  min-height: 1.75rem;
+  place-items: center;
+  color: var(--om-ink-soft);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.om-datetime-day {
+  display: grid;
+  min-width: 0;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--om-ink);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.om-datetime-day:hover:not(:disabled) {
+  border-color: var(--om-line);
+  background: color-mix(in srgb, var(--color-brand, #b88648) 12%, var(--om-card));
+}
+
+.om-datetime-day.is-outside {
+  color: var(--om-ink-muted);
+  opacity: 0.7;
+}
+
+.om-datetime-day.is-selected,
+.om-datetime-time-list button.is-selected {
+  border-color: var(--color-brand, #b88648);
+  background: var(--color-brand, #b88648);
+  color: var(--om-on-accent, #fff);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--color-brand, #b88648) 24%, transparent);
+}
+
+.om-datetime-day:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.om-datetime-time {
+  width: min(16rem, calc(100vw - 2rem));
+}
+
+.om-datetime-time-value {
+  color: var(--color-brand, #b88648);
+  font-variant-numeric: tabular-nums;
+}
+
+.om-datetime-time-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.6rem;
+}
+
+.om-datetime-time-list {
+  display: flex;
+  max-height: 11rem;
+  flex-direction: column;
+  gap: 0.15rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.2rem;
+  border: 1px solid var(--om-line);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--om-card-soft) 72%, transparent);
+  scrollbar-color: var(--color-brand, #b88648) transparent;
+}
+
+.om-datetime-time-list button {
+  min-height: 1.85rem;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--om-ink);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.om-datetime-time-list button:hover:not(.is-selected) {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 12%, var(--om-card));
+}
+
+.om-datetime :is(button:focus-visible, input:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--color-brand, #b88648) 68%, transparent);
+  outline-offset: 1px;
+}
+
+/* Keep native selects in the sanctuary accent. */
 .sanctuary-shell select {
   accent-color: var(--color-brand, #b88648);
   align-items: center;
@@ -2044,20 +2276,20 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 .sanctuary-main button[class*="bg-indigo-600"],
 .sanctuary-main button[class*="bg-indigo-500"],
 .sanctuary-main button[type="submit"] {
-  border: 1px solid var(--color-brand, #b88648) !important;
-  background: var(--color-brand, #b88648) !important;
-  color: var(--om-on-accent, #fff) !important;
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-brand, #b88648) 22%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 36%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
+  color: var(--color-indigo-700) !important;
+  box-shadow: none !important;
   transform: none !important;
 }
 
 .sanctuary-main button[class*="bg-indigo-600"]:hover,
 .sanctuary-main button[class*="bg-indigo-500"]:hover,
 .sanctuary-main button[type="submit"]:hover {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 88%, black) !important;
-  background: color-mix(in srgb, var(--color-brand, #b88648) 88%, black) !important;
-  color: var(--om-on-accent, #fff) !important;
-  box-shadow: 0 5px 16px color-mix(in srgb, var(--color-brand, #b88648) 30%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 54%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 18%, transparent) !important;
+  color: var(--color-indigo-950) !important;
+  box-shadow: none !important;
 }
 
 .sanctuary-main button.sanctuary-flat-primary {
@@ -2198,19 +2430,19 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 .dark .sanctuary-main button[class*="bg-indigo-600"],
 .dark .sanctuary-main button[class*="bg-indigo-500"],
 .dark .sanctuary-main button[type="submit"] {
-  border-color: var(--color-brand, #b88648) !important;
-  background: var(--color-brand, #b88648) !important;
-  color: var(--om-on-accent, #fff) !important;
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-brand, #b88648) 22%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 8%, transparent) !important;
+  color: var(--color-indigo-300) !important;
+  box-shadow: none !important;
 }
 
 .dark .sanctuary-main button[class*="bg-indigo-600"]:hover,
 .dark .sanctuary-main button[class*="bg-indigo-500"]:hover,
 .dark .sanctuary-main button[type="submit"]:hover {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 88%, black) !important;
-  background: color-mix(in srgb, var(--color-brand, #b88648) 88%, black) !important;
-  color: var(--om-on-accent, #fff) !important;
-  box-shadow: 0 5px 16px color-mix(in srgb, var(--color-brand, #b88648) 30%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 14%, transparent) !important;
+  color: var(--color-indigo-200) !important;
+  box-shadow: none !important;
 }
 
 .sanctuary-main a[class*="text-indigo-"],
@@ -3362,6 +3594,35 @@ html .sanctuary-shell :is(p, span, label, h1, h2, h3, h4, button, a, li, td, th,
 
 .sanctuary-shell .sanctuary-main .goal-portfolio-shell .goal-progress-track {
   background-color: var(--om-card-soft) !important;
+}
+
+html[data-eye-comfort="true"] {
+  --om-card-alpha: 100%;
+  --om-card-soft-alpha: 100%;
+  --om-card-blur: 0px !important;
+}
+
+html[data-eye-comfort="true"] .sanctuary-shell::before {
+  filter: none;
+}
+
+html[data-eye-comfort="true"] .sanctuary-shell * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dark[data-eye-comfort="true"] .sanctuary-shell :is([class*="text-slate-400"], [class*="text-slate-500"], [class*="text-slate-600"]) {
+  color: #cbd5e1 !important;
+}
+
+html[data-eye-comfort="true"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-hero,
+html[data-eye-comfort="true"] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not([class*="absolute"]):not([class*="fixed"]) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-eye-comfort="true"] .sanctuary-shell .sanctuary-scene {
+  display: none !important;
 }
 
 .sanctuary-shell .goal-portfolio-controls button {

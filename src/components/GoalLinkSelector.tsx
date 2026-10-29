@@ -2,6 +2,7 @@ import React from 'react';
 import { Target } from 'lucide-react';
 import { Goal } from '../types';
 import { LinkModeSelector } from './LinkModeSelector';
+import { GoalPicker } from './GoalPicker';
 
 interface GoalLinkSelectorProps {
   goals?: Goal[];
@@ -62,25 +63,13 @@ export const GoalLinkSelector: React.FC<GoalLinkSelectorProps> = ({
               </span>
             )}
           </div>
-          <select
+          <GoalPicker
+            goals={goals}
             value={goalId}
-            onChange={(e) => onGoalChange(e.target.value)}
+            onChange={onGoalChange}
+            placeholder="-- Choose Goal --"
             className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs font-medium text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer"
-          >
-            <option value="">-- Choose Goal (Main 🎯, Sub 🔹, Micro ▫️, Nano 🔸, Atomic ⚡) --</option>
-            {goals.map((g) => {
-              const lvlLabel =
-                g.level === 5 ? '⚡ Level 5 Atomic' :
-                g.level === 4 ? '🔸 Level 4 Nano' :
-                g.level === 3 ? '▫️ Level 3 Micro' :
-                g.level === 2 ? '🔹 Level 2 Sub' : '🎯 Level 1 Main';
-              return (
-                <option key={g.id} value={g.id}>
-                  {lvlLabel}: {g.title} ({g.progress}%)
-                </option>
-              );
-            })}
-          </select>
+          />
           {selectedGoal && (
             <span className="block text-[10px] text-indigo-700 dark:text-indigo-300">
               ⚡ Linked to goal "{selectedGoal.title}" ({selectedGoal.progress}% progress)

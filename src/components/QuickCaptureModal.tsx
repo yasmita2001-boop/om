@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from './ThemedDateTimeInput';
 import React, { useState } from 'react';
 import { X, CheckSquare, FileText, BookOpen, DollarSign, Target, Bell, User, Volume2 } from 'lucide-react';
 import { storage, generateUUID } from '../lib/storage';
@@ -350,7 +351,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                   Due Date
                 </label>
-                <input
+                <ThemedDateTimeInput
                   type="date"
                   value={date}
                   onChange={e => setDate(e.target.value)}
@@ -367,7 +368,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                     Reminder Date
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     required
                     value={date}
@@ -379,7 +380,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                     Alarm Time
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="time"
                     required
                     value={reminderTime}

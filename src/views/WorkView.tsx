@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState } from 'react';
 import {
   Briefcase, BookOpen, Users, Trash2, Award, Edit3, X, Calendar,
@@ -26,6 +27,7 @@ import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { GoalPicker } from '../components/GoalPicker';
 
 interface WorkViewProps {
   projects: WorkProject[];
@@ -1042,21 +1044,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <select
+                    <GoalPicker
+                      goals={goals || []}
                       value={projGoalId}
-                      onChange={e => handleSelectGoalForProject(e.target.value)}
+                      onChange={handleSelectGoalForProject}
+                      placeholder="-- Choose Goal --"
                       className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
-                    >
-                      <option value="">-- Choose Goal (🎯 Main, 🔹 Sub, ▫️ Micro, 🔸 Nano, ⚡ Atomic) --</option>
-                      {goals.map(g => {
-                        const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
-                        return (
-                          <option key={g.id} value={g.id}>
-                            {lvl}: {g.title} ({g.progress}%)
-                          </option>
-                        );
-                      })}
-                    </select>
+                    />
                   </div>
                 )}
 
@@ -1083,7 +1077,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Due Date</label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={projDue}
                     onChange={e => setProjDue(e.target.value)}
@@ -1133,7 +1127,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     </div>
                     <div>
                       <label className="text-slate-500 font-semibold">Alarm Time</label>
-                      <input
+                      <ThemedDateTimeInput
                         type="time"
                         value={projAlarmTime}
                         onChange={e => setProjAlarmTime(e.target.value)}
@@ -1364,21 +1358,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <select
+                    <GoalPicker
+                      goals={goals || []}
                       value={learnGoalId}
-                      onChange={e => handleSelectGoalForLearning(e.target.value)}
+                      onChange={handleSelectGoalForLearning}
+                      placeholder="-- Choose Goal --"
                       className="h-8.5 w-full rounded-lg border border-emerald-300 bg-white px-2.5 text-xs text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-emerald-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
-                    >
-                      <option value="">-- Choose Goal (🎯 Main, 🔹 Sub, ▫️ Micro, 🔸 Nano, ⚡ Atomic) --</option>
-                      {goals.map(g => {
-                        const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
-                        return (
-                          <option key={g.id} value={g.id}>
-                            {lvl}: {g.title} ({g.progress}%)
-                          </option>
-                        );
-                      })}
-                    </select>
+                    />
                     {learnGoalId && (
                       <span className="block text-[10px] text-emerald-800 dark:text-emerald-300">
                         ⚡ Advancing learning progress will reflect directly into this goal!
@@ -1423,7 +1409,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Completion Date</label>
-                <input
+                <ThemedDateTimeInput
                   type="date"
                   value={learnTargetDate}
                   onChange={e => setLearnTargetDate(e.target.value)}
@@ -1458,7 +1444,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     </div>
                     <div>
                       <label className="text-slate-500 font-semibold">Alarm Time</label>
-                      <input
+                      <ThemedDateTimeInput
                         type="time"
                         value={learnAlarmTime}
                         onChange={e => setLearnAlarmTime(e.target.value)}
@@ -1679,21 +1665,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <select
+                    <GoalPicker
+                      goals={goals || []}
                       value={skillGoalId}
-                      onChange={e => handleSelectGoalForSkill(e.target.value)}
+                      onChange={handleSelectGoalForSkill}
+                      placeholder="-- Choose Goal --"
                       className="h-8.5 w-full rounded-lg border border-purple-300 bg-white px-2.5 text-xs text-slate-900 focus:border-purple-500 focus:outline-none dark:border-purple-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
-                    >
-                      <option value="">-- Choose Goal (🎯 Main, 🔹 Sub, ▫️ Micro, 🔸 Nano, ⚡ Atomic) --</option>
-                      {goals.map(g => {
-                        const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
-                        return (
-                          <option key={g.id} value={g.id}>
-                            {lvl}: {g.title} ({g.progress}%)
-                          </option>
-                        );
-                      })}
-                    </select>
+                    />
                     {skillGoalId && (
                       <span className="block text-[10px] text-purple-800 dark:text-purple-300">
                         ⚡ Advancing this skill towards Mastery will roll up directly into this goal!
@@ -1742,7 +1720,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Mastery Date</label>
-                <input
+                <ThemedDateTimeInput
                   type="date"
                   value={skillTargetDate}
                   onChange={e => setSkillTargetDate(e.target.value)}
@@ -1777,7 +1755,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     </div>
                     <div>
                       <label className="text-slate-500 font-semibold">Alarm Time</label>
-                      <input
+                      <ThemedDateTimeInput
                         type="time"
                         value={skillAlarmTime}
                         onChange={e => setSkillAlarmTime(e.target.value)}
@@ -1974,7 +1952,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Date</label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={meetDate}
                     onChange={e => setMeetDate(e.target.value)}
@@ -2144,7 +2122,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Due Date</label>
-                      <input
+                      <ThemedDateTimeInput
                         type="date"
                         value={editDate}
                         onChange={e => setEditDate(e.target.value)}
@@ -2236,7 +2214,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Date</label>
-                    <input
+                    <ThemedDateTimeInput
                       type="date"
                       value={editDate}
                       onChange={e => setEditDate(e.target.value)}
@@ -2344,7 +2322,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                     Target Execution Date
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     required
                     value={genesisModal.dueAt}
@@ -2395,7 +2373,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                       <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400">
                         Alarm Time on Due Date
                       </label>
-                      <input
+                      <ThemedDateTimeInput
                         type="time"
                         value={genesisModal.alarmTime}
                         onChange={e => setGenesisModal({ ...genesisModal, alarmTime: e.target.value })}

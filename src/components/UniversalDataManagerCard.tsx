@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from './ThemedDateTimeInput';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Download, Upload, RefreshCw, CheckCircle2,
@@ -637,7 +638,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-center gap-1 text-[11px]">
                         <span className="w-10 text-slate-400 shrink-0">From:</span>
-                        <input
+                        <ThemedDateTimeInput
                           type="date"
                           value={customStartDate}
                           onChange={e => setCustomStartDate(e.target.value)}
@@ -646,7 +647,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                       </div>
                       <div className="flex items-center gap-1 text-[11px]">
                         <span className="w-10 text-slate-400 shrink-0">To:</span>
-                        <input
+                        <ThemedDateTimeInput
                           type="date"
                           value={customEndDate}
                           onChange={e => setCustomEndDate(e.target.value)}

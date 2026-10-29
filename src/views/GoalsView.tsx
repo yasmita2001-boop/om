@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Target, Plus, TrendingUp, ShieldCheck, Flame, Trash2,
@@ -1891,7 +1892,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                         Target Date
                       </label>
-                      <input
+                      <ThemedDateTimeInput
                         type="date"
                         value={targetDate}
                         onChange={e => setTargetDate(e.target.value)}
@@ -3025,7 +3026,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Date</label>
-                <input
+                <ThemedDateTimeInput
                   type="date"
                   value={msDueDate}
                   onChange={e => setMsDueDate(e.target.value)}
@@ -3597,7 +3598,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                     Target Date
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={editingGoal.targetDate || ''}
                     onChange={e => setEditingGoal({ ...editingGoal, targetDate: e.target.value })}

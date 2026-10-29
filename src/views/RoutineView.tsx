@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState } from 'react';
 import {
   Repeat, Clock, Trash2, CheckCircle2,
@@ -17,6 +18,7 @@ import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { FormDisclosureToggle } from '../components/FormDisclosure';
+import { GoalPicker } from '../components/GoalPicker';
 
 interface RoutineViewProps {
   routines: Routine[];
@@ -892,21 +894,13 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
                     Select Target Goal (🎯 Main, 🔹 Sub, or ▫️ Micro):
                   </label>
-                  <select
+                  <GoalPicker
+                    goals={goals || []}
                     value={routineGoalId}
-                    onChange={e => handleSelectGoalForRoutine(e.target.value)}
+                    onChange={handleSelectGoalForRoutine}
+                    placeholder="-- Choose Goal --"
                     className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer"
-                  >
-                    <option value="">-- Choose Goal (🎯 Main, 🔹 Sub, ▫️ Micro, 🔸 Nano, ⚡ Atomic) --</option>
-                    {goals.map(g => {
-                      const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
-                      return (
-                        <option key={g.id} value={g.id}>
-                          {lvl}: {g.title} ({g.progress}%)
-                        </option>
-                      );
-                    })}
-                  </select>
+                  />
                 </div>
               )}
 
@@ -925,7 +919,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                   Start Time
                 </label>
-                <input
+                <ThemedDateTimeInput
                   type="time"
                   value={startTime}
                   onChange={e => setStartTime(e.target.value)}
@@ -937,7 +931,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                   End Time
                 </label>
-                <input
+                <ThemedDateTimeInput
                   type="time"
                   value={endTime}
                   onChange={e => setEndTime(e.target.value)}
@@ -1226,7 +1220,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 {Array.from({ length: Math.min(timesPerDay, 6) }).map((_, idx) => (
                   <div key={idx}>
                     <label className="block text-[10px] text-slate-500 dark:text-slate-400">Slot {idx + 1}</label>
-                    <input
+                    <ThemedDateTimeInput
                       type="time"
                       value={slotTimes[idx] || '08:00'}
                       onChange={e => handleUpdateSlotTime(idx, e.target.value)}
@@ -1971,7 +1965,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                     Target Execution Date
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     required
                     value={genesisModal.dueAt}
@@ -2022,7 +2016,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400">
                         Alarm Time on Due Date
                       </label>
-                      <input
+                      <ThemedDateTimeInput
                         type="time"
                         value={genesisModal.alarmTime}
                         onChange={e => setGenesisModal({ ...genesisModal, alarmTime: e.target.value })}

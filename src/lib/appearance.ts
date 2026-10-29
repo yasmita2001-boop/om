@@ -73,6 +73,26 @@ export const APPEARANCE_PRESETS = [
     backgroundColor: '#111827',
     backgroundImage: 'linear-gradient(135deg, #263a63 0%, #202947 48%, #111827 100%)',
     preview: 'linear-gradient(135deg, #263a63, #111827)'
+  },
+  {
+    id: 'comfort-light',
+    name: 'Eye Comfort Light',
+    description: 'Soft, low-distraction light',
+    accentColor: '#8b7557',
+    colorMode: 'light' as const,
+    backgroundColor: '#eeeae1',
+    backgroundImage: 'linear-gradient(135deg, #f1eee6 0%, #ece9e0 55%, #e8e5dc 100%)',
+    preview: 'linear-gradient(135deg, #f1eee6, #e8e5dc)'
+  },
+  {
+    id: 'comfort-dark',
+    name: 'Eye Comfort Dark',
+    description: 'Soft, low-glare dark',
+    accentColor: '#a99a78',
+    colorMode: 'dark' as const,
+    backgroundColor: '#191b20',
+    backgroundImage: 'linear-gradient(135deg, #22252b 0%, #1b1e23 55%, #17191e 100%)',
+    preview: 'linear-gradient(135deg, #22252b, #17191e)'
   }
 ] as const;
 
@@ -181,6 +201,7 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
   const preset = APPEARANCE_PRESETS.find(item => item.id === appearance.backgroundId) || APPEARANCE_PRESETS[0];
   const coordinatedPreset = APPEARANCE_PRESETS.find(item => item.id === appearance.presetId) || APPEARANCE_PRESETS[0];
   const effectiveColorMode = getEffectiveColorMode(appearance.colorMode);
+  const isEyeComfort = appearance.presetId === 'comfort-light' || appearance.presetId === 'comfort-dark';
   const isTransparentBackground = appearance.transparentBackground && appearance.backgroundId === 'custom';
 
   applyAccent(appearance.accentColor);
@@ -218,6 +239,7 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
   root.dataset.foregroundContrast = String(appearance.foregroundContrast !== 100);
   root.dataset.wallpaperId = appearance.backgroundId;
   root.dataset.wallpaperCustom = String(appearance.backgroundId === 'custom');
+  root.dataset.eyeComfort = String(isEyeComfort);
   return appearance;
 }
 

@@ -1,3 +1,4 @@
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   DollarSign, Plus, ArrowUpDown,
@@ -4017,7 +4018,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                     Transaction Date <span className="text-rose-500">*</span>
                   </label>
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     required
                     max={today}
@@ -4614,7 +4615,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <select value={scheduleFrequency} onChange={event => setScheduleFrequency(event.target.value as CashFlowScheduleFrequency)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="once">One time</option><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>
                 <input required value={scheduleCategory} onChange={event => setScheduleCategory(event.target.value)} placeholder="Category (e.g. Rent)" className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 <input required type="number" min="0.01" step="0.01" value={scheduleAmount} onChange={event => setScheduleAmount(event.target.value)} placeholder="Amount NPR" className="h-10 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
-                <input required type="date" value={scheduleNextDueDate} onChange={event => setScheduleNextDueDate(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <ThemedDateTimeInput required type="date" value={scheduleNextDueDate} onChange={event => setScheduleNextDueDate(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 <select value={scheduleAccountId} onChange={event => setScheduleAccountId(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="">No tracked account</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select>
                 <button type="submit" className="sanctuary-flat-primary col-span-2 h-10 rounded-xl px-3 text-xs font-semibold">+ Save expected schedule</button>
               </form>
@@ -4806,7 +4807,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                   Payment date
-                  <input type="date" max={today} required value={payDate} onChange={event => setPayDate(event.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                  <ThemedDateTimeInput type="date" max={today} required value={payDate} onChange={event => setPayDate(event.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 </label>
                 <details className="rounded-xl border border-slate-100 px-3 py-2 dark:border-slate-800">
                   <summary className="cursor-pointer text-[10px] font-semibold text-slate-500 dark:text-slate-400">
@@ -5007,13 +5008,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <input value={loanReference} onChange={event => setLoanReference(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </label>
                     <label className="text-[10px] font-medium text-slate-500">Start date
-                      <input type="date" max={today} value={loanStartDate} onChange={event => setLoanStartDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                      <ThemedDateTimeInput type="date" max={today} value={loanStartDate} onChange={event => setLoanStartDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </label>
                     <label className="text-[10px] font-medium text-slate-500">Approval date
-                      <input type="date" max={today} value={loanApprovalDate} onChange={event => setLoanApprovalDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                      <ThemedDateTimeInput type="date" max={today} value={loanApprovalDate} onChange={event => setLoanApprovalDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </label>
                     <label className="text-[10px] font-medium text-slate-500">First installment date
-                      <input type="date" value={loanFirstPaymentDate} min={loanStartDate} onChange={event => setLoanFirstPaymentDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                      <ThemedDateTimeInput type="date" value={loanFirstPaymentDate} min={loanStartDate} onChange={event => setLoanFirstPaymentDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </label>
                     <label className="text-[10px] font-medium text-slate-500">Payment frequency
                       <select value={loanRepaymentFrequency} onChange={event => setLoanRepaymentFrequency(event.target.value as NonNullable<Loan['repaymentFrequency']>)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
@@ -5571,7 +5572,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </select>
                   </label>
                   <label className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">Date
-                    <input type="date" required max={today} value={investmentActivityDate} onChange={event => setInvestmentActivityDate(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                    <ThemedDateTimeInput type="date" required max={today} value={investmentActivityDate} onChange={event => setInvestmentActivityDate(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
                   <label className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">{investmentActivityKind === 'sell' ? 'Gross sale proceeds' : investmentActivityKind === 'dividend' || investmentActivityKind === 'interest' ? 'Gross income' : investmentActivityKind === 'fee' ? 'Fee paid' : investmentActivityKind === 'tax' ? 'Tax paid' : 'Purchase amount'} (NPR)
                     <input type="number" min="0.01" step="0.01" required value={investmentActivityAmount} onChange={event => setInvestmentActivityAmount(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
@@ -6122,7 +6123,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </label>
                     <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
                       Rate effective from
-                      <input
+                      <ThemedDateTimeInput
                         type="date"
                         value={saveInterestEffectiveDate}
                         onChange={event => setSaveInterestEffectiveDate(event.target.value)}
@@ -6184,7 +6185,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                   Start / deposit date
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={saveStartDate}
                     onChange={event => setSaveStartDate(event.target.value)}
@@ -6193,7 +6194,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </label>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                   Maturity date (optional)
-                  <input
+                  <ThemedDateTimeInput
                     type="date"
                     value={saveMaturityDate}
                     onChange={event => setSaveMaturityDate(event.target.value)}
@@ -6570,10 +6571,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <summary className="cursor-pointer text-[10px] font-semibold text-slate-500 dark:text-slate-400">Purchase, location, depreciation & notes</summary>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <label className="text-[10px] font-medium text-slate-500">Purchase date
-                    <input type="date" max={today} value={assetPurchaseDate} onChange={event => setAssetPurchaseDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                    <ThemedDateTimeInput type="date" max={today} value={assetPurchaseDate} onChange={event => setAssetPurchaseDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
                   <label className="text-[10px] font-medium text-slate-500">Valuation date
-                    <input type="date" max={today} value={assetValuationDate} onChange={event => setAssetValuationDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                    <ThemedDateTimeInput type="date" max={today} value={assetValuationDate} onChange={event => setAssetValuationDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
                   <label className="text-[10px] font-medium text-slate-500">Purchase / legal costs (NPR)
                     <input type="number" min="0" step="0.01" value={assetAcquisitionCosts} onChange={event => setAssetAcquisitionCosts(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
@@ -6831,7 +6832,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                     <input required min="0" step="0.01" type="number" value={assetSalePrice} onChange={event => setAssetSalePrice(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
                                   </label>
                                   <label className="text-[10px] text-slate-500">Sale date
-                                    <input required min={asset.purchaseDate} max={today} type="date" value={assetSaleDate} onChange={event => setAssetSaleDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                                    <ThemedDateTimeInput required min={asset.purchaseDate} max={today} type="date" value={assetSaleDate} onChange={event => setAssetSaleDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
                                   </label>
                                   <label className="col-span-2 text-[10px] text-slate-500">Proceeds received into
                                     <select value={assetSaleAccountId} onChange={event => setAssetSaleAccountId(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white">
@@ -6995,7 +6996,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         <div className="flex flex-col gap-1.5">
                           <div className="flex items-center gap-1.5 text-[11px]">
                             <span className="w-10 text-slate-400 shrink-0">From:</span>
-                            <input
+                            <ThemedDateTimeInput
                               type="date"
                               value={customStartDate}
                               onChange={e => setCustomStartDate(e.target.value)}
@@ -7004,7 +7005,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           </div>
                           <div className="flex items-center gap-1.5 text-[11px]">
                             <span className="w-10 text-slate-400 shrink-0">To:</span>
-                            <input
+                            <ThemedDateTimeInput
                               type="date"
                               value={customEndDate}
                               onChange={e => setCustomEndDate(e.target.value)}
@@ -7254,7 +7255,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           onChange={event => setEditingTransactionAmount(event.target.value)}
                           className="h-8 rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                         />
-                        <input
+                        <ThemedDateTimeInput
                           type="date"
                           required
                           aria-label="Transaction date"

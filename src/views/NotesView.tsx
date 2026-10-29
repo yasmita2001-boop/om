@@ -18,6 +18,7 @@ import { htmlToPlainText, plainTextToHtml, sanitizeHtml } from '../lib/sanitizeH
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { FormDisclosureToggle } from '../components/FormDisclosure';
+import { GoalPicker } from '../components/GoalPicker';
 
 interface NotesViewProps {
   notes: Note[];
@@ -784,21 +785,13 @@ export const NotesView: React.FC<NotesViewProps> = ({
                       </span>
                     )}
                   </div>
-                  <select
+                  <GoalPicker
+                    goals={goals}
                     value={noteGoalId}
-                    onChange={e => handleSelectGoalForNote(e.target.value)}
+                    onChange={handleSelectGoalForNote}
+                    placeholder="-- Choose Goal --"
                     className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
-                  >
-                    <option value="">-- Choose Goal (🎯 Main, 🔹 Sub, ▫️ Micro, 🔸 Nano, ⚡ Atomic) --</option>
-                    {goals.map(g => {
-                      const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
-                      return (
-                        <option key={g.id} value={g.id}>
-                          {lvl}: {g.title} ({g.progress}%)
-                        </option>
-                      );
-                    })}
-                  </select>
+                  />
                   {noteGoalId && (
                     <span className="block text-[10px] text-indigo-800 dark:text-indigo-300">
                       ⚡ Saving this note links your knowledge vault directly to the selected goal's hierarchy!
@@ -1133,21 +1126,13 @@ export const NotesView: React.FC<NotesViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <select
+                    <GoalPicker
+                      goals={goals}
                       value={modalGoalId}
-                      onChange={e => handleSelectGoalForModalNote(e.target.value)}
+                      onChange={handleSelectGoalForModalNote}
+                      placeholder="-- Choose Goal --"
                       className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
-                    >
-                      <option value="">-- Choose Goal (🎯 Main, 🔹 Sub, ▫️ Micro, 🔸 Nano, ⚡ Atomic) --</option>
-                      {goals.map(g => {
-                        const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
-                        return (
-                          <option key={g.id} value={g.id}>
-                            {lvl}: {g.title} ({g.progress}%)
-                          </option>
-                        );
-                      })}
-                    </select>
+                    />
                   </div>
                 )}
 

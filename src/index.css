@@ -1141,20 +1141,12 @@ a, button, input, select, textarea, label, [role="button"], summary {
   color: var(--om-ink);
 }
 
-.lock-screen__card {
+.lock-screen__content {
   position: relative;
-  width: min(100%, 29rem);
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 28%, var(--om-line));
-  border-radius: 1.75rem;
-  padding: clamp(2rem, 6vw, 3rem);
-  background:
-    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--color-brand, #b88648) 12%, transparent), transparent 48%),
-    color-mix(in srgb, var(--om-card) 94%, transparent);
-  box-shadow: 0 24px 70px rgb(34 27 19 / 16%), inset 0 1px rgb(255 255 255 / 62%);
+  z-index: 1;
+  width: min(100%, 38rem);
+  padding: clamp(1.25rem, 4vh, 2.5rem);
   text-align: center;
-  backdrop-filter: blur(var(--om-card-blur, 16px)) saturate(135%);
-  -webkit-backdrop-filter: blur(var(--om-card-blur, 16px)) saturate(135%);
 }
 
 .lock-screen__icon {
@@ -1319,13 +1311,6 @@ a, button, input, select, textarea, label, [role="button"], summary {
   margin: 0;
 }
 
-.dark .lock-screen__card {
-  background:
-    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--color-brand, #b88648) 14%, transparent), transparent 48%),
-    color-mix(in srgb, var(--om-card) 94%, transparent);
-  box-shadow: 0 28px 76px rgb(0 0 0 / 36%), inset 0 1px rgb(255 255 255 / 6%);
-}
-
 .dark .lock-screen__error {
   color: #fda4af;
 }
@@ -1432,18 +1417,6 @@ a, button, input, select, textarea, label, [role="button"], summary {
   height: min(24vw, 16rem);
   border-color: rgb(255 214 156 / 12%);
   transform: translate(-50%, -50%) rotateX(68deg) rotateZ(38deg);
-}
-
-.lock-screen__card {
-  z-index: 1;
-  width: min(100%, 38rem);
-  border: 0;
-  border-radius: 0;
-  padding: clamp(1.25rem, 4vh, 2.5rem);
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .lock-screen__portal {
@@ -1606,7 +1579,7 @@ a, button, input, select, textarea, label, [role="button"], summary {
     padding: 1rem;
   }
 
-  .lock-screen__card {
+  .lock-screen__content {
     padding: 1rem 1.25rem;
   }
 

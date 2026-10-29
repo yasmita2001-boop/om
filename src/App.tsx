@@ -770,7 +770,7 @@ function LifeOSApp() {
           <div className="lock-screen__orbit lock-screen__orbit--one" />
           <div className="lock-screen__orbit lock-screen__orbit--two" />
         </div>
-        <section className="lock-screen__card" aria-labelledby="lock-screen-title">
+        <section className="lock-screen__content" aria-labelledby="lock-screen-title">
           <div className="lock-screen__portal" aria-hidden="true">
             <span className="lock-screen__portal-core" />
             <LockKeyhole className="h-14 w-14" />

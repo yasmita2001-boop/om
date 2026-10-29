@@ -459,6 +459,22 @@ export function getBackgroundAssetUrl(assetId: string): string {
   return backgroundObjectUrls.get(assetId) || '';
 }
 
+export async function clearStoredBackgroundAssets(): Promise<void> {
+  for (const objectUrl of backgroundObjectUrls.values()) {
+    URL.revokeObjectURL(objectUrl);
+  }
+  backgroundObjectUrls.clear();
+
+  if (typeof indexedDB === 'undefined') return;
+
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(BACKGROUND_DATABASE_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error || new Error('Failed to delete saved background media.'));
+    request.onblocked = () => reject(new Error('Close other Om LifeOS tabs, then retry the background cleanup.'));
+  });
+}
+
 export async function restoreBackgroundAsset(assetId: string): Promise<void> {
   if (!isStoredBackgroundAsset(assetId) || backgroundObjectUrls.has(assetId)) return;
 

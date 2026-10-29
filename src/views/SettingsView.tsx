@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Download, Database, Trash2,
   Palette, ChevronDown, RefreshCw,
-  Volume2, Smartphone
+  Volume2
 } from 'lucide-react';
 import {
   storage,
@@ -17,6 +17,7 @@ import { soundEngine } from '../lib/soundEngine';
 import { applyAccent, rememberAccentChoice, resolveSavedAccent } from '../lib/accentTheme';
 import { AppearanceCustomizer } from '../components/AppearanceCustomizer';
 import { AppearancePreferences } from '../lib/appearance';
+import { formatBytes } from '../lib/thumbnailService';
 
 interface SettingsViewProps {
   settings?: AppState;
@@ -50,7 +51,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     percent: number;
     level: string;
     available?: boolean;
-  }>({ usage: 0, quota: 0, percent: 0, level: 'healthy', available: false });
+    profileUsage: number;
+  }>({ usage: 0, quota: 0, percent: 0, level: 'healthy', available: false, profileUsage: 0 });
+  const [isLoadingStorageStats, setIsLoadingStorageStats] = useState(true);
+  const [storageStatsError, setStorageStatsError] = useState<string | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isPurgeDefaultOpen, setIsPurgeDefaultOpen] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
@@ -66,9 +70,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   }, [settings?.accentColor]);
 
+  const profileId = settings?.profileId || storage.getActiveProfileId();
+  const loadStorageStats = useCallback(async () => {
+    setIsLoadingStorageStats(true);
+    try {
+      const [estimate, profileStats] = await Promise.all([
+        storage.getStorageEstimate(),
+        storage.calculateProfileStorageStats(profileId)
+      ]);
+      setStorageStats({ ...estimate, profileUsage: profileStats.totalBytes });
+      setStorageStatsError(null);
+    } catch (error) {
+      setStorageStatsError(error instanceof Error ? error.message : 'Storage statistics could not be loaded.');
+    } finally {
+      setIsLoadingStorageStats(false);
+    }
+  }, [profileId]);
+
   useEffect(() => {
-    storage.getStorageEstimate().then(setStorageStats);
-  }, []);
+    void loadStorageStats();
+  }, [loadStorageStats]);
 
   const handleRunIntegrityAudit = async () => {
     setIsAuditing(true);
@@ -105,8 +126,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         }
       }
 
-      const newStats = await storage.getStorageEstimate();
-      setStorageStats(newStats);
+      await loadStorageStats();
 
       onSuccess(`Core link check: ${totalChecked} records checked, ${issues} broken links found, ${repaired} repaired`);
     } catch {
@@ -151,8 +171,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         ? `✓ Cleaned ${parts.join(' & ')}. Active records & restorable Recycle Bin items are intact.`
         : '✓ No browser caches or orphaned temporary files remained. Active data is intact.';
       onSuccess(msg);
-      const newStats = await storage.getStorageEstimate();
-      setStorageStats(newStats);
+      await loadStorageStats();
       onRefresh();
     } catch (e: any) {
       onError('Cache cleaning failed: ' + e?.message);
@@ -210,9 +229,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Tab: System & Appearance */}
       {activeTab === 'system' && (
-        <div className="grid items-start gap-6 lg:grid-cols-2">
+        <div className="grid items-start gap-4 md:grid-cols-2">
           {/* Left Column: Appearance & Theme + Storage Health & Quota (6 cols) */}
-          <div className="w-full lg:col-span-2">
+          <div className="w-full md:col-span-2">
             <AppearanceCustomizer
               value={appearance}
               onApply={onApplyAppearance}
@@ -221,6 +240,67 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               wallpaperVideoMuted={wallpaperVideoMuted}
               onToggleWallpaperVideoSound={onToggleWallpaperVideoSound}
             />
+          </div>
+          <section className="order-3 rounded-xl border-2 border-dashed border-amber-200/80 bg-card p-3 text-ink shadow-card dark:border-amber-900/50 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200/70 pb-3 dark:border-amber-900/40">
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+                  <h2 className="text-sm font-bold text-ink">Storage Usage</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isAuditing}
+                    onClick={handleRunIntegrityAudit}
+                    className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer disabled:opacity-50"
+                    title="Check task goals and finance account links"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
+                    <span>Check Links</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isLoadingStorageStats}
+                    onClick={() => void loadStorageStats()}
+                    className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer disabled:opacity-50"
+                    title="Refresh storage statistics"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isLoadingStorageStats ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+              <div className="mt-2 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
+                <div className="min-w-0">
+                  <div className="text-ink-muted">Profile data</div>
+                  <div className="mt-0.5 text-base font-bold text-ink">
+                    {isLoadingStorageStats ? 'Calculating…' : storageStatsError ? 'Unavailable' : formatBytes(storageStats.profileUsage)}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-ink-muted">Browser used</div>
+                  <div className="mt-0.5 text-base font-bold text-ink">
+                    {storageStats.available ? `${formatBytes(storageStats.usage)} used` : 'Usage unavailable'}
+                  </div>
+                  <div className="mt-1 text-[11px] text-ink-muted">
+                    {storageStats.quota > 0
+                      ? `${formatBytes(storageStats.quota)} quota · ${storageStats.percent.toFixed(2)}% used`
+                      : 'Browser quota unavailable'}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-amber-100/70 dark:bg-amber-950/50">
+                <div
+                  className={`h-full ${storageStats.level === 'critical' ? 'bg-rose-500' : storageStats.level === 'warning' ? 'bg-amber-500' : 'bg-amber-600 dark:bg-amber-400'}`}
+                  style={{ width: `${Math.min(100, Math.max(storageStats.quota > 0 ? 0.5 : 0, storageStats.percent))}%` }}
+                />
+              </div>
+              {storageStatsError && (
+                <p role="status" className="mt-2 text-[11px] text-rose-600 dark:text-rose-400">
+                  Storage stats error: {storageStatsError}
+                </p>
+              )}
+          </section>
             <div className="hidden flex-1 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-6 flex-col h-full">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
@@ -251,7 +331,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 >
                   ☾ Dark
                 </button>
-              </div>
             </div>
 
             {/* Accent Theme Colors Dropdown */}
@@ -441,59 +520,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               })()}
             </div>
           </div>
-
-          {/* Storage Health & Quota Section (Integrated into Left Column) */}
-          <div className="border-t border-slate-100 pt-5 dark:border-slate-800 space-y-3.5">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <Database className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Storage Health & Quota</h2>
-              </div>
-
-              <button
-                type="button"
-                disabled={isAuditing}
-                onClick={handleRunIntegrityAudit}
-                className="ml-auto flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer shrink-0 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
-                title="Check task goals and finance account links"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
-                <span>Check Links</span>
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Local Browser Storage Quota</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-white">
-                  {storageStats.quota > 0 ? `${storageStats.percent.toFixed(2)}% used` : 'Unknown'}
-                </span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                <div
-                  className={`h-full ${storageStats.level === 'critical' ? 'bg-rose-500' : storageStats.level === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                  style={{ width: `${Math.min(100, Math.max(storageStats.quota > 0 ? 0.5 : 0, storageStats.percent))}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[11px] text-slate-400">
-                <span>{(storageStats.usage / (1024 * 1024)).toFixed(2)} MB stored locally</span>
-                <span>
-                  {storageStats.quota > 0
-                    ? storageStats.quota >= 1024 * 1024 * 1024
-                      ? `${(storageStats.quota / (1024 * 1024 * 1024)).toFixed(2)} GB browser quota`
-                      : `${(storageStats.quota / (1024 * 1024)).toFixed(0)} MB browser quota`
-                    : 'Browser quota unavailable'}
-                </span>
-              </div>
-            </div>
+          </div>
           </div>
 
-        </div>
-      </div>
-
       {/* Tactile Sound & Micro-Interactions Card (6 cols) */}
-      <div className="w-full">
-        <div className="flex flex-col space-y-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
+      <div className="order-4 w-full min-w-0">
+        <div className="flex flex-col space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
               <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <div className="flex items-center gap-2 min-w-0">
                   <Volume2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
@@ -503,69 +535,65 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {/* Sound Effects Toggle */}
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-white">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {/* Sound Effects Toggle */}
+                  <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-2">
+                    <div className="text-[11px] font-bold leading-tight text-slate-900 dark:text-white">
                       Auditory Micro-Clicks
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label="Auditory Micro-Clicks"
-                    aria-checked={soundEnabled}
-                    onClick={() => {
-                      const next = !soundEnabled;
-                      setSoundEnabled(next);
-                      soundEngine.setSoundEnabled(next);
-                      if (next) onSuccess('Auditory feedback enabled');
-                    }}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      soundEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                        soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-label="Auditory Micro-Clicks"
+                      aria-checked={soundEnabled}
+                      onClick={() => {
+                        const next = !soundEnabled;
+                        setSoundEnabled(next);
+                        soundEngine.setSoundEnabled(next);
+                        if (next) onSuccess('Auditory feedback enabled');
+                      }}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        soundEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
                       }`}
-                    />
-                  </button>
-                </div>
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
 
-                {/* Haptic Feedback Toggle */}
-                <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Smartphone className="h-3.5 w-3.5 text-slate-400" />
-                      <span>Haptic Vibration</span>
+                  {/* Haptic Feedback Toggle */}
+                  <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-2">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold leading-tight text-slate-900 dark:text-white">
+                        Haptic Vibration
+                      </div>
                     </div>
-                    <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-                      Requires a supported device; most desktops cannot vibrate.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label="Haptic Vibration"
-                    aria-checked={hapticEnabled}
-                    onClick={() => {
-                      const next = !hapticEnabled;
-                      setHapticEnabled(next);
-                      soundEngine.setHapticEnabled(next);
-                      if (next) onSuccess('Haptic feedback enabled');
-                    }}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      hapticEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                        hapticEnabled ? 'translate-x-5' : 'translate-x-0'
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-label="Haptic Vibration"
+                      aria-checked={hapticEnabled}
+                      onClick={() => {
+                        const next = !hapticEnabled;
+                        setHapticEnabled(next);
+                        soundEngine.setHapticEnabled(next);
+                        if (next) onSuccess('Haptic feedback enabled');
+                      }}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        hapticEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
                       }`}
-                    />
-                  </button>
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          hapticEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Volume Level Slider */}
@@ -592,36 +620,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 {/* Interactive Sound Previews */}
-                <div className="rounded-xl border-2 border-dashed border-slate-200 p-3 dark:border-slate-800 space-y-2">
-                  <div className="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
-                    Sound Previews (Click to test)
+                <div className="rounded-xl border-2 border-dashed border-slate-200 p-2 dark:border-slate-800 space-y-1">
+                  <div className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
+                    Sound Previews
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                     <button
                       type="button"
                       onClick={() => soundEngine.play('taskComplete')}
-                      className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
+                      className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
                       ✓ Task Tick
                     </button>
                     <button
                       type="button"
                       onClick={() => soundEngine.play('habitComplete')}
-                      className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
+                      className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
                       ✦ Habit Ring
                     </button>
                     <button
                       type="button"
                       onClick={() => soundEngine.play('calcKey')}
-                      className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
+                      className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
                       ⌨ Key Tap
                     </button>
                     <button
                       type="button"
                       onClick={() => soundEngine.play('successChime')}
-                      className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
+                      className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
                       ♫ Success
                     </button>
@@ -632,7 +660,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {/* Recycle Bin & Deletion Guard (Positioned at the end of System & Appearance) */}
-          <div id="system-recycle-bin-section">
+          <div id="system-recycle-bin-section" className="order-2 md:col-span-2">
             <RecycleBinView
               profileId={settings?.profileId || settings?.profiles?.[0]?.id || 'om-master-profile'}
               onRefresh={onRefresh}
@@ -693,9 +721,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="button"
                 onClick={handleResetData}
                 className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-rose-700 hover:text-rose-900 dark:text-rose-300 dark:hover:text-rose-200 cursor-pointer transition-colors"
+                title="Permanently clear all local profiles, deleted items, custom backgrounds, and app settings"
               >
                 <Trash2 className="h-3 w-3" />
-                <span>Reset Database</span>
+                <span>Factory Reset App</span>
               </button>
             </div>
           </div>
@@ -717,9 +746,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* DANGER RESET CONFIRMATION MODAL */}
       <ConfirmModal
         isOpen={isResetConfirmOpen}
-        title="Reset Entire Database?"
-        message="DANGER: This will permanently delete all tasks, notes, habits, routines, journals, and financial records from your local storage. This action cannot be undone."
-        confirmText="Yes, Clear Everything"
+        title="Factory Reset This App?"
+        message="This permanently deletes every local profile and record, including the Recycle Bin, uploaded background images/videos, appearance settings, and offline caches. The app will reload with fresh defaults. This cannot be undone; export a backup first if you may need this data. Cloud backups are not deleted."
+        confirmText="Yes, Factory Reset"
         cancelText="Cancel"
         isDanger={true}
         onConfirm={handleConfirmReset}

@@ -253,9 +253,6 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
 
             <div className="space-y-1.5">
               <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">Custom background</span>
-              <span className="block text-[10px] text-slate-500 dark:text-slate-400">
-                Images up to 12 MB or MP4 videos up to 50 MB.
-              </span>
               <input
                 ref={fileInputRef}
                 type="file"

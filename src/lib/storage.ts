@@ -40,6 +40,7 @@ import {
 
 import { calculatePayloadBreakdown } from './thumbnailService';
 import { advanceSchedule, getInvestmentMetrics, restoreScheduleOccurrence } from './financeCalculations';
+import { clearStoredBackgroundAssets } from './appearance';
 
 const FOCUS_ALARMS_STORAGE_KEY = 'om_focus_alarms_list';
 
@@ -2068,6 +2069,7 @@ export async function cleanOrphanedCacheAndTrash(options?: {
 
 export async function performHardAppReset(): Promise<void> {
   storage.close();
+  await clearStoredBackgroundAssets();
 
   if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
     await new Promise<void>((resolve, reject) => {

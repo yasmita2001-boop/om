@@ -313,7 +313,7 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
 
           {/* Quick Metrics & Actions Bar */}
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <div className="flex items-center gap-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700/60 px-2.5 py-1 text-[11px]">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 text-[11px]">
               <span className="text-slate-500 dark:text-slate-400 font-medium">In Bin</span>
               <span className="font-bold text-slate-900 dark:text-white tabular-nums">{items.length}</span>
             </div>

@@ -73,15 +73,36 @@ describe('TextReaderController', () => {
   it('does not pause active speech for its keep-alive check', () => {
     controller.speak('First sentence. Second sentence.');
 
-    vi.advanceTimersByTime(8000);
+    vi.advanceTimersByTime(2000);
 
     expect(speechSynthesis.pause).not.toHaveBeenCalled();
     expect(speechSynthesis.resume).not.toHaveBeenCalled();
 
     speechSynthesis.paused = true;
-    vi.advanceTimersByTime(8000);
+    vi.advanceTimersByTime(2000);
 
     expect(speechSynthesis.resume).toHaveBeenCalledOnce();
+  });
+
+  it('retries a silently interrupted unit once, then continues with the next unit', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    controller.speak('First sentence. Second sentence.');
+    speechSynthesis.speaking = false;
+
+    vi.advanceTimersByTime(6000);
+
+    expect(utterances).toHaveLength(2);
+    expect(utterances[1].text).toBe('First sentence.');
+
+    speechSynthesis.speaking = false;
+    vi.advanceTimersByTime(6000);
+
+    expect(utterances).toHaveLength(3);
+    expect(utterances[2].text).toBe('Second sentence.');
+    expect(warn).toHaveBeenCalledWith(
+      'Speech synthesis stopped without an end event; continuing with the next text unit.'
+    );
+    warn.mockRestore();
   });
 
   it('continues with the next sentence when resumed during a sentence pause', () => {

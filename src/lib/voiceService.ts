@@ -424,6 +424,10 @@ export class TextReaderController {
   private keepAliveInterval: any = null;
   private pauseTimer: any = null;
   private isWaitingForNextUnit = false;
+  private activeUnitStartedAt = 0;
+  private stalledSynthesisChecks = 0;
+  private activeUnitRetryCount = 0;
+  private activeUtteranceId = 0;
   private onStateChange?: TextReaderOptions['onStateChange'];
   private currentOptions: TextReaderOptions = {};
   private activeVoice: SpeechSynthesisVoice | null = null;
@@ -450,6 +454,8 @@ export class TextReaderController {
     this.currentUnitIndex = 0;
     this.isSpeaking = true;
     this.isPaused = false;
+    this.isWaitingForNextUnit = false;
+    this.activeUnitRetryCount = 0;
 
     // Resolve optimal voice (Indian English, Hindi Devanagari, Natural Neural)
     const effectiveLang = isHindi ? 'hi-IN' : (targetLang === 'auto' ? 'en-IN' : targetLang);
@@ -480,14 +486,35 @@ export class TextReaderController {
   private startKeepAlive() {
     this.stopKeepAlive();
     this.keepAliveInterval = setInterval(() => {
-      if (
-        typeof window !== 'undefined' &&
-        window.speechSynthesis?.paused &&
-        !this.isPaused
-      ) {
+      if (typeof window === 'undefined' || !window.speechSynthesis || !this.isSpeaking) return;
+      if (this.isPaused || this.isWaitingForNextUnit) return;
+
+      if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
+        this.stalledSynthesisChecks = 0;
+        return;
       }
-    }, 8000);
+
+      if (window.speechSynthesis.speaking) {
+        this.stalledSynthesisChecks = 0;
+        return;
+      }
+
+      if (Date.now() - this.activeUnitStartedAt < 4000) return;
+
+      this.stalledSynthesisChecks++;
+      if (this.stalledSynthesisChecks >= 2) {
+        if (this.activeUnitRetryCount < 1) {
+          this.activeUnitRetryCount++;
+          this.speakCurrentUnit();
+        } else {
+          console.warn('Speech synthesis stopped without an end event; continuing with the next text unit.');
+          this.currentUnitIndex++;
+          this.activeUnitRetryCount = 0;
+          this.speakCurrentUnit();
+        }
+      }
+    }, 2000);
   }
 
   private stopKeepAlive() {
@@ -505,6 +532,8 @@ export class TextReaderController {
     }
 
     const unit = this.currentUnits[this.currentUnitIndex];
+    this.activeUnitStartedAt = Date.now();
+    this.stalledSynthesisChecks = 0;
     if (!unit || !unit.text) {
       this.currentUnitIndex++;
       this.speakCurrentUnit();
@@ -523,6 +552,7 @@ export class TextReaderController {
     }
 
     const utterance = new SpeechSynthesisUtterance(unit.text);
+    const utteranceId = ++this.activeUtteranceId;
     
     // Assign voice & language
     if (this.activeVoice) {
@@ -543,6 +573,9 @@ export class TextReaderController {
     utterance.volume = Math.max(0.1, Math.min(1.0, baseVolume));
 
     utterance.onstart = () => {
+      if (utteranceId !== this.activeUtteranceId) return;
+      this.activeUnitStartedAt = Date.now();
+      this.stalledSynthesisChecks = 0;
       this.onStateChange?.({
         isSpeaking: true,
         isPaused: false,
@@ -553,6 +586,9 @@ export class TextReaderController {
     };
 
     utterance.onend = () => {
+      if (utteranceId !== this.activeUtteranceId) return;
+      this.activeUtteranceId++;
+      this.activeUnitRetryCount = 0;
       this.currentUnitIndex++;
       if (this.currentUnitIndex < this.currentUnits.length && this.isSpeaking) {
         this.scheduleNextUnit(unit.trailingPauseMs);
@@ -562,6 +598,9 @@ export class TextReaderController {
     };
 
     utterance.onerror = (e) => {
+      if (utteranceId !== this.activeUtteranceId) return;
+      this.activeUtteranceId++;
+      this.activeUnitRetryCount = 0;
       console.warn('Speech synthesis unit error:', e);
       this.currentUnitIndex++;
       if (this.currentUnitIndex < this.currentUnits.length && this.isSpeaking) {
@@ -590,6 +629,9 @@ export class TextReaderController {
     this.isSpeaking = false;
     this.isPaused = false;
     this.isWaitingForNextUnit = false;
+    this.stalledSynthesisChecks = 0;
+    this.activeUtteranceId++;
+    this.activeUnitRetryCount = 0;
     this.stopKeepAlive();
     clearTimeout(this.pauseTimer);
     this.onStateChange?.({
@@ -627,6 +669,9 @@ export class TextReaderController {
     clearTimeout(this.pauseTimer);
     this.pauseTimer = null;
     this.isWaitingForNextUnit = false;
+    this.stalledSynthesisChecks = 0;
+    this.activeUtteranceId++;
+    this.activeUnitRetryCount = 0;
     if (isSpeechSynthesisSupported()) {
       window.speechSynthesis.cancel();
       this.isSpeaking = false;

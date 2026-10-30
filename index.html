@@ -11,6 +11,73 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#B88648" />
     <meta name="color-scheme" content="light dark" />
+    <style>
+      #app-initial-lock-screen {
+        position: fixed;
+        z-index: 10000;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        padding: 1.5rem;
+        background:
+          radial-gradient(ellipse at 50% 47%, rgb(31 39 79 / 38%), transparent 48%),
+          radial-gradient(ellipse at 15% 80%, rgb(10 125 132 / 26%), transparent 42%),
+          radial-gradient(ellipse at 88% 18%, rgb(113 65 139 / 24%), transparent 38%),
+          #050816;
+        color: #f5f2e8;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        text-align: center;
+      }
+      #app-initial-lock-screen > section { width: min(100%, 38rem); padding: clamp(1.25rem, 4vh, 2.5rem); }
+      #app-initial-lock-screen .initial-lock-portal {
+        display: grid;
+        width: clamp(7rem, 18vw, 9.5rem);
+        aspect-ratio: 1;
+        margin: 0 auto 1.4rem;
+        place-items: center;
+        border: 1px solid rgb(255 231 188 / 38%);
+        border-radius: 50%;
+        background: radial-gradient(circle at 50% 46%, #0d112a 0 31%, transparent 33%), conic-gradient(from 10deg, #ffe7bc, #5ecdda 40%, #b47ff7 72%, #ffe7bc);
+        box-shadow: 0 0 22px rgb(255 218 158 / 46%), 0 0 64px rgb(107 172 235 / 30%);
+        color: #fff0c8;
+      }
+      #app-initial-lock-screen .initial-lock-portal svg { width: 3.5rem; height: 3.5rem; }
+      #app-initial-lock-screen .initial-lock-eyebrow { color: rgb(201 216 242 / 76%); font-size: .66rem; font-weight: 700; letter-spacing: .16em; }
+      #app-initial-lock-screen .initial-lock-title { margin-top: .75rem; color: #fff8e9; font-size: clamp(1.75rem, 5vw, 2.65rem); font-weight: 750; letter-spacing: -.04em; line-height: 1.2; }
+      #app-initial-lock-screen .initial-lock-description { max-width: 22rem; margin: .75rem auto 0; color: rgb(219 227 247 / 78%); font-size: .92rem; line-height: 1.65; }
+      #app-initial-lock-screen button {
+        display: flex;
+        width: 100%;
+        min-height: 3.5rem;
+        align-items: center;
+        justify-content: center;
+        gap: .6rem;
+        margin-top: 1.5rem;
+        border: 1px solid rgb(255 234 193 / 72%);
+        border-radius: 1rem;
+        padding: .75rem 1rem;
+        background: linear-gradient(115deg, rgb(34 150 164 / 76%), rgb(91 73 163 / 84%) 54%, rgb(174 123 71 / 76%));
+        color: #fff9e9;
+        font: inherit;
+        font-size: .9rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      #app-initial-lock-screen button[data-lock-action="guest"] {
+        min-height: 3rem;
+        margin-top: .8rem;
+        border-color: rgb(198 221 255 / 36%);
+        background: linear-gradient(120deg, rgb(255 255 255 / 12%), rgb(117 148 219 / 9%));
+      }
+      #app-initial-lock-screen .initial-lock-divider { display: flex; align-items: center; gap: .75rem; margin-top: 1.15rem; color: rgb(202 216 239 / 72%); font-size: .72rem; }
+      #app-initial-lock-screen .initial-lock-divider::before,
+      #app-initial-lock-screen .initial-lock-divider::after { height: 1px; flex: 1; background: rgb(189 216 255 / 44%); content: ""; }
+      @media (max-width: 480px) { #app-initial-lock-screen { padding: 1rem; } #app-initial-lock-screen > section { padding: 1rem 1.25rem; } #app-initial-lock-screen .initial-lock-portal { width: 7rem; } }
+      @media (prefers-reduced-motion: reduce) {
+        #app-initial-lock-screen * { scroll-behavior: auto !important; }
+      }
+    </style>
     <script>
       (function () {
         try {
@@ -46,6 +113,36 @@
   </head>
   <body class="text-slate-900 antialiased selection:bg-indigo-500 selection:text-white dark:bg-[#0B0F19] dark:text-slate-100 min-h-screen">
     <div id="root" class="min-h-screen flex flex-col"></div>
+    <div id="app-initial-lock-screen">
+      <section aria-labelledby="initial-lock-title">
+        <div class="initial-lock-portal" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="4" y="11" width="16" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 1 1 8 0v4m-4 4v2" />
+        </svg>
+        </div>
+        <p class="initial-lock-eyebrow">OM LIFEOS · PRIVATE WORKSPACE</p>
+        <h1 id="initial-lock-title" class="initial-lock-title">Your space, safely yours.</h1>
+        <p class="initial-lock-description">Sign in with your Google account to unlock your workspace.</p>
+        <button type="button" data-lock-action="google">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+          Unlock with Google
+        </button>
+        <div class="initial-lock-divider"><span>or</span></div>
+        <button type="button" data-lock-action="guest">Continue as guest</button>
+      </section>
+    </div>
+    <script>
+      document.getElementById('app-initial-lock-screen')?.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target instanceof Element)) return;
+        var button = target.closest('button[data-lock-action]');
+        if (button) this.dataset.pendingAction = button.dataset.lockAction || '';
+      });
+    </script>
     <noscript>Om needs JavaScript enabled to run.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>

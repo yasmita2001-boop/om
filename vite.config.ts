@@ -96,7 +96,9 @@ export default defineConfig(() => {
       cssCodeSplit: true,
       reportCompressedSize: false,
       sourcemap: false,
-      chunkSizeWarningLimit: 1000,
+      // Single-file exports intentionally bundle every lazy feature together;
+      // keep the normal per-chunk warning threshold for code-split builds.
+      chunkSizeWarningLimit: isSingleFile ? 3000 : 1000,
       modulePreload: isSingleFile ? (false as const) : undefined,
       rollupOptions: {
         output: {

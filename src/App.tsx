@@ -32,6 +32,8 @@ import {
 const IS_GUEST_MODE = import.meta.env.DEV || import.meta.env.MODE === 'local-test';
 const GUEST_PROFILE_ID = 'om-master-profile';
 const LOW_POWER_VIEWPORT_QUERY = '(max-width: 767px), (pointer: coarse)';
+const isCoordinatedEnvironmentPreset = (presetId: string): presetId is 'ocean' | 'forest' | 'sunset' | 'midnight' =>
+  ['ocean', 'forest', 'sunset', 'midnight'].some(id => id === presetId);
 
 // Components
 import { Header } from './components/Header';
@@ -66,7 +68,7 @@ const SpiritualView = lazyWithRetry(() => import('./views/SpiritualView').then(m
 const ThingsView = lazyWithRetry(() => import('./views/ThingsView').then(m => ({ default: m.ThingsView })));
 const RecycleBinView = lazyWithRetry(() => import('./views/RecycleBinView').then(m => ({ default: m.RecycleBinView })));
 const SettingsView = lazyWithRetry(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
-const SanctuaryEnvironment = lazyWithRetry(() => import('./components/SanctuaryEnvironment').then(m => ({ default: m.default })));
+const CoordinatedEnvironment = lazyWithRetry(() => import('./components/CoordinatedEnvironment').then(m => ({ default: m.default })));
 
 
 const ViewFallback: React.FC = () => <ViewSkeleton />;
@@ -110,14 +112,18 @@ function LifeOSApp() {
 
   // Module switches get a soft cross-fade/slide via the View Transitions API.
   const changeModule = useCallback((module: NavModule) => {
+    const updateModule = () => {
+      setActiveModule(module);
+      window.scrollTo(0, 0);
+    };
     const doc = document as Document & { startViewTransition?: (updateCallback: () => void) => unknown };
     const reduceMotion = typeof window.matchMedia === 'function'
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (typeof doc.startViewTransition === 'function' && !reduceMotion) {
-      doc.startViewTransition(() => { setActiveModule(module); });
+      doc.startViewTransition(updateModule);
       return;
     }
-    setActiveModule(module);
+    updateModule();
   }, []);
 
   // Restore appearance immediately so local preferences remain available offline.
@@ -782,6 +788,7 @@ function LifeOSApp() {
           </p>
           <button
             type="button"
+            data-lock-action="google"
             onClick={handleGoogleUnlock}
             disabled={isUnlockingGoogle}
             className="lock-screen__button"
@@ -792,6 +799,7 @@ function LifeOSApp() {
           <div className="lock-screen__divider"><span>or</span></div>
           <button
             type="button"
+            data-lock-action="guest"
             onClick={handleGuestUnlock}
             className="lock-screen__guest-button"
           >
@@ -852,9 +860,12 @@ function LifeOSApp() {
       data-app-root="true"
       data-environment={environmentEnabled ? 'on' : 'off'}
       data-wallpaper-custom={appearance.backgroundId === 'custom' ? 'true' : 'false'}
+      data-appearance-preset={appearance.presetId}
       className="sanctuary-shell isolate flex min-h-screen flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white dark:text-slate-100 bg-transparent"
     >
       <style>{'@supports (appearance: base-select) { .sanctuary-shell select::picker(select)::backdrop { background: transparent; } }'}</style>
+      <div className="sanctuary-theme-background" aria-hidden="true" />
+      <div className="sanctuary-cosmos-atmosphere" aria-hidden="true" />
       {wallpaperVideoUrl && (
         <>
           <video
@@ -874,9 +885,15 @@ function LifeOSApp() {
           />
         </>
       )}
-      {environmentEnabled && !isLowPowerViewport && (
+      {isCoordinatedEnvironmentPreset(appearance.presetId)
+        && (
         <Suspense fallback={null}>
-          <SanctuaryEnvironment />
+          <CoordinatedEnvironment
+            key={appearance.presetId}
+            presetId={appearance.presetId}
+            lowPower={isLowPowerViewport}
+            enabled={environmentEnabled}
+          />
         </Suspense>
       )}
       <div className="sanctuary-foreground-dimmer" aria-hidden="true" />
@@ -1217,7 +1234,7 @@ function LifeOSApp() {
         onSnooze={async (mins = 5) => {
           await alarmService.snoozeAlarm(mins);
           setActiveTriggeredAlarm(null);
-          showToast(`⏰ Alarm snoozed for ${mins} minutes`);
+          showToast(`Alarm snoozed for ${mins} minutes`);
           loadAllData();
         }}
       />

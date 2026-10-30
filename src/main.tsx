@@ -1,4 +1,4 @@
-import {StrictMode} from 'react';
+import {StrictMode, useEffect} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import {GlobalErrorBoundary} from './components/GlobalErrorBoundary.tsx';
@@ -11,10 +11,28 @@ const startSW = () => { try { registerSW({ immediate: true }); } catch (e) { con
 if (document.readyState === 'complete') startSW();
 else window.addEventListener('load', startSW, { once: true });
 
+function InitialLockScreenHandoff() {
+  useEffect(() => {
+    const initialScreen = document.getElementById('app-initial-lock-screen');
+    const pendingAction = initialScreen?.dataset.pendingAction;
+    initialScreen?.remove();
+
+    if (pendingAction === 'google' || pendingAction === 'guest') {
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLButtonElement>(`button[data-lock-action="${pendingAction}"]`)?.click();
+      });
+    }
+  }, []);
+  return null;
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <GlobalErrorBoundary>
-      <App />
-    </GlobalErrorBoundary>
+    <>
+      <GlobalErrorBoundary>
+        <App />
+      </GlobalErrorBoundary>
+      <InitialLockScreenHandoff />
+    </>
   </StrictMode>,
 );

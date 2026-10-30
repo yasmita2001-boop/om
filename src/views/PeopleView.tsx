@@ -120,7 +120,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
       .sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
     const now = Date.now();
     const reminderData = {
-      title: `🎉 ${p.name}'s Milestone (${p.relationship}): ${p.importantDate}`,
+      title: `${p.name}'s Milestone (${p.relationship}): ${p.importantDate}`,
       dueAt: p.importantDate,
       repeatRule: 'none' as const,
       status: 'open' as const,
@@ -134,7 +134,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
       const [existing, ...duplicates] = matchingReminders;
       await storage.put('reminders', { ...existing, ...reminderData });
       await Promise.all(duplicates.map(reminder => storage.delete('reminders', reminder.id)));
-      onSuccess(`🔔 Reminder re-armed for ${p.name}'s important date!`);
+      onSuccess(`Reminder re-armed for ${p.name}'s important date!`);
       onRefresh();
       return;
     }
@@ -146,7 +146,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
       updatedAt: now
     };
     await storage.put('reminders', reminder);
-    onSuccess(`🔔 Reminder scheduled for ${p.name}'s important date!`);
+    onSuccess(`Reminder scheduled for ${p.name}'s important date!`);
     onRefresh();
   };
 
@@ -164,8 +164,8 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
     const target = new Date(`${dateStr.slice(0, 10)}T00:00:00`).getTime();
     if (isNaN(target)) return null;
     const diffDays = Math.round((target - tD) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return { label: 'Today 🎉', style: 'bg-rose-500 text-white font-bold animate-pulse' };
-    if (diffDays > 0 && diffDays <= 7) return { label: `In ${diffDays}d ⏰`, style: 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950 dark:text-amber-200 font-bold' };
+    if (diffDays === 0) return { label: 'Today', style: 'bg-rose-500 text-white font-bold animate-pulse' };
+    if (diffDays > 0 && diffDays <= 7) return { label: `In ${diffDays}d`, style: 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950 dark:text-amber-200 font-bold' };
     if (diffDays > 7) return { label: `In ${diffDays}d`, style: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300' };
     return { label: `${Math.abs(diffDays)}d ago`, style: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' };
   };

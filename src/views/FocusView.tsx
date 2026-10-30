@@ -195,7 +195,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
           alarmService.triggerAlarm({
             id: generateUUID(),
             type: 'focus_timer',
-            title: '🎯 Deep Work Sprint Complete!',
+            title: 'Deep Work Sprint Complete!',
             subtitle: sessionLabel || 'Great job staying in deep focus.',
             timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             ringtone: selectedDefaultRingtone
@@ -273,7 +273,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
     if (newSession.goalId) {
       await syncGoalProgressFromFocus(newSession.goalId);
     }
-    onSuccess(`🎯 Focus session logged (${Math.round(elapsed / 60)} minutes)`);
+    onSuccess(`Focus session logged (${Math.round(elapsed / 60)} minutes)`);
     handleReset();
     onRefresh();
   };
@@ -315,7 +315,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
       if (saved) {
         setCustomRingtone({ name: file.name, dataUrl });
         setSelectedDefaultRingtone('custom');
-        onSuccess(`🎵 Custom ringtone "${file.name}" saved!`);
+        onSuccess(`Custom ringtone "${file.name}" saved!`);
         handlePreview('custom');
       }
     };
@@ -397,7 +397,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
       sourceType: selectedRoutineId ? 'routine' : 'manual'
     });
 
-    onSuccess(`⏰ Alarm scheduled for ${newAlarmTime}${matchedRoutine ? ` linked with "${matchedRoutine.name}"` : ''}`);
+    onSuccess(`Alarm scheduled for ${newAlarmTime}${matchedRoutine ? ` linked with "${matchedRoutine.name}"` : ''}`);
     setNewAlarmLabel('');
     setSelectedRoutineId('');
     setAlarmTitleMode('manual');
@@ -465,7 +465,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
               const next = !soundEnabled;
               setSoundEnabled(next);
               if (next) handlePreview(selectedDefaultRingtone);
-              onSuccess(next ? '🔔 Chime enabled' : 'Muted');
+              onSuccess(next ? 'Chime enabled' : 'Muted');
             }}
             className={`flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
               soundEnabled
@@ -778,7 +778,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         <option key={r.id} value={r.id}>{r.name}</option>
                       ))}
                       {customRingtone && (
-                        <option value="custom">🎵 {customRingtone.name} (Custom)</option>
+                        <option value="custom">{customRingtone.name} (Custom)</option>
                       )}
                     </select>
                   </div>
@@ -845,7 +845,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                               <option value="">-- Choose a Routine to Link --</option>
                               {availableRoutines.map(r => (
                                 <option key={r.id} value={r.id}>
-                                  📅 {r.name} {r.startTime ? `(${r.startTime}${r.endTime ? ` - ${r.endTime}` : ''})` : ''} • {r.frequency}
+                                  {r.name} {r.startTime ? `(${r.startTime}${r.endTime ? ` - ${r.endTime}` : ''})` : ''} • {r.frequency}
                                 </option>
                               ))}
                             </select>

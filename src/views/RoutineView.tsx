@@ -2,7 +2,7 @@ import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState } from 'react';
 import {
   Repeat, Clock, Trash2, CheckCircle2,
-  Flame, Check, Bell, Link2, Edit3, X, Target,
+  Flame, Check, Bell, Link2, Edit3, X,
   BellRing, Zap, CheckSquare, Plus
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
@@ -19,6 +19,7 @@ import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { FormDisclosureToggle } from '../components/FormDisclosure';
 import { GoalPicker } from '../components/GoalPicker';
+import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
 
 interface RoutineViewProps {
   routines: Routine[];
@@ -236,7 +237,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       const alarmDueAt = `${today}T${startTime}`;
       await storage.put('reminders', {
         id: generateUUID(),
-        title: `⏰ Routine Genesis Alarm: ${newTask.title}`,
+        title: `Routine Genesis Alarm: ${newTask.title}`,
         dueAt: alarmDueAt,
         repeatRule: 'none',
         status: 'open',
@@ -311,7 +312,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       const alarmDueAt = `${today}T${times[0] || '08:00'}`;
       await storage.put('reminders', {
         id: generateUUID(),
-        title: `⏰ Habit Genesis Alarm: ${newTask.title}`,
+        title: `Habit Genesis Alarm: ${newTask.title}`,
         dueAt: alarmDueAt,
         repeatRule: 'none',
         status: 'open',
@@ -366,7 +367,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
     await storage.put('reminders', {
       id: generateUUID(),
-      title: `⏰ Reminder Alarm: ${quickAlarmItem.title}`,
+      title: `Reminder Alarm: ${quickAlarmItem.title}`,
       dueAt: targetDueAt,
       repeatRule: 'none',
       status: 'open',
@@ -377,7 +378,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       updatedAt: Date.now()
     });
 
-    onSuccess(`🔔 Reminder alarm scheduled for "${quickAlarmItem.title}" at ${targetDueAt.replace('T', ' ')}!`);
+    onSuccess(`Reminder alarm scheduled for "${quickAlarmItem.title}" at ${targetDueAt.replace('T', ' ')}!`);
     setQuickAlarmItem(null);
     onRefresh();
   };
@@ -510,7 +511,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       const alarmDueAt = `${genesisModal.dueAt}T${genesisModal.alarmTime}`;
       await storage.put('reminders', {
         id: generateUUID(),
-        title: `⏰ Task Genesis Alarm: ${newTask.title}`,
+        title: `Task Genesis Alarm: ${newTask.title}`,
         dueAt: alarmDueAt,
         repeatRule: 'none',
         status: 'open',
@@ -524,7 +525,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     }
 
     setGenesisModal(prev => ({ ...prev, isOpen: false }));
-    onSuccess(`⚡ Task Genesis deployed for "${newTask.title}"! Task and audio reminder armed.`);
+    onSuccess(`Task Genesis deployed for "${newTask.title}"! Task and audio reminder armed.`);
     onRefresh();
   };
 
@@ -532,12 +533,12 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     alarmService.triggerAlarm({
       id: generateUUID(),
       type: 'reminder',
-      title: `🚨 DELAY ALERT: ${title}`,
+      title: `DELAY ALERT: ${title}`,
       subtitle: subtitle || 'Routine block is past scheduled time window!',
       timeStr: 'NOW',
       ringtone: 'zen_bell'
     });
-    onSuccess(`🚨 Urgent alarm ringing for "${title}"!`);
+    onSuccess(`Urgent alarm ringing for "${title}"!`);
   };
 
   const handleUpdateHabitRoutine = async (habit: Habit, newRoutineId: string) => {
@@ -663,7 +664,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       sourceType: 'routine'
     });
 
-    onSuccess(`⏰ Alarm scheduled for "${routine.name}" at ${alarmTime}!`);
+    onSuccess(`Alarm scheduled for "${routine.name}" at ${alarmTime}!`);
     onRefresh();
   };
 
@@ -830,7 +831,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-rose-500 cursor-pointer"
                 >
                   <BellRing className="h-4 w-4 animate-bounce" />
-                  <span>🚨 Ring Alarm</span>
+                  <span>Ring Alarm</span>
                 </button>
                 <button
                   type="button"
@@ -841,7 +842,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
                 >
                   <Zap className="h-3.5 w-3.5 text-amber-300" />
-                  <span>⚡ Task Genesis</span>
+                  <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3.5 w-3.5" /> Task Genesis</span>
                 </button>
               </div>
             </div>
@@ -892,7 +893,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               {routineInputMode === 'link' && (
                 <div className="mb-2 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
                   <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                    Select Target Goal (🎯 Main, 🔹 Sub, or ▫️ Micro):
+                    Select Target Goal (Main, Sub, or Micro):
                   </label>
                   <GoalPicker
                     goals={goals || []}
@@ -1009,7 +1010,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   onChange={e => setRoutineArmGenesis(e.target.checked)}
                   className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                 />
-                <span>⚡ Deploy Task Genesis with Alarm on Creation</span>
+                <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Deploy Task Genesis with Alarm on Creation</span>
               </label>
               {routineArmGenesis && (
                 <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
@@ -1103,7 +1104,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     ) : (
                       routines.map(r => (
                         <option key={r.id} value={r.id}>
-                          🔗 {r.name} ({r.startTime || r.time} → {r.endTime || 'end'}) · {r.frequency}
+                          <><ThemeIcon name="link" className="h-3.5 w-3.5" /> {r.name} ({r.startTime || r.time} → {r.endTime || 'end'}) · {r.frequency}</>
                         </option>
                       ))
                     )}
@@ -1167,7 +1168,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     onClick={() => setIsOccurrencesManual(prev => !prev)}
                     className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                   >
-                    {isOccurrencesManual ? '📋 Presets' : '✍️ Manual'}
+                    <span className="inline-flex items-center gap-1">
+                      <ThemeIcon name={isOccurrencesManual ? 'presets' : 'hand'} className="h-3 w-3" />
+                      {isOccurrencesManual ? 'Presets' : 'Manual'}
+                    </span>
                   </button>
                 </div>
 
@@ -1245,7 +1249,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   onChange={e => setHabitArmGenesis(e.target.checked)}
                   className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
-                <span>⚡ Deploy Habit Genesis Task with Alarm on Creation</span>
+                <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Deploy Habit Genesis Task with Alarm on Creation</span>
               </label>
               {habitArmGenesis && (
                 <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
@@ -1398,10 +1402,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     {r.goalId && (() => {
                       const g = goals.find(goal => goal.id === r.goalId);
                       if (!g) return null;
-                      const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
+                      const lvl = g.level === 5 ? 'Atomic' : g.level === 4 ? 'Nano' : g.level === 3 ? 'Micro' : g.level === 2 ? 'Sub' : 'Main';
                       return (
                         <div className="mt-2 inline-flex max-w-full min-w-0 items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/80 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                          <Target className="h-3 w-3 shrink-0 text-indigo-500" />
+                          <GoalTierIcon level={g.level} className="h-3 w-3" />
                           <span className="min-w-0 break-words">{lvl}: {g.title} ({g.progress}%)</span>
                         </div>
                       );
@@ -1793,7 +1797,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     <option value="">None (Standalone)</option>
                     {routines.map(r => (
                       <option key={r.id} value={r.id}>
-                        🔗 {r.name} ({r.startTime || r.time})
+                        <><ThemeIcon name="link" className="h-3.5 w-3.5" /> {r.name} ({r.startTime || r.time})</>
                       </option>
                     ))}
                   </select>
@@ -1839,7 +1843,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       onClick={() => setEditOccurrencesManual(prev => !prev)}
                       className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                     >
-                      {editOccurrencesManual ? '📋 Presets' : '✍️ Manual'}
+                      <span className="inline-flex items-center gap-1">
+                        <ThemeIcon name={editOccurrencesManual ? 'presets' : 'hand'} className="h-3 w-3" />
+                        {editOccurrencesManual ? 'Presets' : 'Manual'}
+                      </span>
                     </button>
                   </div>
 
@@ -1910,7 +1917,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white font-black text-xs">
-                  ⚡
+                  <Zap className="h-4 w-4 text-white" />
                 </span>
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
@@ -2150,7 +2157,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   type="submit"
                   className="rounded-xl bg-amber-500 px-5 py-2 text-xs font-extrabold text-white shadow-xs hover:bg-amber-600 cursor-pointer"
                 >
-                  🔔 Arm Alarm
+                  Arm Alarm
                 </button>
               </div>
             </form>

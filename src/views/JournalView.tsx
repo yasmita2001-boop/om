@@ -16,6 +16,7 @@ import { htmlToPlainText, plainTextToHtml, sanitizeHtml } from '../lib/sanitizeH
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { FormDisclosureToggle } from '../components/FormDisclosure';
+import { ThemeIcon, type ThemeIconName } from '../components/ThemeIcon';
 import { GoalPicker } from '../components/GoalPicker';
 
 interface JournalViewProps {
@@ -99,11 +100,11 @@ export const JournalView: React.FC<JournalViewProps> = ({
   };
 
   const moodOptions = [
-    { label: 'Productive', icon: '⚡' },
-    { label: 'Peaceful', icon: '😌' },
-    { label: 'Inspired', icon: '🌟' },
-    { label: 'Deep Focus', icon: '🧘' },
-    { label: 'Challenged', icon: '🌧' }
+    { label: 'Productive', icon: 'zap' },
+    { label: 'Peaceful', icon: 'calm' },
+    { label: 'Inspired', icon: 'star' },
+    { label: 'Deep Focus', icon: 'focus' },
+    { label: 'Challenged', icon: 'alert' }
   ];
 
   const themePalettes: Record<string, { label: string; swatch: string; cardClass: string }> = {
@@ -494,7 +495,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
           <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 text-xs">
-                📖
+                <ThemeIcon name="journal" className="h-4 w-4" />
               </span>
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
                 {editingId ? 'Edit Entry' : 'Record Reflection'}
@@ -567,7 +568,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                   />
                   {journalGoalId && (
                     <span className="block text-[10px] text-indigo-800 dark:text-indigo-300">
-                      ⚡ Recording this reflection links your philosophical insights directly to this goal's hierarchy!
+                      <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Recording this reflection links your philosophical insights directly to this goal's hierarchy!
                     </span>
                   )}
                 </div>
@@ -606,7 +607,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                   className="journal-reflection-field mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
                   {moodOptions.map(m => (
-                    <option key={m.label} value={m.label}>{m.icon} {m.label}</option>
+                    <option key={m.label} value={m.label}>{m.label}</option>
                   ))}
                 </select>
               </div>
@@ -756,7 +757,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                         : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                     }`}
                   >
-                    <span>{m.icon}</span>
+                    <ThemeIcon name={m.icon as ThemeIconName} className="h-4 w-4" />
                     <span>{m.label}</span>
                     <span>({count})</span>
                   </button>
@@ -803,7 +804,15 @@ export const JournalView: React.FC<JournalViewProps> = ({
                     <Calendar className="h-3.5 w-3.5" />
                     {viewingEntry.date}
                   </span>
-                  {viewingEntry.mood && <span>{moodOptions.find(m => m.label === viewingEntry.mood)?.icon} {viewingEntry.mood}</span>}
+                  {viewingEntry.mood && (
+                    <span className="inline-flex items-center gap-1">
+                      <ThemeIcon
+                        name={(moodOptions.find(m => m.label === viewingEntry.mood)?.icon || 'star') as ThemeIconName}
+                        className="h-4 w-4"
+                      />
+                      {viewingEntry.mood}
+                    </span>
+                  )}
                   {viewingEntry.goalId && (
                     <span>{goals.find(g => g.id === viewingEntry.goalId)?.title || 'Goal linked'}</span>
                   )}

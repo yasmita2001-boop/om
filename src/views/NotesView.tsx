@@ -19,6 +19,7 @@ import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { FormDisclosureToggle } from '../components/FormDisclosure';
 import { GoalPicker } from '../components/GoalPicker';
+import { ThemeIcon } from '../components/ThemeIcon';
 
 interface NotesViewProps {
   notes: Note[];
@@ -636,7 +637,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex w-full max-w-full flex-wrap items-center gap-1 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:gap-2">
           <button
             type="button"
             aria-expanded={noteFiltersOpen}
@@ -794,7 +795,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   />
                   {noteGoalId && (
                     <span className="block text-[10px] text-indigo-800 dark:text-indigo-300">
-                      ⚡ Saving this note links your knowledge vault directly to the selected goal's hierarchy!
+                      <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Saving this note links your knowledge vault directly to the selected goal's hierarchy!
                     </span>
                   )}
                 </div>

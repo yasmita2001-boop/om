@@ -7,6 +7,7 @@ import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
 import { syncGoalProgressFromSpiritual } from '../lib/goalTaskSync';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { FormToggleButton } from '../components/FormToggleButton';
+import { ThemeIcon } from '../components/ThemeIcon';
 
 interface SpiritualViewProps {
   values: ValueItem[];
@@ -120,7 +121,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     // Also auto-create a linked habit in Routine & Habits!
     const h: Habit = {
       id: habitId,
-      name: `🕉 ${pracName.trim()}`,
+      name: pracName.trim(),
       frequency: pracFreq,
       timesPerDay: 1,
       linkedPracticeId: practiceId,
@@ -174,7 +175,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
       if (linkedHabit) {
         const updatedHabit: Habit = {
           ...linkedHabit,
-          name: `🕉 ${editPracName.trim()}`,
+          name: editPracName.trim(),
           frequency: editPracFreq.trim() || 'Daily',
           updatedAt: Date.now()
         };
@@ -441,6 +442,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        <ThemeIcon name="prayer" className="h-4 w-4" />
                         <span className="truncate font-semibold text-slate-900 dark:text-white">{p.name}</span>
                         <GoalBadge goalId={p.goalId} goals={goals} />
                       </div>

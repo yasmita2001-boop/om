@@ -18,6 +18,8 @@ import { applyAccent, rememberAccentChoice, resolveSavedAccent } from '../lib/ac
 import { AppearanceCustomizer } from '../components/AppearanceCustomizer';
 import { AppearancePreferences } from '../lib/appearance';
 import { formatBytes } from '../lib/thumbnailService';
+import { ThemeIcon } from '../components/ThemeIcon';
+import { FormToggleButton } from '../components/FormToggleButton';
 
 interface SettingsViewProps {
   settings?: AppState;
@@ -45,6 +47,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onToggleWallpaperVideoSound
 }) => {
   const [activeTab, setActiveTab] = useState<'system' | 'exports'>('system');
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
   const [storageStats, setStorageStats] = useState<{
     usage: number;
     quota: number;
@@ -203,11 +206,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </h1>
       </div>
 
-      {/* Settings Navigation Tabs (Full Width Responsive Slide Tab) */}
-      <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
+      {/* Keep the appearance panel toggle beside the settings tabs, like other add-form actions. */}
+      <div className="flex min-w-0 flex-col gap-2 border-b border-slate-200 pb-2 dark:border-slate-800 md:flex-row md:items-center md:justify-between">
         <SlideTabs
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as any)}
+          containerClassName="md:w-auto md:flex-1"
           tabs={[
             {
               id: 'system',
@@ -225,22 +229,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }
           ]}
         />
+        {activeTab === 'system' && (
+          <div className="flex shrink-0 justify-end">
+            <FormToggleButton
+              label="Theme"
+              open={isAppearanceOpen}
+              onClick={() => setIsAppearanceOpen(open => !open)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Tab: System & Appearance */}
       {activeTab === 'system' && (
         <div className="grid items-start gap-4 md:grid-cols-2">
           {/* Left Column: Appearance & Theme + Storage Health & Quota (6 cols) */}
-          <div className="w-full md:col-span-2">
-            <AppearanceCustomizer
-              value={appearance}
-              onApply={onApplyAppearance}
-              onSuccess={onSuccess}
-              onError={onError}
-              wallpaperVideoMuted={wallpaperVideoMuted}
-              onToggleWallpaperVideoSound={onToggleWallpaperVideoSound}
-            />
-          </div>
+          {isAppearanceOpen && (
+            <div className="w-full md:col-span-2">
+              <AppearanceCustomizer
+                value={appearance}
+                onApply={onApplyAppearance}
+                onSuccess={onSuccess}
+                onError={onError}
+                wallpaperVideoMuted={wallpaperVideoMuted}
+                onToggleWallpaperVideoSound={onToggleWallpaperVideoSound}
+              />
+            </div>
+          )}
           <section className="order-3 rounded-xl border-2 border-dashed border-amber-200/80 bg-card p-3 text-ink shadow-card dark:border-amber-900/50 sm:p-4">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200/70 pb-3 dark:border-amber-900/40">
                 <div className="flex items-center gap-2">
@@ -630,28 +645,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       onClick={() => soundEngine.play('taskComplete')}
                       className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
-                      ✓ Task Tick
+                      <span className="inline-flex items-center gap-1"><ThemeIcon name="check" className="h-3.5 w-3.5" /> Task Tick</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => soundEngine.play('habitComplete')}
                       className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
-                      ✦ Habit Ring
+                      <span className="inline-flex items-center gap-1"><ThemeIcon name="repeat" className="h-3.5 w-3.5" /> Habit Ring</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => soundEngine.play('calcKey')}
                       className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
-                      ⌨ Key Tap
+                      <span className="inline-flex items-center gap-1"><ThemeIcon name="calculator" className="h-3.5 w-3.5" /> Key Tap</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => soundEngine.play('successChime')}
                       className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
                     >
-                      ♫ Success
+                      <span className="inline-flex items-center gap-1"><ThemeIcon name="celebrate" className="h-3.5 w-3.5" /> Success</span>
                     </button>
                   </div>
                 </div>

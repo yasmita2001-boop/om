@@ -12,6 +12,7 @@ import {
 import { getLocalDateString } from '../lib/dateUtils';
 import { OmLogoMark } from '../components/OmLogoMark';
 import { EmptyState } from '../components/EmptyState';
+import { ThemeIcon } from '../components/ThemeIcon';
 
 interface DashboardViewProps {
   tasks: Task[];
@@ -495,7 +496,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 return (
                   <div key={rem.id} className="flex items-center justify-between rounded-xl border border-slate-100 p-3 text-xs sm:text-sm dark:border-slate-800/60 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all">
                     <div className="flex items-center gap-2.5 truncate pr-2">
-                      <span className="text-base shrink-0">{isAlarm ? '⏰' : '📌'}</span>
+                      <ThemeIcon name={isAlarm ? 'alarm' : 'target'} className="h-4 w-4" />
                       <div className="truncate">
                         <span className="font-semibold text-slate-900 dark:text-white block truncate">{rem.title}</span>
                         <span className="text-[11px] text-slate-400">
@@ -600,7 +601,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4 dark:border-slate-800">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 font-bold">
-              ⚡
+              <ThemeIcon name="zap" className="h-4 w-4" />
             </div>
             <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
               Instant Quick Capture Routing

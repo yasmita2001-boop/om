@@ -1701,8 +1701,18 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 }
 
 @keyframes sanctuary-landscape-drift {
-  0% { background-position: 0 0, 48% 47%; }
-  100% { background-position: 0 0, 52% 49%; }
+  0% { background-position: center, 50% 47%, 14% 75%, 86% 20%, 48% 47%; }
+  100% { background-position: center, 50% 47%, 14% 75%, 86% 20%, 52% 49%; }
+}
+
+@keyframes sanctuary-portal-drift {
+  0% { transform: perspective(900px) rotateX(62deg) rotateZ(-11deg) scale(1.04); }
+  100% { transform: perspective(900px) rotateX(66deg) rotateZ(-7deg) scale(1.12); }
+}
+
+@keyframes sanctuary-mote-drift {
+  0% { background-position: 0 0, 0 0; opacity: 0.42; }
+  100% { background-position: 90px -55px, -36px 24px; opacity: 0.68; }
 }
 
 @keyframes sanctuary-cloud-drift {
@@ -1872,7 +1882,82 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   pointer-events: none;
 }
 
-.sanctuary-shell[data-environment="off"]:not([data-wallpaper-custom="true"])::before {
+.coordinated-theme-layer {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.coordinated-theme-scene {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.17;
+  pointer-events: none;
+}
+
+.coordinated-theme-overlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgb(15 23 42 / calc(var(--om-wallpaper-overlay, 0.22) * 0.45)) 0%,
+    rgb(15 23 42 / var(--om-wallpaper-overlay, 0.22)) 100%
+  );
+}
+
+.coordinated-theme-layer[data-preset="ocean"] .coordinated-theme-overlay {
+  background: linear-gradient(
+    180deg,
+    rgb(5 32 57 / calc(var(--om-wallpaper-overlay, 0.22) * 0.35)) 0%,
+    rgb(3 42 57 / var(--om-wallpaper-overlay, 0.22)) 100%
+  );
+}
+
+.coordinated-theme-layer[data-preset="forest"] .coordinated-theme-overlay {
+  background: linear-gradient(
+    180deg,
+    rgb(12 38 25 / calc(var(--om-wallpaper-overlay, 0.22) * 0.32)) 0%,
+    rgb(13 48 34 / var(--om-wallpaper-overlay, 0.22)) 100%
+  );
+}
+
+.coordinated-theme-layer[data-preset="sunset"] .coordinated-theme-overlay {
+  background: linear-gradient(
+    180deg,
+    rgb(57 31 51 / calc(var(--om-wallpaper-overlay, 0.22) * 0.3)) 0%,
+    rgb(73 35 48 / var(--om-wallpaper-overlay, 0.22)) 100%
+  );
+}
+
+.coordinated-theme-layer[data-preset="midnight"] .coordinated-theme-scene {
+  opacity: 0.21;
+}
+
+.coordinated-theme-layer[data-preset="midnight"] .coordinated-theme-overlay {
+  background: linear-gradient(
+    180deg,
+    rgb(7 15 43 / calc(var(--om-wallpaper-overlay, 0.22) * 0.3)) 0%,
+    rgb(8 19 48 / var(--om-wallpaper-overlay, 0.22)) 100%
+  );
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  .coordinated-theme-scene {
+    opacity: 0.12;
+  }
+
+  .coordinated-theme-layer[data-preset="midnight"] .coordinated-theme-scene {
+    opacity: 0.15;
+  }
+}
+
+:root:not([data-appearance-preset="private-cosmos"]):not([data-appearance-preset="sanctuary"]) .sanctuary-shell[data-environment="off"]:not([data-wallpaper-custom="true"])::before {
   background: none;
   animation: none;
 }
@@ -1982,8 +2067,8 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   }
 
   @keyframes sanctuary-landscape-drift {
-    0% { background-position: 0 0, 53% 49%; }
-    100% { background-position: 0 0, 55% 51%; }
+    0% { background-position: center, 50% 47%, 14% 75%, 86% 20%, 53% 49%; }
+    100% { background-position: center, 50% 47%, 14% 75%, 86% 20%, 55% 51%; }
   }
 }
 
@@ -3996,7 +4081,7 @@ html[data-custom-theme="true"] [class*="bg-slate-"],
 html[data-custom-theme="true"] [class*="bg-gray-"],
 html[data-custom-theme="true"] [class*="dark:bg-slate-"],
 html[data-custom-theme="true"] [class*="dark:bg-gray-"] {
-  background-color: var(--om-custom-surface) !important;
+  background-color: color-mix(in srgb, var(--om-custom-surface) var(--om-card-alpha, 96%), transparent) !important;
 }
 
 html[data-custom-theme="true"] [class*="text-slate-"],
@@ -4021,6 +4106,11 @@ html[data-custom-theme="true"] [class*="border-gray-"] {
 html[data-custom-theme="true"] input::placeholder,
 html[data-custom-theme="true"] textarea::placeholder {
   color: color-mix(in srgb, var(--om-custom-text) 58%, var(--om-custom-surface)) !important;
+}
+
+html[data-custom-theme="true"] .sanctuary-shell :is(.command-bar, .sanctuary-sidebar, .sanctuary-mobile-bottom-nav, .sanctuary-mobile-module-sheet) {
+  background-color: color-mix(in srgb, var(--om-custom-surface) var(--om-card-alpha, 96%), transparent) !important;
+  backdrop-filter: blur(var(--om-card-blur, 16px)) saturate(120%);
 }
 
 /* Keep expandable controls, selected submenu items and menus tied to the active accent. */
@@ -4052,4 +4142,530 @@ html[data-custom-theme="true"] textarea::placeholder {
   border-color: color-mix(in srgb, var(--color-brand, #b88648) 42%, transparent) !important;
   background-color: color-mix(in srgb, var(--color-brand, #b88648) 12%, transparent) !important;
   color: var(--color-indigo-300) !important;
+}
+
+/* Sanctuary uses its own illustrated landscape instead of the generic 3D scene. */
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-scene {
+  display: none;
+}
+
+:root[data-appearance-preset="sanctuary"] .sanctuary-theme-background {
+  position: fixed;
+  z-index: 0;
+  inset: -1rem;
+  pointer-events: none;
+  background-image:
+    linear-gradient(180deg, rgb(15 23 42 / calc(var(--om-wallpaper-overlay, 0.22) * 0.45)) 0%, rgb(15 23 42 / var(--om-wallpaper-overlay, 0.22)) 100%),
+    radial-gradient(ellipse at 50% 48%, rgb(255 210 139 / 58%), transparent 48%),
+    radial-gradient(ellipse at 9% 67%, rgb(214 144 95 / 48%), transparent 43%),
+    radial-gradient(ellipse at 92% 38%, rgb(180 190 204 / 40%), transparent 44%),
+    radial-gradient(ellipse at 52% 100%, rgb(93 68 69 / 38%), transparent 42%),
+    var(--om-wallpaper-image, url("./assets/sanctuary-environment.svg"));
+  background-position: center, 50% 48%, 9% 67%, 92% 38%, 52% 100%, var(--om-wallpaper-position, center 48%);
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: blur(var(--om-wallpaper-blur, 0px))
+    brightness(var(--om-wallpaper-brightness, 100%))
+    contrast(var(--om-wallpaper-contrast, 100%));
+  transform: scale(var(--om-wallpaper-zoom, 1));
+  transform-origin: var(--om-wallpaper-position, center 48%);
+}
+
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell::before,
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell::after {
+  position: fixed;
+  z-index: 0;
+  inset: -12%;
+  display: block;
+  content: "";
+  pointer-events: none;
+}
+
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell::before {
+  inset: 0;
+  background-image:
+    radial-gradient(2px 2px at 8% 18%, #fff1d2 45%, transparent 70%),
+    radial-gradient(1px 1px at 21% 70%, #f5c78d 45%, transparent 70%),
+    radial-gradient(2px 2px at 37% 29%, #fff8e6 45%, transparent 70%),
+    radial-gradient(1px 1px at 53% 82%, #e8ba84 45%, transparent 70%),
+    radial-gradient(2px 2px at 69% 20%, #fff1d2 45%, transparent 70%),
+    radial-gradient(1px 1px at 83% 65%, #f5c78d 45%, transparent 70%),
+    radial-gradient(1px 1px at 94% 38%, #fff8e6 45%, transparent 70%),
+    radial-gradient(ellipse at 50% 48%, rgb(255 219 154 / 18%), transparent 38%);
+  background-size: 340px 300px, 430px 370px;
+  animation: sanctuary-mote-drift 52s ease-in-out infinite alternate;
+}
+
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell::after {
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 82vw 30vw at 50% 55%, transparent 48%, rgb(255 225 169 / 76%) 48.7%, rgb(226 164 99 / 42%) 49.4%, transparent 50.3%),
+    radial-gradient(ellipse 69vw 25vw at 50% 55%, transparent 47.2%, rgb(247 204 151 / 64%) 48%, rgb(177 128 103 / 30%) 48.8%, transparent 49.8%),
+    radial-gradient(ellipse 56vw 20vw at 50% 55%, transparent 46.5%, rgb(255 239 202 / 52%) 47.3%, rgb(222 164 108 / 27%) 48.2%, transparent 49.2%),
+    radial-gradient(ellipse at 50% 55%, transparent 0 20%, rgb(255 224 167 / 26%) 20.2%, transparent 20.8% 27%, rgb(211 166 119 / 23%) 27.2%, transparent 27.8% 35%, rgb(255 236 195 / 20%) 35.2%, transparent 35.8%);
+  transform: perspective(900px) rotateX(62deg) rotateZ(-11deg) scale(1.04);
+  filter: drop-shadow(0 0 28px rgb(225 167 105 / 40%));
+  animation: sanctuary-portal-drift 88s ease-in-out infinite alternate;
+}
+
+html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary-theme-background {
+  background-image: linear-gradient(
+    180deg,
+    rgb(15 23 42 / calc(var(--om-wallpaper-overlay, 0.22) * 0.45)) 0%,
+    rgb(15 23 42 / var(--om-wallpaper-overlay, 0.22)) 100%
+  );
+  background-position: center;
+  background-size: cover;
+  filter: none;
+  transform: none;
+  animation: none;
+}
+
+/* Sanctuary uses opaque warm surfaces so its artwork stays behind the workspace. */
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell {
+  --om-card-base: #f2dfc8;
+  --om-card-soft-base: #e8cdb0;
+  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
+  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
+  --om-line: color-mix(in srgb, #a87343 var(--om-card-border-alpha, 20%), transparent);
+  --om-ink: #272d42;
+  --om-ink-soft: #49404a;
+  --om-ink-muted: #685b56;
+  --om-shell-surface: color-mix(in srgb, #f3e4d2 72%, #c89a7c 28%);
+  --om-shell-surface-soft: color-mix(in srgb, #f8ead8 66%, #bd8f6c 34%);
+  --om-glass-surface: var(--om-card);
+  --om-glass-border: var(--om-line);
+  --om-glass-shadow: 0 8px 26px rgb(61 43 34 / 14%), inset 0 1px rgb(255 249 237 / 24%);
+  --color-card: var(--om-card);
+  --color-card-soft: var(--om-card-soft);
+  --color-line: var(--om-line);
+  --color-ink: var(--om-ink);
+  --color-ink-soft: var(--om-ink-soft);
+  --color-ink-muted: var(--om-ink-muted);
+  background-color: transparent !important;
+  background-image: none;
+  color: var(--om-ink);
+}
+
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"] {
+  border-color: color-mix(in srgb, #bd9874 var(--om-card-border-alpha, 20%), transparent) !important;
+  background-image: linear-gradient(
+    145deg,
+    color-mix(in srgb, #f5e5d1 var(--om-card-alpha, 100%), transparent),
+    color-mix(in srgb, #f0dcc3 var(--om-card-alpha, 100%), transparent) 58%,
+    color-mix(in srgb, #ead3b7 var(--om-card-alpha, 100%), transparent)
+  ) !important;
+  box-shadow: 0 10px 32px rgb(61 43 34 / 17%), inset 0 1px rgb(255 249 237 / 52%);
+  backdrop-filter: none !important;
+}
+
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell .command-bar,
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-sidebar {
+  background-color: color-mix(in srgb, #ead6bc var(--om-card-alpha, 100%), transparent) !important;
+  background-image: linear-gradient(
+    145deg,
+    color-mix(in srgb, #f0dfc9 var(--om-card-alpha, 100%), transparent),
+    color-mix(in srgb, #ead6bc var(--om-card-alpha, 100%), transparent) 60%,
+    color-mix(in srgb, #e4cbaa var(--om-card-alpha, 100%), transparent)
+  ) !important;
+  backdrop-filter: none !important;
+}
+
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-main [class~="bg-indigo-600"] {
+  border: 1px solid rgb(255 239 207 / 78%);
+  background:
+    linear-gradient(115deg, rgb(255 255 255 / 22%), transparent 42%),
+    linear-gradient(115deg, #c59a62, #a87343 54%, #6e574c) !important;
+  color: #fffaf0 !important;
+  box-shadow: 0 12px 30px rgb(124 83 48 / 24%), inset 0 1px rgb(255 255 255 / 38%);
+}
+
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-main [class~="bg-indigo-600"]:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 16px 38px rgb(124 83 48 / 32%), inset 0 1px rgb(255 255 255 / 48%);
+}
+
+/* Private Cosmos carries the lock screen's full atmosphere into the workspace. */
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell {
+  --om-card-base: #151a2e;
+  --om-card-soft-base: #101629;
+  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
+  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
+  --om-line: color-mix(in srgb, rgb(169 195 231) var(--om-card-border-alpha, 23%), transparent);
+  --om-ink: #f5f2e8;
+  --om-ink-soft: rgb(219 227 247 / 88%);
+  --om-ink-muted: rgb(201 216 242 / 76%);
+  --om-shell-surface: color-mix(in srgb, #111629 84%, #176f7b 16%);
+  --om-shell-surface-soft: color-mix(in srgb, #15182e 82%, #72519a 18%);
+  --om-glass-surface: var(--om-card);
+  --om-glass-border: var(--om-line);
+  --om-glass-shadow: 0 8px 28px rgb(0 0 0 / var(--om-card-shadow-alpha, 18%)),
+    inset 0 1px rgb(255 255 255 / var(--om-card-inset-alpha, 30%));
+  --color-card: var(--om-card);
+  --color-card-soft: var(--om-card-soft);
+  --color-line: var(--om-line);
+  --color-ink: var(--om-ink);
+  --color-ink-soft: var(--om-ink-soft);
+  --color-ink-muted: var(--om-ink-muted);
+  background-color: #050816 !important;
+  background-image: none;
+  color: #f5f2e8;
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-cosmos-atmosphere {
+  position: fixed;
+  z-index: 0;
+  inset: -12%;
+  pointer-events: none;
+  background-image:
+    linear-gradient(180deg, rgb(15 23 42 / calc(var(--om-wallpaper-overlay, 0.08) * 0.45)), rgb(15 23 42 / var(--om-wallpaper-overlay, 0.08))),
+    radial-gradient(ellipse at 50% 47%, rgb(56 67 132 / 60%), transparent 51%),
+    radial-gradient(ellipse at 15% 80%, rgb(10 153 164 / 55%), transparent 45%),
+    radial-gradient(ellipse at 88% 18%, rgb(133 78 170 / 52%), transparent 42%),
+    radial-gradient(ellipse at 50% 100%, rgb(44 126 186 / 34%), transparent 40%),
+    radial-gradient(ellipse at 50% 29%, rgb(218 177 132 / 18%), transparent 27%);
+  background-position: center, var(--om-wallpaper-position, 50% 50%);
+  background-size: cover;
+  filter: blur(var(--om-wallpaper-blur, 0px))
+    brightness(var(--om-wallpaper-brightness, 100%))
+    contrast(var(--om-wallpaper-contrast, 100%));
+  transform: scale(var(--om-wallpaper-zoom, 1));
+  transform-origin: var(--om-wallpaper-position, 50% 50%);
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell::before,
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell::after {
+  position: fixed;
+  z-index: 0;
+  inset: -15%;
+  display: block;
+  content: "";
+  pointer-events: none;
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell::before {
+  inset: 0;
+  z-index: 0;
+  opacity: 0.9;
+  background-image:
+    radial-gradient(2px 2px at 7% 18%, #fff 45%, transparent 70%),
+    radial-gradient(1px 1px at 17% 71%, #a8e8ff 45%, transparent 70%),
+    radial-gradient(2px 2px at 28% 32%, #ffe1a3 45%, transparent 70%),
+    radial-gradient(1px 1px at 37% 84%, #fff 45%, transparent 70%),
+    radial-gradient(2px 2px at 49% 15%, #d9c9ff 45%, transparent 70%),
+    radial-gradient(1px 1px at 58% 67%, #fff 45%, transparent 70%),
+    radial-gradient(2px 2px at 69% 25%, #ffdb9c 45%, transparent 70%),
+    radial-gradient(1px 1px at 77% 78%, #b2f6ed 45%, transparent 70%),
+    radial-gradient(2px 2px at 91% 42%, #fff 45%, transparent 70%),
+    radial-gradient(1px 1px at 85% 12%, #c7d7ff 45%, transparent 70%),
+    radial-gradient(1px 1px at 4% 52%, #d9e8ff 45%, transparent 70%),
+    radial-gradient(2px 2px at 12% 36%, #fff 45%, transparent 70%),
+    radial-gradient(1px 1px at 23% 9%, #b2f6ed 45%, transparent 70%),
+    radial-gradient(1px 1px at 32% 61%, #d9c9ff 45%, transparent 70%),
+    radial-gradient(2px 2px at 42% 42%, #fff 45%, transparent 70%),
+    radial-gradient(1px 1px at 54% 91%, #a8e8ff 45%, transparent 70%),
+    radial-gradient(1px 1px at 63% 8%, #fff 45%, transparent 70%),
+    radial-gradient(2px 2px at 73% 52%, #ffe1a3 45%, transparent 70%),
+    radial-gradient(1px 1px at 82% 32%, #d9c9ff 45%, transparent 70%),
+    radial-gradient(1px 1px at 94% 82%, #b2f6ed 45%, transparent 70%),
+    radial-gradient(1px 1px at 2% 94%, #fff 45%, transparent 70%),
+    radial-gradient(2px 2px at 96% 5%, #ffe1a3 45%, transparent 70%);
+  background-size: 390px 320px;
+  animation: lock-star-drift 70s linear infinite;
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell::after {
+  z-index: 0;
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 82vw 30vw at 50% 55%, transparent 48.6%, rgb(127 224 238 / 52%) 49%, rgb(127 224 238 / 24%) 49.5%, transparent 50.2%),
+    radial-gradient(ellipse 69vw 25vw at 50% 55%, transparent 48%, rgb(226 192 255 / 46%) 48.4%, rgb(226 192 255 / 22%) 49%, transparent 49.8%),
+    radial-gradient(ellipse 56vw 20vw at 50% 55%, transparent 47.4%, rgb(255 214 156 / 38%) 47.9%, rgb(255 214 156 / 19%) 48.5%, transparent 49.3%),
+    radial-gradient(ellipse at 50% 55%, transparent 0 20%, rgb(226 192 255 / 24%) 20.2%, transparent 20.8% 27%, rgb(127 224 238 / 20%) 27.2%, transparent 27.8% 35%, rgb(255 214 156 / 17%) 35.2%, transparent 35.8%);
+  transform: perspective(900px) rotateX(64deg) rotateZ(-12deg) scale(1.2);
+  filter: drop-shadow(0 0 18px rgb(81 190 205 / 24%));
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-scene {
+  display: none;
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"] {
+  border-color: color-mix(in srgb, rgb(169 195 231) calc(34% * var(--om-foreground-opacity, 1)), transparent) !important;
+  background-image: linear-gradient(135deg,
+    rgb(126 181 204 / calc(14% * var(--om-foreground-opacity, 1))),
+    rgb(123 88 166 / calc(12% * var(--om-foreground-opacity, 1))) 55%,
+    rgb(255 218 158 / calc(8% * var(--om-foreground-opacity, 1)))) !important;
+  box-shadow: 0 10px 32px rgb(0 0 0 / calc(18% * var(--om-foreground-opacity, 1))),
+    inset 0 1px rgb(215 232 255 / calc(10% * var(--om-foreground-opacity, 1)));
+  backdrop-filter: blur(var(--om-card-blur, 16px)) saturate(145%);
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .command-bar,
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-sidebar {
+  background-color: color-mix(in srgb, #111629 calc(52% * var(--om-foreground-opacity, 1)), transparent) !important;
+  backdrop-filter: blur(var(--om-card-blur, 16px)) saturate(160%);
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-main [class~="bg-indigo-600"] {
+  border: 1px solid rgb(255 234 193 / 72%);
+  background:
+    linear-gradient(115deg, rgb(255 255 255 / 18%), transparent 42%),
+    linear-gradient(115deg, rgb(34 150 164 / 76%), rgb(91 73 163 / 84%) 54%, rgb(174 123 71 / 76%)) !important;
+  color: #fff9e9 !important;
+  box-shadow: 0 12px 30px rgb(73 164 194 / 28%), inset 0 1px rgb(255 255 255 / 45%);
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-main [class~="bg-indigo-600"]:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 16px 38px rgb(115 163 237 / 42%), inset 0 1px rgb(255 255 255 / 58%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-appearance-preset="sanctuary"] .sanctuary-theme-background {
+    animation: none;
+    will-change: auto;
+  }
+  :root[data-appearance-preset="sanctuary"] .sanctuary-shell::before,
+  :root[data-appearance-preset="sanctuary"] .sanctuary-shell::after {
+    animation: none;
+  }
+  :root[data-appearance-preset="private-cosmos"] .sanctuary-shell { background-attachment: scroll; }
+  :root[data-appearance-preset="private-cosmos"] .sanctuary-shell::before,
+  :root[data-appearance-preset="private-cosmos"] .sanctuary-shell::after {
+    animation: none;
+  }
+}
+
+@media (max-width: 767px) {
+  :root[data-appearance-preset="sanctuary"] .sanctuary-theme-background {
+    animation: none;
+    will-change: auto;
+  }
+  :root[data-appearance-preset="sanctuary"] .sanctuary-shell::before,
+  :root[data-appearance-preset="sanctuary"] .sanctuary-shell::after {
+    animation: none;
+  }
+}
+
+/* Give the two nature-inspired presets their own unmistakable surface palettes. */
+:root[data-lifeos-mode="light"][data-appearance-preset="forest"] .sanctuary-shell {
+  --om-card-base: #e1efda;
+  --om-card-soft-base: #cfe5c8;
+  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
+  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
+  --om-shell-surface: #d1e4c8;
+  --om-shell-surface-soft: #bdd8b5;
+  --om-line: color-mix(in srgb, #3f704b var(--om-card-border-alpha, 20%), transparent);
+  --om-glass-surface: var(--om-card);
+  --om-glass-border: var(--om-line);
+  --color-card: var(--om-card);
+  --color-card-soft: var(--om-card-soft);
+  --color-line: var(--om-line);
+}
+
+:root[data-lifeos-mode="light"][data-appearance-preset="sunset"] .sanctuary-shell {
+  --om-card-base: #ffeadb;
+  --om-card-soft-base: #f8d1c0;
+  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
+  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
+  --om-shell-surface: #f5d2c1;
+  --om-shell-surface-soft: #efbca9;
+  --om-line: color-mix(in srgb, #b94d58 var(--om-card-border-alpha, 20%), transparent);
+  --om-glass-surface: var(--om-card);
+  --om-glass-border: var(--om-line);
+  --color-card: var(--om-card);
+  --color-card-soft: var(--om-card-soft);
+  --color-line: var(--om-line);
+}
+
+:root.dark[data-appearance-preset="forest"] .sanctuary-shell {
+  --om-card-base: #1b2b21;
+  --om-card-soft-base: #23372a;
+  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
+  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
+  --om-shell-surface: #18251d;
+  --om-shell-surface-soft: #24332a;
+  --om-line: color-mix(in srgb, #76a783 var(--om-card-border-alpha, 20%), transparent);
+  --om-glass-surface: var(--om-card);
+  --om-glass-border: var(--om-line);
+  --color-card: var(--om-card);
+  --color-card-soft: var(--om-card-soft);
+  --color-line: var(--om-line);
+}
+
+:root.dark[data-appearance-preset="sunset"] .sanctuary-shell {
+  --om-card-base: #302127;
+  --om-card-soft-base: #3b2830;
+  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
+  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
+  --om-shell-surface: #291d24;
+  --om-shell-surface-soft: #35252d;
+  --om-line: color-mix(in srgb, #e18479 var(--om-card-border-alpha, 20%), transparent);
+  --om-glass-surface: var(--om-card);
+  --om-glass-border: var(--om-line);
+  --color-card: var(--om-card);
+  --color-card-soft: var(--om-card-soft);
+  --color-line: var(--om-line);
+}
+
+:root[data-appearance-preset="forest"] .sanctuary-shell::before {
+  background-image:
+    linear-gradient(180deg, rgb(12 38 25 / 12%), rgb(13 48 34 / 34%)),
+    var(--om-wallpaper-image);
+  background-position: center, var(--om-wallpaper-position, center 48%);
+  animation: none;
+}
+
+:root[data-appearance-preset="sunset"] .sanctuary-shell::before {
+  background-image:
+    linear-gradient(180deg, rgb(57 31 51 / 10%), rgb(73 35 48 / 28%)),
+    var(--om-wallpaper-image);
+  background-position: center, var(--om-wallpaper-position, center 48%);
+  animation: none;
+}
+
+:root[data-appearance-preset="ocean"] .sanctuary-shell::before {
+  background-image:
+    linear-gradient(180deg, rgb(5 32 57 / 10%), rgb(3 42 57 / 28%)),
+    var(--om-wallpaper-image);
+  background-position: center, var(--om-wallpaper-position, center 48%);
+  animation: none;
+}
+
+:root[data-appearance-preset="midnight"] .sanctuary-shell::before {
+  background-image:
+    linear-gradient(180deg, rgb(7 15 43 / 10%), rgb(8 19 48 / 32%)),
+    var(--om-wallpaper-image);
+  background-position: center, var(--om-wallpaper-position, center 48%);
+  animation: none;
+}
+
+@media (orientation: portrait) {
+  :root:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell::before {
+    background-size: cover, cover;
+    background-position: center, var(--om-wallpaper-position, center 48%);
+  }
+}
+
+/* Keep light-mode work surfaces crisp and readable across every module. */
+:root[data-lifeos-mode="light"] .sanctuary-shell {
+  --om-card-blur: 0px;
+  --om-glass-shadow: 0 1px 2px rgb(32 38 47 / 4%), 0 8px 20px rgb(32 38 47 / 5%);
+}
+
+:root[data-lifeos-mode="light"] .sanctuary-shell .command-bar,
+:root[data-lifeos-mode="light"] .sanctuary-shell .sanctuary-sidebar,
+:root[data-lifeos-mode="light"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-hero,
+:root[data-lifeos-mode="light"] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not([class*="absolute"]):not([class*="fixed"]) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-lifeos-mode="light"] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"] {
+    transition: none;
+  }
+}
+
+:root[data-appearance-preset="ocean"] .sanctuary-shell {
+  --om-wallpaper-surface-blur: 12px;
+  --om-wallpaper-glass-primary: rgb(14 116 144 / 16%);
+  --om-wallpaper-glass-secondary: rgb(56 189 248 / 11%);
+  --om-wallpaper-glass-tertiary: rgb(20 184 166 / 9%);
+  --om-wallpaper-glass-border: rgb(8 107 130 / 42%);
+  --om-wallpaper-chrome: rgb(219 241 247 / 86%);
+  --om-wallpaper-action-start: #0e7490;
+  --om-wallpaper-action-end: #0f9b9f;
+}
+
+:root.dark[data-appearance-preset="ocean"] .sanctuary-shell {
+  --om-wallpaper-surface-blur: 16px;
+  --om-wallpaper-chrome: rgb(5 32 48 / 82%);
+}
+
+:root[data-appearance-preset="forest"] .sanctuary-shell {
+  --om-wallpaper-surface-blur: 12px;
+  --om-wallpaper-glass-primary: rgb(34 105 59 / 16%);
+  --om-wallpaper-glass-secondary: rgb(132 204 22 / 10%);
+  --om-wallpaper-glass-tertiary: rgb(13 148 136 / 9%);
+  --om-wallpaper-glass-border: rgb(55 111 64 / 42%);
+  --om-wallpaper-chrome: rgb(229 242 222 / 86%);
+  --om-wallpaper-action-start: #287344;
+  --om-wallpaper-action-end: #4a963f;
+}
+
+:root.dark[data-appearance-preset="forest"] .sanctuary-shell {
+  --om-wallpaper-surface-blur: 16px;
+  --om-wallpaper-chrome: rgb(21 42 29 / 84%);
+}
+
+:root[data-appearance-preset="sunset"] .sanctuary-shell {
+  --om-wallpaper-surface-blur: 12px;
+  --om-wallpaper-glass-primary: rgb(214 95 51 / 15%);
+  --om-wallpaper-glass-secondary: rgb(244 145 85 / 12%);
+  --om-wallpaper-glass-tertiary: rgb(190 71 103 / 10%);
+  --om-wallpaper-glass-border: rgb(178 79 66 / 42%);
+  --om-wallpaper-chrome: rgb(255 235 220 / 87%);
+  --om-wallpaper-action-start: #d65b43;
+  --om-wallpaper-action-end: #bd4968;
+}
+
+:root.dark[data-appearance-preset="sunset"] .sanctuary-shell {
+  --om-wallpaper-surface-blur: 16px;
+  --om-wallpaper-chrome: rgb(49 30 35 / 84%);
+}
+
+:root[data-appearance-preset="midnight"] .sanctuary-shell {
+  --om-wallpaper-surface-blur: 16px;
+  --om-wallpaper-glass-primary: rgb(55 79 145 / 16%);
+  --om-wallpaper-glass-secondary: rgb(99 102 241 / 12%);
+  --om-wallpaper-glass-tertiary: rgb(14 116 144 / 9%);
+  --om-wallpaper-glass-border: rgb(127 151 213 / 42%);
+  --om-wallpaper-chrome: rgb(228 233 249 / 86%);
+  --om-wallpaper-action-start: #465eaa;
+  --om-wallpaper-action-end: #6558ad;
+}
+
+:root.dark[data-appearance-preset="midnight"] .sanctuary-shell {
+  --om-wallpaper-chrome: rgb(16 22 47 / 86%);
+}
+
+:root[data-lifeos-mode]:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not([class*="absolute"]):not([class*="fixed"]) {
+  border-color: var(--om-wallpaper-glass-border) !important;
+  background:
+    linear-gradient(135deg,
+      var(--om-wallpaper-glass-primary),
+      var(--om-wallpaper-glass-secondary) 55%,
+      var(--om-wallpaper-glass-tertiary)),
+    var(--om-card) !important;
+  box-shadow: 0 10px 30px rgb(18 32 48 / 10%),
+    inset 0 1px rgb(255 255 255 / 38%) !important;
+  backdrop-filter: blur(var(--om-wallpaper-surface-blur, 12px)) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(var(--om-wallpaper-surface-blur, 12px)) saturate(135%) !important;
+}
+
+:root[data-lifeos-mode]:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .command-bar,
+:root[data-lifeos-mode]:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .sanctuary-sidebar {
+  background-color: var(--om-wallpaper-chrome) !important;
+  border-color: var(--om-wallpaper-glass-border) !important;
+  backdrop-filter: blur(var(--om-wallpaper-surface-blur, 16px)) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(var(--om-wallpaper-surface-blur, 16px)) saturate(140%) !important;
+}
+
+:root:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .sanctuary-main [class~="bg-indigo-600"] {
+  border: 1px solid var(--om-wallpaper-glass-border);
+  background:
+    linear-gradient(115deg, rgb(255 255 255 / 20%), transparent 44%),
+    linear-gradient(115deg, var(--om-wallpaper-action-start), var(--om-wallpaper-action-end)) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--om-wallpaper-action-start) 24%, transparent),
+    inset 0 1px rgb(255 255 255 / 38%);
+}
+
+:root:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .sanctuary-main [class~="bg-indigo-600"]:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--om-wallpaper-action-start) 34%, transparent),
+    inset 0 1px rgb(255 255 255 / 48%);
 }

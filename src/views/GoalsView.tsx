@@ -25,6 +25,7 @@ import { EmptyState } from '../components/EmptyState';
 import {
   computeGoalAggregateBreakdown,
   GoalProgressBreakdown,
+  GoalItemType,
   resolveTaskGoalId,
   syncGoalProgressFromMilestones,
   syncGoalProgressDirect,
@@ -33,6 +34,34 @@ import {
   syncGoalProgressFromMeetings,
   recalculateGoalAggregateProgress
 } from '../lib/goalTaskSync';
+import { ThemeIcon, type ThemeIconName } from '../components/ThemeIcon';
+
+const goalItemIcons: Record<GoalItemType, ThemeIconName> = {
+  goal: 'mainGoal',
+  task: 'target',
+  milestone: 'target',
+  habit: 'repeat',
+  routine: 'calendar',
+  project: 'branch',
+  learning: 'book',
+  skill: 'star',
+  note: 'note',
+  journal: 'journal',
+  savingsPlan: 'savings',
+  loan: 'loan',
+  investment: 'portfolio',
+  asset: 'wallet',
+  liability: 'alert',
+  transaction: 'wallet',
+  appointment: 'calendar',
+  healthNote: 'bottle',
+  meeting: 'user',
+  value: 'star',
+  practice: 'prayer',
+  commitment: 'target',
+  focusSession: 'focus',
+  reminder: 'bell'
+};
 
 /**
  * Fresh, High-Performance Linked Progress Breakdown Widget
@@ -360,7 +389,8 @@ function GoalLinkedBreakdownWidget({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-[10px] font-semibold uppercase text-slate-400 tracking-wider shrink-0">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-slate-400 tracking-wider shrink-0">
+                        <ThemeIcon name={goalItemIcons[item.type]} className="h-3 w-3" />
                         {item.typeLabel}
                       </span>
                       <span className={`truncate font-medium min-w-0 ${item.isCompleted ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>
@@ -1117,11 +1147,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     }
 
     const levelToastNames: Record<number, string> = {
-      1: '🎯 Strategic Main Goal (Level 1) registered',
-      2: `🔹 Sub Goal (Level 2) linked to "${parentGoal?.title}"`,
-      3: `▫️ Micro Goal (Level 3) linked to "${parentGoal?.title}"`,
-      4: `🔸 Nano Goal (Level 4) linked to "${parentGoal?.title}"`,
-      5: `⚡ Atomic Goal (Level 5) linked to "${parentGoal?.title}"`
+      1: 'Strategic Main Goal (Level 1) registered',
+      2: `Sub Goal (Level 2) linked to "${parentGoal?.title}"`,
+      3: `Micro Goal (Level 3) linked to "${parentGoal?.title}"`,
+      4: `Nano Goal (Level 4) linked to "${parentGoal?.title}"`,
+      5: `Atomic Goal (Level 5) linked to "${parentGoal?.title}"`
     };
 
     onSuccess(levelToastNames[effectiveLevel] || 'Goal registered successfully');
@@ -1158,7 +1188,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     };
 
     await storage.put('strategies', newStrategy);
-    onSuccess('⚡ Strategy initiative created');
+    onSuccess('Strategy initiative created');
     setStratTitle('');
     setStratAction('');
     onRefresh();

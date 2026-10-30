@@ -24,6 +24,7 @@ import { FormDisclosure } from '../components/FormDisclosure';
 import { syncGoalProgressFromFinance } from '../lib/goalTaskSync';
 import { addSchedulePeriod, advanceSchedule, getInvestmentMetrics } from '../lib/financeCalculations';
 import { calculatorEngine } from '../lib/calculatorEngine';
+import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
 
 interface FinanceViewProps {
   accounts: FinanceAccount[];
@@ -1239,31 +1240,26 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     switch (level) {
       case 5:
         return {
-          icon: '⚡',
           name: 'Atomic',
           color: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 border-purple-200/80 dark:border-purple-800/60'
         };
       case 4:
         return {
-          icon: '🔸',
           name: 'Nano',
           color: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 border-sky-200/80 dark:border-sky-800/60'
         };
       case 3:
         return {
-          icon: '▫️',
           name: 'Micro',
           color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border-amber-200/80 dark:border-amber-800/60'
         };
       case 2:
         return {
-          icon: '🔹',
           name: 'Sub',
           color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200/80 dark:border-emerald-800/60'
         };
       default:
         return {
-          icon: '🎯',
           name: 'Main',
           color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200/80 dark:border-indigo-800/60'
         };
@@ -1280,7 +1276,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold border ${meta.color} transition-all`}
         title={`Linked to Strategic Goal: ${meta.name} - ${g.title} (${g.progress}% done)`}
       >
-        <span>{meta.icon}</span>
+        <GoalTierIcon level={g.level} className="h-3 w-3" />
         <span className="truncate max-w-[130px]">{g.title}</span>
       </span>
     );
@@ -1338,7 +1334,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               const meta = getGoalLevelLabel(g.level);
               return (
                 <option key={g.id} value={g.id}>
-                  {meta.icon} {meta.name}: {g.title} ({g.progress}%)
+                  {meta.name}: {g.title} ({g.progress}%)
                 </option>
               );
             })}
@@ -4298,7 +4294,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         <option value="">-- Choose Vault Receipt --</option>
                         {receipts?.map(r => (
                           <option key={r.id} value={r.id}>
-                            {r.title} {r.amount ? `(NPR ${r.amount})` : ''} {r.fileName ? '📎' : ''}
+                            {r.title} {r.amount ? `(NPR ${r.amount})` : ''} {r.fileName && <ThemeIcon name="attachment" className="inline h-3.5 w-3.5" />}
                           </option>
                         ))}
                       </select>

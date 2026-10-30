@@ -5,6 +5,7 @@ import {
   Stethoscope, FileText, Edit3, X, CheckCircle2, Circle, Plus
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
+import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
 import {
   HealthProfile, HealthMeasurement, SleepRecord, WaterRecord,
   NutritionRecord, HealthAppointment, HealthNote, Goal
@@ -749,12 +750,12 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       createdAt: Date.now()
                     };
                     await storage.put('waterRecords', w);
-                    onSuccess('+250ml Water logged 💧');
+                    onSuccess('+250ml Water logged');
                     onRefresh();
                   }}
                   className="flex-1 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 py-2 text-xs font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition-colors cursor-pointer"
                 >
-                  💧 +250ml Glass
+                  <><ThemeIcon name="water" className="h-4 w-4" /> +250ml Glass</>
                 </button>
                 <button
                   type="button"
@@ -766,12 +767,12 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       createdAt: Date.now()
                     };
                     await storage.put('waterRecords', w);
-                    onSuccess('+500ml Bottle logged 💧');
+                    onSuccess('+500ml Bottle logged');
                     onRefresh();
                   }}
                   className="flex-1 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 py-2 text-xs font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition-colors cursor-pointer"
                 >
-                  🍶 +500ml Bottle
+                  <><ThemeIcon name="bottle" className="h-4 w-4" /> +500ml Bottle</>
                 </button>
               </div>
 
@@ -1162,7 +1163,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     <option value="">None (Standalone)</option>
                     {goals.map(g => (
                       <option key={g.id} value={g.id}>
-                        🎯 {g.title} ({g.progress}%)
+                        <><GoalTierIcon level={g.level} /> {g.title} ({g.progress}%)</>
                       </option>
                     ))}
                   </select>

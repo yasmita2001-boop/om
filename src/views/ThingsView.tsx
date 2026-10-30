@@ -13,6 +13,7 @@ import {
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { ThemeIcon } from '../components/ThemeIcon';
 import { SlideTabs } from '../components/SlideTabs';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { FormToggleButton } from '../components/FormToggleButton';
@@ -1424,7 +1425,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         <option value="">-- Choose Transaction --</option>
                         {financeTransactions?.map(tx => (
                           <option key={tx.id} value={tx.id}>
-                            {tx.category} - ₹{tx.amount} ({tx.date}) {tx.fileName ? '📎' : ''}
+                            {tx.category} - ₹{tx.amount} ({tx.date}) {tx.fileName && <ThemeIcon name="attachment" className="inline h-3.5 w-3.5" />}
                           </option>
                         ))}
                       </select>

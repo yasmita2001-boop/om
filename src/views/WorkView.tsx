@@ -28,6 +28,7 @@ import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { GoalPicker } from '../components/GoalPicker';
+import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
 
 interface WorkViewProps {
   projects: WorkProject[];
@@ -400,7 +401,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       const alarmDueAt = `${taskDue}T${projAlarmTime}`;
       await storage.put('reminders', {
         id: generateUUID(),
-        title: `⏰ Project Genesis Alarm: ${newTask.title}`,
+        title: `Project Genesis Alarm: ${newTask.title}`,
         dueAt: alarmDueAt,
         repeatRule: 'none',
         status: 'open',
@@ -534,7 +535,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       const alarmDueAt = `${genesisModal.dueAt}T${genesisModal.alarmTime}`;
       await storage.put('reminders', {
         id: generateUUID(),
-        title: `⏰ Genesis Task Alarm: ${newTask.title}`,
+        title: `Genesis Task Alarm: ${newTask.title}`,
         dueAt: alarmDueAt,
         repeatRule: 'none',
         status: 'open',
@@ -548,7 +549,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
     }
 
     setGenesisModal(prev => ({ ...prev, isOpen: false }));
-    onSuccess(`⚡ Task Genesis deployed for "${newTask.title}"! Task and audio reminder armed.`);
+    onSuccess(`Task Genesis deployed for "${newTask.title}"! Task and audio reminder armed.`);
     onRefresh();
   };
 
@@ -556,12 +557,12 @@ export const WorkView: React.FC<WorkViewProps> = ({
     alarmService.triggerAlarm({
       id: generateUUID(),
       type: 'reminder',
-      title: `🚨 DELAY ALERT: ${title}`,
+      title: `DELAY ALERT: ${title}`,
       subtitle: subtitle || 'Deliverable is overdue beyond scheduled date!',
       timeStr: 'NOW',
       ringtone: 'digital_pulse'
     });
-    onSuccess(`🚨 Urgent alarm ringing for "${title}"!`);
+    onSuccess(`Urgent alarm ringing for "${title}"!`);
   };
 
   const handleAddLearning = async (e: React.FormEvent) => {
@@ -604,7 +605,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       const alarmDueAt = `${taskDue}T${learnAlarmTime}`;
       await storage.put('reminders', {
         id: generateUUID(),
-        title: `⏰ Learning Genesis Alarm: ${newTask.title}`,
+        title: `Learning Genesis Alarm: ${newTask.title}`,
         dueAt: alarmDueAt,
         repeatRule: 'none',
         status: 'open',
@@ -699,7 +700,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       const alarmDueAt = `${taskDue}T${skillAlarmTime}`;
       await storage.put('reminders', {
         id: generateUUID(),
-        title: `⏰ Skill Genesis Alarm: ${newTask.title}`,
+        title: `Skill Genesis Alarm: ${newTask.title}`,
         dueAt: alarmDueAt,
         repeatRule: 'none',
         status: 'open',
@@ -754,7 +755,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
     await storage.put('reminders', {
       id: generateUUID(),
-      title: `⏰ Reminder Alarm: ${quickAlarmItem.title}`,
+      title: `Reminder Alarm: ${quickAlarmItem.title}`,
       dueAt: targetDueAt,
       repeatRule: 'none',
       status: 'open',
@@ -765,7 +766,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       updatedAt: Date.now()
     });
 
-    onSuccess(`🔔 Reminder alarm scheduled for "${quickAlarmItem.title}" at ${targetDueAt.replace('T', ' ')}!`);
+    onSuccess(`Reminder alarm scheduled for "${quickAlarmItem.title}" at ${targetDueAt.replace('T', ' ')}!`);
     setQuickAlarmItem(null);
     onRefresh();
   };
@@ -947,7 +948,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-rose-500 cursor-pointer"
                 >
                   <BellRing className="h-4 w-4 animate-bounce" />
-                  <span>🚨 Ring Alarm</span>
+                  <span>Ring Alarm</span>
                 </button>
                 <button
                   type="button"
@@ -959,7 +960,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
                 >
                   <Zap className="h-3.5 w-3.5 text-amber-300" />
-                  <span>⚡ Task Genesis</span>
+                  <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3.5 w-3.5" /> Task Genesis</span>
                 </button>
               </div>
             </div>
@@ -1109,7 +1110,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     onChange={e => setProjArmGenesis(e.target.checked)}
                     className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                   />
-                  <span>⚡ Deploy Task Genesis with Alarm on Creation</span>
+                  <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Deploy Task Genesis with Alarm on Creation</span>
                 </label>
                 {projArmGenesis && (
                   <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
@@ -1294,7 +1295,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                         <div className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/80 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
                           <Target className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
                           <span className="w-full leading-snug truncate">
-                            {linkedGoal.level === 5 ? '⚡ Atomic' : linkedGoal.level === 4 ? '🔸 Nano' : linkedGoal.level === 3 ? '▫️ Micro' : linkedGoal.level === 2 ? '🔹 Sub' : '🎯 Main'}: {linkedGoal.title} ({linkedGoal.progress}%)
+                            <><GoalTierIcon level={linkedGoal.level} /> {linkedGoal.level === 5 ? 'Atomic' : linkedGoal.level === 4 ? 'Nano' : linkedGoal.level === 3 ? 'Micro' : linkedGoal.level === 2 ? 'Sub' : 'Main'}: {linkedGoal.title} ({linkedGoal.progress}%)</>
                           </span>
                         </div>
                       )}
@@ -1367,7 +1368,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     />
                     {learnGoalId && (
                       <span className="block text-[10px] text-emerald-800 dark:text-emerald-300">
-                        ⚡ Advancing learning progress will reflect directly into this goal!
+                        <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Advancing learning progress will reflect directly into this goal!
                       </span>
                     )}
                   </div>
@@ -1426,7 +1427,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     onChange={e => setLearnArmGenesis(e.target.checked)}
                     className="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                   />
-                  <span>⚡ Deploy Study Session Task Genesis with Alarm</span>
+                  <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Deploy Study Session Task Genesis with Alarm</span>
                 </label>
                 {learnArmGenesis && (
                   <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
@@ -1558,7 +1559,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                         <div className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
                           <Target className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
                           <span className="w-full leading-snug">
-                            {linkedGoal.level === 5 ? '⚡ Atomic' : linkedGoal.level === 4 ? '🔸 Nano' : linkedGoal.level === 3 ? '▫️ Micro' : linkedGoal.level === 2 ? '🔹 Sub' : '🎯 Main'}: {linkedGoal.title} ({linkedGoal.progress}%)
+                            <><GoalTierIcon level={linkedGoal.level} /> {linkedGoal.level === 5 ? 'Atomic' : linkedGoal.level === 4 ? 'Nano' : linkedGoal.level === 3 ? 'Micro' : linkedGoal.level === 2 ? 'Sub' : 'Main'}: {linkedGoal.title} ({linkedGoal.progress}%)</>
                           </span>
                         </div>
                       )}
@@ -1674,7 +1675,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     />
                     {skillGoalId && (
                       <span className="block text-[10px] text-purple-800 dark:text-purple-300">
-                        ⚡ Advancing this skill towards Mastery will roll up directly into this goal!
+                        <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Advancing this skill towards Mastery will roll up directly into this goal!
                       </span>
                     )}
                   </div>
@@ -1737,7 +1738,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     onChange={e => setSkillArmGenesis(e.target.checked)}
                     className="rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
                   />
-                  <span>⚡ Deploy Practice Drill Task Genesis with Alarm</span>
+                  <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Deploy Practice Drill Task Genesis with Alarm</span>
                 </label>
                 {skillArmGenesis && (
                   <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
@@ -1872,7 +1873,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                           <div className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200/80 dark:border-purple-800/80 text-[10px] font-bold text-purple-700 dark:text-purple-300">
                             <Target className="h-3.5 w-3.5 shrink-0 text-purple-500" />
                             <span className="w-full leading-snug">
-                              {linkedGoal.level === 5 ? '⚡ Atomic' : linkedGoal.level === 4 ? '🔸 Nano' : linkedGoal.level === 3 ? '▫️ Micro' : linkedGoal.level === 2 ? '🔹 Sub' : '🎯 Main'}: {linkedGoal.title} ({linkedGoal.progress}%)
+                              <><GoalTierIcon level={linkedGoal.level} /> {linkedGoal.level === 5 ? 'Atomic' : linkedGoal.level === 4 ? 'Nano' : linkedGoal.level === 3 ? 'Micro' : linkedGoal.level === 2 ? 'Sub' : 'Main'}: {linkedGoal.title} ({linkedGoal.progress}%)</>
                             </span>
                           </div>
                         )}
@@ -2075,7 +2076,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                 <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-800/80 dark:bg-indigo-950/30">
                   <label className="block text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1 mb-1">
                     <Target className="h-3.5 w-3.5" />
-                    <span>Linked Goal (🎯 Main, 🔹 Sub, or ▫️ Micro):</span>
+                    <span>Linked Goal (Main, Sub, or Micro):</span>
                   </label>
                   <select
                     value={editGoalId}
@@ -2084,7 +2085,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   >
                     <option value="">None (Standalone)</option>
                     {goals.map(g => {
-                      const lvl = g.level === 5 ? '⚡ Atomic' : g.level === 4 ? '🔸 Nano' : g.level === 3 ? '▫️ Micro' : g.level === 2 ? '🔹 Sub' : '🎯 Main';
+                      const lvl = g.level === 5 ? 'Atomic' : g.level === 4 ? 'Nano' : g.level === 3 ? 'Micro' : g.level === 2 ? 'Sub' : 'Main';
                       return (
                         <option key={g.id} value={g.id}>
                           {lvl}: {g.title} ({g.progress}%)
@@ -2267,7 +2268,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white font-black text-xs">
-                  ⚡
+                  <Zap className="h-4 w-4 text-white" />
                 </span>
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
@@ -2507,7 +2508,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   type="submit"
                   className="rounded-xl bg-amber-500 px-5 py-2 text-xs font-extrabold text-white shadow-xs hover:bg-amber-600 cursor-pointer"
                 >
-                  🔔 Arm Alarm
+                  Arm Alarm
                 </button>
               </div>
             </form>

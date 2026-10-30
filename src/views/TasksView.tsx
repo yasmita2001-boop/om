@@ -22,6 +22,7 @@ import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { FormDisclosure, FormDisclosureToggle } from '../components/FormDisclosure';
+import { ThemeIcon } from '../components/ThemeIcon';
 import { GoalPicker } from '../components/GoalPicker';
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
@@ -89,12 +90,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
     alarmService.triggerAlarm({
       id: generateUUID(),
       type: 'reminder',
-      title: `🚨 DELAY ALERT: ${taskTitle}`,
+      title: `DELAY ALERT: ${taskTitle}`,
       subtitle: subtitle || 'Overdue action unit! Urgent execution required.',
       timeStr: 'NOW',
       ringtone: 'digital_pulse'
     });
-    onSuccess(`🚨 Urgent alarm ringing for "${taskTitle}"!`);
+    onSuccess(`Urgent alarm ringing for "${taskTitle}"!`);
   };
 
   const handleSaveQuickAlarm = async (e: React.FormEvent) => {
@@ -123,7 +124,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
     await storage.put('reminders', {
       id: generateUUID(),
-      title: `⏰ Task Reminder: ${quickAlarmItem.title}`,
+      title: `Task Reminder: ${quickAlarmItem.title}`,
       dueAt: targetDueAt,
       repeatRule: 'none',
       status: 'open',
@@ -135,7 +136,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       updatedAt: Date.now()
     });
 
-    onSuccess(`🔔 Reminder alarm scheduled for "${quickAlarmItem.title}" at ${targetDueAt.replace('T', ' ')}!`);
+    onSuccess(`Reminder alarm scheduled for "${quickAlarmItem.title}" at ${targetDueAt.replace('T', ' ')}!`);
     setQuickAlarmItem(null);
     onRefresh();
   };
@@ -299,7 +300,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         const alarmDueAt = `${dueAt}T${taskGenesisAlarmTime}`;
         await storage.put('reminders', {
           id: generateUUID(),
-          title: `⏰ Task Genesis Alarm: ${newTask.title}`,
+          title: `Task Genesis Alarm: ${newTask.title}`,
           dueAt: alarmDueAt,
           repeatRule: 'none',
           status: 'open',
@@ -520,7 +521,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     link.download = `daily-command-target-${today}.md`;
     link.click();
     URL.revokeObjectURL(url);
-    onSuccess('💾 Command Target file exported and downloaded (.md)');
+    onSuccess('Command Target file exported and downloaded (.md)');
   };
 
   // Load a saved record from archive
@@ -733,7 +734,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-rose-500 cursor-pointer"
             >
               <BellRing className="h-4 w-4 animate-bounce" />
-              <span>🚨 Ring Alarm</span>
+              <span>Ring Alarm</span>
             </button>
           </div>
         </div>
@@ -835,7 +836,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
                     {goalId && (
                       <span className="block text-[10px] text-indigo-700 dark:text-indigo-300">
-                        ⚡ Completing this task will advance the goal's progress and roll up to parent goals!
+                        <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Completing this task will advance the goal's progress and roll up to parent goals!
                       </span>
                     )}
                   </div>
@@ -940,7 +941,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       onChange={e => setArmTaskGenesisAlarm(e.target.checked)}
                       className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
-                    <span>⚡ Arm Audio Reminder Alarm on Creation</span>
+                    <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Arm Audio Reminder Alarm on Creation</span>
                   </label>
                   {armTaskGenesisAlarm && (
                     <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
@@ -1185,7 +1186,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 header={
                   <div className="flex items-center gap-2">
                     <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 text-sm font-bold">
-                      🎯
+                      <ThemeIcon name="target" className="h-4 w-4" />
                     </span>
                     <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                       Daily Command Target
@@ -1643,7 +1644,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   type="submit"
                   className="rounded-xl bg-amber-500 px-5 py-2 text-xs font-extrabold text-white shadow-xs hover:bg-amber-600 cursor-pointer"
                 >
-                  🔔 Arm Alarm
+                  Arm Alarm
                 </button>
               </div>
             </form>

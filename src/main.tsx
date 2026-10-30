@@ -14,13 +14,31 @@ else window.addEventListener('load', startSW, { once: true });
 function InitialLockScreenHandoff() {
   useEffect(() => {
     const initialScreen = document.getElementById('app-initial-lock-screen');
-    const pendingAction = initialScreen?.dataset.pendingAction;
-    initialScreen?.remove();
+    const root = document.getElementById('root');
+    if (!initialScreen || !root) return;
 
-    if (pendingAction === 'google' || pendingAction === 'guest') {
-      requestAnimationFrame(() => {
-        document.querySelector<HTMLButtonElement>(`button[data-lock-action="${pendingAction}"]`)?.click();
-      });
+    let observer: MutationObserver | undefined;
+    const finishHandoff = () => {
+      if (!root.firstElementChild) return;
+      if (!initialScreen.isConnected) {
+        observer?.disconnect();
+        return;
+      }
+
+      observer?.disconnect();
+      const pendingAction = initialScreen.dataset.pendingAction;
+      initialScreen.remove();
+      if (pendingAction === 'google' || pendingAction === 'guest') {
+        requestAnimationFrame(() => {
+          document.querySelector<HTMLButtonElement>(`button[data-lock-action="${pendingAction}"]`)?.click();
+        });
+      }
+    };
+
+    finishHandoff();
+    if (initialScreen.isConnected) {
+      observer = new MutationObserver(finishHandoff);
+      observer.observe(root, { childList: true });
     }
   }, []);
   return null;

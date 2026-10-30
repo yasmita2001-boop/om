@@ -1,4 +1,0 @@
-The Ocean, Forest, Sunset and Midnight theme wallpapers were provided by the user.
-
-The matching theme-*-4k.webp assets are 3840x2160 WebP exports of the provided
-theme-*.png images. The 4K dimensions are upscaled from each provided source.

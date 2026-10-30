@@ -423,6 +423,7 @@ export class TextReaderController {
   private currentUnitIndex: number = 0;
   private keepAliveInterval: any = null;
   private pauseTimer: any = null;
+  private isWaitingForNextUnit = false;
   private onStateChange?: TextReaderOptions['onStateChange'];
   private currentOptions: TextReaderOptions = {};
   private activeVoice: SpeechSynthesisVoice | null = null;
@@ -479,11 +480,12 @@ export class TextReaderController {
   private startKeepAlive() {
     this.stopKeepAlive();
     this.keepAliveInterval = setInterval(() => {
-      if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
-        if (!this.isPaused) {
-          window.speechSynthesis.pause();
-          window.speechSynthesis.resume();
-        }
+      if (
+        typeof window !== 'undefined' &&
+        window.speechSynthesis?.paused &&
+        !this.isPaused
+      ) {
+        window.speechSynthesis.resume();
       }
     }, 8000);
   }
@@ -496,6 +498,7 @@ export class TextReaderController {
   }
 
   private speakCurrentUnit() {
+    this.isWaitingForNextUnit = false;
     if (!this.isSpeaking || this.currentUnitIndex >= this.currentUnits.length) {
       this.finishSpeaking();
       return;
@@ -552,13 +555,7 @@ export class TextReaderController {
     utterance.onend = () => {
       this.currentUnitIndex++;
       if (this.currentUnitIndex < this.currentUnits.length && this.isSpeaking) {
-        // Natural breath pause between clauses/sentences
-        clearTimeout(this.pauseTimer);
-        this.pauseTimer = setTimeout(() => {
-          if (this.isSpeaking && !this.isPaused) {
-            this.speakCurrentUnit();
-          }
-        }, unit.trailingPauseMs);
+        this.scheduleNextUnit(unit.trailingPauseMs);
       } else {
         this.finishSpeaking();
       }
@@ -568,7 +565,7 @@ export class TextReaderController {
       console.warn('Speech synthesis unit error:', e);
       this.currentUnitIndex++;
       if (this.currentUnitIndex < this.currentUnits.length && this.isSpeaking) {
-        setTimeout(() => this.speakCurrentUnit(), 100);
+        this.scheduleNextUnit(100);
       } else {
         this.finishSpeaking();
       }
@@ -577,9 +574,22 @@ export class TextReaderController {
     window.speechSynthesis.speak(utterance);
   }
 
+  private scheduleNextUnit(delayMs: number) {
+    clearTimeout(this.pauseTimer);
+    this.isWaitingForNextUnit = true;
+    this.pauseTimer = setTimeout(() => {
+      this.pauseTimer = null;
+      if (this.isSpeaking && !this.isPaused) {
+        this.isWaitingForNextUnit = false;
+        this.speakCurrentUnit();
+      }
+    }, delayMs);
+  }
+
   private finishSpeaking() {
     this.isSpeaking = false;
     this.isPaused = false;
+    this.isWaitingForNextUnit = false;
     this.stopKeepAlive();
     clearTimeout(this.pauseTimer);
     this.onStateChange?.({
@@ -595,6 +605,7 @@ export class TextReaderController {
     if (isSpeechSynthesisSupported() && this.isSpeaking) {
       window.speechSynthesis.pause();
       clearTimeout(this.pauseTimer);
+      this.pauseTimer = null;
       this.isPaused = true;
       this.onStateChange?.({ isSpeaking: true, isPaused: true });
     }
@@ -605,12 +616,17 @@ export class TextReaderController {
       window.speechSynthesis.resume();
       this.isPaused = false;
       this.onStateChange?.({ isSpeaking: true, isPaused: false });
+      if (this.isWaitingForNextUnit) {
+        this.scheduleNextUnit(0);
+      }
     }
   }
 
   public stop() {
     this.stopKeepAlive();
     clearTimeout(this.pauseTimer);
+    this.pauseTimer = null;
+    this.isWaitingForNextUnit = false;
     if (isSpeechSynthesisSupported()) {
       window.speechSynthesis.cancel();
       this.isSpeaking = false;

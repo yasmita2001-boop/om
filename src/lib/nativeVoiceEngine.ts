@@ -33,11 +33,10 @@ export interface VoiceTuningParams {
 }
 
 export interface VoiceMatchPreset {
-  id: string;
+  id: 'deep_baritone' | 'sweet_melody' | 'natural_human' | 'fast_energetic' | 'radio_broadcaster' | 'zen_meditation';
   name: string;
   nameHi: string;
   desc: string;
-  icon: string;
   pitch: number;
   rate: number;
   pauseWeight: number;
@@ -52,7 +51,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
   labelHi: string;
   desc: string; 
   descHi: string;
-  icon: string; 
   gender: 'female' | 'male' | 'any'; 
   tuning: VoiceTuningParams;
   tags: string[];
@@ -62,7 +60,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'शालीन वाचक (Narrator)',
     desc: 'Clear, gentle, and peaceful cadence for articles & notes',
     descHi: 'शांत, स्पष्ट और सौम्य वाचन - अध्ययन एवं लेखों के लिए',
-    icon: '🌸',
     gender: 'female',
     tuning: { rate: 0.95, pitch: 1.06, pauseWeight: 1.0, volume: 1.0 },
     tags: ['Gentle', 'Articles', 'Notes', 'Clear']
@@ -72,7 +69,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'मधुर कथा वाचक (Story)',
     desc: 'Warm, empathetic, sweet cadence for reflections & journals',
     descHi: 'मधुर, आत्मीय और भावपूर्ण आवाज़ - डायरी व कहानियों के लिए',
-    icon: '☕',
     gender: 'female',
     tuning: { rate: 0.92, pitch: 1.14, pauseWeight: 1.15, volume: 1.0 },
     tags: ['Emotional', 'Journal', 'Sweet', 'Empathetic']
@@ -82,7 +78,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'गंभीर वाचक (News Anchor)',
     desc: 'Deep, crisp, authoritative briefing & podcast cadence',
     descHi: 'गंभीर, वजनदार और स्पष्ट वाचन - पॉडकास्ट व समाचार शैली',
-    icon: '🎙️',
     gender: 'male',
     tuning: { rate: 0.96, pitch: 0.88, pauseWeight: 1.0, volume: 1.0 },
     tags: ['Deep', 'Authoritative', 'Crisp', 'News']
@@ -92,7 +87,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'उत्साही मित्र (Conversational)',
     desc: 'Upbeat, conversational, everyday Hinglish vibe',
     descHi: 'दोस्ताना, ऊर्जावान और स्वाभाविक बातचीत की शैली',
-    icon: '⚡',
     gender: 'male',
     tuning: { rate: 1.04, pitch: 0.98, pauseWeight: 0.85, volume: 1.0 },
     tags: ['Upbeat', 'Hinglish', 'Casual', 'Fast']
@@ -102,7 +96,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'नाटकीय कथाकार (Dramatic)',
     desc: 'Dramatic pauses and rich emotional storytelling cadence',
     descHi: 'विश्राम और उतार-चढ़ाव के साथ प्रभावशाली कथा वाचन',
-    icon: '📖',
     gender: 'any',
     tuning: { rate: 0.88, pitch: 1.04, pauseWeight: 1.35, volume: 1.0 },
     tags: ['Dramatic', 'Rich Pauses', 'Story', 'Captivating']
@@ -112,7 +105,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'शांत ध्यानमग्न (Zen Soft)',
     desc: 'Slow, serene, soothing whisper tone for meditation & focus',
     descHi: 'धीमी, कोमल और शांतिदायक आवाज़ - ध्यान और विश्राम के लिए',
-    icon: '🍃',
     gender: 'female',
     tuning: { rate: 0.80, pitch: 0.94, pauseWeight: 1.45, volume: 0.9 },
     tags: ['Zen', 'Relaxation', 'Bedtime', 'Focus']
@@ -122,7 +114,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'व्यावसायिक (Corporate Executive)',
     desc: 'Sharp, confident, articulate business presentation tone',
     descHi: 'आत्मविश्वासी, औपचारिक व पेशेवर कॉर्पोरेट प्रस्तुति शैली',
-    icon: '💼',
     gender: 'male',
     tuning: { rate: 0.98, pitch: 0.95, pauseWeight: 0.95, volume: 1.0 },
     tags: ['Formal', 'Business', 'Confident', 'Polished']
@@ -132,7 +123,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'शिक्षक एवं प्रोफ़ेसर (Educational)',
     desc: 'Measured, articulate, explanatory cadence with emphasis',
     descHi: 'गंभीर, समझाने वाली और स्पष्ट शैक्षणिक वाचन शैली',
-    icon: '🎓',
     gender: 'any',
     tuning: { rate: 0.92, pitch: 1.00, pauseWeight: 1.10, volume: 1.0 },
     tags: ['Educational', 'Explanatory', 'Articulate', 'Study']
@@ -142,7 +132,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'रेडियो जॉकी (Radio RJ Host)',
     desc: 'High energy, rhythmic, charming radio broadcaster cadence',
     descHi: 'तेज़, आकर्षक, मधुर और मनोरंजक रेडियो जॉकी का अंदाज़',
-    icon: '📻',
     gender: 'any',
     tuning: { rate: 1.06, pitch: 1.10, pauseWeight: 0.90, volume: 1.0 },
     tags: ['Radio RJ', 'Dynamic', 'Lively', 'Charming']
@@ -152,7 +141,6 @@ export const PERSONA_PRESETS: Record<VoicePersona, {
     labelHi: 'सर्वश्रेष्ठ न्यूरल आवाज़ (AI Best)',
     desc: 'Auto-picks the highest fidelity neural system voice installed',
     descHi: 'सिस्टम में उपलब्ध सबसे प्राकृतिक और वास्तविक आवाज़ का चयन',
-    icon: '🌟',
     gender: 'any',
     tuning: { rate: 0.96, pitch: 1.00, pauseWeight: 1.00, volume: 1.0 },
     tags: ['Neural', 'HD Voice', 'Auto', 'Natural']
@@ -168,7 +156,6 @@ export const VOICE_MATCH_PRESETS: VoiceMatchPreset[] = [
     name: 'Deep Baritone',
     nameHi: 'भारी व रोबदार आवाज़',
     desc: 'Low-frequency bass tone with solid authority',
-    icon: '🎙️',
     pitch: 0.82,
     rate: 0.92,
     pauseWeight: 1.15,
@@ -179,7 +166,6 @@ export const VOICE_MATCH_PRESETS: VoiceMatchPreset[] = [
     name: 'Sweet & Melodic',
     nameHi: 'मधुर व कोमल आवाज़',
     desc: 'High-frequency pleasant treble tone with soft cadence',
-    icon: '🌸',
     pitch: 1.18,
     rate: 0.94,
     pauseWeight: 1.10,
@@ -190,7 +176,6 @@ export const VOICE_MATCH_PRESETS: VoiceMatchPreset[] = [
     name: 'Natural Conversation',
     nameHi: 'स्वाभाविक बातचीत',
     desc: 'Balanced everyday speaking pitch and rhythm',
-    icon: '💬',
     pitch: 1.00,
     rate: 0.96,
     pauseWeight: 1.00,
@@ -201,7 +186,6 @@ export const VOICE_MATCH_PRESETS: VoiceMatchPreset[] = [
     name: 'Energetic & Fast',
     nameHi: 'उत्साही व तेज़',
     desc: 'Quick tempo for productive speed listening',
-    icon: '⚡',
     pitch: 1.05,
     rate: 1.18,
     pauseWeight: 0.85,
@@ -212,7 +196,6 @@ export const VOICE_MATCH_PRESETS: VoiceMatchPreset[] = [
     name: 'Radio Presenter',
     nameHi: 'रेडियो जॉकी शैली',
     desc: 'Punchy modulation and dynamic broadcaster cadence',
-    icon: '📻',
     pitch: 1.10,
     rate: 1.08,
     pauseWeight: 0.95,
@@ -223,7 +206,6 @@ export const VOICE_MATCH_PRESETS: VoiceMatchPreset[] = [
     name: 'Zen & Meditative',
     nameHi: 'शांत व ध्यानमग्न',
     desc: 'Slow, deep breathing pauses for mindful reading',
-    icon: '🍃',
     pitch: 0.92,
     rate: 0.80,
     pauseWeight: 1.45,

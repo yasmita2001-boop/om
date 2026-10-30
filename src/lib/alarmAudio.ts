@@ -414,7 +414,7 @@ export function getAllRingtoneOptions(): RingtoneOption[] {
     return [
       {
         id: 'custom',
-        name: `🎵 ${custom.name} (Custom)`,
+        name: `${custom.name} (Custom)`,
         description: 'Your uploaded custom audio ringtone',
         type: 'custom'
       },
@@ -434,7 +434,7 @@ export function getRingtoneLabel(id?: string): string {
   if (!id) return 'Default Alarm';
   if (id === 'custom') {
     const custom = alarmAudio.getCustomRingtone();
-    return custom ? `🎵 ${custom.name} (Custom)` : 'Custom Audio';
+    return custom ? `${custom.name} (Custom)` : 'Custom Audio';
   }
   const found = BUILTIN_RINGTONES.find(r => r.id === id);
   return found ? found.name : id;

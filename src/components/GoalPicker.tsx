@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Goal } from '../types';
 import { getGoalHierarchyLevel, sortGoalsHierarchically } from '../lib/goalHierarchy';
+import { ThemeIcon } from './ThemeIcon';
 
 const goalLevels = [
-  { level: 1, label: 'Main', icon: '🎯' },
-  { level: 2, label: 'Sub', icon: '🔹' },
-  { level: 3, label: 'Micro', icon: '▫️' },
-  { level: 4, label: 'Nano', icon: '🔸' },
-  { level: 5, label: 'Atomic', icon: '⚡' }
+  { level: 1, label: 'Main', icon: 'mainGoal' },
+  { level: 2, label: 'Sub', icon: 'subGoal' },
+  { level: 3, label: 'Micro', icon: 'microGoal' },
+  { level: 4, label: 'Nano', icon: 'nanoGoal' },
+  { level: 5, label: 'Atomic', icon: 'zap' }
 ] as const;
 
 interface GoalPickerProps {
@@ -65,7 +66,7 @@ export const GoalPicker: React.FC<GoalPickerProps> = ({
                 : 'border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:bg-slate-900 dark:text-indigo-300'
             }`}
           >
-            {icon} {label}
+            <ThemeIcon name={icon} className="h-3 w-3" /> {label}
           </button>
         ))}
       </div>
@@ -78,7 +79,7 @@ export const GoalPicker: React.FC<GoalPickerProps> = ({
         <option value="">{placeholder}</option>
         {selectedGoal && selectedLevel !== null && selectedLevel !== activeLevel && activeLevel !== 'all' && (
           <option value={selectedGoal.id}>
-            Current selection - {goalLevels[selectedLevel - 1].icon} {goalLevels[selectedLevel - 1].label}: {selectedGoal.title} ({selectedGoal.progress}%)
+            Current selection - {goalLevels[selectedLevel - 1].label}: {selectedGoal.title} ({selectedGoal.progress}%)
           </option>
         )}
         {filteredGoals.map(goal => {
@@ -86,7 +87,7 @@ export const GoalPicker: React.FC<GoalPickerProps> = ({
           const levelInfo = goalLevels[level - 1];
           return (
             <option key={goal.id} value={goal.id}>
-              {levelInfo.icon} {levelInfo.label}: {goal.title} ({goal.progress}%)
+              {levelInfo.label}: {goal.title} ({goal.progress}%)
             </option>
           );
         })}

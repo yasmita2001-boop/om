@@ -279,10 +279,10 @@ export function computeGoalAggregateBreakdown(
   childGoals.forEach(c => {
     const prog = Math.max(0, Math.min(100, Math.round(Number(c.progress) || 0)));
     const typeLabel =
-      c.level === 5 ? '⚡ Atomic Goal' :
-      c.level === 4 ? '🔸 Nano Goal' :
-      c.level === 3 ? '▫️ Micro Goal' :
-      c.level === 2 ? '🔹 Sub Goal' : '🎯 Main Goal';
+      c.level === 5 ? 'Atomic Goal' :
+      c.level === 4 ? 'Nano Goal' :
+      c.level === 3 ? 'Micro Goal' :
+      c.level === 2 ? 'Sub Goal' : 'Main Goal';
     rawItems.push({
       id: c.id,
       type: 'goal',
@@ -300,7 +300,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: t.id,
       type: 'task',
-      typeLabel: '📋 Task',
+      typeLabel: 'Task',
       title: t.title,
       progress: prog,
       isCompleted: isDone
@@ -314,7 +314,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: m.id,
       type: 'milestone',
-      typeLabel: '🏁 Milestone',
+      typeLabel: 'Milestone',
       title: m.title,
       progress: prog,
       isCompleted: isDone || prog >= 100
@@ -334,7 +334,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: h.id,
       type: 'habit',
-      typeLabel: '🔁 Habit Ritual',
+      typeLabel: 'Habit Ritual',
       title: `${h.name} (${effectiveDays}/30d consistency${isDoneToday ? ' · ✓ Done Today' : ''})`,
       progress: prog,
       isCompleted: prog >= 90
@@ -354,7 +354,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: r.id,
       type: 'routine',
-      typeLabel: '⏱️ Routine Block',
+      typeLabel: 'Routine Block',
       title: `${r.name} (${effectiveDays}/30d consistency${isDoneToday ? ' · ✓ Done Today' : ''})`,
       progress: prog,
       isCompleted: prog >= 90
@@ -374,7 +374,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: p.id,
       type: 'project',
-      typeLabel: '📂 Deliverable',
+      typeLabel: 'Deliverable',
       title: p.name,
       progress: prog,
       isCompleted: prog >= 100 || p.status === 'Completed'
@@ -387,7 +387,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: l.id,
       type: 'learning',
-      typeLabel: '📚 Learning Track',
+      typeLabel: 'Learning Track',
       title: l.title,
       progress: prog,
       isCompleted: prog >= 100
@@ -410,7 +410,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: s.id,
       type: 'skill',
-      typeLabel: '🏆 Competency',
+      typeLabel: 'Competency',
       title: s.name,
       progress: prog,
       isCompleted: prog >= 100
@@ -422,7 +422,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: n.id,
       type: 'note',
-      typeLabel: '📓 Knowledge Vault',
+      typeLabel: 'Knowledge Vault',
       title: n.title,
       progress: 0,
       isCompleted: false
@@ -434,7 +434,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: j.id,
       type: 'journal',
-      typeLabel: '📖 Journal Reflection',
+      typeLabel: 'Journal Reflection',
       title: j.title,
       progress: 0,
       isCompleted: false
@@ -449,7 +449,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: s.id,
       type: 'savingsPlan',
-      typeLabel: '💰 Savings Goal',
+      typeLabel: 'Savings Goal',
       title: `${s.name} (₹${current.toLocaleString()} / ₹${target.toLocaleString()})`,
       progress: prog,
       isCompleted: prog >= 100
@@ -465,7 +465,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: l.id,
       type: 'loan',
-      typeLabel: '💳 Loan Repayment',
+      typeLabel: 'Loan Repayment',
       title: `${l.name} (Paid: ₹${repaid.toLocaleString()})`,
       progress: prog,
       isCompleted: principal > 0 && (outstanding <= 0 || prog >= 100)
@@ -480,7 +480,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: i.id,
       type: 'investment',
-      typeLabel: '📈 Investment',
+      typeLabel: 'Investment',
       title: `${i.name} (₹${val.toLocaleString()})`,
       progress: prog,
       isCompleted: amt > 0 && val >= amt
@@ -492,7 +492,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: a.id,
       type: 'asset',
-      typeLabel: '🏛️ Asset Holding',
+      typeLabel: 'Asset Holding',
       title: `${a.name} (₹${(Number(a.value) || 0).toLocaleString()})`,
       progress: 100,
       isCompleted: true
@@ -506,7 +506,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: l.id,
       type: 'liability',
-      typeLabel: '⚖️ Liability Item',
+      typeLabel: 'Liability Item',
       title: `${l.name} (₹${amt.toLocaleString()})`,
       progress: prog,
       isCompleted: amt <= 0
@@ -518,7 +518,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: t.id,
       type: 'transaction',
-      typeLabel: '💵 Ledger Entry',
+      typeLabel: 'Ledger Entry',
       title: `${t.category || t.type}: ₹${(Number(t.amount) || 0).toLocaleString()} (${t.date})`,
       progress: 0,
       isCompleted: false
@@ -531,7 +531,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: a.id,
       type: 'appointment',
-      typeLabel: '🩺 Medical Appointment',
+      typeLabel: 'Medical Appointment',
       title: `${a.title} (${a.date})`,
       progress: isDone ? 100 : 0,
       isCompleted: isDone
@@ -543,7 +543,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: n.id,
       type: 'healthNote',
-      typeLabel: '📋 Health Clinical Note',
+      typeLabel: 'Health Clinical Note',
       title: `${(n.text || '').slice(0, 35)}... (${n.date})`,
       progress: 0,
       isCompleted: false
@@ -556,7 +556,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: m.id,
       type: 'meeting',
-      typeLabel: '🤝 Strategic Meeting',
+      typeLabel: 'Strategic Meeting',
       title: `${m.title} (${m.date})`,
       progress: isDone ? 100 : 0,
       isCompleted: isDone
@@ -568,7 +568,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: p.id,
       type: 'practice',
-      typeLabel: '🧘 Spiritual Practice',
+      typeLabel: 'Spiritual Practice',
       title: p.name,
       progress: 0,
       isCompleted: false
@@ -581,7 +581,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: f.id,
       type: 'focusSession',
-      typeLabel: '⚡ Deep Work Session',
+      typeLabel: 'Deep Work Session',
       title: `${f.label || 'Focus'} (${mins}m on ${f.date})`,
       progress: 0,
       isCompleted: false
@@ -594,7 +594,7 @@ export function computeGoalAggregateBreakdown(
     rawItems.push({
       id: r.id,
       type: 'reminder',
-      typeLabel: '⏰ Goal Reminder',
+      typeLabel: 'Goal Reminder',
       title: `${r.title} (${r.dueAt})`,
       progress: isDone ? 100 : 0,
       isCompleted: isDone

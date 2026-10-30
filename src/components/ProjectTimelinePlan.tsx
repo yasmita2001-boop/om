@@ -18,6 +18,7 @@ import {
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
 import { SlideTabs } from './SlideTabs';
+import { GoalTierIcon, ThemeIcon, type ThemeIconName } from './ThemeIcon';
 import { alarmService } from '../lib/alarmService';
 import { useRingtoneOptions } from '../lib/alarmAudio';
 import {
@@ -315,36 +316,36 @@ export function computeItemDelay(item: {
 }
 
 // 5-Tier Goal Metadata Helper
-export function getGoalTierBadge(level?: number): { name: string; icon: string; badgeStyle: string } {
+export function getGoalTierBadge(level?: number): { name: string; icon: ThemeIconName; badgeStyle: string } {
   switch (level) {
     case 2:
       return {
         name: 'Sub Goal',
-        icon: '🔹',
+        icon: 'subGoal',
         badgeStyle: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
       };
     case 3:
       return {
         name: 'Micro Goal',
-        icon: '▫️',
+        icon: 'microGoal',
         badgeStyle: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300'
       };
     case 4:
       return {
         name: 'Nano Goal',
-        icon: '🔸',
+        icon: 'nanoGoal',
         badgeStyle: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300'
       };
     case 5:
       return {
         name: 'Atomic Goal',
-        icon: '⚡',
+        icon: 'zap',
         badgeStyle: 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900/60 dark:bg-purple-950/40 dark:text-purple-300'
       };
     default:
       return {
         name: 'Main Goal',
-        icon: '🎯',
+        icon: 'mainGoal',
         badgeStyle: 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300'
       };
   }
@@ -1385,35 +1386,35 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
       if (t) {
         const updated: Task = { ...t, dueAt: newDateStr, date: newDateStr, updatedAt: Date.now() };
         await storage.put('tasks', updated);
-        onSuccess(`📅 Rescheduled task "${t.title}" to ${newDateStr}`);
+        onSuccess(`Rescheduled task "${t.title}" to ${newDateStr}`);
       }
     } else if (type === 'milestone') {
       const m = milestones.find(x => x.id === id);
       if (m) {
         const updated: Milestone = { ...m, dueDate: newDateStr, updatedAt: Date.now() };
         await storage.put('milestones', updated);
-        onSuccess(`📅 Rescheduled milestone "${m.title}" to ${newDateStr}`);
+        onSuccess(`Rescheduled milestone "${m.title}" to ${newDateStr}`);
       }
     } else if (type === 'project') {
       const p = workProjects.find(x => x.id === id);
       if (p) {
         const updated: WorkProject = { ...p, due: newDateStr, updatedAt: Date.now() };
         await storage.put('workProjects', updated);
-        onSuccess(`📅 Rescheduled project "${p.name}" to ${newDateStr}`);
+        onSuccess(`Rescheduled project "${p.name}" to ${newDateStr}`);
       }
     } else if (type === 'learning') {
       const l = learningItems.find(x => x.id === id);
       if (l) {
         const updated: LearningItem = { ...l, targetDate: newDateStr, updatedAt: Date.now() };
         await storage.put('learningItems', updated);
-        onSuccess(`📅 Rescheduled study target "${l.title}" to ${newDateStr}`);
+        onSuccess(`Rescheduled study target "${l.title}" to ${newDateStr}`);
       }
     } else if (type === 'skill') {
       const s = skills.find(x => x.id === id);
       if (s) {
         const updated: Skill = { ...s, targetDate: newDateStr };
         await storage.put('skills', updated);
-        onSuccess(`📅 Rescheduled skill drill "${s.name}" to ${newDateStr}`);
+        onSuccess(`Rescheduled skill drill "${s.name}" to ${newDateStr}`);
       }
     }
 
@@ -1426,12 +1427,12 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
     alarmService.triggerAlarm({
       id: id || generateUUID(),
       type: 'reminder',
-      title: `🚨 OVERDUE ALERT: ${title}`,
+      title: `OVERDUE ALERT: ${title}`,
       subtitle: subtitle || 'Item is past its scheduled deadline. Immediate execution required.',
       timeStr: 'NOW',
       ringtone: 'digital_pulse'
     });
-    onSuccess(`🚨 Urgent alarm sounding for "${title}"!`);
+    onSuccess(`Urgent alarm sounding for "${title}"!`);
   };
 
   const handleArmAlarmsForAllDelayed = async () => {
@@ -1446,7 +1447,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
       const targetTimeStr = getLocalDateTimeStr(5 + armed * 2);
       await storage.put('reminders', {
         id: generateUUID(),
-        title: `⏰ Urgent Alarm: ${title}`,
+        title: `Urgent Alarm: ${title}`,
         dueAt: targetTimeStr,
         repeatRule: 'none',
         status: 'open',
@@ -1466,7 +1467,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
     for (const s of delayedSkills) await armItem(s.name, s.id, 'zen_bell');
     for (const r of delayedRoutines) await armItem(r.name, r.id, 'zen_bell');
 
-    onSuccess(`🔔 Armed reminder alarms for ${armed} delayed items across all streams!`);
+    onSuccess(`Armed reminder alarms for ${armed} delayed items across all streams!`);
     onRefresh();
   };
 
@@ -1534,7 +1535,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
       const alarmDueAtStr = `${genesisModal.dueAt}T${genesisModal.alarmTime}`;
       const rem: ReminderItem = {
         id: generateUUID(),
-        title: `⏰ Action Alarm: ${newTask.title}`,
+        title: `Action Alarm: ${newTask.title}`,
         dueAt: alarmDueAtStr,
         repeatRule: 'none',
         status: 'open',
@@ -1549,7 +1550,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
     }
 
     setGenesisModal(prev => ({ ...prev, isOpen: false }));
-    onSuccess(`⚡ Task Genesis complete: "${newTask.title}" added to active planner!`);
+    onSuccess(`Task Genesis complete: "${newTask.title}" added to active planner!`);
     onRefresh();
   };
 
@@ -1707,7 +1708,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                 className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-rose-500 active:scale-95 transition-all cursor-pointer"
               >
                 <BellRing className="h-4 w-4 animate-bounce" />
-                <span>🚨 Ring Urgent Alarm</span>
+                <span>Ring Urgent Alarm</span>
               </button>
 
               <button
@@ -1838,7 +1839,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               <option value="all">Goals ({goals.length})</option>
               {hierarchicalGoals.map(g => (
                 <option key={g.id} value={g.id}>
-                  {g.level === 2 ? '  ↳ 🔹 ' : g.level === 3 ? '    ↳ ▫️ ' : g.level === 4 ? '      ↳ 🔸 ' : g.level === 5 ? '        ↳ ⚡ ' : '🎯 '}{g.title}
+                  <GoalTierIcon level={g.level} /> {g.title}
                 </option>
               ))}
             </select>
@@ -2174,7 +2175,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                               </button>
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1">
-                                  <span className="text-[10px] shrink-0">{tierMeta.icon}</span>
+                                  <ThemeIcon name={tierMeta.icon} className="h-3 w-3" />
                                   <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                                     {goal.title}
                                   </span>
@@ -2189,11 +2190,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                   <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                                     {activeStream === 'finance' ? (
                                       <div className="flex items-center gap-1 font-mono text-emerald-700 dark:text-emerald-400">
-                                        <span className="font-bold">💰 Savings: {goalSavings.length}</span>
+                                        <span className="inline-flex items-center gap-1 font-bold"><ThemeIcon name="savings" className="h-3 w-3" /> Savings: {goalSavings.length}</span>
                                         <span>·</span>
-                                        <span className="font-bold text-rose-600 dark:text-rose-400">💳 Loans: {goalLoans.length}</span>
+                                        <span className="inline-flex items-center gap-1 font-bold text-rose-600 dark:text-rose-400"><ThemeIcon name="loan" className="h-3 w-3" /> Loans: {goalLoans.length}</span>
                                         <span>·</span>
-                                        <span className="font-bold text-blue-600 dark:text-blue-400">📈 Inv: {goalInvestments.length}</span>
+                                        <span className="inline-flex items-center gap-1 font-bold text-blue-600 dark:text-blue-400"><ThemeIcon name="portfolio" className="h-3 w-3" /> Inv: {goalInvestments.length}</span>
                                       </div>
                                     ) : periodGoalRate !== null ? (
                                       <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded font-mono">
@@ -2276,7 +2277,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                         ? 'No linked timeline items or subgoals are shown here. Progress may be manually set or based on linked data outside this timeline.'
                                         : 'Progress is based on linked work items and subgoals.'}
                                     >
-                                      {totalGoalItems === 0 ? 'Manual' : '🎯 Overall'}: {goal.progress}%
+                                      {totalGoalItems === 0 ? 'Manual' : 'Overall'}: {goal.progress}%
                                     </span>
 
                                     <span className="text-slate-800 dark:text-slate-100 truncate hidden sm:inline drop-shadow-xs font-semibold">
@@ -2879,7 +2880,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                       <div className="flex items-center gap-1.5 truncate">
                                         <Landmark className={`h-3 w-3 shrink-0 ${isDelayed ? 'text-rose-500' : 'text-emerald-600'}`} />
                                         <span className="truncate font-medium text-slate-800 dark:text-slate-200">
-                                          💰 {sp.name}
+                                          <><ThemeIcon name="savings" className="h-3.5 w-3.5" /> {sp.name}</>
                                         </span>
                                       </div>
                                       <span className={`text-[10px] font-mono font-bold shrink-0 ml-1 ${isDelayed ? 'text-rose-600' : 'text-emerald-600'}`}>
@@ -2936,7 +2937,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                       <div className="flex items-center gap-1.5 truncate">
                                         <ShieldAlert className={`h-3 w-3 shrink-0 ${isPaid ? 'text-emerald-500' : isDelayed ? 'text-rose-600' : 'text-amber-500'}`} />
                                         <span className="truncate font-medium text-slate-800 dark:text-slate-200">
-                                          💳 {(loan as any).lender || loan.name || 'Loan'}
+                                          <><ThemeIcon name="loan" className="h-3.5 w-3.5" /> {(loan as any).lender || loan.name || 'Loan'}</>
                                         </span>
                                       </div>
                                       <span className={`text-[10px] font-mono font-bold shrink-0 ml-1 ${isPaid ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -2989,7 +2990,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                       <div className="flex items-center gap-1.5 truncate">
                                         <TrendingUp className="h-3 w-3 text-blue-600 shrink-0" />
                                         <span className="truncate font-medium text-slate-800 dark:text-slate-200">
-                                          📈 {inv.name}
+                                          <><ThemeIcon name="portfolio" className="h-3.5 w-3.5" /> {inv.name}</>
                                         </span>
                                       </div>
                                       <span className="text-[10px] font-mono font-bold text-blue-600 shrink-0 ml-1">
@@ -3042,7 +3043,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                           </button>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1">
-                              <span className="text-[10px] shrink-0">⚡</span>
+                              <ThemeIcon name="zap" className="h-3 w-3 shrink-0" />
                               <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                                 Operational & Action Tasks
                               </span>
@@ -3210,7 +3211,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                 <div className="flex items-center gap-1.5 truncate">
                                   <Landmark className={`h-3 w-3 shrink-0 ${isDelayed ? 'text-rose-500' : 'text-emerald-600'}`} />
                                   <span className="truncate font-medium text-slate-800 dark:text-slate-200">
-                                    💰 {sp.name}
+                                    <><ThemeIcon name="savings" className="h-3.5 w-3.5" /> {sp.name}</>
                                   </span>
                                 </div>
                                 <span className={`text-[10px] font-mono font-bold shrink-0 ml-1 ${isDelayed ? 'text-rose-600' : 'text-emerald-600'}`}>
@@ -3258,7 +3259,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                 <div className="flex items-center gap-1.5 truncate">
                                   <ShieldAlert className={`h-3 w-3 shrink-0 ${isPaid ? 'text-emerald-500' : isDelayed ? 'text-rose-600' : 'text-amber-500'}`} />
                                   <span className="truncate font-medium text-slate-800 dark:text-slate-200">
-                                    💳 {(loan as any).lender || loan.name || 'Loan'}
+                                    <><ThemeIcon name="loan" className="h-3.5 w-3.5" /> {(loan as any).lender || loan.name || 'Loan'}</>
                                   </span>
                                 </div>
                                 <span className={`text-[10px] font-mono font-bold shrink-0 ml-1 ${isPaid ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -3305,7 +3306,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                 <div className="flex items-center gap-1.5 truncate">
                                   <TrendingUp className="h-3 w-3 text-blue-600 shrink-0" />
                                   <span className="truncate font-medium text-slate-800 dark:text-slate-200">
-                                    📈 {inv.name}
+                                    <><ThemeIcon name="portfolio" className="h-3.5 w-3.5" /> {inv.name}</>
                                   </span>
                                 </div>
                                 <span className="text-[10px] font-mono font-bold text-blue-600 shrink-0 ml-1">
@@ -3388,7 +3389,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                 <div className="flex items-center gap-1.5 truncate">
                                   <Calendar className="h-3 w-3 text-indigo-500 shrink-0" />
                                   <span className="truncate font-medium text-slate-800 dark:text-slate-200">
-                                    🎉 {person.name}
+                                    <><ThemeIcon name="celebrate" className="h-3.5 w-3.5" /> {person.name}</>
                                   </span>
                                 </div>
                                 <span className="text-[9px] font-mono text-indigo-600 shrink-0 ml-1">
@@ -3405,7 +3406,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                       className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold shadow-xs whitespace-nowrap border bg-indigo-50 text-indigo-800 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-200 dark:border-indigo-800"
                                       title={`${person.name} (${person.relationship}): ${person.importantDate}`}
                                     >
-                                      <span>🎉 {person.name}</span>
+                                      <span className="inline-flex items-center gap-1"><ThemeIcon name="celebrate" className="h-3 w-3" /> {person.name}</span>
                                       <span className="text-[9px] opacity-75 font-mono">({person.importantDate?.slice(5)})</span>
                                     </div>
                                   </div>
@@ -3476,7 +3477,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5 dark:border-slate-800">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold border ${tier.badgeStyle}`}>
-                        {tier.icon} {tier.name}
+                        <ThemeIcon name={tier.icon} className="h-3 w-3" /> {tier.name}
                       </span>
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
                         {goal.title}
@@ -3546,7 +3547,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                           <div key={s.id} className="rounded-xl border border-emerald-200/60 bg-emerald-50/30 p-2 text-xs flex items-center justify-between">
                             <div className="flex items-center gap-1.5 truncate">
                               <Landmark className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">💰 {s.name}</span>
+                              <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate"><ThemeIcon name="savings" className="h-3.5 w-3.5" /> {s.name}</span>
                             </div>
                             <span className="text-[10px] font-bold text-emerald-600 font-mono shrink-0 ml-1">{s.progress}%</span>
                           </div>
@@ -3555,7 +3556,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                           <div key={l.id} className="rounded-xl border border-rose-200/60 bg-rose-50/30 p-2 text-xs flex items-center justify-between">
                             <div className="flex items-center gap-1.5 truncate">
                               <ShieldAlert className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">💳 {(l as any).lender || l.name}</span>
+                              <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate"><ThemeIcon name="loan" className="h-3.5 w-3.5" /> {(l as any).lender || l.name}</span>
                             </div>
                             <span className="text-[10px] font-bold text-rose-600 font-mono shrink-0 ml-1">{l.progress}% paid</span>
                           </div>
@@ -3564,7 +3565,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                           <div key={inv.id} className="rounded-xl border border-blue-200/60 bg-blue-50/30 p-2 text-xs flex items-center justify-between">
                             <div className="flex items-center gap-1.5 truncate">
                               <TrendingUp className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">📈 {inv.name}</span>
+                              <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate"><ThemeIcon name="portfolio" className="h-3.5 w-3.5" /> {inv.name}</span>
                             </div>
                             <span className="text-[10px] font-bold text-blue-600 font-mono shrink-0 ml-1">₹{(inv.currentVal || 0).toLocaleString('en-IN')}</span>
                           </div>
@@ -3606,7 +3607,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5 dark:border-slate-800">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                      ⚡ Operational
+                      <ThemeIcon name="zap" className="h-3 w-3" /> Operational
                     </span>
                     <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
                       Operational & Action Tasks
@@ -3639,7 +3640,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 pb-2.5 dark:border-emerald-900/60">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                      💰 Portfolio
+                      <ThemeIcon name="portfolio" className="h-3 w-3" /> Portfolio
                     </span>
                     <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
                       Standalone Finance
@@ -3652,7 +3653,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                     <div key={s.id} className="rounded-xl border border-emerald-200/60 bg-emerald-50/30 p-2 text-xs flex items-center justify-between">
                       <div className="flex items-center gap-1.5 truncate">
                         <Landmark className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">💰 {s.name}</span>
+                        <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate"><ThemeIcon name="savings" className="h-3.5 w-3.5" /> {s.name}</span>
                       </div>
                       <span className="text-[10px] font-bold text-emerald-600 font-mono shrink-0 ml-1">{s.progress}%</span>
                     </div>
@@ -3661,7 +3662,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                     <div key={l.id} className="rounded-xl border border-rose-200/60 bg-rose-50/30 p-2 text-xs flex items-center justify-between">
                       <div className="flex items-center gap-1.5 truncate">
                         <ShieldAlert className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">💳 {(l as any).lender || l.name}</span>
+                        <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate"><ThemeIcon name="loan" className="h-3.5 w-3.5" /> {(l as any).lender || l.name}</span>
                       </div>
                       <span className="text-[10px] font-bold text-rose-600 font-mono shrink-0 ml-1">{l.progress}% paid</span>
                     </div>
@@ -3670,7 +3671,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                     <div key={inv.id} className="rounded-xl border border-blue-200/60 bg-blue-50/30 p-2 text-xs flex items-center justify-between">
                       <div className="flex items-center gap-1.5 truncate">
                         <TrendingUp className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">📈 {inv.name}</span>
+                        <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate"><ThemeIcon name="portfolio" className="h-3.5 w-3.5" /> {inv.name}</span>
                       </div>
                       <span className="text-[10px] font-bold text-blue-600 font-mono shrink-0 ml-1">₹{(inv.currentVal || 0).toLocaleString('en-IN')}</span>
                     </div>
@@ -3758,7 +3759,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                           onClick={() => handleTriggerAlarmNow(task.title, task.delay.label, task.id)}
                           className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 cursor-pointer"
                         >
-                          🚨 Alarm
+                          Alarm
                         </button>
                         <button
                           type="button"
@@ -3804,7 +3805,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                           onClick={() => handleTriggerAlarmNow(m.title, m.delay.label, m.id)}
                           className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 cursor-pointer"
                         >
-                          🚨 Alarm
+                          Alarm
                         </button>
                         <button
                           type="button"
@@ -3848,14 +3849,14 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                         onClick={() => handleTriggerAlarmNow(proj.name, 'Project deliverable past due!', proj.id)}
                         className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 cursor-pointer"
                       >
-                        🚨 Ring Alarm
+                        Ring Alarm
                       </button>
                       <button
                         type="button"
                         onClick={() => handleOpenTaskGenesis({ type: 'project', id: proj.id, title: proj.name, goalId: proj.goalId, due: proj.due })}
                         className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-500 cursor-pointer"
                       >
-                        ⚡ Task Genesis
+                        <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" /> Task Genesis
                       </button>
                     </div>
                   </div>
@@ -3872,7 +3873,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                           Savings Target Behind · {sp.delay.label}
                         </span>
                         <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
-                          💰 {sp.name}
+                          <><ThemeIcon name="savings" className="h-3.5 w-3.5" /> {sp.name}</>
                         </h4>
                         {sp.goal && <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Goal: {sp.goal.title}</p>}
                       </div>
@@ -3887,7 +3888,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                         onClick={() => handleTriggerAlarmNow(sp.name, `Savings target behind: ${sp.delay.label}`, sp.id)}
                         className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 cursor-pointer"
                       >
-                        🚨 Ring Alarm
+                        Ring Alarm
                       </button>
                     </div>
                   </div>
@@ -3904,7 +3905,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                           Debt Clearance Overdue · {loan.delay.label}
                         </span>
                         <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
-                          💳 {(loan as any).lender || loan.name}
+                          <><ThemeIcon name="loan" className="h-3.5 w-3.5" /> {(loan as any).lender || loan.name}</>
                         </h4>
                         {loan.goal && <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Goal: {loan.goal.title}</p>}
                       </div>
@@ -3919,7 +3920,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                         onClick={() => handleTriggerAlarmNow((loan as any).lender || loan.name, `Debt clearance overdue: ${loan.delay.label}`, loan.id)}
                         className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 cursor-pointer"
                       >
-                        🚨 Ring Alarm
+                        Ring Alarm
                       </button>
                     </div>
                   </div>
@@ -3972,7 +3973,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-2.5 dark:border-slate-800">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold border ${tier.badgeStyle}`}>
-                        {tier.icon} {tier.name}
+                        <ThemeIcon name={tier.icon} className="h-3 w-3" /> {tier.name}
                       </span>
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">{goal.title}</h4>
                       <span className="text-xs text-slate-400">({goal.category || 'General'})</span>
@@ -4020,7 +4021,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white font-black text-xs">
-                  ⚡
+                  <Zap className="h-4 w-4 text-white" />
                 </span>
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white">

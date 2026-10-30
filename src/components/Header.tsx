@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Zap, Moon, Sun, Calendar, ChevronDown, Clock, Sparkles } from 'lucide-react';
+import { Search, Plus, Zap, Moon, Sun, Calendar, ChevronDown, Clock, Sparkles, FileText, DollarSign, Mic } from 'lucide-react';
 import { NavModule } from '../types';
 import { adToBs, getTodayIso } from '../lib/nepaliDate';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -258,14 +258,14 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => { onOpenQuickCapture('note'); setIsActionsOpen(false); }}
                   className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer"
                 >
-                  <span className="text-amber-500">📝</span> Quick Note
+                  <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-300" aria-hidden="true" /> Quick Note
                 </button>
                 <button
                   type="button"
                   onClick={() => { onOpenQuickCapture('expense'); setIsActionsOpen(false); }}
                   className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer"
                 >
-                  <span className="text-emerald-500">💰</span> Log Expense
+                  <DollarSign className="h-4 w-4 text-indigo-600 dark:text-indigo-300" aria-hidden="true" /> Log Expense
                 </button>
                 <button
                   type="button"
@@ -286,7 +286,7 @@ export const Header: React.FC<HeaderProps> = ({
                   className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer border-t border-slate-100 dark:border-slate-800/80 mt-1 pt-2"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-indigo-500">🎙️</span>
+                    <Mic className="h-4 w-4 text-indigo-600 dark:text-indigo-300" aria-hidden="true" />
                     <span className="font-semibold text-slate-900 dark:text-slate-100">Voice Studio</span>
                   </div>
                   <div className="flex items-center gap-0.5 h-3 px-1" aria-hidden="true">

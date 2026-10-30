@@ -94,7 +94,7 @@ const BULLET_STYLES = [
   { id: 'check', symbol: '✓', label: 'Checkmark' },
   { id: 'star', symbol: '★', label: 'Star' },
   { id: 'diamond', symbol: '◆', label: 'Diamond' },
-  { id: 'target', symbol: '🎯', label: 'Target' },
+  { id: 'target', symbol: '◉', label: 'Target' },
   { id: 'spark', symbol: '✦', label: 'Sparkle' },
   { id: 'box', symbol: '☐', label: 'Checkbox' }
 ];
@@ -2045,7 +2045,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                     <input
                       type="text"
                       maxLength={6}
-                      placeholder="e.g. 🎯, 🚀, 🔥, ⚡"
+                      placeholder="Add an emoji or bullet symbol"
                       value={customBulletInput}
                       onChange={(e) => setCustomBulletInput(e.target.value)}
                       className="h-6 w-28 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-xs text-slate-900 dark:text-white"

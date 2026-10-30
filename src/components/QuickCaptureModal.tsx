@@ -6,6 +6,7 @@ import { getLocalDateString } from '../lib/dateUtils';
 import { Task, Note, JournalEntry, FinanceTransaction, FinanceAccount, Goal, ReminderItem, Person } from '../types';
 import { AttachmentUploader, StoredAttachmentMeta } from './AttachmentUploader';
 import { alarmAudio, BUILTIN_RINGTONES } from '../lib/alarmAudio';
+import { ThemeIcon } from './ThemeIcon';
 
 interface QuickCaptureModalProps {
   isOpen: boolean;
@@ -99,7 +100,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           updatedAt: now
         };
         await storage.put('notes', newNote);
-        onSuccess('📝 Note captured successfully');
+        onSuccess('Note captured successfully');
       } else if (activeType === 'journal') {
         const serializedAttachments = attachments.map(a => JSON.stringify(a));
         const newJournal: JournalEntry = {
@@ -113,7 +114,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           updatedAt: now
         };
         await storage.put('journal', newJournal);
-        onSuccess('📔 Journal entry captured');
+        onSuccess('Journal entry captured');
       } else if (activeType === 'expense') {
         const amt = Number(amount);
         if (!amt || amt <= 0) return;
@@ -157,7 +158,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
         });
 
         await storage.atomicPutMany(ops);
-        onSuccess(`💰 Expense of ₹${amt.toLocaleString('en-IN')} logged & deducted from ${targetAcct?.name || 'account'}`);
+        onSuccess(`Expense of ₹${amt.toLocaleString('en-IN')} logged & deducted from ${targetAcct?.name || 'account'}`);
       } else if (activeType === 'goal') {
         const newGoal: Goal = {
           id: generateUUID(),
@@ -169,7 +170,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           updatedAt: now
         };
         await storage.put('goals', newGoal);
-        onSuccess('🎯 Strategic goal captured');
+        onSuccess('Strategic goal captured');
       } else if (activeType === 'reminder') {
         const fullDue = `${date}T${reminderTime}`;
         const newRem: ReminderItem = {
@@ -184,7 +185,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           updatedAt: now
         };
         await storage.put('reminders', newRem);
-        onSuccess(`⏰ Reminder & Alarm scheduled for ${date} at ${reminderTime}`);
+        onSuccess(`Reminder & Alarm scheduled for ${date} at ${reminderTime}`);
       } else if (activeType === 'person') {
         const newPerson: Person = {
           id: generateUUID(),
@@ -194,7 +195,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           createdAt: now
         };
         await storage.put('people', newPerson);
-        onSuccess('🤝 Contact saved');
+        onSuccess('Contact saved');
       }
 
       reloadAll();
@@ -398,7 +399,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                     onChange={e => setAlarmEnabled(e.target.checked)}
                     className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span>⏰ Ring Audio Alarm on Time</span>
+                  <span className="inline-flex items-center gap-1"><ThemeIcon name="alarm" className="h-3 w-3" /> Ring Audio Alarm on Time</span>
                 </label>
 
                 {alarmEnabled && (
@@ -415,7 +416,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                         <option key={r.id} value={r.id}>{r.name}</option>
                       ))}
                       {alarmAudio.getCustomRingtone() && (
-                        <option value="custom">🎵 Custom Ringtone</option>
+                        <option value="custom">Custom Ringtone</option>
                       )}
                     </select>
 

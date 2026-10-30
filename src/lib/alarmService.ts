@@ -138,7 +138,7 @@ class AlarmManagerService {
     // Browser Notification if permitted
     try {
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification(`⏰ Alarm: ${data.title}`, {
+        new Notification(`Alarm: ${data.title}`, {
           body: data.subtitle || `Time: ${data.timeStr}`,
           icon: '/favicon.ico'
         });

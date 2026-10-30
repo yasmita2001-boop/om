@@ -186,9 +186,9 @@ describe('appearance preferences', () => {
     expect(document.documentElement.style.getPropertyValue('--om-foreground-dim-alpha')).toBe('0.45');
     expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe('#eee5d9');
     expect(document.documentElement.style.getPropertyValue('--om-text-outline-alpha')).toBe('39%');
-    expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('52.8%');
-    expect(document.documentElement.style.getPropertyValue('--om-card-border-alpha')).toBe('13.7%');
-    expect(document.documentElement.style.getPropertyValue('--om-card-blur')).toBe('8.8px');
+    expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('55%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-border-alpha')).toBe('17%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-blur')).toBe('0px');
     expect(document.documentElement.dataset.wallpaperCustom).toBe('true');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
@@ -204,6 +204,80 @@ describe('appearance preferences', () => {
     });
 
     expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe(ocean.backgroundColor);
+  });
+
+  it('applies distinct Forest and Sunset wallpaper and accent palettes', () => {
+    const forest = APPEARANCE_PRESETS.find(preset => preset.id === 'forest')!;
+    const sunset = APPEARANCE_PRESETS.find(preset => preset.id === 'sunset')!;
+
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: forest.id,
+      backgroundId: forest.id,
+      accentColor: forest.accentColor
+    });
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toBe(forest.backgroundImage);
+    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe(forest.backgroundColor);
+    expect(document.documentElement.style.getPropertyValue('--color-brand')).toBe(forest.accentColor);
+
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: sunset.id,
+      backgroundId: sunset.id,
+      accentColor: sunset.accentColor
+    });
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toBe(sunset.backgroundImage);
+    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe(sunset.backgroundColor);
+    expect(document.documentElement.style.getPropertyValue('--color-brand')).toBe(sunset.accentColor);
+    expect(forest.backgroundImage).not.toBe(sunset.backgroundImage);
+    expect(forest.backgroundColor).not.toBe(sunset.backgroundColor);
+    expect(forest.accentColor).not.toBe(sunset.accentColor);
+  });
+
+  it('uses each supplied wallpaper as the matching coordinated theme background', () => {
+    const wallpapers = [
+      ['ocean', 'theme-ocean-4k.webp'],
+      ['forest', 'theme-forest-4k.webp'],
+      ['sunset', 'theme-sunset-4k.webp'],
+      ['midnight', 'theme-midnight-4k.webp']
+    ] as const;
+
+    for (const [presetId, assetName] of wallpapers) {
+      const preset = APPEARANCE_PRESETS.find(item => item.id === presetId)!;
+      applyAppearance({
+        ...DEFAULT_APPEARANCE,
+        presetId,
+        backgroundId: presetId
+      });
+
+      expect(preset.backgroundImage).toContain(assetName);
+      expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toBe(preset.backgroundImage);
+    }
+  });
+
+  it('uses the selected custom wallpaper in a coordinated theme', () => {
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: 'ocean',
+      backgroundId: 'custom',
+      backgroundImage: 'data:image/jpeg;base64,ZmFrZQ=='
+    });
+
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image'))
+      .toBe('url("data:image/jpeg;base64,ZmFrZQ==")');
+  });
+
+  it('lets the four dynamic landscape wallpapers remain visible around their surfaces', () => {
+    for (const presetId of ['ocean', 'forest', 'sunset', 'midnight']) {
+      applyAppearance({
+        ...DEFAULT_APPEARANCE,
+        presetId,
+        backgroundId: presetId
+      });
+
+      expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('84%');
+      expect(document.documentElement.style.getPropertyValue('--om-card-soft-alpha')).toBe('76%');
+    }
   });
 
   it('normalizes and applies a custom theme color to the wallpaper and surfaces', () => {
@@ -302,6 +376,89 @@ describe('appearance preferences', () => {
     expect(document.documentElement.dataset.eyeComfort).toBe('false');
   });
 
+  it('applies the Private Cosmos coordinated theme as a dark orbital wallpaper', () => {
+    const preset = APPEARANCE_PRESETS.find(item => item.id === 'private-cosmos')!;
+    const appearance = applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: preset.id,
+      backgroundId: preset.id,
+      colorMode: preset.colorMode,
+      accentColor: preset.accentColor
+    });
+
+    expect(appearance).toMatchObject({
+      presetId: 'private-cosmos',
+      backgroundId: 'private-cosmos',
+      colorMode: 'dark',
+      accentColor: '#e5c777'
+    });
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-color')).toBe('#090b17');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toContain('radial-gradient(ellipse');
+    expect(document.documentElement.dataset.eyeComfort).toBe('false');
+    expect(document.documentElement.dataset.appearancePreset).toBe('private-cosmos');
+    expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('40%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-blur')).toBe('22px');
+  });
+
+  it('applies foreground transparency to Sanctuary surfaces', () => {
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: 'sanctuary',
+      backgroundId: 'sanctuary',
+      foregroundTransparency: 0
+    });
+
+    expect(document.documentElement.dataset.appearancePreset).toBe('sanctuary');
+    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe('#eee5d9');
+    expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('100%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-soft-alpha')).toBe('100%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-blur')).toBe('0px');
+
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: 'sanctuary',
+      backgroundId: 'sanctuary',
+      foregroundTransparency: 50
+    });
+    expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('50%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-soft-alpha')).toBe('50%');
+
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: 'sanctuary',
+      backgroundId: 'sanctuary',
+      foregroundTransparency: 100
+    });
+    expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('0%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-soft-alpha')).toBe('0%');
+  });
+
+  it('applies background controls and transparency to Private Cosmos surfaces', () => {
+    applyAppearance({
+      ...DEFAULT_APPEARANCE,
+      presetId: 'private-cosmos',
+      backgroundId: 'private-cosmos',
+      positionX: 24,
+      positionY: 72,
+      zoom: 132,
+      overlay: 46,
+      blur: 5,
+      backgroundBrightness: 84,
+      backgroundContrast: 126,
+      foregroundTransparency: 100
+    });
+
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-position')).toBe('24% 72%');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-zoom')).toBe('1.32');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-overlay')).toBe('0.46');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-blur')).toBe('5px');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-brightness')).toBe('84%');
+    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-contrast')).toBe('126%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('0%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-blur')).toBe('0px');
+  });
+
   it('makes the document transparent when transparent custom wallpaper is enabled', () => {
     applyAppearance({
       ...DEFAULT_APPEARANCE,
@@ -318,6 +475,8 @@ describe('appearance preferences', () => {
   it('keeps foreground surfaces readable while showing the wallpaper at maximum transparency', () => {
     applyAppearance({
       ...DEFAULT_APPEARANCE,
+      presetId: 'ocean',
+      backgroundId: 'ocean',
       foregroundTransparency: 100
     });
 

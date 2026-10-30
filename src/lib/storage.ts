@@ -1421,7 +1421,12 @@ class StorageEngine {
     for (const reminder of reminders) {
       const isLegacyTaskReminder = !reminder.linkedType &&
         typeof reminder.title === 'string' &&
-        (reminder.title.startsWith('⏰ Task Reminder:') || reminder.title.startsWith('⏰ Task Genesis Alarm:'));
+        (
+          reminder.title.startsWith('⏰ Task Reminder:') ||
+          reminder.title.startsWith('⏰ Task Genesis Alarm:') ||
+          reminder.title.startsWith('Task Reminder:') ||
+          reminder.title.startsWith('Task Genesis Alarm:')
+        );
       if (
         (reminder.linkedType === 'task' || isLegacyTaskReminder) &&
         !taskIds.has(reminder.linkedId)

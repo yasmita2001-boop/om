@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Film, ImagePlus, RotateCcw, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
+import forestWallpaper from '../assets/theme-forest-4k.webp';
+import midnightWallpaper from '../assets/theme-midnight-4k.webp';
+import oceanWallpaper from '../assets/theme-ocean-4k.webp';
+import sunsetWallpaper from '../assets/theme-sunset-4k.webp';
 import {
   APPEARANCE_PRESETS,
   AppearanceColorMode,
@@ -39,6 +43,13 @@ const ACCENT_PRESETS = [
   { name: 'Violet', hex: '#8b5cf6' },
   { name: 'Slate', hex: '#475569' }
 ];
+
+const THEME_WALLPAPERS: Partial<Record<typeof APPEARANCE_PRESETS[number]['id'], string>> = {
+  ocean: oceanWallpaper,
+  forest: forestWallpaper,
+  sunset: sunsetWallpaper,
+  midnight: midnightWallpaper
+};
 
 const isValidHex = (value: string) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
 
@@ -139,15 +150,6 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
 
   return (
     <section className="space-y-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
-        <div>
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white">Personalize your workspace</h2>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Coordinated colors, background and display settings.
-          </p>
-        </div>
-      </div>
-
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,1fr)]">
         <div className="space-y-5">
           <div className="space-y-2.5">
@@ -155,6 +157,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {APPEARANCE_PRESETS.map(preset => {
                 const selected = draft.presetId === preset.id;
+                const wallpaper = THEME_WALLPAPERS[preset.id];
                 return (
                   <button
                     key={preset.id}
@@ -162,6 +165,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                     aria-pressed={selected}
                     onClick={() => {
                       const isEyeComfort = preset.id === 'comfort-light' || preset.id === 'comfort-dark';
+                      const isPrivateCosmos = preset.id === 'private-cosmos';
                       updateDraft({
                         presetId: preset.id,
                         backgroundId: preset.id,
@@ -169,7 +173,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                         backgroundIsVideo: false,
                         accentColor: preset.accentColor,
                         colorMode: preset.colorMode,
-                        ...(isEyeComfort ? {
+                        ...(isEyeComfort || isPrivateCosmos ? {
                           transparentBackground: false,
                           foregroundTransparency: 0,
                           foregroundBrightness: 100,
@@ -180,7 +184,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                           positionX: 50,
                           positionY: 50,
                           zoom: 100,
-                          overlay: 0,
+                          overlay: isPrivateCosmos ? 8 : 0,
                           blur: 0
                         } : {})
                       });
@@ -192,7 +196,18 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                         : 'border-slate-200 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-500'
                     }`}
                   >
-                    <span className="block h-12" style={{ background: preset.preview }} />
+                    <span className="block h-12 overflow-hidden bg-slate-200 dark:bg-slate-800">
+                      {wallpaper ? (
+                        <img
+                          src={wallpaper}
+                          alt=""
+                          draggable={false}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="block h-full w-full" style={{ background: preset.preview }} />
+                      )}
+                    </span>
                     <span className="flex items-center justify-between gap-1 px-2.5 py-2">
                       <span className="min-w-0">
                         <span className="block truncate text-xs font-bold text-slate-800 dark:text-slate-100">{preset.name}</span>

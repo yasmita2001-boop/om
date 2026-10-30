@@ -3,6 +3,7 @@ import { Target } from 'lucide-react';
 import { Goal } from '../types';
 import { LinkModeSelector } from './LinkModeSelector';
 import { GoalPicker } from './GoalPicker';
+import { ThemeIcon } from './ThemeIcon';
 
 interface GoalLinkSelectorProps {
   goals?: Goal[];
@@ -72,7 +73,7 @@ export const GoalLinkSelector: React.FC<GoalLinkSelectorProps> = ({
           />
           {selectedGoal && (
             <span className="block text-[10px] text-indigo-700 dark:text-indigo-300">
-              ⚡ Linked to goal "{selectedGoal.title}" ({selectedGoal.progress}% progress)
+              <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Linked to goal "{selectedGoal.title}" ({selectedGoal.progress}% progress)
             </span>
           )}
         </div>

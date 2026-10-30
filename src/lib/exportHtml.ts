@@ -35,6 +35,28 @@ async function loadWatermarkDataUrl(): Promise<string> {
 
 export async function generateCompleteStandaloneHtml(fullData: Record<string, any>): Promise<string> {
   const exportedAt = new Date().toLocaleString();
+  const iconPaths = {
+    alert: '<path d="m10.3 3.9-8.1 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.8-3.1l-8.1-14a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/>',
+    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>',
+    clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1ZM8 10h8M8 14h8M8 18h5"/>',
+    dashboard: '<path d="M3 13a9 9 0 1 1 18 0"/><path d="m12 13 4-4M5 18h14"/>',
+    folder: '<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+    goal: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    habits: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9A7 7 0 0 1 17 6l3 6M4 12l3 6a7 7 0 0 0 11.5-3"/>',
+    journal: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20M8 7h8M8 10h8"/>',
+    lock: '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3m-4 5v2"/>',
+    moon: '<path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/>',
+    notes: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
+    people: '<path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+    printer: '<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6zM18 12h.01"/>',
+    save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+    tasks: '<path d="m4 6 1.5 1.5L8 5M11 6h9M4 12l1.5 1.5L8 11M11 12h9M4 18l1.5 1.5L8 17M11 18h9"/>',
+    wallet: '<rect x="2" y="5" width="20" height="15" rx="2"/><path d="M2 9h20M16 14h2"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+  } as const;
+  const icon = (name: keyof typeof iconPaths) =>
+    `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name]}</svg>`;
   const watermarkDataUrl = await loadWatermarkDataUrl();
   const safeDataJson = JSON.stringify(fullData)
     .replace(/</g, '\\u003c')
@@ -172,7 +194,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
         id: s.id || '',
         type: 'savings' as const,
         typeLabel: 'Savings Target',
-        title: `💰 ${s.name || 'Savings Plan'}`,
+        title: s.name || 'Savings Plan',
         dueDate: targetDate,
         status: prog >= 100 ? 'Target Reached' : `${prog}% saved`,
         progress: prog,
@@ -192,7 +214,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
         id: l.id || '',
         type: 'loan' as const,
         typeLabel: 'Debt Clearance',
-        title: `💳 ${l.lender || l.name || 'Loan'}`,
+        title: l.lender || l.name || 'Loan',
         dueDate: l.targetDate || l.dueDate,
         status: isPaid ? 'Cleared' : `${prog}% paid`,
         progress: prog,
@@ -210,7 +232,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
         id: inv.id || '',
         type: 'investment' as const,
         typeLabel: 'Investment Asset',
-        title: `📈 ${inv.name || 'Investment'}`,
+        title: inv.name || 'Investment',
         dueDate: inv.targetDate || inv.maturityDate || inv.horizonDate,
         status: gain >= 0 ? `+₹${gain.toLocaleString('en-IN')}` : `-₹${Math.abs(gain).toLocaleString('en-IN')}`,
         progress: amount > 0 ? Math.min(100, Math.round((currentVal / amount) * 100)) : 100,
@@ -644,6 +666,15 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
       border-top: 1px solid var(--border-color);
       margin-top: 3rem;
     }
+    .ui-icon {
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      margin-right: 0.3em;
+      color: var(--accent);
+      vertical-align: -0.15em;
+      flex: 0 0 auto;
+    }
     @media (max-width: 768px) {
       .layout-container { flex-direction: column; }
       aside { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); }
@@ -753,9 +784,9 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
     </div>
     <div class="header-actions">
       <input type="text" id="global-search" class="search-input" placeholder="Search tasks, notes..." oninput="handleSearch(this.value)">
-      <button type="button" class="btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌙 Theme</button>
-      <button type="button" class="btn" onclick="window.print()" title="Print Full Report">🖨️ Print</button>
-      <button type="button" class="btn btn-primary" onclick="downloadBackupJson()" title="Download raw JSON snapshot">💾 Export JSON</button>
+      <button type="button" class="btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">${icon('moon')} Theme</button>
+      <button type="button" class="btn" onclick="window.print()" title="Print Full Report">${icon('printer')} Print</button>
+      <button type="button" class="btn btn-primary" onclick="downloadBackupJson()" title="Download raw JSON snapshot">${icon('save')} Export JSON</button>
     </div>
   </header>
 
@@ -763,42 +794,42 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
     <!-- Sidebar Navigation -->
     <aside>
       <div class="nav-item active" onclick="showTab('dashboard')">
-        <span>⚡ Dashboard</span>
+        <span>${icon('dashboard')} Dashboard</span>
       </div>
       <div class="nav-item" onclick="showTab('timeline')">
-        <span>📅 Timeline & Plan</span>
-        <span class="nav-badge" id="nav-count-timeline" style="${delayedTimelineItems > 0 ? 'background-color:var(--danger);color:white;font-weight:700;' : ''}">${delayedTimelineItems > 0 ? `⚠️ ${delayedTimelineItems}` : totalTimelineItems}</span>
+        <span>${icon('calendar')} Timeline & Plan</span>
+        <span class="nav-badge" id="nav-count-timeline" style="${delayedTimelineItems > 0 ? 'background-color:var(--danger);color:white;font-weight:700;' : ''}">${delayedTimelineItems > 0 ? `${icon('alert')} ${delayedTimelineItems}` : totalTimelineItems}</span>
       </div>
       <div class="nav-item" onclick="showTab('tasks')">
-        <span>📋 Tasks & Planner</span>
+        <span>${icon('tasks')} Tasks & Planner</span>
         <span class="nav-badge" id="nav-count-tasks">${tasks.length}</span>
       </div>
       <div class="nav-item" onclick="showTab('finance')">
-        <span>💰 Finance & Ledger</span>
+        <span>${icon('wallet')} Finance & Ledger</span>
         <span class="nav-badge">${financeAccounts.length}</span>
       </div>
       <div class="nav-item" onclick="showTab('goals')">
-        <span>🎯 Goals & Strategy</span>
+        <span>${icon('goal')} Goals & Strategy</span>
         <span class="nav-badge">${goals.length}</span>
       </div>
       <div class="nav-item" onclick="showTab('notes')">
-        <span>📝 Notes & Notebooks</span>
+        <span>${icon('notes')} Notes & Notebooks</span>
         <span class="nav-badge">${notes.length}</span>
       </div>
       <div class="nav-item" onclick="showTab('journal')">
-        <span>📖 Journal & Mind</span>
+        <span>${icon('journal')} Journal & Mind</span>
         <span class="nav-badge">${journal.length}</span>
       </div>
       <div class="nav-item" onclick="showTab('habits')">
-        <span>🔄 Habits & Routines</span>
+        <span>${icon('habits')} Habits & Routines</span>
         <span class="nav-badge">${habits.length}</span>
       </div>
       <div class="nav-item" onclick="showTab('people')">
-        <span>👥 People & Network</span>
+        <span>${icon('people')} People & Network</span>
         <span class="nav-badge">${people.length}</span>
       </div>
       <div class="nav-item" onclick="showTab('database')">
-        <span>💾 Database & Backup</span>
+        <span>${icon('save')} Database & Backup</span>
       </div>
     </aside>
 
@@ -807,7 +838,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
       <!-- Top Sovereignty Banner -->
       <div class="banner">
         <div>
-          <strong style="font-size: 0.85rem;">🔒 Complete Sovereign Single-File HTML</strong>
+          <strong style="font-size: 0.85rem;">${icon('lock')} Complete Sovereign Single-File HTML</strong>
           <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
             This file contains all your LifeOS data, components and offline viewer. It runs entirely inside your browser without any network connection.
           </p>
@@ -843,13 +874,13 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
           <div class="metric-card" onclick="showTab('timeline')" style="cursor:pointer;" title="Click to view Timeline & Plan">
             <div class="title">Timeline & Plan</div>
             <div class="value" style="${delayedTimelineItems > 0 ? 'color:var(--danger);' : ''}">${totalTimelineItems}</div>
-            <div class="sub">${delayedTimelineItems > 0 ? `⚠️ ${delayedTimelineItems} delayed items` : 'All on track'} · ${workProjects.length} projects</div>
+            <div class="sub">${delayedTimelineItems > 0 ? `${icon('alert')} ${delayedTimelineItems} delayed items` : 'All on track'} · ${workProjects.length} projects</div>
           </div>
         </div>
 
         <div class="card">
           <div class="card-header">
-            <h2 class="card-title">📅 Timeline Milestones & Project Deadlines</h2>
+            <h2 class="card-title">${icon('calendar')} Timeline Milestones & Project Deadlines</h2>
             <button type="button" class="btn" onclick="showTab('timeline')">Open Full Timeline →</button>
           </div>
           <table class="data-table">
@@ -875,9 +906,9 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
                     </div>
                   </td>
                   <td>
-                    ${item.delaySeverity === 'critical' ? `<span class="badge badge-high">⚠️ ${escapeHtml(item.delayLabel)}</span>` :
+                    ${item.delaySeverity === 'critical' ? `<span class="badge badge-high">${icon('alert')} ${escapeHtml(item.delayLabel)}</span>` :
                       item.delaySeverity === 'warning' ? `<span class="badge badge-high">${escapeHtml(item.delayLabel)}</span>` :
-                      item.delaySeverity === 'today' ? `<span class="badge badge-today">🔔 Due Today</span>` :
+                      item.delaySeverity === 'today' ? `<span class="badge badge-today">${icon('bell')} Due Today</span>` :
                       item.delaySeverity === 'completed' ? `<span class="badge badge-success">✓ Done</span>` :
                       item.delaySeverity === 'upcoming' ? `<span class="badge badge-low">${escapeHtml(item.delayLabel)}</span>` :
                       `<span class="badge" style="background:var(--bg-card-subtle);color:var(--text-muted)">-</span>`}
@@ -966,7 +997,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
         <div class="card">
           <div class="card-header">
             <div>
-              <h2 class="card-title">📅 Project Timeline & Execution Schedule (${totalTimelineItems})</h2>
+              <h2 class="card-title">${icon('calendar')} Project Timeline & Execution Schedule (${totalTimelineItems})</h2>
               <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">
                 Unified chronological timeline connecting Projects, Milestones, Deadlines, and Learning paths.
               </p>
@@ -986,7 +1017,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
             <button type="button" class="timeline-filter-btn" onclick="filterTimeline('savings', this)">Savings (${savingsPlans.length})</button>
             <button type="button" class="timeline-filter-btn" onclick="filterTimeline('loan', this)">Loans (${loans.length})</button>
             <button type="button" class="timeline-filter-btn" onclick="filterTimeline('investment', this)">Investments (${investments.length})</button>
-            ${delayedTimelineItems > 0 ? `<button type="button" class="timeline-filter-btn" style="border-color:var(--danger);color:var(--danger);" onclick="filterTimeline('delayed', this)">⚠️ Delayed Only (${delayedTimelineItems})</button>` : ''}
+            ${delayedTimelineItems > 0 ? `<button type="button" class="timeline-filter-btn" style="border-color:var(--danger);color:var(--danger);" onclick="filterTimeline('delayed', this)">${icon('alert')} Delayed Only (${delayedTimelineItems})</button>` : ''}
           </div>
 
           <table class="data-table">
@@ -1027,15 +1058,15 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
                     </div>
                   </td>
                   <td>
-                    ${item.delaySeverity === 'critical' ? `<span class="badge badge-high">⚠️ ${escapeHtml(item.delayLabel)}</span>` :
+                    ${item.delaySeverity === 'critical' ? `<span class="badge badge-high">${icon('alert')} ${escapeHtml(item.delayLabel)}</span>` :
                       item.delaySeverity === 'warning' ? `<span class="badge badge-high">${escapeHtml(item.delayLabel)}</span>` :
-                      item.delaySeverity === 'today' ? `<span class="badge badge-today">🔔 Due Today</span>` :
+                      item.delaySeverity === 'today' ? `<span class="badge badge-today">${icon('bell')} Due Today</span>` :
                       item.delaySeverity === 'completed' ? `<span class="badge badge-success">✓ Done</span>` :
                       item.delaySeverity === 'upcoming' ? `<span class="badge badge-low">${escapeHtml(item.delayLabel)}</span>` :
                       `<span class="badge" style="background:var(--bg-card-subtle);color:var(--text-muted)">-</span>`}
                   </td>
                   <td>
-                    ${item.goalTitle ? `<span style="font-size:0.72rem; background:var(--bg-card-subtle); padding:0.15rem 0.45rem; border-radius:0.4rem; color:var(--text-muted);">🎯 ${escapeHtml(item.goalTitle)}</span>` : '<span style="color:var(--text-muted); font-size:0.72rem;">—</span>'}
+                    ${item.goalTitle ? `<span style="font-size:0.72rem; background:var(--bg-card-subtle); padding:0.15rem 0.45rem; border-radius:0.4rem; color:var(--text-muted);">${icon('goal')} ${escapeHtml(item.goalTitle)}</span>` : '<span style="color:var(--text-muted); font-size:0.72rem;">—</span>'}
                   </td>
                 </tr>
               `).join('') || '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted)">No timeline items planned yet.</td></tr>'}
@@ -1064,8 +1095,8 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
                   ${t.description ? `<div class="task-desc">${escapeHtml(t.description)}</div>` : ''}
                   <div class="task-meta">
                     <span class="badge ${t.priority === 'High' ? 'badge-high' : t.priority === 'Low' ? 'badge-low' : 'badge-medium'}">${escapeHtml(t.priority || 'Medium')}</span>
-                    ${t.dueAt ? `<span style="font-size:0.7rem; color:var(--text-muted)">📅 Due: ${escapeHtml(t.dueAt)}</span>` : ''}
-                    ${t.domain ? `<span style="font-size:0.7rem; color:var(--text-muted)">📁 ${escapeHtml(t.domain)}</span>` : ''}
+                    ${t.dueAt ? `<span style="font-size:0.7rem; color:var(--text-muted)">${icon('calendar')} Due: ${escapeHtml(t.dueAt)}</span>` : ''}
+                    ${t.domain ? `<span style="font-size:0.7rem; color:var(--text-muted)">${icon('folder')} ${escapeHtml(t.domain)}</span>` : ''}
                   </div>
                 </div>
               </div>
@@ -1247,8 +1278,8 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
           <div class="card-header">
             <h2 class="card-title">Raw Sovereign Database JSON</h2>
             <div style="display:flex; gap:0.5rem;">
-              <button class="btn" onclick="copyDataJson()">📋 Copy JSON</button>
-              <button class="btn btn-primary" onclick="downloadBackupJson()">💾 Download .omlifeos File</button>
+              <button class="btn" onclick="copyDataJson()">${icon('clipboard')} Copy JSON</button>
+              <button class="btn btn-primary" onclick="downloadBackupJson()">${icon('save')} Download .omlifeos File</button>
             </div>
           </div>
           <div id="json-viewer" class="json-box">Loading data JSON...</div>

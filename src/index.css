@@ -3315,6 +3315,15 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   box-shadow: none;
 }
 
+.sanctuary-mobile-module-option,
+.sanctuary-mobile-module-option:hover,
+.sanctuary-mobile-module-option[aria-current="page"] {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .sanctuary-mobile-module-option > div:first-child {
   background: transparent;
   box-shadow: none;

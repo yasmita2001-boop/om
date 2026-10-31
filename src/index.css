@@ -4711,6 +4711,7 @@ html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary
   margin: auto;
   padding: clamp(1rem, 4vw, 1.5rem) !important;
   overflow-y: auto;
+  container-type: inline-size;
 }
 
 .drive-confirm-actions {
@@ -4732,7 +4733,7 @@ html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary
   white-space: nowrap;
 }
 
-@media (min-width: 480px) {
+@container (min-width: 24rem) {
   .drive-confirm-actions {
     display: flex !important;
     justify-content: flex-end;

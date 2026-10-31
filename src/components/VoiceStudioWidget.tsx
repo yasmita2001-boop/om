@@ -79,6 +79,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
   const [currentSentence, setCurrentSentence] = useState<string | undefined>(undefined);
   const [currentVoiceLabel, setCurrentVoiceLabel] = useState<string | undefined>(undefined);
   const [readingProgress, setReadingProgress] = useState(0);
+  const [readerError, setReaderError] = useState<string | null>(null);
 
 
   // Load available system voices
@@ -175,6 +176,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
   // Audio Reading Handlers
   const handleStartReading = () => {
     if (!readerText.trim()) return;
+    setReaderError(null);
     const persona = PERSONA_PRESETS[selectedPersona];
 
     globalTextReader.speak(readerText, {
@@ -186,6 +188,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
       persona: selectedPersona,
       preferGender: persona?.gender || 'any',
       voiceName: selectedVoiceName || undefined,
+      onError: setReaderError,
       onStateChange: (state) => {
         setIsSpeaking(state.isSpeaking);
         setIsPaused(state.isPaused);
@@ -198,6 +201,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
 
   // Instant Voice Match Preview
   const handlePreviewMatchedVoice = () => {
+    setReaderError(null);
     const isHindi = readerLang === 'hi-IN';
     const sample = isHindi
       ? 'नमस्ते! यह आपकी चुनी हुई और मिलाई गई आवाज़ है। यह सुर और गति बिलकुल सटीक है।'
@@ -213,6 +217,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
       persona: selectedPersona,
       preferGender: persona?.gender || 'any',
       voiceName: selectedVoiceName || undefined,
+      onError: setReaderError,
       onStateChange: (state) => {
         setIsSpeaking(state.isSpeaking);
         setIsPaused(state.isPaused);
@@ -233,6 +238,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
 
   const handleStopReading = () => {
     globalTextReader.stop();
+    setReaderError(null);
     setIsSpeaking(false);
     setIsPaused(false);
     setCurrentSentence(undefined);
@@ -378,6 +384,11 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                       </p>
                     )}
                   </div>
+                )}
+                {readerError && (
+                  <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                    {readerError}
+                  </p>
                 )}
 
                 {/* Filter & Language Bar */}

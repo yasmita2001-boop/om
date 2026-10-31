@@ -41,6 +41,7 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
   const parsedDate = isDate ? parseDate(currentValue) : null;
   const [isOpen, setIsOpen] = useState(false);
   const [opensAbove, setOpensAbove] = useState(false);
+  const [popoverOffsetX, setPopoverOffsetX] = useState(0);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const date = parsedDate || new Date();
     return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -101,6 +102,21 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
     return (!min || dateValue >= min) && (!max || dateValue <= max);
   };
 
+  const alignPopoverToViewport = () => {
+    const bounds = wrapperRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const popoverWidth = Math.min(isDate ? 304 : 256, window.innerWidth - 16);
+    const rightEdge = window.innerWidth - 8;
+    setPopoverOffsetX(Math.min(0, Math.max(8 - bounds.left, rightEdge - bounds.left - popoverWidth)));
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    alignPopoverToViewport();
+    window.addEventListener('resize', alignPopoverToViewport);
+    return () => window.removeEventListener('resize', alignPopoverToViewport);
+  }, [isOpen, isDate]);
+
   const togglePicker = (event?: React.MouseEvent | React.KeyboardEvent) => {
     event?.preventDefault();
     if (isOpen) {
@@ -110,6 +126,7 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
     const bounds = wrapperRef.current?.getBoundingClientRect();
     const popupHeight = isDate ? 350 : 340;
     setOpensAbove(Boolean(bounds && window.innerHeight - bounds.bottom < popupHeight && bounds.top > popupHeight));
+    alignPopoverToViewport();
     setIsOpen(true);
   };
 
@@ -162,6 +179,7 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
           className={`om-datetime-popover ${isDate ? 'om-datetime-calendar' : 'om-datetime-time'}${opensAbove ? ' is-above' : ''}`}
           role="dialog"
           aria-label={isDate ? 'Choose a date' : 'Choose a time'}
+          style={{ left: `${popoverOffsetX}px` }}
         >
           {isDate ? (
             <>

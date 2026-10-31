@@ -22,6 +22,7 @@ export interface TextReaderOptions {
   persona?: VoicePersona;
   preferGender?: 'female' | 'male' | 'any';
   voiceName?: string;
+  onError?: (message: string) => void;
   onStateChange?: (state: {
     isSpeaking: boolean;
     isPaused: boolean;
@@ -600,9 +601,18 @@ export class TextReaderController {
     utterance.onerror = (e) => {
       if (utteranceId !== this.activeUtteranceId) return;
       this.activeUtteranceId++;
-      this.activeUnitRetryCount = 0;
       console.warn('Speech synthesis unit error:', e);
+      if (this.activeUnitRetryCount < 1) {
+        this.activeUnitRetryCount++;
+        this.speakCurrentUnit();
+        return;
+      }
+
+      this.currentOptions.onError?.(
+        `Speech synthesis could not read a text segment (${e.error}). Skipping that segment and continuing.`
+      );
       this.currentUnitIndex++;
+      this.activeUnitRetryCount = 0;
       if (this.currentUnitIndex < this.currentUnits.length && this.isSpeaking) {
         this.scheduleNextUnit(100);
       } else {

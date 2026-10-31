@@ -4,7 +4,8 @@ import {
   APPEARANCE_PRESETS,
   DEFAULT_APPEARANCE,
   omitDeviceAppearanceSettings,
-  normalizeAppearance
+  normalizeAppearance,
+  readSavedAppearance
 } from '../appearance';
 
 describe('appearance preferences', () => {
@@ -42,9 +43,9 @@ describe('appearance preferences', () => {
     });
 
     expect(appearance).toMatchObject({
-      presetId: 'sanctuary',
+      presetId: 'private-cosmos',
       colorMode: DEFAULT_APPEARANCE.colorMode,
-      accentColor: '#b88648',
+      accentColor: '#e5c777',
       customThemeBackgroundColor: DEFAULT_APPEARANCE.customThemeBackgroundColor,
       customThemeSurfaceColor: DEFAULT_APPEARANCE.customThemeSurfaceColor,
       customThemeTextColor: DEFAULT_APPEARANCE.customThemeTextColor,
@@ -61,6 +62,61 @@ describe('appearance preferences', () => {
       textClarity: 0,
       blur: 0
     });
+  });
+
+  it('uses Private Cosmos as the default appearance', () => {
+    const appearance = normalizeAppearance();
+
+    expect(DEFAULT_APPEARANCE).toMatchObject({
+      presetId: 'private-cosmos',
+      backgroundId: 'private-cosmos',
+      colorMode: 'dark',
+      accentColor: '#e5c777'
+    });
+    expect(appearance.presetId).toBe('private-cosmos');
+    expect(appearance.backgroundId).toBe('private-cosmos');
+    applyAppearance(appearance);
+    expect(document.documentElement.dataset.appearancePreset).toBe('private-cosmos');
+  });
+
+  it('migrates the previous Sanctuary default but keeps saved theme choices', () => {
+    localStorage.setItem('om_appearance', JSON.stringify({
+      presetId: 'sanctuary',
+      backgroundId: 'sanctuary',
+      colorMode: 'light',
+      accentColor: '#b88648',
+      backgroundImage: '',
+      backgroundIsVideo: false,
+      transparentBackground: false,
+      foregroundTransparency: 0,
+      foregroundBrightness: 100,
+      foregroundContrast: 100,
+      backgroundBrightness: 100,
+      backgroundContrast: 100,
+      textClarity: 0,
+      positionX: 50,
+      positionY: 48,
+      zoom: 100,
+      overlay: 22,
+      blur: 0
+    }));
+
+    expect(readSavedAppearance()).toMatchObject({
+      presetId: 'private-cosmos',
+      backgroundId: 'private-cosmos',
+      colorMode: 'dark',
+      accentColor: '#e5c777'
+    });
+
+    localStorage.setItem('om_appearance', JSON.stringify({
+      ...DEFAULT_APPEARANCE,
+      presetId: 'sanctuary',
+      backgroundId: 'sanctuary',
+      colorMode: 'light',
+      accentColor: '#b88648',
+      overlay: 0
+    }));
+    expect(readSavedAppearance().presetId).toBe('sanctuary');
   });
 
   it('allows the background to be dimmed fully', () => {
@@ -109,7 +165,7 @@ describe('appearance preferences', () => {
       backgroundImage: `https://example.com/image.jpg`
     });
 
-    expect(appearance.backgroundId).toBe('sanctuary');
+    expect(appearance.backgroundId).toBe('private-cosmos');
     expect(appearance.backgroundImage).toBe('');
   });
 
@@ -184,11 +240,11 @@ describe('appearance preferences', () => {
     expect(document.documentElement.style.getPropertyValue('--om-wallpaper-brightness')).toBe('120%');
     expect(document.documentElement.style.getPropertyValue('--om-wallpaper-contrast')).toBe('130%');
     expect(document.documentElement.style.getPropertyValue('--om-foreground-dim-alpha')).toBe('0.45');
-    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe('#eee5d9');
+    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe('#090b17');
     expect(document.documentElement.style.getPropertyValue('--om-text-outline-alpha')).toBe('39%');
-    expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('55%');
-    expect(document.documentElement.style.getPropertyValue('--om-card-border-alpha')).toBe('17%');
-    expect(document.documentElement.style.getPropertyValue('--om-card-blur')).toBe('0px');
+    expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('22%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-border-alpha')).toBe('29.1%');
+    expect(document.documentElement.style.getPropertyValue('--om-card-blur')).toBe('12.1px');
     expect(document.documentElement.dataset.wallpaperCustom).toBe('true');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });

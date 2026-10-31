@@ -1980,7 +1980,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
               ) : (
                 [...meetings].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
                   <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 p-4 text-xs transition-colors hover:border-slate-200 dark:border-slate-800 dark:hover:border-slate-700">
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-2.5">
                       <button
                         type="button"
                         onClick={() => handleToggleMeetingComplete(m)}
@@ -2009,12 +2009,12 @@ export const WorkView: React.FC<WorkViewProps> = ({
                           </span>
                           <GoalBadge goalId={m.goalId} goals={goals} />
                         </div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
+                        <div className="break-words text-[11px] text-slate-400 mt-0.5">
                           {m.date} · {m.people || 'Internal'}
                         </div>
                       </div>
                     </div>
-                    <ProgressiveActions label={`More actions for ${m.title}`} className="shrink-0">
+                    <ProgressiveActions label={`More actions for ${m.title}`} className="min-w-0 max-w-full">
                       {/* EDIT BUTTON */}
                       <button
                         type="button"

@@ -50,6 +50,7 @@ interface SavedTargetRecord {
   pointsCount: number;
   pointsDone: number;
   savedAt: number;
+  updatedAt?: number;
   raw: DailyPlanner;
 }
 
@@ -219,9 +220,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [plannerTarget, setPlannerTarget] = useState(dailyPlanner?.target || '');
   const [plannerProgress, setPlannerProgress] = useState(dailyPlanner?.progress ?? 0);
   const [pointText, setPointText] = useState('');
+  const [editingPointId, setEditingPointId] = useState<string | null>(null);
+  const [editingPointText, setEditingPointText] = useState('');
   const [dailyWins, setDailyWins] = useState(dailyPlanner?.wins?.join('\n') || '');
   const [eveningReview, setEveningReview] = useState(dailyPlanner?.reflection?.join('\n') || '');
   const [savedTargetsArchive, setSavedTargetsArchive] = useState<SavedTargetRecord[]>([]);
+  const [editingSavedTargetId, setEditingSavedTargetId] = useState<string | null>(null);
 
   // Synchronize Daily Planner state whenever dailyPlanner prop updates from storage
   useEffect(() => {
@@ -437,6 +441,43 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   // Save Daily Command Target
   const handleSavePlannerTarget = async () => {
+    if (editingSavedTargetId) {
+      const currentRecord = savedTargetsArchive.find(record => record.id === editingSavedTargetId);
+      if (!currentRecord) {
+        onSuccess('The saved target could not be found. Refresh the archive and try again.');
+        setEditingSavedTargetId(null);
+        return;
+      }
+      const winsArray = dailyWins.split('\n').map(s => s.trim()).filter(Boolean);
+      const reflectionArray = eveningReview.split('\n').map(s => s.trim()).filter(Boolean);
+      const updatedArchive = savedTargetsArchive.map(record => record.id === editingSavedTargetId
+        ? {
+            ...record,
+            target: plannerTarget || 'Daily Command Target',
+            progress: plannerProgress,
+            updatedAt: Date.now(),
+            raw: {
+              ...record.raw,
+              target: plannerTarget,
+              progress: plannerProgress,
+              wins: winsArray,
+              reflection: reflectionArray
+            }
+          }
+        : record);
+      try {
+        localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updatedArchive));
+      } catch (error) {
+        console.error('Unable to update saved command target', error);
+        onSuccess('Unable to update the saved target. Check browser storage and try again.');
+        return;
+      }
+      setSavedTargetsArchive(updatedArchive);
+      setEditingSavedTargetId(null);
+      onSuccess('Saved command target updated');
+      return;
+    }
+
     const appSettings = (await storage.getSingleton<any>('appSettings')) || {};
     const winsArray = dailyWins.split('\n').map(s => s.trim()).filter(Boolean);
     const reflArray = eveningReview.split('\n').map(s => s.trim()).filter(Boolean);
@@ -467,10 +508,15 @@ export const TasksView: React.FC<TasksViewProps> = ({
     };
 
     const updatedArchive = [newRecord, ...savedTargetsArchive.filter(r => r.date !== today || r.target !== plannerTarget)].slice(0, 30);
-    setSavedTargetsArchive(updatedArchive);
     try {
       localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updatedArchive));
-    } catch {}
+    } catch (error) {
+      console.error('Unable to save command target archive record', error);
+      onSuccess('Daily target saved, but its archive record could not be stored.');
+      onRefresh();
+      return;
+    }
+    setSavedTargetsArchive(updatedArchive);
 
     onSuccess('✓ Command Target saved successfully');
     onRefresh();
@@ -526,11 +572,31 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   // Load a saved record from archive
   const handleLoadSavedRecord = (record: SavedTargetRecord) => {
+    setEditingSavedTargetId(null);
     setPlannerTarget(record.target);
     setPlannerProgress(record.progress);
     if (record.raw?.wins) setDailyWins(record.raw.wins.join('\n'));
     if (record.raw?.reflection) setEveningReview(record.raw.reflection.join('\n'));
     onSuccess(`Loaded saved target from ${record.date}`);
+  };
+
+  const handleEditSavedRecord = (record: SavedTargetRecord) => {
+    setEditingSavedTargetId(record.id);
+    setPlannerTarget(record.target);
+    setPlannerProgress(record.progress);
+    setDailyWins(record.raw?.wins?.join('\n') || '');
+    setEveningReview(record.raw?.reflection?.join('\n') || '');
+    onSuccess(`Editing saved target from ${record.date}`);
+  };
+
+  const handleCancelEditSavedRecord = () => {
+    setEditingSavedTargetId(null);
+    if (dailyPlanner) {
+      setPlannerTarget(dailyPlanner.target || '');
+      setPlannerProgress(dailyPlanner.progress ?? 0);
+      setDailyWins(dailyPlanner.wins?.join('\n') || '');
+      setEveningReview(dailyPlanner.reflection?.join('\n') || '');
+    }
   };
 
   const handleAddPlannerPoint = async (e: React.KeyboardEvent) => {
@@ -592,6 +658,36 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
     appSettings.dailyPlanner = updatedPlanner;
     await storage.setSingleton('appSettings', appSettings);
+    onRefresh();
+  };
+
+  const handleSavePoint = async (pointId: string, e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (!editingPointText.trim()) return;
+
+    const appSettings = (await storage.getSingleton<any>('appSettings')) || {};
+    const currentPlanner = appSettings.dailyPlanner || dailyPlanner;
+    const currentPoints = currentPlanner?.points || [];
+    if (!currentPoints.some((point: DailyPlanner['points'][number]) => point.id === pointId)) {
+      setEditingPointId(null);
+      onRefresh();
+      return;
+    }
+
+    appSettings.dailyPlanner = {
+      ...(currentPlanner || {}),
+      date: today,
+      target: plannerTarget,
+      progress: plannerProgress,
+      points: currentPoints.map((point: DailyPlanner['points'][number]) =>
+        point.id === pointId ? { ...point, text: editingPointText.trim() } : point
+      ),
+      wins: currentPlanner?.wins || [],
+      reflection: currentPlanner?.reflection || []
+    };
+    await storage.setSingleton('appSettings', appSettings);
+    setEditingPointId(null);
+    setEditingPointText('');
     onRefresh();
   };
 
@@ -1080,10 +1176,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
                           </div>
                         )}
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
-                          <span className="rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 capitalize font-medium text-slate-600 dark:text-slate-300">
+                          <span className="whitespace-nowrap rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 capitalize font-medium text-slate-600 dark:text-slate-300">
                             {task.domain}
                           </span>
-                          <span className={`rounded-md px-1.5 py-0.5 font-bold ${
+                          <span className={`whitespace-nowrap rounded-md px-1.5 py-0.5 font-bold ${
                             task.priority === 'High'
                               ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
                               : task.priority === 'Medium'
@@ -1093,7 +1189,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                             {task.priority}
                           </span>
                           {task.dueAt && (
-                            <span className="font-mono text-slate-500 flex items-center gap-1">
+                            <span className="font-mono text-slate-500 flex items-center gap-1 whitespace-nowrap">
                               <Calendar className="h-2.5 w-2.5" />
                               <span>{task.dueAt}</span>
                             </span>
@@ -1257,7 +1353,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       (dailyPlanner?.points || []).map(pt => (
                         <div
                           key={pt.id}
-                          onClick={() => handleTogglePoint(pt.id)}
+                          onClick={() => {
+                            if (editingPointId !== pt.id) void handleTogglePoint(pt.id);
+                          }}
                           className="group flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors hover:bg-card-soft cursor-pointer"
                         >
                           <div className="flex min-w-0 items-center gap-2.5 pr-2">
@@ -1266,10 +1364,56 @@ export const TasksView: React.FC<TasksViewProps> = ({
                             ) : (
                               <Circle className="h-4 w-4 shrink-0 text-ink-muted/50" />
                             )}
-                            <span className={pt.done ? 'text-ink-muted line-through' : 'font-medium text-ink'}>
-                              {pt.text}
-                            </span>
+                            {editingPointId === pt.id ? (
+                              <input
+                                autoFocus
+                                value={editingPointText}
+                                onClick={event => event.stopPropagation()}
+                                onChange={event => setEditingPointText(event.target.value)}
+                                onKeyDown={event => {
+                                  if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    void handleSavePoint(pt.id, event);
+                                  } else if (event.key === 'Escape') {
+                                    event.stopPropagation();
+                                    setEditingPointId(null);
+                                  }
+                                }}
+                                aria-label="Edit checkpoint"
+                                className="min-w-0 flex-1 rounded-md border border-indigo-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
+                              />
+                            ) : (
+                              <span className={pt.done ? 'text-ink-muted line-through' : 'font-medium text-ink'}>
+                                {pt.text}
+                              </span>
+                            )}
                           </div>
+                          {editingPointId === pt.id && (
+                            <button
+                              type="button"
+                              onClick={event => void handleSavePoint(pt.id, event)}
+                              className="p-1 text-indigo-600 hover:text-indigo-800"
+                              title="Save checkpoint"
+                              aria-label="Save checkpoint"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {editingPointId !== pt.id && (
+                            <button
+                              type="button"
+                              onClick={event => {
+                                event.stopPropagation();
+                                setEditingPointId(pt.id);
+                                setEditingPointText(pt.text);
+                              }}
+                              className="p-1 text-slate-400 transition-colors hover:text-indigo-600"
+                              title="Edit checkpoint"
+                              aria-label={`Edit checkpoint ${pt.text}`}
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => handleDeletePoint(pt.id, e)}
@@ -1332,8 +1476,17 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-transparent px-3.5 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-50 cursor-pointer dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950/30"
                 >
                   <Save className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
-                  <span>Save Target</span>
+                  <span>{editingSavedTargetId ? 'Update Saved Target' : 'Save Target'}</span>
                 </button>
+                {editingSavedTargetId && (
+                  <button
+                    type="button"
+                    onClick={handleCancelEditSavedRecord}
+                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1382,22 +1535,36 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         </div>
 
                         <div className="flex items-center justify-between pt-1 border-t border-slate-50 dark:border-slate-800/40">
-                          <button
-                            type="button"
-                            onClick={() => handleLoadSavedRecord(rec)}
-                            className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
-                          >
-                            Load Into Editor
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleEditSavedRecord(rec)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer"
+                            >
+                              <Edit3 className="h-3 w-3" />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleLoadSavedRecord(rec)}
+                              className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
+                            >
+                              Load Into Editor
+                            </button>
+                          </div>
 
                           <button
                             type="button"
                             onClick={() => {
                               const updated = savedTargetsArchive.filter(r => r.id !== rec.id);
-                              setSavedTargetsArchive(updated);
                               try {
                                 localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updated));
-                              } catch {}
+                                setSavedTargetsArchive(updated);
+                                if (editingSavedTargetId === rec.id) setEditingSavedTargetId(null);
+                              } catch (error) {
+                                console.error('Unable to remove saved command target', error);
+                                onSuccess('Unable to remove the saved target. Check browser storage and try again.');
+                              }
                             }}
                             className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 p-1"
                             title="Remove record"

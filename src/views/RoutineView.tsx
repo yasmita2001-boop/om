@@ -1,5 +1,5 @@
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Repeat, Clock, Trash2, CheckCircle2,
   Flame, Check, Bell, Link2, Edit3, X,
@@ -60,6 +60,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   const today = getLocalDateString();
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'routine' | 'habit'; id: string; name: string } | null>(null);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
+  const routineFormRef = useRef<HTMLElement | null>(null);
   const [habitFilter, setHabitFilter] = useState<'all' | 'linked' | 'standalone' | string>('all');
   const [routineFormOpen, setRoutineFormOpen] = useState(false);
   const [habitFormOpen, setHabitFormOpen] = useState(false);
@@ -198,6 +200,38 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     e.preventDefault();
     if (!routineName.trim()) return;
 
+    if (editingRoutine) {
+      const fresh = await storage.get<Routine>('routines', editingRoutine.id);
+      if (!fresh) {
+        onSuccess('Could not update routine block because it no longer exists. Refresh and try again.');
+        return;
+      }
+      const nextGoalId = routineInputMode === 'link' ? routineGoalId || undefined : undefined;
+      const updated: Routine = {
+        ...fresh,
+        name: routineName.trim(),
+        startTime,
+        endTime,
+        time: startTime,
+        frequency: routineFreq,
+        category: routineCat,
+        note: routineNote.trim() || undefined,
+        goalId: nextGoalId,
+        updatedAt: Date.now()
+      };
+      await storage.put('routines', updated);
+      if (fresh.goalId && fresh.goalId !== nextGoalId) await syncGoalProgressFromRoutines(fresh.goalId);
+      if (nextGoalId && fresh.goalId !== nextGoalId) await syncGoalProgressFromRoutines(nextGoalId);
+
+      setEditingRoutine(null);
+      setRoutineName('');
+      setRoutineNote('');
+      setRoutineFormOpen(false);
+      onSuccess(`✓ Routine block "${updated.name}" updated`);
+      onRefresh();
+      return;
+    }
+
     const now = Date.now();
     const routineId = generateUUID();
     const newRoutine: Routine = {
@@ -262,6 +296,28 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     setRoutineArmGenesis(false);
     setRoutineFormOpen(false);
     onRefresh();
+  };
+
+  const handleStartEditRoutine = (routine: Routine) => {
+    setEditingRoutine(routine);
+    setRoutineName(routine.name);
+    setStartTime(routine.startTime || routine.time || '07:00');
+    setEndTime(routine.endTime || '08:00');
+    setRoutineFreq(routine.frequency || 'daily');
+    setRoutineCat(routine.category);
+    setRoutineNote(routine.note || '');
+    setRoutineGoalId(routine.goalId || '');
+    setRoutineInputMode(routine.goalId ? 'link' : 'manual');
+    setRoutineArmGenesis(false);
+    setRoutineFormOpen(true);
+    requestAnimationFrame(() => routineFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+
+  const handleCancelRoutineEdit = () => {
+    setEditingRoutine(null);
+    setRoutineName('');
+    setRoutineNote('');
+    setRoutineFormOpen(false);
   };
 
   const handleAddHabit = async (e: React.FormEvent) => {
@@ -713,11 +769,14 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <FormDisclosureToggle
-            label="Routine Genesis"
+            label={editingRoutine ? 'Edit Routine' : 'Routine Genesis'}
             openLabel="Close Routine"
             isOpen={routineFormOpen}
-            onToggle={() => setRoutineFormOpen(open => !open)}
-            icon={<Plus className="h-3.5 w-3.5" />}
+            onToggle={() => {
+              if (routineFormOpen && editingRoutine) handleCancelRoutineEdit();
+              else setRoutineFormOpen(open => !open);
+            }}
+            icon={editingRoutine ? <Edit3 className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
           />
           <FormDisclosureToggle
             label="Habit Genesis"
@@ -854,14 +913,14 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       {/* Forms Grid (Routine Genesis & Habit Genesis) */}
       <div className={`grid grid-cols-1 gap-6 ${routineFormOpen && habitFormOpen ? 'lg:grid-cols-2' : ''}`}>
         {/* Schedule Routine Block (1st col) */}
-        {routineFormOpen && <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        {routineFormOpen && <section ref={routineFormRef} className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 text-xs">
                 <Clock className="h-4 w-4" />
               </span>
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                Routine Genesis
+                {editingRoutine ? 'Edit Routine Block' : 'Routine Genesis'}
               </h2>
             </div>
           </div>
@@ -1002,7 +1061,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             </div>
 
             {/* Deploy Task Genesis with Alarm on Creation */}
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/20 space-y-2">
+            {!editingRoutine && <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/20 space-y-2">
               <label className="flex items-center gap-2 cursor-pointer text-[11px] font-bold text-indigo-900 dark:text-indigo-200">
                 <input
                   type="checkbox"
@@ -1042,14 +1101,23 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   </div>
                 </div>
               )}
-            </div>
+            </div>}
 
             <button
               type="submit"
               className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 active:scale-98 transition-transform cursor-pointer"
             >
-              ＋ Add Routine Block
+              {editingRoutine ? 'Save Routine Changes' : '＋ Add Routine Block'}
             </button>
+            {editingRoutine && (
+              <button
+                type="button"
+                onClick={handleCancelRoutineEdit}
+                className="w-full rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel edit
+              </button>
+            )}
           </form>
         </section>}
 
@@ -1377,6 +1445,15 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           title="Schedule Zen Bell Alarm for this routine block"
                         >
                           <Bell className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditRoutine(r)}
+                          className="text-slate-400 hover:text-indigo-600 transition-colors p-1 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
+                          title="Edit routine block"
+                          aria-label={`Edit routine block ${r.name}`}
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
                         </button>
                         <button
                           type="button"

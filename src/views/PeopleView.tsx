@@ -27,6 +27,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   const [relationship, setRelationship] = useState('Friend');
   const [contact, setContact] = useState('');
   const [importantDate, setImportantDate] = useState('');
+  const [editingPerson, setEditingPerson] = useState<Person | null>(null);
   const [activeAction, setActiveAction] = useState<'person' | 'interaction'>('person');
   const [openPeopleForm, setOpenPeopleForm] = useState<'person' | 'interaction' | null>(null);
   // Interaction logger & editor state
@@ -39,7 +40,14 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
     e.preventDefault();
     if (!name.trim()) return;
 
-    const p: Person = {
+    const p: Person = editingPerson ? {
+      ...editingPerson,
+      name: name.trim(),
+      relationship,
+      contact: contact.trim() || undefined,
+      importantDate: importantDate || undefined,
+      updatedAt: Date.now()
+    } : {
       id: generateUUID(),
       name: name.trim(),
       relationship,
@@ -49,11 +57,31 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
     };
 
     await storage.put('people', p);
-    onSuccess(`Contact "${name}" added`);
+    onSuccess(editingPerson ? `Contact "${name}" updated` : `Contact "${name}" added`);
+    setEditingPerson(null);
     setName('');
+    setRelationship('Friend');
     setContact('');
     setImportantDate('');
     onRefresh();
+  };
+
+  const handleStartEditPerson = (person: Person) => {
+    setEditingPerson(person);
+    setName(person.name);
+    setRelationship(person.relationship || 'Friend');
+    setContact(person.contact || '');
+    setImportantDate(person.importantDate || '');
+    setActiveAction('person');
+    setOpenPeopleForm('person');
+  };
+
+  const handleCancelEditPerson = () => {
+    setEditingPerson(null);
+    setName('');
+    setRelationship('Friend');
+    setContact('');
+    setImportantDate('');
   };
 
   const handleSaveInteraction = async (e: React.FormEvent) => {
@@ -197,10 +225,15 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
           <div className={activeAction === 'person' ? 'mt-4' : 'hidden'}>
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
               <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Add Important Person</h2>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">{editingPerson ? 'Edit Important Person' : 'Add Important Person'}</h2>
             </div>
 
             <form onSubmit={handleAddPerson} className="mt-4 space-y-3">
+              {editingPerson && (
+                <button type="button" onClick={handleCancelEditPerson} className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white">
+                  Cancel editing
+                </button>
+              )}
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Full Name</label>
                 <input
@@ -254,7 +287,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                 type="submit"
                 className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer"
               >
-                Save Contact
+                {editingPerson ? 'Update Contact' : 'Save Contact'}
               </button>
             </form>
           </div>
@@ -376,6 +409,14 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                             </div>
                           </div>
                           <ProgressiveActions label={`More actions for ${p.name}`} className="shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditPerson(p)}
+                              className="text-slate-400 hover:text-indigo-600 cursor-pointer p-1"
+                              title="Edit contact"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleDeletePerson(p.id)}

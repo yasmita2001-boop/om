@@ -411,8 +411,11 @@ function LifeOSApp() {
           : normalizeAppearance({
               ...DEFAULT_APPEARANCE,
               ...settingsData.appearance,
-              colorMode: settingsData.appearance?.colorMode || settingsData.themeMode || DEFAULT_APPEARANCE.colorMode,
-              accentColor: settingsData.appearance?.accentColor || resolveSavedAccent(settingsData.accentColor)
+              colorMode: settingsData.appearance?.colorMode || DEFAULT_APPEARANCE.colorMode,
+              accentColor: settingsData.appearance?.accentColor
+                || (settingsData.accentColor?.toLowerCase() === '#b88648'
+                  ? DEFAULT_APPEARANCE.accentColor
+                  : resolveSavedAccent(settingsData.accentColor))
             });
         if (!hasSavedAppearance()) {
           try {
@@ -574,8 +577,8 @@ function LifeOSApp() {
               provider: 'google',
               avatarUrl: profile.avatarUrl
             },
-            themeMode: 'light',
-            accentColor: '#b88648',
+            themeMode: DEFAULT_APPEARANCE.colorMode,
+            accentColor: DEFAULT_APPEARANCE.accentColor,
             notificationsEnabled: true,
             noteCategories: ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
             calcFavorites: ['EMI / Loan', 'SIP / Investment', 'Date Difference']

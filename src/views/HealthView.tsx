@@ -638,14 +638,14 @@ export const HealthView: React.FC<HealthViewProps> = ({
                 <div className="col-span-full"><EmptyState icon={Activity} compact title="No workouts logged" hint="Log your sessions to build the training history." /></div>
               ) : (
                 [...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
-                  <div key={m.id} className="min-w-0 rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
+                  <div key={m.id} className="min-w-0 rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex flex-wrap justify-between items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-slate-900 dark:text-white truncate">{m.exercise || 'Daily Activity'}</span>
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{m.date}</div>
                     </div>
-                    <div className="text-right font-mono font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                    <div className="ml-auto min-w-0 text-right font-mono font-bold text-slate-700 dark:text-slate-300 shrink-0">
                       {m.steps && <div>{m.steps.toLocaleString()} steps</div>}
                       {m.weight && <div>{m.weight} kg</div>}
                       {m.duration && <div className="text-indigo-600 dark:text-indigo-400">{m.duration} min</div>}
@@ -937,7 +937,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   <div className="col-span-full"><EmptyState icon={Stethoscope} compact title="No appointments" hint="Upcoming visits show with countdowns here." /></div>
                 ) : (
                   [...appointments].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(a => (
-                    <div key={a.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
+                    <div key={a.id} className="min-w-0 rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex flex-wrap justify-between items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleToggleAppointmentComplete(a)}
@@ -966,7 +966,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                           </span>
                           <GoalBadge goalId={a.goalId} goals={goals} />
                         </div>
-                        <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                        <div className="min-w-0 break-words text-[10px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-1.5">
                           <Calendar className="h-3 w-3" />
                           <span>{a.date}</span>
                           {a.doctor && <span>· Dr: {a.doctor}</span>}

@@ -318,6 +318,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   }, [sectionActionPanel]);
 
   const [activeLoanAction, setActiveLoanAction] = useState<'payment' | 'newLoan' | 'liability'>('payment');
+  const [editingLoanId, setEditingLoanId] = useState<string | null>(null);
   const [activeInvestmentAction, setActiveInvestmentAction] = useState<'asset' | 'activity'>('asset');
   const getForecastEndDate = (days: number) => {
     const [year, month, day] = today.split('-').map(Number);
@@ -576,6 +577,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   // New Savings Form
   const [saveName, setSaveName] = useState('');
+  const [editingSavingsPlanId, setEditingSavingsPlanId] = useState<string | null>(null);
   const [saveCurrent, setSaveCurrent] = useState('');
   const [saveTarget, setSaveTarget] = useState('');
   const [saveMonths, setSaveMonths] = useState('12');
@@ -1701,6 +1703,79 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     onRefresh();
   };
 
+  const handleStartEditLoan = (loan: Loan) => {
+    setEditingLoanId(loan.id);
+    setLoanName(loan.name);
+    setLoanPrincipal(String(loan.principal));
+    setLoanRate(String(loan.rate));
+    setLoanTenure(String(loan.tenure));
+    setLoanDirection(loan.direction || 'borrowed');
+    setLoanCategory(loan.category || 'institutional');
+    setLoanType(loan.loanType || 'Personal Loan');
+    setLoanLenderName(loan.lenderName || '');
+    setLoanBranchName(loan.branchName || '');
+    setLoanReference(loan.reference || '');
+    setLoanDisbursedAmount(String(loan.disbursedAmount ?? loan.principal));
+    setLoanActualInstallment(loan.emiAmountIsActual ? String(loan.emiAmount || '') : '');
+    setLoanStartDate(loan.startDate || today);
+    setLoanApprovalDate(loan.approvalDate || '');
+    setLoanFirstPaymentDate(loan.firstPaymentDate || '');
+    setLoanRateType(loan.rateType || 'fixed');
+    setLoanInterestMethod(loan.interestMethod || 'reducing');
+    setLoanRepaymentFrequency(loan.repaymentFrequency || 'monthly');
+    setLoanProcessingFee(String(loan.processingFee || ''));
+    setLoanAdministrativeFee(String(loan.administrativeFee || ''));
+    setLoanTax(String(loan.applicableTax || ''));
+    setLoanInsurance(String(loan.insuranceCharge || ''));
+    setLoanOtherFees(String(loan.otherFees || ''));
+    setLoanCollateralValue(String(loan.collateralValue || ''));
+    setLoanForeclosureCharge(String(loan.foreclosureCharge || ''));
+    setLoanGoalId(loan.goalId || '');
+    setLoanInputMode(loan.goalId ? 'link' : 'manual');
+    const linkedDisbursement = transactions.find(transaction =>
+      transaction.linkedLoanId === loan.id && (transaction.type === 'loan' || transaction.type === 'loanGiven')
+    );
+    setLoanDepositAccountId(linkedDisbursement?.accountId || accounts[0]?.id || '');
+    setSectionActionPanel('loanActions');
+    setActiveLoanAction('newLoan');
+  };
+
+  const resetLoanForm = () => {
+    setLoanName('');
+    setLoanPrincipal('');
+    setLoanRate('8.5');
+    setLoanTenure('60');
+    setLoanDirection('borrowed');
+    setLoanCategory('institutional');
+    setLoanType('Personal Loan');
+    setLoanDisbursedAmount('');
+    setLoanActualInstallment('');
+    setLoanLenderName('');
+    setLoanBranchName('');
+    setLoanReference('');
+    setLoanStartDate(today);
+    setLoanApprovalDate('');
+    setLoanFirstPaymentDate('');
+    setLoanRateType('fixed');
+    setLoanInterestMethod('reducing');
+    setLoanRepaymentFrequency('monthly');
+    setLoanProcessingFee('');
+    setLoanAdministrativeFee('');
+    setLoanTax('');
+    setLoanInsurance('');
+    setLoanOtherFees('');
+    setLoanCollateralValue('');
+    setLoanForeclosureCharge('');
+    setLoanGoalId('');
+    setLoanInputMode('manual');
+    setLoanDepositAccountId(accounts[0]?.id || '');
+  };
+
+  const handleCancelEditLoan = () => {
+    setEditingLoanId(null);
+    resetLoanForm();
+  };
+
   const handleCreateLoan = async (e: React.FormEvent) => {
     e.preventDefault();
     const p = Number(loanPrincipal);
@@ -1729,26 +1804,32 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       reportError('For money lent to someone, the tracked receivable principal must equal the actual amount transferred. Record any separate charges as their own transaction.');
       return;
     }
-    if (loanDirection === 'lent' && disbursed > (Number(accounts.find(a => a.id === loanDepositAccountId)?.balance) || 0)) {
+    if (!editingLoanId && loanDirection === 'lent' && disbursed > (Number(accounts.find(a => a.id === loanDepositAccountId)?.balance) || 0)) {
       reportError('The amount lent exceeds the selected account balance.');
       return;
     }
-    if (loanDirection === 'lent' && !loanDepositAccountId) {
+    if (!editingLoanId && loanDirection === 'lent' && !loanDepositAccountId) {
       reportError('Select the account used to lend the money.');
       return;
     }
 
-    const loanId = generateUUID();
+    const existingLoan = editingLoanId ? loans.find(loan => loan.id === editingLoanId) : undefined;
+    if (editingLoanId && !existingLoan) {
+      reportError('This loan is no longer available. Refresh the list and try again.');
+      return;
+    }
+    const loanId = existingLoan?.id || generateUUID();
     const now = Date.now();
     const firstPaymentDate = loanFirstPaymentDate || addLoanPaymentPeriod(loanStartDate, loanRepaymentFrequency, 1);
     const newLoan: Loan = {
+      ...existingLoan,
       id: loanId,
       name: loanName.trim(),
       principal: p,
       rate,
       tenure: term,
       dueDay: Number(firstPaymentDate.slice(-2)) || 1,
-      outstanding: p,
+      outstanding: existingLoan?.outstanding ?? p,
       direction: loanDirection,
       category: loanCategory,
       loanType,
@@ -1776,14 +1857,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       foreclosureCharge: fees[5] || undefined,
       collateralValue,
       goalId: loanInputMode === 'link' && loanGoalId ? loanGoalId : null,
-      createdAt: now
+      createdAt: existingLoan?.createdAt || now,
+      updatedAt: now
     };
 
     const operations: Array<{ storeName: string; item: any }> = [
       { storeName: 'loans', item: newLoan }
     ];
 
-    if (loanDepositAccountId) {
+    if (!existingLoan && loanDepositAccountId) {
       const acct = accounts.find(a => a.id === loanDepositAccountId);
       if (acct) {
         operations.push({
@@ -1811,30 +1893,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
 
     await storage.atomicPutMany(operations);
+    if (existingLoan?.goalId && existingLoan.goalId !== newLoan.goalId) {
+      await syncGoalProgressFromFinance(existingLoan.goalId);
+    }
     if (newLoan.goalId) {
       await syncGoalProgressFromFinance(newLoan.goalId);
     }
     setPayLoanId(newLoan.id);
-    onSuccess(`Loan liability registered${loanDepositAccountId ? ' & funds deposited to account' : ''}`);
-    setLoanName('');
-    setLoanPrincipal('');
-    setLoanDisbursedAmount('');
-    setLoanActualInstallment('');
-    setLoanLenderName('');
-    setLoanBranchName('');
-    setLoanReference('');
-    setLoanStartDate(today);
-    setLoanApprovalDate('');
-    setLoanFirstPaymentDate('');
-    setLoanProcessingFee('');
-    setLoanAdministrativeFee('');
-    setLoanTax('');
-    setLoanInsurance('');
-    setLoanOtherFees('');
-    setLoanCollateralValue('');
-    setLoanForeclosureCharge('');
-    setLoanGoalId('');
-    setLoanInputMode('manual');
+    onSuccess(existingLoan
+      ? 'Loan details updated; payment history and ledger entries were preserved.'
+      : `Loan liability registered${loanDepositAccountId ? ' & funds deposited to account' : ''}`);
+    setEditingLoanId(null);
+    resetLoanForm();
     onRefresh();
   };
 
@@ -2667,6 +2737,69 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     onRefresh();
   };
 
+  const handleStartEditSavingsPlan = (plan: SavingsPlan) => {
+    setEditingSavingsPlanId(plan.id);
+    setSaveName(plan.name);
+    setSaveCurrent(String(plan.currentAmount));
+    setSaveTarget(plan.targetAmount ? String(plan.targetAmount) : '');
+    setSaveMonths(String(plan.durationMonths || 12));
+    setSaveProductType(plan.productType || 'reserve');
+    setSaveCategory(plan.category || 'simple');
+    setSaveFrequency(plan.frequency || 'monthly');
+    setSaveCustomPeriodDays(plan.customPeriodDays ? String(plan.customPeriodDays) : '');
+    setSaveContributionAmount(plan.contributionAmount ? String(plan.contributionAmount) : '');
+    setSaveBankName(plan.bankName || '');
+    setSaveBranchName(plan.branchName || '');
+    setSaveReference(plan.reference || '');
+    setSaveAnnualInterestRate(String(plan.annualInterestRate ?? 8));
+    setSaveCompoundingPerYear(String(plan.compoundingPerYear || 4) as '1' | '2' | '4' | '12');
+    setSaveInterestMethod(plan.interestMethod || 'compound');
+    setSaveInterestEffectiveDate(plan.interestEffectiveDate || today);
+    setSaveInterestPayoutFrequency(plan.interestPayoutFrequency || 'at_maturity');
+    setSaveTdsRate(plan.tdsRate === undefined ? '' : String(plan.tdsRate));
+    setSaveServiceCharges(plan.serviceCharges === undefined ? '' : String(plan.serviceCharges));
+    setSavePenalty(plan.penalty === undefined ? '' : String(plan.penalty));
+    setSaveOtherDeductions(plan.otherDeductions === undefined ? '' : String(plan.otherDeductions));
+    setSaveNotes(plan.notes || '');
+    setSaveStartDate(plan.startDate || today);
+    setSaveMaturityDate(plan.maturityDate || '');
+    setSaveGoalId(plan.goalId || '');
+    setSaveInputMode(plan.goalId ? 'link' : 'manual');
+    setSaveFundingMode('already_funded');
+    setSectionActionPanel('savings');
+  };
+
+  const handleCancelEditSavingsPlan = () => {
+    setEditingSavingsPlanId(null);
+    setSaveName('');
+    setSaveCurrent('');
+    setSaveTarget('');
+    setSaveMonths('12');
+    setSaveProductType('reserve');
+    setSaveCategory('simple');
+    setSaveFrequency('monthly');
+    setSaveCustomPeriodDays('');
+    setSaveContributionAmount('');
+    setSaveBankName('');
+    setSaveBranchName('');
+    setSaveReference('');
+    setSaveAnnualInterestRate('8');
+    setSaveCompoundingPerYear('4');
+    setSaveInterestMethod('compound');
+    setSaveInterestEffectiveDate(today);
+    setSaveInterestPayoutFrequency('at_maturity');
+    setSaveTdsRate('');
+    setSaveServiceCharges('');
+    setSavePenalty('');
+    setSaveOtherDeductions('');
+    setSaveNotes('');
+    setSaveStartDate(today);
+    setSaveMaturityDate('');
+    setSaveGoalId('');
+    setSaveInputMode('manual');
+    setSaveFundingMode('account');
+  };
+
   const handleCreateSavings = async (e: React.FormEvent) => {
     e.preventDefault();
     const initialAmt = saveCurrent.trim() === '' ? 0 : Number(saveCurrent);
@@ -2717,10 +2850,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
 
-    const fundingAccount = initialAmt > 0 && saveFundingMode === 'account' && saveAccountId
+    const existingPlan = editingSavingsPlanId ? savingsPlans.find(plan => plan.id === editingSavingsPlanId) : undefined;
+    if (editingSavingsPlanId && !existingPlan) {
+      reportError('This savings plan is no longer available. Refresh the list and try again.');
+      return;
+    }
+    const fundingAccount = !existingPlan && initialAmt > 0 && saveFundingMode === 'account' && saveAccountId
       ? accounts.find(account => account.id === saveAccountId)
       : undefined;
-    if (initialAmt > 0 && saveFundingMode === 'account' && !fundingAccount) {
+    if (!existingPlan && initialAmt > 0 && saveFundingMode === 'account' && !fundingAccount) {
       reportError('The selected source account is unavailable. Refresh and select a valid account.');
       return;
     }
@@ -2732,9 +2870,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const spId = generateUUID();
     const now = Date.now();
     const basePlan: SavingsPlan = {
-      id: spId,
+      ...existingPlan,
+      id: existingPlan?.id || spId,
       name: saveName.trim(),
-      currentAmount: initialAmt,
+      currentAmount: existingPlan?.currentAmount ?? initialAmt,
       targetAmount: targetAmt,
       durationMonths: saveProductType === 'fixed_deposit' ? durationMonths : (Number(saveMonths) || 12),
       productType: saveProductType,
@@ -2760,12 +2899,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       maturityDate: saveMaturityDate || undefined,
       notes: saveNotes.trim() || undefined,
       goalId: saveInputMode === 'link' && saveGoalId ? saveGoalId : null,
-      createdAt: now,
+      createdAt: existingPlan?.createdAt || now,
       updatedAt: now
     };
     const sp: SavingsPlan = {
       ...basePlan,
-      targetAmount: saveProductType === 'fixed_deposit' ? initialAmt : targetAmt
+      targetAmount: saveProductType === 'fixed_deposit'
+        ? (existingPlan?.targetAmount ?? initialAmt)
+        : targetAmt
     };
 
     const operations: Array<{ storeName: string; item: any }> = [
@@ -2806,9 +2947,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (sp.goalId) {
       await syncGoalProgressFromFinance(sp.goalId);
     }
-    onSuccess(saveProductType === 'fixed_deposit'
+    if (existingPlan?.goalId && existingPlan.goalId !== sp.goalId) {
+      await syncGoalProgressFromFinance(existingPlan.goalId);
+    }
+    onSuccess(existingPlan
+      ? 'Savings / deposit details updated; the current balance and ledger history were preserved.'
+      : saveProductType === 'fixed_deposit'
       ? 'Fixed deposit recorded.'
       : `${getSavingsProductLabel(saveProductType)} recorded${fundingAccount ? ' and funded from account' : ' as an existing/imported balance'}`);
+    setEditingSavingsPlanId(null);
     setSaveName('');
     setSaveCurrent('');
     setSaveTarget('');
@@ -4888,8 +5035,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             {/* Register Loan Liability */}
             <div className={activeLoanAction === 'newLoan' ? 'mt-4' : 'hidden'}>
               <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-                Register New Loan
+                {editingLoanId ? 'Edit Loan' : 'Register New Loan'}
               </h2>
+              {editingLoanId && (
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-[10px] text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                  <span>Principal, disbursement, payments, outstanding balance, and ledger entries are preserved.</span>
+                  <button type="button" onClick={handleCancelEditLoan} className="shrink-0 font-semibold underline">Cancel</button>
+                </div>
+              )}
               <form onSubmit={handleCreateLoan} className="mt-4 space-y-3">
                 {/* Strategic Goal Link Mode Selector */}
                 {renderGoalModeToggle(
@@ -4906,6 +5059,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     Loan direction
                     <select
                       value={loanDirection}
+                      disabled={Boolean(editingLoanId)}
                       onChange={event => {
                         const direction = event.target.value as 'borrowed' | 'lent';
                         setLoanDirection(direction);
@@ -4954,6 +5108,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       step="0.01"
                       required
                       value={loanPrincipal}
+                      disabled={Boolean(editingLoanId)}
                       onChange={e => setLoanPrincipal(e.target.value)}
                       placeholder="100000"
                       className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -5024,7 +5179,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <select value={loanInterestMethod} onChange={event => setLoanInterestMethod(event.target.value as NonNullable<Loan['interestMethod']>)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="reducing">Reducing balance</option><option value="flat">Flat rate</option><option value="simple">Simple interest</option></select>
                     </label>
                     <label className="col-span-2 text-[10px] font-medium text-slate-500">Actual disbursed / received amount (NPR)
-                      <input type="number" min="0.01" step="0.01" value={loanDisbursedAmount} onChange={event => setLoanDisbursedAmount(event.target.value)} placeholder={loanPrincipal || 'Defaults to principal'} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                      <input type="number" min="0.01" step="0.01" value={loanDisbursedAmount} disabled={Boolean(editingLoanId)} onChange={event => setLoanDisbursedAmount(event.target.value)} placeholder={loanPrincipal || 'Defaults to principal'} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-60" />
                     </label>
                     <label className="col-span-2 text-[10px] font-medium text-slate-500">Lender's installment amount per period (actual, optional)
                       <input type="number" min="0.01" step="0.01" value={loanActualInstallment} onChange={event => setLoanActualInstallment(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
@@ -5047,7 +5202,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </div>
                 </details>
 
-                <div>
+                {!editingLoanId && <div>
                   <label className="block text-xs leading-4 font-semibold text-slate-600 dark:text-slate-300">
                     {loanDirection === 'lent' ? 'Lend from account' : 'Disbursement to account (optional)'}
                   </label>
@@ -5063,12 +5218,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       </option>
                     ))}
                   </select>
-                </div>
+                </div>}
                 <button
                   type="submit"
                   className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
                 >
-                  + Add Loan to Ledger
+                  {editingLoanId ? 'Update Loan Details' : '+ Add Loan to Ledger'}
                 </button>
               </form>
             </div>
@@ -5230,6 +5385,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                 NPR {Number(l.outstanding).toLocaleString('en-IN')}
                               </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditLoan(l)}
+                              className="text-slate-400 hover:text-indigo-600 transition-colors p-1 cursor-pointer"
+                              title="Edit loan"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => setDeleteTarget({ store: 'loans', id: l.id, name: l.name })}
@@ -5818,8 +5981,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           <div ref={savingsPanelRef} className={`${sectionActionPanel === 'savings' ? 'lg:col-span-5' : 'hidden'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              Register Savings / Deposit
+              {editingSavingsPlanId ? 'Edit Savings / Deposit' : 'Register Savings / Deposit'}
             </h2>
+            {editingSavingsPlanId && (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-[10px] text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                <span>Current balance and existing ledger entries are managed separately and will be preserved.</span>
+                <button type="button" onClick={handleCancelEditSavingsPlan} className="shrink-0 font-semibold underline">Cancel</button>
+              </div>
+            )}
             <form onSubmit={handleCreateSavings} className="mt-4 space-y-3">
               <div>
                 <div className="mb-1 flex items-center justify-between">
@@ -5928,6 +6097,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     min="0"
                     step="0.01"
                     value={saveCurrent}
+                    disabled={Boolean(editingSavingsPlanId)}
                     onChange={e => setSaveCurrent(e.target.value)}
                     placeholder="e.g. 100000"
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -6213,6 +6383,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </label>
                 <select
                   value={saveFundingMode === 'already_funded' ? 'already-funded' : saveAccountId}
+                  disabled={Boolean(editingSavingsPlanId)}
                   onChange={e => {
                     if (e.target.value === 'already-funded') {
                       setSaveFundingMode('already_funded');
@@ -6245,7 +6416,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 type="submit"
                 className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
               >
-                {`+ Record ${getSavingsProductLabel(saveProductType)}`}
+                {editingSavingsPlanId ? 'Update Savings / Deposit Details' : `+ Record ${getSavingsProductLabel(saveProductType)}`}
               </button>
             </form>
           </div>
@@ -6298,22 +6469,22 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   const current = isFixedDeposit ? (valuation?.currentValue || 0) : principal;
                   const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
                   return (
-                    <div key={sp.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 group">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-slate-900 dark:text-white text-sm">{sp.name}</span>
+                    <div key={sp.id} className="min-w-0 rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 group">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2 flex-wrap">
+                          <span className="min-w-0 break-words font-bold text-slate-900 dark:text-white text-sm">{sp.name}</span>
                           {renderGoalBadge(sp.goalId)}
                           {isClosed && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">Closed</span>}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-right">
-                            <div className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
+                        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
+                          <div className="min-w-0 flex-[1_1_100%] text-left sm:flex-1 sm:text-right">
+                            <div className="min-w-0 break-words font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
                               {isFixedDeposit
-                                ? `NPR ${current.toLocaleString('en-IN', { maximumFractionDigits: 2 })} est. / NPR ${target.toLocaleString('en-IN', { maximumFractionDigits: 2 })} at maturity`
-                                : `NPR ${current.toLocaleString('en-IN')} · ${getSavingsProductLabel(sp.productType)}${target > 0 ? ` / NPR ${target.toLocaleString('en-IN')} target` : ''}`}
+                                ? <><span className="whitespace-nowrap tabular-nums">NPR {current.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span> est. / <span className="whitespace-nowrap tabular-nums">NPR {target.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span> at maturity</>
+                                : <><span className="whitespace-nowrap tabular-nums">NPR {current.toLocaleString('en-IN')}</span> · {getSavingsProductLabel(sp.productType)}{target > 0 && <> / <span className="whitespace-nowrap tabular-nums">NPR {target.toLocaleString('en-IN')}</span> target</>}</>}
                             </div>
                             {isFixedDeposit && (
-                              <div className="text-[10px] text-slate-400">
+                              <div className="break-words text-[10px] text-slate-400">
                                 Principal NPR {principal.toLocaleString('en-IN')} · {sp.annualInterestRate}% p.a. · maturity {valuation?.maturityDate}
                               </div>
                             )}
@@ -6365,6 +6536,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                               Withdraw
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditSavingsPlan(sp)}
+                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
+                            title="Edit savings plan"
+                            aria-label={`Edit savings plan ${sp.name}`}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => setDeleteTarget({ store: 'savingsPlans', id: sp.id, name: sp.name })}

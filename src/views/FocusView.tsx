@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Play, Pause, RotateCcw, Check, Sparkles, Volume2,
   VolumeX, Clock, Bell, Plus, Trash2,
-  Upload, Music, Sliders,
+  Upload, Music, Sliders, Pencil,
   Link2
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
@@ -124,6 +124,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
   const [newAlarmRingtone, setNewAlarmRingtone] = useState(alarmAudio.getDefaultRingtoneId());
   const [newAlarmDays, setNewAlarmDays] = useState<number[]>([1, 2, 3, 4, 5]); // Weekdays default
   const [isAddingAlarm, setIsAddingAlarm] = useState(false);
+  const [editingAlarm, setEditingAlarm] = useState<FocusAlarm | null>(null);
   const [alarmTitleMode, setAlarmTitleMode] = useState<'routine' | 'manual'>('manual');
   const [selectedRoutineId, setSelectedRoutineId] = useState<string>('');
   const [availableRoutines, setAvailableRoutines] = useState<Routine[]>(routines || []);
@@ -136,6 +137,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
 
   const completedTimerRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const alarmFormRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     if (timerProfileId === profileId) return;
@@ -386,23 +388,49 @@ export const FocusView: React.FC<FocusViewProps> = ({
       ? availableRoutines.find(r => r.id === selectedRoutineId)
       : null;
 
-    alarmService.addFocusAlarm({
+    const updates = {
       time: newAlarmTime,
       label: newAlarmLabel.trim() || (matchedRoutine ? matchedRoutine.name : 'Focus Alarm'),
       ringtone: newAlarmRingtone,
-      enabled: true,
       days: newAlarmDays,
       linkedRoutineId: selectedRoutineId || null,
       linkedRoutineName: matchedRoutine ? matchedRoutine.name : null,
-      sourceType: selectedRoutineId ? 'routine' : 'manual'
-    });
+      sourceType: selectedRoutineId ? 'routine' as const : 'manual' as const
+    };
+    if (editingAlarm) {
+      alarmService.updateFocusAlarm(editingAlarm.id, updates);
+      onSuccess(`Alarm updated for ${newAlarmTime}${matchedRoutine ? ` linked with "${matchedRoutine.name}"` : ''}`);
+    } else {
+      alarmService.addFocusAlarm({ ...updates, enabled: true });
+      onSuccess(`Alarm scheduled for ${newAlarmTime}${matchedRoutine ? ` linked with "${matchedRoutine.name}"` : ''}`);
+    }
 
-    onSuccess(`Alarm scheduled for ${newAlarmTime}${matchedRoutine ? ` linked with "${matchedRoutine.name}"` : ''}`);
     setNewAlarmLabel('');
     setSelectedRoutineId('');
     setAlarmTitleMode('manual');
     setIsAddingAlarm(false);
+    setEditingAlarm(null);
     refreshAlarms();
+  };
+
+  const handleEditAlarm = (alarm: FocusAlarm) => {
+    setEditingAlarm(alarm);
+    setNewAlarmTime(alarm.time);
+    setNewAlarmLabel(alarm.label);
+    setNewAlarmRingtone(alarm.ringtone);
+    setNewAlarmDays(alarm.days || []);
+    setSelectedRoutineId(alarm.linkedRoutineId || '');
+    setAlarmTitleMode(alarm.sourceType === 'routine' ? 'routine' : 'manual');
+    setIsAddingAlarm(true);
+    requestAnimationFrame(() => alarmFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+
+  const handleCancelAlarmEdit = () => {
+    setEditingAlarm(null);
+    setIsAddingAlarm(false);
+    setSelectedRoutineId('');
+    setAlarmTitleMode('manual');
+    setNewAlarmLabel('');
   };
 
   const toggleAlarmStatus = (alarm: FocusAlarm) => {
@@ -428,10 +456,13 @@ export const FocusView: React.FC<FocusViewProps> = ({
 
   const alarmFormAction = (
     <FormDisclosureToggle
-      label="New Alarm"
+      label={editingAlarm ? 'Edit Alarm' : 'New Alarm'}
       openLabel="Close Form"
       isOpen={isAddingAlarm}
-      onToggle={() => setIsAddingAlarm(open => !open)}
+      onToggle={() => {
+        if (isAddingAlarm) handleCancelAlarmEdit();
+        else setIsAddingAlarm(true);
+      }}
       icon={<Plus className="h-3.5 w-3.5" />}
     />
   );
@@ -748,9 +779,12 @@ export const FocusView: React.FC<FocusViewProps> = ({
 
             </div>
 
-            {/* Quick Add Alarm Form */}
+            {/* Create or edit alarm */}
             {isAddingAlarm && (
-              <form onSubmit={handleCreateAlarm} className="focus-alarm-form space-y-3 rounded-2xl border p-4 animate-in fade-in duration-150">
+              <form ref={alarmFormRef} onSubmit={handleCreateAlarm} className="focus-alarm-form space-y-3 rounded-2xl border p-4 animate-in fade-in duration-150">
+                <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {editingAlarm ? `Edit alarm: ${editingAlarm.label}` : 'New alarm'}
+                </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
@@ -914,7 +948,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                 <div className="focus-alarm-actions flex items-center justify-end gap-2 border-t pt-2">
                   <button
                     type="button"
-                    onClick={() => setIsAddingAlarm(false)}
+                    onClick={handleCancelAlarmEdit}
                     className="focus-alarm-cancel rounded-xl px-3 py-1.5 text-xs cursor-pointer"
                   >
                     Cancel
@@ -923,7 +957,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                     type="submit"
                     className="focus-alarm-save rounded-xl border px-4 py-1.5 text-xs font-bold cursor-pointer"
                   >
-                    Save Alarm
+                    {editingAlarm ? 'Update Alarm' : 'Save Alarm'}
                   </button>
                 </div>
               </form>
@@ -946,13 +980,13 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   return (
                     <div
                       key={alarm.id}
-                      className={`flex min-w-0 items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
+                      className={`flex min-w-0 flex-wrap items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
                         alarm.enabled
                           ? 'border-indigo-100 bg-indigo-50/30 dark:border-indigo-900/50 dark:bg-indigo-950/20'
                           : 'border-slate-200 bg-white opacity-60 dark:border-slate-800 dark:bg-slate-800/40'
                       }`}
                     >
-                      <div className="min-w-0 flex-1 space-y-1">
+                      <div className="min-w-0 flex-[1_1_9rem] space-y-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                           <span className="font-mono text-2xl font-black tracking-tight text-slate-900 dark:text-white tabular-nums">
                             {alarm.time}
@@ -986,8 +1020,17 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-3">
-                        <ProgressiveActions label={`More actions for ${alarm.label}`} className="shrink-0">
+                      <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">
+                        <ProgressiveActions label={`More actions for ${alarm.label}`} className="min-w-0 max-w-full">
+                          <button
+                            type="button"
+                            onClick={() => handleEditAlarm(alarm)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
+                            title="Edit Alarm"
+                            aria-label={`Edit alarm ${alarm.label}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => handlePreview(alarm.ringtone)}

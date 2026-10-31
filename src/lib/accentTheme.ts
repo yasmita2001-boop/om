@@ -4,7 +4,7 @@
  * Accent-family Tailwind palettes are re-pointed to `--color-brand` inside index.css,
  * so existing module controls follow the active theme without changing every call site.
  */
-const DEFAULT_ACCENT = '#b88648';
+const DEFAULT_ACCENT = '#e5c777';
 const LEGACY_DEFAULT_ACCENT = '#6366f1';
 const USER_SELECTED_ACCENT_KEY = 'om_accent_user_selected';
 const HEX_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;

@@ -122,6 +122,25 @@ main .grid > * {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
 }
 
+/* Keep card content and action rows usable when data or viewport widths are tight. */
+.sanctuary-main :is(div, article, section)[class*="rounded-"][class*="border"] {
+  min-width: 0;
+}
+
+.sanctuary-main [class*="rounded-"][class*="border"] > .flex[class*="justify-between"] {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.sanctuary-main [class*="rounded-"][class*="border"] > .flex[class*="justify-between"] > .flex[class*="items-center"] {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.sanctuary-main [class*="rounded-"][class*="border"] :is(p, h1, h2, h3, h4, h5, h6, label, span) {
+  overflow-wrap: break-word;
+}
+
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -1000,6 +1019,16 @@ a, button, input, select, textarea, label, [role="button"], summary {
 
 .progressive-actions[data-open='true'] {
   width: min(18rem, 100%);
+  margin-inline-start: auto;
+}
+
+:is(.flex, .inline-flex):has(> .progressive-actions[data-open='true']) {
+  flex-wrap: wrap;
+}
+
+.note-card:has(.progressive-actions[data-open='true']) {
+  height: auto;
+  min-height: 11rem;
 }
 
 .progressive-actions__trigger {

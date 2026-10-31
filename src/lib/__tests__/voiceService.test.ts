@@ -119,4 +119,30 @@ describe('TextReaderController', () => {
     expect(utterances).toHaveLength(2);
     expect(utterances[1].text).toBe('Second sentence.');
   });
+
+  it('retries a text segment once after a synthesis error', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    controller.speak('First sentence. Second sentence.');
+
+    utterances[0].onerror?.({ error: 'network' } as SpeechSynthesisErrorEvent);
+
+    expect(utterances).toHaveLength(2);
+    expect(utterances[1].text).toBe('First sentence.');
+    warn.mockRestore();
+  });
+
+  it('reports a segment that still fails after retry and continues reading', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onError = vi.fn();
+    controller.speak('First sentence. Second sentence.', { onError });
+    utterances[0].onerror?.({ error: 'network' } as SpeechSynthesisErrorEvent);
+    utterances[1].onerror?.({ error: 'network' } as SpeechSynthesisErrorEvent);
+
+    expect(onError).toHaveBeenCalledWith(
+      'Speech synthesis could not read a text segment (network). Skipping that segment and continuing.'
+    );
+    vi.advanceTimersByTime(100);
+    expect(utterances.at(-1)?.text).toBe('Second sentence.');
+    warn.mockRestore();
+  });
 });

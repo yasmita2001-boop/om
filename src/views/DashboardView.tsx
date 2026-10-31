@@ -541,23 +541,25 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                <ArrowDownRight className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Inflow · all time</span>
+            <div className="min-w-0 rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                <ArrowDownRight className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                <span className="min-w-0">Inflow · all time</span>
               </div>
-              <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                NPR {totalInflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
+                <span className="whitespace-nowrap">NPR</span>{' '}
+                <span className="whitespace-nowrap tabular-nums">{totalInflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
               </div>
             </div>
 
-            <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                <ArrowUpRight className="h-3.5 w-3.5 text-rose-600" />
-                <span>Outflow · all time</span>
+            <div className="min-w-0 rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                <span className="min-w-0">Outflow · all time</span>
               </div>
-              <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                NPR {totalOutflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
+                <span className="whitespace-nowrap">NPR</span>{' '}
+                <span className="whitespace-nowrap tabular-nums">{totalOutflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
               </div>
             </div>
           </div>
@@ -608,45 +610,45 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             </h2>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="mt-4 grid grid-cols-2 xl:grid-cols-4 gap-2">
             <button
               type="button"
               onClick={() => onOpenQuickCapture('task')}
-              className="rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
+              className="min-w-0 rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
             >
               <CheckSquare className="h-4 w-4 text-emerald-500 mb-1" />
               <div className="text-xs font-bold text-slate-900 dark:text-white">Task</div>
-              <div className="text-[10px] text-slate-400">To Planner</div>
+              <div className="break-words text-[10px] text-slate-400">To Planner</div>
             </button>
 
             <button
               type="button"
               onClick={() => onOpenQuickCapture('note')}
-              className="rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
+              className="min-w-0 rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
             >
               <BookOpen className="h-4 w-4 text-amber-500 mb-1" />
               <div className="text-xs font-bold text-slate-900 dark:text-white">Note</div>
-              <div className="text-[10px] text-slate-400">To Notebooks</div>
+              <div className="break-words text-[10px] text-slate-400">To Notebooks</div>
             </button>
 
             <button
               type="button"
               onClick={() => onOpenQuickCapture('journal')}
-              className="rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
+              className="min-w-0 rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
             >
               <Sparkles className="h-4 w-4 text-blue-500 mb-1" />
               <div className="text-xs font-bold text-slate-900 dark:text-white">Journal</div>
-              <div className="text-[10px] text-slate-400">Reflection</div>
+              <div className="break-words text-[10px] text-slate-400">Reflection</div>
             </button>
 
             <button
               type="button"
               onClick={() => onOpenQuickCapture('expense')}
-              className="rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
+              className="min-w-0 rounded-xl border-2 border-dashed border-slate-200 p-3 text-left transition-colors hover:border-amber-400 dark:border-slate-800 dark:hover:border-amber-700 cursor-pointer"
             >
               <DollarSign className="h-4 w-4 text-emerald-600 mb-1" />
               <div className="text-xs font-bold text-slate-900 dark:text-white">Expense</div>
-              <div className="text-[10px] text-slate-400">To Ledger</div>
+              <div className="break-words text-[10px] text-slate-400">To Ledger</div>
             </button>
           </div>
         </section>

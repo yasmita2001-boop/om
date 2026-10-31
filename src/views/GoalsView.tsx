@@ -425,6 +425,11 @@ function GoalLinkedBreakdownWidget({
 
 type GoalLevel = 1 | 2 | 3 | 4 | 5;
 type GoalsTab = 'goals' | 'timeline' | 'strategies' | 'milestones' | 'kpis' | 'missions' | 'mentor';
+type EditableGoalRecord =
+  | { type: 'strategy'; item: Strategy }
+  | { type: 'milestone'; item: Milestone }
+  | { type: 'kpi'; item: KPI }
+  | { type: 'mission'; item: Mission };
 const MAX_GOAL_LEVEL: GoalLevel = 5;
 
 /**
@@ -1037,6 +1042,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const [dailyBurn, setDailyBurn] = useState(String(mentor?.dailyBurn ?? 800));
   const [savingGoal, setSavingGoal] = useState(String(mentor?.savingGoalAmount ?? 500000));
 
+  const [editingRecord, setEditingRecord] = useState<EditableGoalRecord | null>(null);
+
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<{ store: string; id: string; name: string } | null>(null);
 
@@ -1403,6 +1410,88 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       updatedAt: Date.now()
     };
     await storage.put('kpis', updated);
+    onRefresh();
+  };
+
+  const handleSaveEditedRecord = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingRecord) return;
+
+    const { type, item } = editingRecord;
+    if (type !== 'kpi' && !item.title.trim()) {
+      reportError('Enter a title before saving.');
+      return;
+    }
+
+    if (type === 'strategy') {
+      const fresh = await storage.get<Strategy>('strategies', item.id);
+      if (!fresh) {
+        reportError('This strategy no longer exists. Refresh the page and try again.');
+        return;
+      }
+      await storage.put('strategies', {
+        ...fresh,
+        goalId: item.goalId,
+        title: item.title.trim(),
+        action: item.action.trim(),
+        updatedAt: Date.now()
+      });
+    } else if (type === 'milestone') {
+      const fresh = await storage.get<Milestone>('milestones', item.id);
+      if (!fresh) {
+        reportError('This milestone no longer exists. Refresh the page and try again.');
+        return;
+      }
+      await storage.put('milestones', {
+        ...fresh,
+        goalId: item.goalId,
+        title: item.title.trim(),
+        dueDate: item.dueDate || undefined,
+        updatedAt: Date.now()
+      });
+      if (fresh.goalId !== item.goalId) {
+        if (fresh.goalId) await syncGoalProgressFromMilestones(fresh.goalId);
+        if (item.goalId) await syncGoalProgressFromMilestones(item.goalId);
+      }
+    } else if (type === 'kpi') {
+      const target = Number(item.target);
+      const current = Number(item.current);
+      if (!item.name.trim() || !Number.isFinite(target) || target <= 0 || !Number.isFinite(current) || current < 0) {
+        reportError('Enter a KPI name, a target greater than zero, and current progress of zero or more.');
+        return;
+      }
+      const fresh = await storage.get<KPI>('kpis', item.id);
+      if (!fresh) {
+        reportError('This KPI no longer exists. Refresh the page and try again.');
+        return;
+      }
+      await storage.put('kpis', {
+        ...fresh,
+        goalId: item.goalId || undefined,
+        name: item.name.trim(),
+        target,
+        current,
+        unit: item.unit.trim() || 'units',
+        updatedAt: Date.now()
+      });
+    } else {
+      const fresh = await storage.get<Mission>('missions', item.id);
+      if (!fresh) {
+        reportError('This mission no longer exists. Refresh the page and try again.');
+        return;
+      }
+      await storage.put('missions', {
+        ...fresh,
+        title: item.title.trim(),
+        period: item.period.trim(),
+        target: item.target.trim(),
+        action: item.action.trim(),
+        updatedAt: Date.now()
+      });
+    }
+
+    setEditingRecord(null);
+    onSuccess(`${type === 'kpi' ? 'KPI' : type[0].toUpperCase() + type.slice(1)} updated`);
     onRefresh();
   };
 
@@ -2974,6 +3063,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
+                          onClick={() => setEditingRecord({ type: 'strategy', item: s })}
+                          className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
+                          title="Edit strategy"
+                          aria-label={`Edit strategy ${s.title}`}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleToggleStrategyStatus(s)}
                           className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold capitalize cursor-pointer transition-colors ${
                             s.status === 'executed'
@@ -3117,6 +3215,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       </span>
                       <button
                         type="button"
+                        onClick={() => setEditingRecord({ type: 'milestone', item: m })}
+                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
+                        title="Edit milestone"
+                        aria-label={`Edit milestone ${m.title}`}
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setDeleteTarget({ store: 'milestones', id: m.id, name: m.title })}
                         className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
                         title="Delete milestone"
@@ -3237,8 +3344,19 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         </div>
                         <button
                           type="button"
+                          onClick={() => setEditingRecord({ type: 'kpi', item: k })}
+                          className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
+                          title="Edit KPI"
+                          aria-label={`Edit KPI ${k.name}`}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setDeleteTarget({ store: 'kpis', id: k.id, name: k.name })}
                           className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 p-1"
+                          title="Delete KPI"
+                          aria-label={`Delete KPI ${k.name}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -3368,13 +3486,26 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         <div className="font-bold text-slate-900 dark:text-white">{m.title}</div>
                         <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">{m.period}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteTarget({ store: 'missions', id: m.id, name: m.title })}
-                        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 p-1"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingRecord({ type: 'mission', item: m })}
+                          className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
+                          title="Edit mission"
+                          aria-label={`Edit mission ${m.title}`}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget({ store: 'missions', id: m.id, name: m.title })}
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 p-1"
+                          title="Delete mission"
+                          aria-label={`Delete mission ${m.title}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                     {m.target && (
                       <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
@@ -3681,6 +3812,270 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {editingRecord && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setEditingRecord(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-goal-record-title"
+            className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+          >
+            <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+              <h2 id="edit-goal-record-title" className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                <Edit2 className="h-4 w-4 text-indigo-600" />
+                Edit {editingRecord.type === 'kpi' ? 'KPI' : editingRecord.type[0].toUpperCase() + editingRecord.type.slice(1)}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setEditingRecord(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
+                aria-label="Close edit form"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <form onSubmit={handleSaveEditedRecord} className="max-h-[80vh] space-y-4 overflow-y-auto p-5">
+              {editingRecord.type === 'strategy' && (
+                <>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Strategy title
+                    <input
+                      autoFocus
+                      required
+                      value={editingRecord.item.title}
+                      onChange={event => setEditingRecord({
+                        type: 'strategy',
+                        item: { ...editingRecord.item, title: event.target.value }
+                      })}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Linked goal
+                    <select
+                      value={editingRecord.item.goalId}
+                      onChange={event => setEditingRecord({
+                        type: 'strategy',
+                        item: { ...editingRecord.item, goalId: event.target.value }
+                      })}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    >
+                      {!goals.some(goal => goal.id === editingRecord.item.goalId) && (
+                        <option value={editingRecord.item.goalId}>Current goal</option>
+                      )}
+                      {goals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Action plan
+                    <textarea
+                      rows={4}
+                      value={editingRecord.item.action}
+                      onChange={event => setEditingRecord({
+                        type: 'strategy',
+                        item: { ...editingRecord.item, action: event.target.value }
+                      })}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </label>
+                </>
+              )}
+              {editingRecord.type === 'milestone' && (
+                <>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Milestone title
+                    <input
+                      autoFocus
+                      required
+                      value={editingRecord.item.title}
+                      onChange={event => setEditingRecord({
+                        type: 'milestone',
+                        item: { ...editingRecord.item, title: event.target.value }
+                      })}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Linked goal
+                    <select
+                      value={editingRecord.item.goalId}
+                      onChange={event => setEditingRecord({
+                        type: 'milestone',
+                        item: { ...editingRecord.item, goalId: event.target.value }
+                      })}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    >
+                      {!goals.some(goal => goal.id === editingRecord.item.goalId) && (
+                        <option value={editingRecord.item.goalId}>Current goal</option>
+                      )}
+                      {goals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Due date
+                    <ThemedDateTimeInput
+                      type="date"
+                      value={editingRecord.item.dueDate || ''}
+                      onChange={event => setEditingRecord({
+                        type: 'milestone',
+                        item: { ...editingRecord.item, dueDate: event.target.value }
+                      })}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </label>
+                </>
+              )}
+              {editingRecord.type === 'kpi' && (
+                <>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    KPI name
+                    <input
+                      autoFocus
+                      required
+                      value={editingRecord.item.name}
+                      onChange={event => setEditingRecord({
+                        type: 'kpi',
+                        item: { ...editingRecord.item, name: event.target.value }
+                      })}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Associated goal
+                    <select
+                      value={editingRecord.item.goalId || ''}
+                      onChange={event => setEditingRecord({
+                        type: 'kpi',
+                        item: { ...editingRecord.item, goalId: event.target.value || undefined }
+                      })}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="">None (Global Metric)</option>
+                      {goals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
+                    </select>
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Target
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        required
+                        value={editingRecord.item.target}
+                        onChange={event => setEditingRecord({
+                          type: 'kpi',
+                          item: { ...editingRecord.item, target: event.target.valueAsNumber }
+                        })}
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-2 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Current
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={editingRecord.item.current}
+                        onChange={event => setEditingRecord({
+                          type: 'kpi',
+                          item: { ...editingRecord.item, current: event.target.valueAsNumber }
+                        })}
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-2 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Unit
+                      <input
+                        value={editingRecord.item.unit}
+                        onChange={event => setEditingRecord({
+                          type: 'kpi',
+                          item: { ...editingRecord.item, unit: event.target.value }
+                        })}
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
+              {editingRecord.type === 'mission' && (
+                <>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Mission title
+                    <input
+                      autoFocus
+                      required
+                      value={editingRecord.item.title}
+                      onChange={event => setEditingRecord({
+                        type: 'mission',
+                        item: { ...editingRecord.item, title: event.target.value }
+                      })}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Period
+                      <input
+                        value={editingRecord.item.period}
+                        onChange={event => setEditingRecord({
+                          type: 'mission',
+                          item: { ...editingRecord.item, period: event.target.value }
+                        })}
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Key target
+                      <input
+                        value={editingRecord.item.target}
+                        onChange={event => setEditingRecord({
+                          type: 'mission',
+                          item: { ...editingRecord.item, target: event.target.value }
+                        })}
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </label>
+                  </div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Action plan
+                    <textarea
+                      rows={3}
+                      value={editingRecord.item.action}
+                      onChange={event => setEditingRecord({
+                        type: 'mission',
+                        item: { ...editingRecord.item, action: event.target.value }
+                      })}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </label>
+                </>
+              )}
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingRecord(null)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
+                >
+                  Save changes
+                </button>
+              </div>
+            </form>
+          </section>
         </div>
       )}
 

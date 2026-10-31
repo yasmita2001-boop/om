@@ -1842,8 +1842,8 @@ export async function ensureDefaultProfiles(): Promise<AppState> {
         email: 'master@omlifeos.local',
         provider: 'local'
       },
-      themeMode: 'light',
-      accentColor: '#b88648',
+      themeMode: 'dark',
+      accentColor: '#e5c777',
       notificationsEnabled: true,
       noteCategories: ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
       calcFavorites: ['EMI / Loan', 'SIP / Investment', 'Date Difference']

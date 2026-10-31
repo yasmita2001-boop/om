@@ -504,13 +504,13 @@ export const NotesView: React.FC<NotesViewProps> = ({
       <div
         key={n.id}
         onClick={() => setViewingNote(n)}
-        className={`group progressive-row relative flex h-44 flex-col justify-between rounded-2xl border p-4 shadow-xs transition-all card-hover cursor-pointer overflow-hidden ${theme.cardClass}`}
+        className={`note-card group progressive-row relative flex h-44 flex-col justify-between rounded-2xl border p-4 shadow-xs transition-all card-hover cursor-pointer overflow-hidden ${theme.cardClass}`}
       >
         <div className={`absolute top-0 left-0 right-0 h-1 ${theme.spineClass}`} />
 
         <div className="min-h-0 overflow-hidden">
           <div className="flex items-start justify-between gap-2 pt-0.5">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-[1_1_9rem]">
               <div className="flex items-center gap-1.5">
                 <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
                   {n.title}
@@ -533,7 +533,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               </div>
             </div>
 
-            <ProgressiveActions label={`More actions for ${n.title}`} className="shrink-0">
+            <ProgressiveActions label={`More actions for ${n.title}`} className="min-w-0 max-w-full">
               <button
                 type="button"
                 onClick={e => handleCopyNote(n, e)}

@@ -121,14 +121,14 @@ export const APPEARANCE_PRESETS = [
 ] as const;
 
 export const DEFAULT_APPEARANCE: AppearancePreferences = {
-  presetId: 'sanctuary',
+  presetId: 'private-cosmos',
   colorMode: 'dark',
-  accentColor: '#b88648',
+  accentColor: '#e5c777',
   customThemeBackgroundColor: '#eee5d9',
   customThemeSurfaceColor: '#ffffff',
   customThemeTextColor: '#1e293b',
   customThemeBorderColor: '#d1d5db',
-  backgroundId: 'sanctuary',
+  backgroundId: 'private-cosmos',
   backgroundImage: '',
   backgroundIsVideo: false,
   transparentBackground: false,
@@ -139,9 +139,9 @@ export const DEFAULT_APPEARANCE: AppearancePreferences = {
   backgroundContrast: 100,
   textClarity: 0,
   positionX: 50,
-  positionY: 48,
+  positionY: 50,
   zoom: 100,
-  overlay: 22,
+  overlay: 8,
   blur: 0
 };
 
@@ -157,6 +157,27 @@ const backgroundObjectUrls = new Map<string, string>();
 
 const isStoredBackgroundAsset = (value: string): boolean =>
   /^idb-background:[a-z0-9-]+$/i.test(value);
+
+function isLegacyDefaultAppearance(value: Partial<AppearancePreferences>): boolean {
+  return value.presetId === 'sanctuary'
+    && value.backgroundId === 'sanctuary'
+    && (value.colorMode === 'light' || value.colorMode === 'dark')
+    && value.accentColor?.toLowerCase() === '#b88648'
+    && value.backgroundImage === ''
+    && value.backgroundIsVideo === false
+    && value.transparentBackground === false
+    && value.foregroundTransparency === 0
+    && value.foregroundBrightness === 100
+    && value.foregroundContrast === 100
+    && value.backgroundBrightness === 100
+    && value.backgroundContrast === 100
+    && value.textClarity === 0
+    && value.positionX === 50
+    && value.positionY === 48
+    && value.zoom === 100
+    && value.overlay === 22
+    && value.blur === 0;
+}
 
 function openBackgroundDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -175,11 +196,12 @@ const clamp = (value: unknown, min: number, max: number, fallback: number): numb
 };
 
 export function normalizeAppearance(value?: Partial<AppearancePreferences> | null): AppearancePreferences {
+  if (value && isLegacyDefaultAppearance(value)) value = DEFAULT_APPEARANCE;
   const selectedPreset = APPEARANCE_PRESETS.find(item => item.id === value?.presetId);
   const presetId = value?.presetId === 'custom'
     ? 'custom'
-    : selectedPreset?.id || APPEARANCE_PRESETS[0].id;
-  const preset = selectedPreset || APPEARANCE_PRESETS[0];
+    : selectedPreset?.id || DEFAULT_APPEARANCE.presetId;
+  const preset = selectedPreset || APPEARANCE_PRESETS.find(item => item.id === DEFAULT_APPEARANCE.presetId)!;
   const colorMode = value?.colorMode === 'light' || value?.colorMode === 'dark' || value?.colorMode === 'system'
     ? value.colorMode
     : DEFAULT_APPEARANCE.colorMode;

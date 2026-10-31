@@ -4698,3 +4698,51 @@ html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary
   box-shadow: 0 14px 32px color-mix(in srgb, var(--om-wallpaper-action-start) 34%, transparent),
     inset 0 1px rgb(255 255 255 / 48%);
 }
+
+.drive-confirm-overlay {
+  box-sizing: border-box;
+  padding: clamp(0.75rem, 4vw, 1.5rem) !important;
+}
+
+.drive-confirm-card {
+  box-sizing: border-box;
+  width: min(100%, 28rem) !important;
+  max-height: calc(100dvh - 1.5rem) !important;
+  margin: auto;
+  padding: clamp(1rem, 4vw, 1.5rem) !important;
+  overflow-y: auto;
+}
+
+.drive-confirm-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem !important;
+  width: 100%;
+}
+
+.drive-confirm-actions .drive-confirm-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 2.5rem !important;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.625rem !important;
+  white-space: nowrap;
+}
+
+@media (min-width: 480px) {
+  .drive-confirm-actions {
+    display: flex !important;
+    justify-content: flex-end;
+  }
+
+  .drive-confirm-actions .drive-confirm-action {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 7rem !important;
+    padding-right: 1rem !important;
+    padding-left: 1rem !important;
+  }
+}

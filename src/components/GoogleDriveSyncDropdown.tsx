@@ -671,30 +671,34 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
               </div>
               <div className="min-w-0">
                 <h3 id="restore-confirm-title" className="text-base font-bold leading-snug text-slate-900 dark:text-white">
-                  Restore from Google Drive?
+                  Restore backup?
                 </h3>
                 {backupInfo?.modifiedTime && (
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Backup saved {new Date(backupInfo.modifiedTime).toLocaleDateString()}
+                    Google Drive backup · {new Date(backupInfo.modifiedTime).toLocaleDateString()}
                   </p>
                 )}
               </div>
             </div>
 
+            <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              Unsynced workspace changes may be overwritten.
+            </p>
+
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setShowRestoreConfirm(false)}
-                className="min-h-11 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:w-auto sm:min-w-28 cursor-pointer"
+                className="min-h-11 w-full min-w-0 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:flex-1 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmRestore}
-                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-indigo-500 sm:w-auto sm:min-w-36 cursor-pointer"
+                className="flex min-h-10 w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-indigo-500 sm:flex-1 cursor-pointer"
               >
-                <span>Restore backup</span>
+                <span>Backup</span>
               </button>
             </div>
           </div>

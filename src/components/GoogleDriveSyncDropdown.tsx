@@ -658,9 +658,9 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
 
       {/* RESTORE CONFIRMATION MODAL */}
       {showRestoreConfirm && (
-        <div className="sanctuary-drive-confirm-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-xs sm:p-4">
+        <div className="sanctuary-drive-confirm-overlay drive-confirm-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-xs sm:p-4">
           <div
-            className="sanctuary-glass-dialog my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:max-h-[calc(100dvh-2rem)] sm:p-6 animate-in fade-in zoom-in-95 duration-150"
+            className="sanctuary-glass-dialog drive-confirm-card my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:max-h-[calc(100dvh-2rem)] sm:p-6 animate-in fade-in zoom-in-95 duration-150"
             role="dialog"
             aria-modal="true"
             aria-labelledby="restore-confirm-title"
@@ -674,29 +674,26 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
                   Restore backup?
                 </h3>
                 {backupInfo?.modifiedTime && (
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Google Drive backup · {new Date(backupInfo.modifiedTime).toLocaleDateString()}
+                  <p className="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">
+                    Saved · {new Date(backupInfo.modifiedTime).toLocaleDateString()}
                   </p>
                 )}
               </div>
             </div>
 
-            <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-              Unsynced workspace changes may be overwritten.
-            </p>
-
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <div className="drive-confirm-actions mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setShowRestoreConfirm(false)}
-                className="min-h-11 w-full min-w-0 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:flex-1 cursor-pointer"
+                className="drive-confirm-action min-h-10 w-full min-w-0 whitespace-nowrap rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:flex-1 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmRestore}
-                className="flex min-h-10 w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-indigo-500 sm:flex-1 cursor-pointer"
+                aria-label="Restore backup from Google Drive"
+                className="drive-confirm-action flex min-h-10 w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-indigo-500 sm:flex-1 cursor-pointer"
               >
                 <span>Backup</span>
               </button>

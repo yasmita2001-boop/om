@@ -12,7 +12,7 @@ npm run build:local-test # writes dist-local-test/om-lifeos-local-test.html, ope
 npm run typecheck      # TypeScript check
 ```
 
-The Golden Sanctuary is the default appearance for new workspaces. Its original, locally bundled environment illustration remains available if WebGL is unavailable; the Three.js scene is lazy-loaded and can be disabled from **Actions**. Reduced-motion preferences disable scene animation.
+Private Cosmos is the default appearance for new workspaces. Sanctuary remains available as a coordinated theme. Its original, locally bundled environment illustration remains available if WebGL is unavailable; the Three.js scene is lazy-loaded and can be disabled from **Actions**. Reduced-motion preferences disable scene animation.
 
 Optional Google Drive backup uses Firebase Auth; edit `firebase-applet-config.json` for your own project and add your domain under Firebase -> Authentication -> Authorized domains.
 

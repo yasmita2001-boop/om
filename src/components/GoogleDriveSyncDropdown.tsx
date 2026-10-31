@@ -658,42 +658,43 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
 
       {/* RESTORE CONFIRMATION MODAL */}
       {showRestoreConfirm && (
-        <div className="sanctuary-drive-confirm-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="sanctuary-glass-dialog w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 shrink-0">
-                <CloudDownload className="h-5 w-5" />
+        <div className="sanctuary-drive-confirm-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-xs sm:p-4">
+          <div
+            className="sanctuary-glass-dialog my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:max-h-[calc(100dvh-2rem)] sm:p-6 animate-in fade-in zoom-in-95 duration-150"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restore-confirm-title"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
+                <CloudDownload className="h-5 w-5" aria-hidden="true" />
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              <div className="min-w-0">
+                <h3 id="restore-confirm-title" className="text-base font-bold leading-snug text-slate-900 dark:text-white">
                   Restore from Google Drive?
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                  This will restore your workspace with the backup stored in your Google Drive
-                  {backupInfo?.modifiedTime ? ` (saved on ${new Date(backupInfo.modifiedTime).toLocaleDateString()})` : ''}.
-                  Any un-synced local changes might be replaced.
-                </p>
+                {backupInfo?.modifiedTime && (
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Backup saved {new Date(backupInfo.modifiedTime).toLocaleDateString()}
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-              ✓ Active records will be restored cleanly. Any soft-deleted ghost items remain safely excluded.
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setShowRestoreConfirm(false)}
-                className="flex-1 rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="min-h-11 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:w-auto sm:min-w-28 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmRestore}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-2 text-xs font-semibold text-white hover:bg-indigo-500 shadow-2xs transition-colors cursor-pointer"
+                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-indigo-500 sm:w-auto sm:min-w-36 cursor-pointer"
               >
-                <span>Confirm Restore</span>
+                <span>Restore backup</span>
               </button>
             </div>
           </div>

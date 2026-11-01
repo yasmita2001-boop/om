@@ -59,6 +59,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
   const [attachmentCount, setAttachmentCount] = useState<number>(0);
   const [mediaBytes, setMediaBytes] = useState<number>(0);
   const [totalBytes, setTotalBytes] = useState<number>(0);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
 
   // Import & Validation State
   const [validating, setValidating] = useState<boolean>(false);
@@ -87,6 +88,8 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
       setActiveRecordsCount(canonical.totalActiveCount);
     } catch (err: any) {
       console.warn('[UniversalDataManager Stats]', err);
+    } finally {
+      setIsLoadingStats(false);
     }
   };
 
@@ -256,7 +259,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
               </span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              {profileName} • {activeRecordsCount} records • {formatBytes(totalBytes)}
+                {profileName} • {activeRecordsCount} data records • {formatBytes(totalBytes)}
             </p>
           </div>
         </div>
@@ -316,7 +319,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
             <button
               type="button"
               onClick={() => handleExport('omlifeos')}
-              disabled={exportingFormat !== null}
+              disabled={exportingFormat !== null || isLoadingStats}
               className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 disabled:opacity-50 cursor-pointer shrink-0 transition-colors"
             >
               {exportingFormat === 'omlifeos' ? (

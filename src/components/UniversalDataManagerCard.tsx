@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Download, Upload, RefreshCw, CheckCircle2,
   AlertTriangle, ChevronDown, ChevronUp,
-  FileText, FileCode, Globe, ShieldCheck,
+  FileText, FileCode, Globe, ShieldCheck, FolderOpen,
   ArrowRight, Database, Calendar, Check
 } from 'lucide-react';
 import {
@@ -15,6 +15,16 @@ import {
 import { storage } from '../lib/storage';
 import { formatBytes } from '../lib/thumbnailService';
 import { ConfirmModal } from './ConfirmModal';
+import {
+  abortBackupWritable,
+  BackupDirectoryHandle,
+  chooseBackupDirectory,
+  createBackupWritable,
+  getSavedBackupDirectory,
+  isBackupFolderSelectionSupported,
+  saveBackupDirectory,
+  writeBackupToWritable
+} from '../lib/backupDestination';
 
 interface UniversalDataManagerCardProps {
   profileId: string;
@@ -34,11 +44,31 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
   // Export State
   const [includeFullMedia, setIncludeFullMedia] = useState<boolean>(true);
   const [exportingFormat, setExportingFormat] = useState<UniversalExportFormat | null>(null);
+  const [backupDirectory, setBackupDirectory] = useState<BackupDirectoryHandle | null>(null);
+  const [isLoadingBackupDirectory, setIsLoadingBackupDirectory] = useState(true);
   const [dateFilterMode, setDateFilterMode] = useState<'all' | 'this_month' | 'last_30_days' | 'custom'>('all');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [isDateDropdownOpen, setIsDateDropdownOpen] = useState<boolean>(false);
   const dateFilterDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    getSavedBackupDirectory()
+      .then(directory => {
+        if (active) setBackupDirectory(directory);
+      })
+      .catch(error => {
+        console.warn('[Backup destination]', error);
+        onError?.(`Could not load the saved backup folder: ${error.message || 'Unknown error'}`);
+      })
+      .finally(() => {
+        if (active) setIsLoadingBackupDirectory(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -102,32 +132,75 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
   }, [profileId]);
 
   // Execute Export
-  const handleExport = async (format: UniversalExportFormat) => {
+  const handleExport = async (format: UniversalExportFormat, saveToFolder = false) => {
     setExportingFormat(format);
+    let writable: Awaited<ReturnType<typeof createBackupWritable>> | null = null;
     try {
+      let destination = format === 'omlifeos' && saveToFolder ? backupDirectory : null;
+      if (format === 'omlifeos' && saveToFolder) {
+        if (!isBackupFolderSelectionSupported()) {
+          throw new Error('This PWA browser does not support saving to a selected folder. Use “Download .omlifeos” instead.');
+        }
+        if (!destination) {
+          destination = await chooseBackupDirectory();
+          if (!destination) return;
+          setBackupDirectory(destination);
+        }
+        writable = await createBackupWritable(destination);
+        await saveBackupDirectory(destination);
+      }
+
       const formatDef = SUPPORTED_EXPORT_FORMATS.find(f => f.id === format);
       const res = await universalDataManager.exportUniversalData(format, {
         profileId,
         profileName,
         includeFullMedia,
         customTitle: `${profileName} LifeOS`,
+        autoDownload: !saveToFolder,
         dateRangeFilter: {
           mode: dateFilterMode,
           startDate: customStartDate,
           endDate: customEndDate
         }
       });
+      if (writable) {
+        await writeBackupToWritable(writable, res.blob);
+        writable = null;
+      }
 
       const mediaNotice = format === 'omlifeos' && !includeFullMedia ? ' (Without media)' : '';
       const scopeNotice = dateFilterMode !== 'all'
         ? ` [${dateFilterMode === 'this_month' ? 'This Month' : dateFilterMode === 'last_30_days' ? 'Last 30 Days' : 'Custom Range'}]`
         : '';
-      onSuccess?.(`✓ ${formatDef?.name || format} downloaded successfully${mediaNotice}${scopeNotice}! (${formatBytes(res.sizeBytes)})`);
+      const destinationNotice = destination
+        ? ` saved to ${destination.name}/Om-LifeOS-Backup.omlifeos`
+        : ' downloaded successfully';
+      onSuccess?.(`✓ ${formatDef?.name || format}${destinationNotice}${mediaNotice}${scopeNotice}! (${formatBytes(res.sizeBytes)})`);
       await loadStats();
     } catch (err: any) {
+      if (writable) await abortBackupWritable(writable);
+      if (err?.name === 'AbortError') return;
       onError?.(`Export failed: ${err.message || 'Unknown export error'}`);
     } finally {
       setExportingFormat(null);
+    }
+  };
+
+  const handleChooseBackupDirectory = async () => {
+    try {
+      const directory = await chooseBackupDirectory();
+      if (!directory) {
+        onError?.('No folder was selected. Choose a folder to save backups there.');
+        return;
+      }
+      setBackupDirectory(directory);
+      await saveBackupDirectory(directory);
+      onSuccess?.(`Backup folder set to "${directory.name}". Future backups update Om-LifeOS-Backup.omlifeos in this folder.`);
+    } catch (error: any) {
+      const message = error?.name === 'AbortError'
+        ? 'Folder selection was cancelled or blocked; no backup folder was selected.'
+        : error?.message || 'Unknown error';
+      onError?.(`Could not select backup folder: ${message}`);
     }
   };
 
@@ -299,7 +372,19 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                   .omlifeos
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 font-medium shrink-0">Backup</span>
+              {isBackupFolderSelectionSupported() ? (
+                <button
+                  type="button"
+                  onClick={() => handleExport('omlifeos', true)}
+                  disabled={exportingFormat !== null || isLoadingBackupDirectory || isLoadingStats}
+                  title="Save or update the backup file in your selected folder"
+                  className="text-[10px] text-slate-400 font-medium shrink-0 hover:text-amber-700 dark:hover:text-amber-300 disabled:opacity-50 cursor-pointer transition-colors"
+                >
+                  {exportingFormat === 'omlifeos' ? 'Backing up...' : 'Backup'}
+                </button>
+              ) : (
+                <span className="text-[10px] text-slate-400 font-medium shrink-0">Backup</span>
+              )}
             </div>
           </div>
 
@@ -316,25 +401,39 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
               </span>
             </label>
 
-            <button
-              type="button"
-              onClick={() => handleExport('omlifeos')}
-              disabled={exportingFormat !== null || isLoadingStats}
-              className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 disabled:opacity-50 cursor-pointer shrink-0 transition-colors"
-            >
-              {exportingFormat === 'omlifeos' ? (
-                <>
-                  <RefreshCw className="h-3 w-3 animate-spin" />
-                  <span>Backing up...</span>
-                </>
-              ) : (
-                <>
-                  <Download className="h-3 w-3" />
-                  <span>Download .omlifeos</span>
-                </>
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              {isBackupFolderSelectionSupported() && (
+                <button
+                  type="button"
+                  onClick={handleChooseBackupDirectory}
+                  disabled={exportingFormat !== null || isLoadingBackupDirectory}
+                  title={backupDirectory ? `Selected folder: ${backupDirectory.name}. Click to change.` : 'Choose where backup files are saved'}
+                  aria-label={backupDirectory ? `Backup folder: ${backupDirectory.name}. Click to change folder.` : 'Choose backup folder'}
+                  className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white disabled:opacity-50 cursor-pointer transition-colors"
+                >
+                  <FolderOpen className="h-3 w-3" />
+                  <span className="max-w-40 truncate">{backupDirectory ? backupDirectory.name : 'Choose folder'}</span>
+                </button>
               )}
-            </button>
+              <button
+                type="button"
+                onClick={() => handleExport('omlifeos')}
+                disabled={exportingFormat !== null}
+                className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 disabled:opacity-50 cursor-pointer shrink-0 transition-colors"
+              >
+                <Download className="h-3 w-3" />
+                <span>Download .omlifeos</span>
+              </button>
+            </div>
           </div>
+          {backupDirectory && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md border border-amber-300/60 bg-amber-50/70 px-2.5 py-1.5 text-xs dark:border-amber-800/60 dark:bg-amber-950/20">
+              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
+              <span className="font-semibold text-slate-700 dark:text-slate-200">Selected folder:</span>
+              <span className="min-w-0 break-all font-medium text-amber-800 dark:text-amber-200">{backupDirectory.name}</span>
+              <span className="text-slate-500 dark:text-slate-400">· Backup updates Om-LifeOS-Backup.omlifeos here.</span>
+            </div>
+          )}
         </div>
 
         {/* Right: Import & Restore Backup */}

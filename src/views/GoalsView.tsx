@@ -1808,7 +1808,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         <div className="space-y-6">
           <div className="flex flex-col gap-6 w-full">
             {/* Add Goal Form (Single Column - Upper) */}
-            {goalFormOpen && <div ref={goalFormRef} className="w-full flex flex-col">
+            {goalFormOpen && <div ref={goalFormRef} className="goal-form-container w-full flex flex-col">
               <div className="flex-1  border-slate-200/80 bg-white p-4 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
                 <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
                   <div className="flex min-w-0 flex-1 items-start gap-2">

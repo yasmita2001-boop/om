@@ -2171,6 +2171,11 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   opacity: 0.5;
 }
 
+.sanctuary-main .goal-form-container:has(.om-datetime-popover) {
+  position: relative;
+  z-index: 20;
+}
+
 .om-datetime-popover {
   position: absolute;
   top: calc(100% + 0.35rem);

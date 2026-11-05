@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from '../lib/currencyDisplay';
 import { ThemedDateTimeInput } from './ThemedDateTimeInput';
 import React, { useState } from 'react';
 import { X, CheckSquare, FileText, BookOpen, DollarSign, Target, Bell, User, Volume2 } from 'lucide-react';
@@ -30,6 +31,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
   const [category, setCategory] = useState('');
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const [date, setDate] = useState(() => getLocalDateString());
+  const [taskHasDueDate, setTaskHasDueDate] = useState(false);
   const [reminderTime, setReminderTime] = useState(() => {
     const d = new Date(Date.now() + 30 * 60 * 1000);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -39,15 +41,30 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
   const [attachments, setAttachments] = useState<StoredAttachmentMeta[]>([]);
   const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [formError, setFormError] = useState('');
 
   React.useEffect(() => {
     if (isOpen) {
       setActiveType(initialType);
+      setTitle('');
+      setDetails('');
+      setAmount('');
+      setCategory('');
+      setPriority('Medium');
+      setDate(getLocalDateString());
+      setTaskHasDueDate(false);
+      const nextReminder = new Date(Date.now() + 30 * 60 * 1000);
+      setReminderTime(`${String(nextReminder.getHours()).padStart(2, '0')}:${String(nextReminder.getMinutes()).padStart(2, '0')}`);
+      setAlarmEnabled(true);
+      setReminderRingtone(alarmAudio.getDefaultRingtoneId());
       setAttachments([]);
+      setFormError('');
       storage.getAll<FinanceAccount>('financeAccounts').then(accts => {
         setFinanceAccounts(accts || []);
         if (accts && accts.length > 0) {
           setSelectedAccountId(accts[0].id);
+        } else {
+          setSelectedAccountId('');
         }
       });
     }
@@ -68,6 +85,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
     e.preventDefault();
     if (!title.trim() && activeType !== 'expense') return;
 
+    setFormError('');
     const now = Date.now();
     try {
       if (activeType === 'task') {
@@ -77,8 +95,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           description: details.trim() || undefined,
           domain: 'personal',
           priority,
-          dueAt: date,
-          date,
+          ...(taskHasDueDate && date ? { dueAt: date, date } : {}),
           done: false,
           status: 'open',
           createdAt: now,
@@ -117,7 +134,10 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
         onSuccess('Journal entry captured');
       } else if (activeType === 'expense') {
         const amt = Number(amount);
-        if (!amt || amt <= 0) return;
+        if (!Number.isFinite(amt) || amt <= 0) {
+          setFormError('Enter an expense amount greater than zero.');
+          return;
+        }
 
         let targetAcct = financeAccounts.find(a => a.id === selectedAccountId) || financeAccounts[0];
         const ops: Array<{ storeName: string; item: any }> = [];
@@ -158,7 +178,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
         });
 
         await storage.atomicPutMany(ops);
-        onSuccess(`Expense of ₹${amt.toLocaleString('en-IN')} logged & deducted from ${targetAcct?.name || 'account'}`);
+        onSuccess(`Expense of ${getCurrencySymbol()} ${amt.toLocaleString('en-IN')} logged & deducted from ${targetAcct?.name || 'account'}`);
       } else if (activeType === 'goal') {
         const newGoal: Goal = {
           id: generateUUID(),
@@ -205,6 +225,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
       setAmount('');
     } catch (err: any) {
       console.error('Quick capture failed', err);
+      setFormError(err instanceof Error ? err.message : 'Unable to save this item. Please try again.');
     }
   };
 
@@ -256,6 +277,12 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           ))}
         </div>
 
+        {formError && (
+          <p role="alert" className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+            {formError}
+          </p>
+        )}
+
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
           <div>
@@ -285,7 +312,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Amount (₹)
+                    Amount ({getCurrencySymbol()})
                   </label>
                   <input
                     type="number"
@@ -323,7 +350,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                   >
                     {financeAccounts.map(a => (
                       <option key={a.id} value={a.id}>
-                        {a.name} (Balance: ₹{Number(a.balance).toLocaleString('en-IN')})
+                        {a.name} (Balance: {getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')})
                       </option>
                     ))}
                   </select>
@@ -333,31 +360,45 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           )}
 
           {activeType === 'task' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Priority
-                </label>
-                <select
-                  value={priority}
-                  onChange={e => setPriority(e.target.value as any)}
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                >
-                  <option value="High">High Priority</option>
-                  <option value="Medium">Medium Priority</option>
-                  <option value="Low">Low Priority</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Due Date
-                </label>
-                <ThemedDateTimeInput
-                  type="date"
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            <div className="space-y-3">
+              <label className="flex items-start gap-2 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={taskHasDueDate}
+                  onChange={e => setTaskHasDueDate(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
+                <span>Set a due date <span className="text-slate-400">· leave unchecked to add this task to Inbox</span></span>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Priority
+                  </label>
+                  <select
+                    value={priority}
+                    onChange={e => setPriority(e.target.value as any)}
+                    className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="High">High Priority</option>
+                    <option value="Medium">Medium Priority</option>
+                    <option value="Low">Low Priority</option>
+                  </select>
+                </div>
+                {taskHasDueDate && (
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                      Due Date
+                    </label>
+                    <ThemedDateTimeInput
+                      type="date"
+                      required
+                      value={date}
+                      onChange={e => setDate(e.target.value)}
+                      className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}

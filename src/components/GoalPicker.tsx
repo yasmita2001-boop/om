@@ -17,6 +17,7 @@ interface GoalPickerProps {
   onChange: (goalId: string) => void;
   placeholder?: string;
   className?: string;
+  flatFilters?: boolean;
 }
 
 export const GoalPicker: React.FC<GoalPickerProps> = ({
@@ -24,7 +25,8 @@ export const GoalPicker: React.FC<GoalPickerProps> = ({
   value,
   onChange,
   placeholder = '-- Choose Goal --',
-  className = ''
+  className = '',
+  flatFilters = false
 }) => {
   const [activeLevel, setActiveLevel] = useState<number | 'all'>('all');
   const sortedGoals = useMemo(() => sortGoalsHierarchically(goals), [goals]);
@@ -46,7 +48,7 @@ export const GoalPicker: React.FC<GoalPickerProps> = ({
           type="button"
           aria-pressed={activeLevel === 'all'}
           onClick={() => setActiveLevel('all')}
-          className={`rounded-full border px-2 py-1 text-[10px] font-semibold transition-colors cursor-pointer ${
+          className={flatFilters ? 'task-genesis-goal-level-tab' : `rounded-full border px-2 py-1 text-[10px] font-semibold transition-colors cursor-pointer ${
             activeLevel === 'all'
               ? 'border-indigo-500 bg-indigo-600 text-white'
               : 'border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:bg-slate-900 dark:text-indigo-300'
@@ -60,7 +62,7 @@ export const GoalPicker: React.FC<GoalPickerProps> = ({
             type="button"
             aria-pressed={activeLevel === level}
             onClick={() => setActiveLevel(level)}
-            className={`rounded-full border px-2 py-1 text-[10px] font-semibold transition-colors cursor-pointer ${
+            className={flatFilters ? 'task-genesis-goal-level-tab' : `rounded-full border px-2 py-1 text-[10px] font-semibold transition-colors cursor-pointer ${
               activeLevel === level
                 ? 'border-indigo-500 bg-indigo-600 text-white'
                 : 'border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:bg-slate-900 dark:text-indigo-300'

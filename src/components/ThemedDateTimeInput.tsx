@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
 
 type DateTimeInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> & {
@@ -36,12 +36,15 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const isDate = type === 'date';
   const currentValue = String(value ?? defaultValue ?? '');
   const parsedDate = isDate ? parseDate(currentValue) : null;
   const [isOpen, setIsOpen] = useState(false);
   const [opensAbove, setOpensAbove] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
   const [popoverOffsetX, setPopoverOffsetX] = useState(0);
+  const [popoverMaxHeight, setPopoverMaxHeight] = useState<number | undefined>();
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const date = parsedDate || new Date();
     return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -117,15 +120,42 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
     return () => window.removeEventListener('resize', alignPopoverToViewport);
   }, [isOpen, isDate]);
 
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+
+    const positionPopover = () => {
+      const bounds = wrapperRef.current?.getBoundingClientRect();
+      const popover = popoverRef.current;
+      if (!bounds || !popover) return;
+
+      const headerBottom = document.querySelector<HTMLElement>('.command-bar')?.getBoundingClientRect().bottom ?? 0;
+      const safeTop = Math.max(8, headerBottom + 8);
+      const spaceAbove = Math.max(0, bounds.top - safeTop - 8);
+      const spaceBelow = Math.max(0, window.innerHeight - bounds.bottom - 8);
+      const requiredHeight = popover.scrollHeight;
+      const openAbove = spaceBelow < requiredHeight && spaceAbove > spaceBelow;
+      const availableHeight = openAbove ? spaceAbove : spaceBelow;
+
+      setOpensAbove(openAbove);
+      setPopoverMaxHeight(Math.max(120, availableHeight));
+      setIsCompact(isDate && requiredHeight > availableHeight);
+    };
+
+    positionPopover();
+    window.addEventListener('resize', positionPopover);
+    window.addEventListener('scroll', positionPopover, true);
+    return () => {
+      window.removeEventListener('resize', positionPopover);
+      window.removeEventListener('scroll', positionPopover, true);
+    };
+  }, [isOpen, isDate]);
+
   const togglePicker = (event?: React.MouseEvent | React.KeyboardEvent) => {
     event?.preventDefault();
     if (isOpen) {
       setIsOpen(false);
       return;
     }
-    const bounds = wrapperRef.current?.getBoundingClientRect();
-    const popupHeight = isDate ? 350 : 340;
-    setOpensAbove(Boolean(bounds && window.innerHeight - bounds.bottom < popupHeight && bounds.top > popupHeight));
     alignPopoverToViewport();
     setIsOpen(true);
   };
@@ -147,9 +177,6 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
         onClick={event => {
           onClick?.(event);
           if (!event.defaultPrevented) {
-            const bounds = wrapperRef.current?.getBoundingClientRect();
-            const popupHeight = isDate ? 350 : 340;
-            setOpensAbove(Boolean(bounds && window.innerHeight - bounds.bottom < popupHeight && bounds.top > popupHeight));
             setIsOpen(true);
           }
         }}
@@ -176,10 +203,11 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
       </button>
       {isOpen && (
         <div
-          className={`om-datetime-popover ${isDate ? 'om-datetime-calendar' : 'om-datetime-time'}${opensAbove ? ' is-above' : ''}`}
+          ref={popoverRef}
+          className={`om-datetime-popover ${isDate ? 'om-datetime-calendar' : 'om-datetime-time'}${opensAbove ? ' is-above' : ''}${isCompact ? ' is-compact' : ''}`}
           role="dialog"
           aria-label={isDate ? 'Choose a date' : 'Choose a time'}
-          style={{ left: `${popoverOffsetX}px` }}
+          style={{ left: `${popoverOffsetX}px`, maxHeight: popoverMaxHeight }}
         >
           {isDate ? (
             <>

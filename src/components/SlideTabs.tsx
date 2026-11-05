@@ -93,7 +93,7 @@ export const SlideTabs: React.FC<SlideTabsProps> = ({
   const isSmall = size === 'sm';
 
   return (
-    <div className={`flex min-w-0 w-full items-center gap-1.5 ${containerClassName}`}>
+    <div data-slide-tabs className={`flex min-w-0 w-full items-center gap-1.5 ${containerClassName}`}>
       {/* Left Scroll Trigger Button */}
       {showArrows && canScrollLeft && (
         <button

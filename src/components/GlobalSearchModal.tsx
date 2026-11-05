@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from '../lib/currencyDisplay';
 import React, { useState, useEffect } from 'react';
 import { Search, X, CheckSquare, FileText, BookOpen, Target, DollarSign, User, ArrowRight } from 'lucide-react';
 import { EmptyState } from './EmptyState';
@@ -27,11 +28,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
 
   useEffect(() => {
     if (!isOpen) {
       setQuery('');
       setResults([]);
+      setSearchError('');
       return;
     }
   }, [isOpen]);
@@ -55,6 +58,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
 
     let isSubscribed = true;
     setLoading(true);
+    setSearchError('');
     setResults([]);
 
     const performSearch = async () => {
@@ -150,7 +154,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
               id: f.id,
               module: 'finance',
               type: 'Finance',
-              title: `${transactionType.toUpperCase() || 'TRANSACTION'}: ₹${f.amount}`,
+              title: `${transactionType.toUpperCase() || 'TRANSACTION'}: ${getCurrencySymbol()} ${f.amount}`,
               subtitle: `${f.category || ''} ${f.note ? '· ' + f.note : ''}`,
               date: f.date
             });
@@ -179,6 +183,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         setResults(hits.slice(0, 50));
       } catch (err) {
         console.error('Search error', err);
+        if (isSubscribed) setSearchError('Search could not read your saved data. Please retry.');
       } finally {
         if (isSubscribed) setLoading(false);
       }
@@ -235,6 +240,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close search"
             className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             <X className="h-4 w-4" />
@@ -248,7 +254,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             </div>
           )}
 
-          {!loading && query && results.length === 0 && (
+          {!loading && searchError && (
+            <div className="mx-2 my-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+              {searchError}
+            </div>
+          )}
+
+          {!loading && !searchError && query && results.length === 0 && (
             <EmptyState
               icon={Search}
               compact

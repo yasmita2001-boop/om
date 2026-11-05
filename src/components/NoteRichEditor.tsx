@@ -1361,7 +1361,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
             <select
               value={activeStyle}
               onChange={(e) => handleApplyStyle(e.target.value)}
-              className="h-7.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 pl-2 pr-6 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs appearance-none"
+              className="toolbar-flat-control h-7.5 pl-2 pr-6 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
               title="Typography Style"
             >
               <option value="p">Paragraph</option>
@@ -1379,7 +1379,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
             <select
               value={activeSize}
               onChange={(e) => handleApplySize(e.target.value)}
-              className="h-7.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 pl-2 pr-5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs appearance-none"
+              className="toolbar-flat-control h-7.5 pl-2 pr-5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
               title="Text Size"
             >
               <option value="2">12px</option>
@@ -1396,7 +1396,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
             <select
               value={activeFont}
               onChange={(e) => handleApplyFont(e.target.value)}
-              className="h-7.5 w-28 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 pl-2 pr-5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs appearance-none"
+              className="toolbar-flat-control h-7.5 w-28 pl-2 pr-5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
               title="Font Family"
               aria-label="Font Family"
             >

@@ -1,9 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Film, ImagePlus, RotateCcw, SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
-import forestWallpaper from '../assets/theme-forest-4k.webp';
-import midnightWallpaper from '../assets/theme-midnight-4k.webp';
-import oceanWallpaper from '../assets/theme-ocean-4k.webp';
-import sunsetWallpaper from '../assets/theme-sunset-4k.webp';
 import {
   APPEARANCE_PRESETS,
   AppearanceColorMode,
@@ -43,13 +39,6 @@ const ACCENT_PRESETS = [
   { name: 'Violet', hex: '#8b5cf6' },
   { name: 'Slate', hex: '#475569' }
 ];
-
-const THEME_WALLPAPERS: Partial<Record<typeof APPEARANCE_PRESETS[number]['id'], string>> = {
-  ocean: oceanWallpaper,
-  forest: forestWallpaper,
-  sunset: sunsetWallpaper,
-  midnight: midnightWallpaper
-};
 
 const isValidHex = (value: string) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
 
@@ -157,7 +146,6 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {APPEARANCE_PRESETS.map(preset => {
                 const selected = draft.presetId === preset.id;
-                const wallpaper = THEME_WALLPAPERS[preset.id];
                 return (
                   <button
                     key={preset.id}
@@ -197,16 +185,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                     }`}
                   >
                     <span className="block h-12 overflow-hidden bg-slate-200 dark:bg-slate-800">
-                      {wallpaper ? (
-                        <img
-                          src={wallpaper}
-                          alt=""
-                          draggable={false}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="block h-full w-full" style={{ background: preset.preview }} />
-                      )}
+                      <span className="block h-full w-full" style={{ background: preset.preview }} />
                     </span>
                     <span className="flex items-center justify-between gap-1 px-2.5 py-2">
                       <span className="min-w-0">

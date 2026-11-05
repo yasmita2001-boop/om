@@ -264,6 +264,13 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
     setIsRestoring(true);
 
     try {
+      await universalDataManager.exportUniversalData('omlifeos', {
+        profileId,
+        profileName,
+        includeFullMedia: true,
+        customTitle: `${profileName}-before-restore`,
+        autoDownload: true
+      });
       const mode = validationResult.isIncrementalBundle ? 'merge_workspace' : 'replace_workspace';
       const result = await universalDataManager.restoreValidatedData(validationResult, {
         mode,
@@ -315,7 +322,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
   ];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900 space-y-4 min-w-0">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800 dark:bg-slate-900 space-y-4 min-w-0">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3.5 dark:border-slate-800">
         <div className="flex items-center gap-2.5">
@@ -502,7 +509,13 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                       {selectedFileName}
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">
-                      {validationResult.formatDetected.toUpperCase()} • Checksum verified
+                      {validationResult.formatDetected.toUpperCase()} • {
+                        validationResult.checksumStatus === 'verified'
+                          ? 'Checksum verified'
+                          : validationResult.checksumStatus === 'mismatch'
+                            ? 'Checksum mismatch'
+                            : 'No checksum provided'
+                      }
                     </span>
                   </div>
                 </div>
@@ -550,6 +563,11 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                   </div>
                 </div>
               )}
+              {!validationResult.isIncrementalBundle && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[10px] text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200">
+                  Full backup restore replaces workspace records not included in the backup. A before-restore backup is downloaded automatically, but confirm the target profile carefully.
+                </div>
+              )}
 
               <div>
                 <button
@@ -593,8 +611,9 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
                 <button
                   type="button"
                   onClick={() => setShowConfirmRestoreModal(true)}
-                  disabled={isRestoring}
+                  disabled={isRestoring || !validationResult.isRestorable}
                   className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 disabled:opacity-50 cursor-pointer"
+                  title={!validationResult.isRestorable ? 'Restore is blocked because the checksum does not match.' : undefined}
                 >
                   {isRestoring ? (
                     <>
@@ -828,7 +847,7 @@ export const UniversalDataManagerCard: React.FC<UniversalDataManagerCardProps> =
       <ConfirmModal
         isOpen={showConfirmRestoreModal}
         title="Restore Backup"
-        message={`Are you sure you want to restore ${validationResult?.totalActiveRecords} records into your application?`}
+        message={`Restore ${validationResult?.totalActiveRecords} records into "${profileName}"? Om-LifeOS will download a before-restore safety backup automatically.`}
         confirmText="Restore Now"
         cancelText="Cancel"
         isDanger={false}

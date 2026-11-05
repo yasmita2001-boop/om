@@ -565,17 +565,8 @@ html.dark .app-watermark__image {
   box-shadow: 0 1px 2px rgb(15 23 42 / 3%);
 }
 
-.finance-view .finance-schedule-panel {
-  border: 1px solid rgb(194 154 94 / 36%) !important;
-  border-radius: 1.25rem !important;
-  background-color: var(--om-card) !important;
-  box-shadow: 0 8px 26px rgb(44 34 24 / 7%), inset 0 1px rgb(255 255 255 / 62%) !important;
-  backdrop-filter: blur(16px) saturate(125%);
-  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
-}
-
 .finance-view .finance-schedule-panel > summary {
-  border-color: rgb(161 112 52 / 18%) !important;
+  border-color: var(--finance-border) !important;
 }
 
 .finance-view input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
@@ -587,15 +578,15 @@ html.dark .app-watermark__image {
 }
 
 .finance-view .finance-transaction-field {
-  border-color: rgb(161 112 52 / 42%) !important;
+  border-color: var(--om-line) !important;
 }
 
 .finance-view .finance-transaction-field:hover {
-  border-color: rgb(161 112 52 / 58%) !important;
+  border-color: color-mix(in srgb, #10b981 38%, var(--om-line)) !important;
 }
 
 .finance-view .finance-transaction-field:focus {
-  border-color: rgb(161 112 52 / 72%) !important;
+  border-color: #10b981 !important;
 }
 
 .finance-view input:focus,
@@ -608,6 +599,11 @@ html.dark .app-watermark__image {
 
 .finance-view .finance-details > summary {
   list-style: none;
+}
+
+.finance-view .finance-details.finance-schedule-panel > summary::after,
+.finance-view .finance-details.finance-schedule-panel[open] > summary::after {
+  content: none !important;
 }
 
 .finance-view .finance-details > summary::-webkit-details-marker {
@@ -636,15 +632,8 @@ html.dark .app-watermark__image {
   box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
 }
 
-.dark .finance-view .finance-schedule-panel {
-  border-color: rgb(217 176 109 / 23%) !important;
-  background-color: var(--om-card) !important;
-  box-shadow: 0 8px 26px rgb(0 0 0 / 18%), inset 0 1px rgb(255 255 255 / 4%) !important;
-  backdrop-filter: blur(18px) saturate(130%);
-}
-
 .dark .finance-view .finance-schedule-panel > summary {
-  border-color: rgb(217 176 109 / 16%) !important;
+  border-color: var(--finance-border) !important;
 }
 
 .dark .finance-view input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
@@ -654,15 +643,15 @@ html.dark .app-watermark__image {
 }
 
 .dark .finance-view .finance-transaction-field {
-  border-color: rgb(217 176 109 / 42%) !important;
+  border-color: var(--om-line) !important;
 }
 
 .dark .finance-view .finance-transaction-field:hover {
-  border-color: rgb(217 176 109 / 58%) !important;
+  border-color: color-mix(in srgb, #34d399 38%, var(--om-line)) !important;
 }
 
 .dark .finance-view .finance-transaction-field:focus {
-  border-color: rgb(217 176 109 / 72%) !important;
+  border-color: #34d399 !important;
 }
 
 .dark .finance-view input:focus,
@@ -670,6 +659,135 @@ html.dark .app-watermark__image {
 .dark .finance-view textarea:focus {
   border-color: rgb(217 176 109 / 68%);
   box-shadow: 0 0 0 3px rgb(217 176 109 / 16%);
+}
+
+.finance-view .finance-transaction-type-tabs {
+  border: 1px solid var(--om-line);
+  background: color-mix(in srgb, var(--om-card-soft) 86%, transparent);
+}
+
+.sanctuary-shell .sanctuary-main .finance-view .finance-transaction-type {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--om-ink-muted) !important;
+  box-shadow: none !important;
+}
+
+.sanctuary-shell .sanctuary-main .finance-view .finance-transaction-type[aria-pressed="true"] {
+  border-color: color-mix(in srgb, #10b981 40%, var(--om-line)) !important;
+  background: color-mix(in srgb, #10b981 13%, var(--om-card)) !important;
+  color: #047857 !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 10%) !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main .finance-view .finance-transaction-type[aria-pressed="true"] {
+  border-color: color-mix(in srgb, #34d399 36%, var(--om-line)) !important;
+  background: color-mix(in srgb, #34d399 14%, var(--om-card)) !important;
+  color: #a7f3d0 !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sanctuary-shell .sanctuary-main .finance-view .finance-transaction-type:not([aria-pressed="true"]):hover {
+    background: color-mix(in srgb, var(--om-ink) 5%, var(--om-card)) !important;
+    color: var(--om-ink) !important;
+  }
+}
+
+.finance-view .finance-transaction-form input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+.finance-view .finance-transaction-form select,
+.finance-view .finance-transaction-form textarea {
+  border-color: var(--om-line) !important;
+  border-radius: 0.625rem;
+  background-color: var(--om-card-soft) !important;
+  color: var(--om-ink) !important;
+}
+
+.finance-view .finance-transaction-form input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):focus,
+.finance-view .finance-transaction-form select:focus,
+.finance-view .finance-transaction-form textarea:focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 16%) !important;
+  outline: none;
+}
+
+.finance-view .finance-unified-pane {
+  gap: 1rem;
+}
+
+.finance-view .finance-unified-list-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.finance-view .finance-unified-list-column.hidden {
+  display: none !important;
+}
+
+.finance-view .finance-unified-list-column > * {
+  margin-top: 0 !important;
+}
+
+.finance-view .finance-unified-split > [class*="lg:col-span-5"]:not(.hidden) + .finance-unified-list-column {
+  position: relative;
+  padding-top: 1rem;
+}
+
+.finance-view .finance-unified-split > [class*="lg:col-span-5"]:not(.hidden) + .finance-unified-list-column::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--finance-border);
+  content: "";
+  pointer-events: none;
+}
+
+.finance-view .finance-unified-split > [class*="lg:col-span-8"]:not(.hidden) + .finance-unified-overview-column {
+  position: relative;
+  padding-top: 1rem;
+}
+
+.finance-view .finance-unified-split > [class*="lg:col-span-8"]:not(.hidden) + .finance-unified-overview-column::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--finance-border);
+  content: "";
+  pointer-events: none;
+}
+
+@media (min-width: 1024px) {
+  .finance-view .finance-unified-split > [class*="lg:col-span-5"]:not(.hidden) + .finance-unified-list-column {
+    padding-top: 0;
+    padding-left: 1rem;
+  }
+
+  .finance-view .finance-unified-split > [class*="lg:col-span-5"]:not(.hidden) + .finance-unified-list-column::before {
+    top: 0;
+    right: auto;
+    bottom: 0;
+    left: 0;
+    width: 1px;
+    height: auto;
+  }
+
+  .finance-view .finance-unified-split > [class*="lg:col-span-6"]:not(.hidden) + .finance-unified-overview-column {
+    padding-top: 0;
+    padding-left: 1rem;
+  }
+
+  .finance-view .finance-unified-split > [class*="lg:col-span-6"]:not(.hidden) + .finance-unified-overview-column::before {
+    top: 0;
+    right: auto;
+    bottom: 0;
+    left: 0;
+    width: 1px;
+    height: auto;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1024,11 +1142,6 @@ a, button, input, select, textarea, label, [role="button"], summary {
 
 :is(.flex, .inline-flex):has(> .progressive-actions[data-open='true']) {
   flex-wrap: wrap;
-}
-
-.note-card:has(.progressive-actions[data-open='true']) {
-  height: auto;
-  min-height: 11rem;
 }
 
 .progressive-actions__trigger {
@@ -1911,81 +2024,6 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   pointer-events: none;
 }
 
-.coordinated-theme-layer {
-  position: fixed;
-  z-index: 0;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.coordinated-theme-scene {
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.17;
-  pointer-events: none;
-}
-
-.coordinated-theme-overlay {
-  position: absolute;
-  z-index: 2;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgb(15 23 42 / calc(var(--om-wallpaper-overlay, 0.22) * 0.45)) 0%,
-    rgb(15 23 42 / var(--om-wallpaper-overlay, 0.22)) 100%
-  );
-}
-
-.coordinated-theme-layer[data-preset="ocean"] .coordinated-theme-overlay {
-  background: linear-gradient(
-    180deg,
-    rgb(5 32 57 / calc(var(--om-wallpaper-overlay, 0.22) * 0.35)) 0%,
-    rgb(3 42 57 / var(--om-wallpaper-overlay, 0.22)) 100%
-  );
-}
-
-.coordinated-theme-layer[data-preset="forest"] .coordinated-theme-overlay {
-  background: linear-gradient(
-    180deg,
-    rgb(12 38 25 / calc(var(--om-wallpaper-overlay, 0.22) * 0.32)) 0%,
-    rgb(13 48 34 / var(--om-wallpaper-overlay, 0.22)) 100%
-  );
-}
-
-.coordinated-theme-layer[data-preset="sunset"] .coordinated-theme-overlay {
-  background: linear-gradient(
-    180deg,
-    rgb(57 31 51 / calc(var(--om-wallpaper-overlay, 0.22) * 0.3)) 0%,
-    rgb(73 35 48 / var(--om-wallpaper-overlay, 0.22)) 100%
-  );
-}
-
-.coordinated-theme-layer[data-preset="midnight"] .coordinated-theme-scene {
-  opacity: 0.21;
-}
-
-.coordinated-theme-layer[data-preset="midnight"] .coordinated-theme-overlay {
-  background: linear-gradient(
-    180deg,
-    rgb(7 15 43 / calc(var(--om-wallpaper-overlay, 0.22) * 0.3)) 0%,
-    rgb(8 19 48 / var(--om-wallpaper-overlay, 0.22)) 100%
-  );
-}
-
-@media (max-width: 767px), (pointer: coarse) {
-  .coordinated-theme-scene {
-    opacity: 0.12;
-  }
-
-  .coordinated-theme-layer[data-preset="midnight"] .coordinated-theme-scene {
-    opacity: 0.15;
-  }
-}
-
 :root:not([data-appearance-preset="private-cosmos"]):not([data-appearance-preset="sanctuary"]) .sanctuary-shell[data-environment="off"]:not([data-wallpaper-custom="true"])::before {
   background: none;
   animation: none;
@@ -2182,7 +2220,9 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   left: 0;
   z-index: 120;
   width: min(19rem, calc(100vw - 2rem));
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--om-glass-border, var(--om-line));
   border-radius: 0.9rem;
   background: var(--om-glass-surface, var(--om-card));
@@ -2255,6 +2295,20 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.15rem;
   padding: 0.55rem;
+}
+
+.om-datetime-calendar.is-compact .om-datetime-calendar-grid {
+  gap: 0.05rem;
+  padding: 0.3rem;
+}
+
+.om-datetime-calendar.is-compact .om-datetime-weekday {
+  min-height: 1.25rem;
+}
+
+.om-datetime-calendar.is-compact .om-datetime-day {
+  min-height: 1.55rem;
+  aspect-ratio: auto;
 }
 
 .om-datetime-weekday {
@@ -2468,22 +2522,22 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   }
 }
 
-.sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.goal-portfolio-shell) {
+.sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.goal-portfolio-shell):not(.journal-reflection-editor):not(.journal-reflection-toolbar *) {
   border-color: var(--om-line) !important;
   background-color: var(--om-card) !important;
   box-shadow: 0 8px 26px rgb(44 34 24 / 7%), inset 0 1px rgb(255 255 255 / 62%);
   backdrop-filter: blur(16px) saturate(125%);
 }
 
-.dark .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.goal-portfolio-shell) {
+.dark .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.goal-portfolio-shell):not(.journal-reflection-editor):not(.journal-reflection-toolbar *) {
   border-color: var(--om-line) !important;
   background-color: var(--om-card) !important;
   box-shadow: 0 8px 26px rgb(0 0 0 / 18%), inset 0 1px rgb(255 255 255 / 4%);
   backdrop-filter: blur(18px) saturate(130%);
 }
 
-.sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.goal-portfolio-shell),
-.dark .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.goal-portfolio-shell) {
+.sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.goal-portfolio-shell):not(.journal-reflection-editor):not(.journal-reflection-toolbar *),
+.dark .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.goal-portfolio-shell):not(.journal-reflection-editor):not(.journal-reflection-toolbar *) {
   backdrop-filter: blur(var(--om-card-blur, 16px)) saturate(125%);
 }
 
@@ -2510,6 +2564,27 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 .dark .sanctuary-main .finance-view .finance-summary-card[class*="rounded-"][class*="border"][class*="bg-white"] .finance-summary-metric {
   border-color: var(--om-line) !important;
   background-color: var(--om-card-soft) !important;
+}
+
+.sanctuary-main .finance-view .finance-balance-sheet-card .finance-summary-metric,
+.dark .sanctuary-main .finance-view .finance-balance-sheet-card .finance-summary-metric {
+  border-color: var(--om-line) !important;
+  background-color: var(--om-card-soft) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.finance-view .finance-balance-sheet-card .finance-summary-metric {
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.finance-view .finance-balance-sheet-card .finance-balance-sheet-rows > div + div {
+  border-top: 1px solid color-mix(in srgb, var(--om-line) 58%, transparent);
+}
+
+.finance-view .finance-balance-sheet-card .finance-balance-sheet-rows--assets > div + div {
+  border-top: 0;
 }
 
 /* Popovers and dropdowns use higher stacking classes and may live outside cards. */
@@ -2960,7 +3035,6 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   background: color-mix(in srgb, var(--color-brand, #b88648) 12%, transparent) !important;
 }
 
-
 .command-bar {
   border-bottom-color: var(--om-line);
   background: var(--om-card);
@@ -3001,11 +3075,24 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   box-shadow: none;
 }
 
-.command-bar button[aria-label^="Global Search"] {
+.command-bar button[aria-label="Global Search"] {
   border-color: transparent;
   background: transparent;
   color: var(--color-indigo-700);
   box-shadow: none;
+}
+
+.command-bar button[aria-label="Global Search (Press to search)"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--om-ink-muted);
+  box-shadow: none;
+}
+
+.command-bar button[aria-label="Global Search (Press to search)"]:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--om-ink);
 }
 
 .command-bar button[aria-label^="Current time"] {
@@ -3060,6 +3147,14 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   color: #382f22;
 }
 
+.command-bar .header-clock-chip .header-chip-value {
+  font-family: var(--font-sans);
+}
+
+.dark .command-bar .header-clock-chip .header-chip-value {
+  font-family: var(--font-sans);
+}
+
 .command-bar .header-chip-subtitle {
   color: #82745d;
 }
@@ -3076,6 +3171,35 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   background: transparent;
   color: var(--color-indigo-700);
   box-shadow: none;
+}
+
+@media (max-width: 399px) {
+  .command-bar > div:last-child {
+    gap: 0.125rem !important;
+  }
+
+  .command-bar .header-clock-chip {
+    gap: 0 !important;
+    padding-inline: 0 !important;
+  }
+
+  .command-bar .header-clock-chip .header-chip-icon {
+    display: none;
+  }
+
+  .command-bar button[aria-label="Quick Actions"] {
+    width: 2rem;
+    padding-inline: 0.25rem !important;
+  }
+
+  .command-bar button[aria-label="Quick Actions"] svg:last-child {
+    display: none;
+  }
+
+  .command-bar button[aria-label="Toggle Dark/Light Mode"] {
+    width: 2rem;
+    padding-inline: 0.25rem !important;
+  }
 }
 
 .sanctuary-sidebar {
@@ -3119,7 +3243,7 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 32%));
 }
 
-.dark .command-bar button[aria-label^="Global Search"] {
+.dark .command-bar button[aria-label="Global Search"] {
   border-color: transparent;
   background: transparent;
   color: var(--color-indigo-300);
@@ -3462,6 +3586,11 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   backdrop-filter: none;
 }
 
+.sanctuary-mobile-bottom-nav > button > span {
+  font-size: clamp(0.625rem, 2.5vw, 0.75rem) !important;
+  line-height: 1.1 !important;
+}
+
 .sanctuary-mobile-bottom-nav > button,
 .sanctuary-mobile-bottom-nav > button[aria-current="page"] {
   min-width: 0;
@@ -3684,6 +3813,25 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   }
 }
 
+.sanctuary-shell .sanctuary-main .finance-view .finance-transaction-form :is(
+  input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not(.calc-display-input),
+  select,
+  textarea
+) {
+  border-color: var(--om-line) !important;
+  background-color: var(--om-card-soft) !important;
+}
+
+.sanctuary-shell .sanctuary-main .finance-view .finance-transaction-form :is(
+  input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not(.calc-display-input),
+  select,
+  textarea
+):focus {
+  border-color: #10b981 !important;
+  background-color: color-mix(in srgb, var(--om-card-soft) 82%, #10b981 18%) !important;
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 16%) !important;
+}
+
 .sanctuary-shell .journal-reflection-field {
   border-color: color-mix(in srgb, var(--color-brand, #b88648) 36%, transparent) !important;
   border-radius: 0.75rem;
@@ -3719,7 +3867,7 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 }
 
 .sanctuary-shell .journal-reflection-editor {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 36%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 30%, transparent) !important;
   border-radius: 0.75rem;
   background-color: color-mix(in srgb, var(--om-card) 28%, transparent) !important;
   box-shadow: none !important;
@@ -3731,7 +3879,7 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 }
 
 .sanctuary-shell .journal-reflection-toolbar {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 20%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 30%, transparent) !important;
   background-color: color-mix(in srgb, var(--color-brand, #b88648) 9%, transparent) !important;
   backdrop-filter: none !important;
 }
@@ -3743,7 +3891,6 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 }
 
 .sanctuary-shell .journal-reflection-toolbar select {
-  background-color: color-mix(in srgb, var(--om-card) 68%, transparent) !important;
   box-shadow: none !important;
 }
 
@@ -3762,12 +3909,12 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 }
 
 .dark .sanctuary-shell .journal-reflection-editor {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 26%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 28%, transparent) !important;
   background-color: color-mix(in srgb, var(--color-brand, #b88648) 4%, transparent) !important;
 }
 
 .dark .sanctuary-shell .journal-reflection-toolbar {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 28%, transparent) !important;
   background-color: color-mix(in srgb, var(--color-brand, #b88648) 6%, transparent) !important;
 }
 
@@ -3778,7 +3925,7 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 }
 
 .dark .sanctuary-shell .journal-reflection-toolbar select {
-  background-color: color-mix(in srgb, var(--om-card) 72%, transparent) !important;
+  background-color: transparent !important;
 }
 
 .dark .sanctuary-shell .journal-reflection-toolbar button:hover {
@@ -3791,160 +3938,150 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 }
 
 .sanctuary-shell .focus-alarm-panel {
-  border-color: rgb(194 154 94 / 32%) !important;
-  background-color: #fffaf1 !important;
+  border-color: rgb(148 163 184 / 35%) !important;
+  background-color: #fff !important;
   box-shadow: none !important;
 }
 
 .sanctuary-shell .focus-alarm-panel > div:first-child {
-  border-color: rgb(161 112 52 / 22%) !important;
+  border-color: rgb(148 163 184 / 24%) !important;
 }
 
 .sanctuary-shell .focus-alarm-icon {
-  background-color: rgb(194 154 94 / 12%) !important;
-  color: #b88648 !important;
-}
-
-.sanctuary-shell .focus-alarm-form {
-  border-color: rgb(161 112 52 / 28%) !important;
-  background-color: #fffdf8 !important;
-  box-shadow: none !important;
-}
-
-.sanctuary-shell .focus-alarm-form label {
-  color: #526174;
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #059669 !important;
 }
 
 .sanctuary-shell .focus-alarm-field {
-  border-color: rgb(161 112 52 / 38%) !important;
-  background-color: #fffdf8 !important;
-  color: #253044 !important;
+  border-color: rgb(100 116 139 / 45%) !important;
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
   box-shadow: none !important;
 }
 
 .sanctuary-shell .focus-alarm-field:hover:not(:disabled) {
-  border-color: rgb(161 112 52 / 56%) !important;
+  border-color: rgb(100 116 139 / 65%) !important;
 }
 
 .sanctuary-shell .focus-alarm-field:focus {
-  border-color: rgb(161 112 52 / 72%) !important;
-  background-color: #fffaf1 !important;
-  box-shadow: 0 0 0 3px rgb(184 134 72 / 12%) !important;
+  border-color: rgb(16 185 129 / 70%) !important;
+  background-color: #fff !important;
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 12%) !important;
   outline: none;
 }
 
 .sanctuary-shell .focus-alarm-mode[role="switch"][aria-checked="false"] {
-  border-color: rgb(161 112 52 / 30%) !important;
-  background-color: rgb(194 154 94 / 12%) !important;
+  border-color: rgb(100 116 139 / 35%) !important;
+  background-color: rgb(148 163 184 / 12%) !important;
+  color: #475569 !important;
 }
 
 .sanctuary-shell .focus-alarm-day {
-  border-color: rgb(161 112 52 / 34%) !important;
-  background-color: rgb(255 250 241 / 30%) !important;
-  color: #805a2c !important;
+  border-color: rgb(100 116 139 / 35%) !important;
+  background-color: rgb(148 163 184 / 8%) !important;
+  color: #475569 !important;
   box-shadow: none !important;
 }
 
 .sanctuary-shell .focus-alarm-day[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 50%, transparent) !important;
-  background-color: color-mix(in srgb, var(--color-brand, #b88648) 12%, transparent) !important;
-  color: var(--color-indigo-950) !important;
+  border-color: rgb(16 185 129 / 45%) !important;
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #047857 !important;
 }
 
 .sanctuary-shell .focus-alarm-day:hover {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 62%, transparent) !important;
+  border-color: rgb(16 185 129 / 55%) !important;
 }
 
 .sanctuary-shell .focus-alarm-actions {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 20%, transparent) !important;
+  border-color: rgb(148 163 184 / 24%) !important;
 }
 
 .sanctuary-shell .focus-alarm-cancel {
-  color: #7a7469 !important;
+  color: #64748b !important;
   background: transparent !important;
 }
 
 .sanctuary-shell .focus-alarm-cancel:hover {
-  background-color: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
-  color: var(--color-indigo-950) !important;
+  background-color: rgb(148 163 184 / 12%) !important;
+  color: #1e293b !important;
 }
 
 .sanctuary-shell .focus-alarm-save {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 40%, transparent) !important;
-  background-color: color-mix(in srgb, var(--color-brand, #b88648) 12%, transparent) !important;
-  color: var(--color-indigo-700) !important;
+  border-color: rgb(16 185 129 / 35%) !important;
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #047857 !important;
   box-shadow: none !important;
 }
 
 .sanctuary-shell .focus-alarm-save:hover {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 58%, transparent) !important;
-  background-color: color-mix(in srgb, var(--color-brand, #b88648) 20%, transparent) !important;
+  border-color: rgb(16 185 129 / 55%) !important;
+  background-color: rgb(16 185 129 / 16%) !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-panel {
-  border-color: rgb(217 176 109 / 24%) !important;
-  background-color: rgb(25 28 35 / 62%) !important;
+  border-color: rgb(148 163 184 / 28%) !important;
+  background-color: rgb(15 23 42 / 78%) !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-panel > div:first-child {
-  border-color: rgb(217 176 109 / 18%) !important;
+  border-color: rgb(148 163 184 / 20%) !important;
 }
 
-.dark .sanctuary-shell .focus-alarm-form {
-  border-color: rgb(217 176 109 / 24%) !important;
-  background-color: rgb(29 32 39 / 64%) !important;
+.dark .sanctuary-shell .focus-alarm-icon {
+  color: #6ee7b7 !important;
 }
 
-.dark .sanctuary-shell .focus-alarm-form label {
-  color: #cbd5e1;
+.dark .sanctuary-shell .focus-alarm-mode {
+  color: #cbd5e1 !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-field {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 34%, transparent) !important;
-  background-color: color-mix(in srgb, var(--om-card) 58%, transparent) !important;
+  border-color: rgb(100 116 139 / 70%) !important;
+  background-color: rgb(15 23 42 / 72%) !important;
   color: var(--om-ink) !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-field:focus {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 68%, transparent) !important;
-  background-color: color-mix(in srgb, var(--om-card) 88%, transparent) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand, #b88648) 12%, transparent) !important;
+  border-color: rgb(16 185 129 / 68%) !important;
+  background-color: rgb(15 23 42 / 90%) !important;
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 12%) !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-day {
-  border-color: rgb(217 176 109 / 30%) !important;
-  background-color: rgb(217 176 109 / 6%) !important;
-  color: #e7c68e !important;
+  border-color: rgb(100 116 139 / 60%) !important;
+  background-color: rgb(148 163 184 / 6%) !important;
+  color: #cbd5e1 !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-day[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 52%, transparent) !important;
-  background-color: color-mix(in srgb, var(--color-brand, #b88648) 14%, transparent) !important;
-  color: var(--color-indigo-200) !important;
+  border-color: rgb(16 185 129 / 48%) !important;
+  background-color: rgb(16 185 129 / 14%) !important;
+  color: #a7f3d0 !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-actions {
-  border-color: rgb(217 176 109 / 18%) !important;
+  border-color: rgb(148 163 184 / 20%) !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-cancel {
-  color: #a7a29a !important;
+  color: #94a3b8 !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-cancel:hover {
-  background-color: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
-  color: var(--color-indigo-200) !important;
+  background-color: rgb(148 163 184 / 12%) !important;
+  color: #e2e8f0 !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-save {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 38%, transparent) !important;
-  background-color: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
-  color: var(--color-indigo-300) !important;
+  border-color: rgb(16 185 129 / 38%) !important;
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #a7f3d0 !important;
 }
 
 .dark .sanctuary-shell .focus-alarm-save:hover {
-  border-color: color-mix(in srgb, var(--color-brand, #b88648) 56%, transparent) !important;
-  background-color: color-mix(in srgb, var(--color-brand, #b88648) 18%, transparent) !important;
+  border-color: rgb(16 185 129 / 56%) !important;
+  background-color: rgb(16 185 129 / 18%) !important;
 }
 
 /* --- Skeleton shimmer (used by components/Skeleton.tsx) --- */
@@ -4005,11 +4142,15 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 .sanctuary-shell .sanctuary-sidebar,
 .sanctuary-shell .dashboard-view .dashboard-hero,
 .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-hero[class*="bg-white"],
-.sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not([class*="absolute"]):not([class*="fixed"]) {
+.sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not(.vault-finance-link-panel):not(.journal-reflection-editor):not(.journal-reflection-toolbar *):not([class*="absolute"]):not([class*="fixed"]) {
   border-color: var(--om-glass-border) !important;
   background: var(--om-card) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.sanctuary-shell .sanctuary-main:not(.dashboard-canvas) :is(div, section, article, details)[class*="rounded-"][class*="border"]:is([class~="p-4"], [class~="p-5"], [class~="p-6"], [class~="sm:p-4"], [class~="sm:p-5"], [class~="sm:p-6"]):not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not(.vault-finance-link-panel):not(.journal-reflection-editor):not(.journal-reflection-toolbar *):not([class*="absolute"]):not([class*="fixed"]) {
   box-shadow: var(--om-glass-shadow) !important;
-  backdrop-filter: blur(var(--om-card-blur, 16px)) saturate(110%) !important;
 }
 
 html.dark .sanctuary-shell :is([class*="text-slate-400"], [class*="text-slate-500"], [class*="text-slate-600"]) {
@@ -4028,16 +4169,16 @@ html .sanctuary-shell :is(p, span, label, h1, h2, h3, h4, button, a, li, td, th,
 
 .sanctuary-shell .dashboard-view .dashboard-hero,
 .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-hero[class*="bg-white"],
-.sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not([class*="absolute"]):not([class*="fixed"]) {
+.sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not(.vault-finance-link-panel):not(.journal-reflection-editor):not(.journal-reflection-toolbar *):not([class*="absolute"]):not([class*="fixed"]) {
   border-radius: 1rem !important;
 }
 
-.sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not([class*="absolute"]):not([class*="fixed"]) {
+.sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not(.vault-finance-link-panel):not([class*="absolute"]):not([class*="fixed"]) {
   transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not([class*="absolute"]):not([class*="fixed"]):hover {
+  .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not(.journal-reflection-editor):not(.journal-reflection-toolbar *):not([class*="absolute"]):not([class*="fixed"]):hover {
     border-color: color-mix(in srgb, var(--om-line) 75%, var(--om-ink-muted) 25%) !important;
   }
 }
@@ -4047,7 +4188,7 @@ html .sanctuary-shell :is(p, span, label, h1, h2, h3, h4, button, a, li, td, th,
   .sanctuary-shell .sanctuary-sidebar,
   .sanctuary-shell .dashboard-view .dashboard-hero,
   .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-hero[class*="bg-white"],
-  .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not([class*="absolute"]):not([class*="fixed"]) {
+  .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not(.journal-reflection-editor):not(.journal-reflection-toolbar *):not([class*="absolute"]):not([class*="fixed"]) {
     backdrop-filter: none !important;
   }
 }
@@ -4056,6 +4197,20 @@ html .sanctuary-shell :is(p, span, label, h1, h2, h3, h4, button, a, li, td, th,
 .sanctuary-shell .sanctuary-main .goal-portfolio-shell .goal-tree-card [class*="border-b"],
 .sanctuary-shell .sanctuary-main .goal-portfolio-shell .goal-tree-card [class*="border-l"] {
   border-color: var(--om-line) !important;
+}
+
+.sanctuary-shell .sanctuary-main .goal-portfolio-shell .goal-tree-card--sub,
+.sanctuary-shell .sanctuary-main .goal-portfolio-shell .goal-tree-card--micro,
+.sanctuary-shell .sanctuary-main .goal-portfolio-shell .goal-tree-card--nano {
+  border-width: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.sanctuary-shell .sanctuary-main .goal-portfolio-shell .goal-tree-card--atomic {
+  border-width: 0 !important;
+  background: var(--om-card-soft) !important;
+  box-shadow: none !important;
 }
 
 .sanctuary-shell .sanctuary-main .goal-portfolio-shell .goal-progress-track {
@@ -4082,7 +4237,7 @@ html.dark[data-eye-comfort="true"] .sanctuary-shell :is([class*="text-slate-400"
 }
 
 html[data-eye-comfort="true"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-hero,
-html[data-eye-comfort="true"] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not([class*="absolute"]):not([class*="fixed"]) {
+html[data-eye-comfort="true"] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]) {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
@@ -4161,7 +4316,7 @@ html[data-custom-theme="true"] .sanctuary-shell :is(.command-bar, .sanctuary-sid
   color: currentColor !important;
 }
 
-.sanctuary-shell :is(button[aria-pressed="true"], button[aria-selected="true"], [role="tab"][aria-selected="true"]) {
+.sanctuary-shell :is(button[aria-pressed="true"]:not(.focus-alarm-day), button[aria-selected="true"], [role="tab"][aria-selected="true"]) {
   border-color: color-mix(in srgb, var(--color-brand, #b88648) 42%, transparent) !important;
   background-color: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
   color: var(--color-indigo-700) !important;
@@ -4172,7 +4327,7 @@ html[data-custom-theme="true"] .sanctuary-shell :is(.command-bar, .sanctuary-sid
   color: var(--color-indigo-300) !important;
 }
 
-.dark .sanctuary-shell :is(button[aria-pressed="true"], button[aria-selected="true"], [role="tab"][aria-selected="true"]) {
+.dark .sanctuary-shell :is(button[aria-pressed="true"]:not(.focus-alarm-day), button[aria-selected="true"], [role="tab"][aria-selected="true"]) {
   border-color: color-mix(in srgb, var(--color-brand, #b88648) 42%, transparent) !important;
   background-color: color-mix(in srgb, var(--color-brand, #b88648) 12%, transparent) !important;
   color: var(--color-indigo-300) !important;
@@ -4281,7 +4436,7 @@ html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary
   color: var(--om-ink);
 }
 
-:root[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"] {
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.journal-reflection-editor):not(.journal-reflection-toolbar *) {
   border-color: color-mix(in srgb, #bd9874 var(--om-card-border-alpha, 20%), transparent) !important;
   background-image: linear-gradient(
     145deg,
@@ -4424,7 +4579,7 @@ html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary
   display: none;
 }
 
-:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"] {
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.journal-reflection-editor):not(.journal-reflection-toolbar *) {
   border-color: color-mix(in srgb, rgb(169 195 231) calc(34% * var(--om-foreground-opacity, 1)), transparent) !important;
   background-image: linear-gradient(135deg,
     rgb(126 181 204 / calc(14% * var(--om-foreground-opacity, 1))),
@@ -4482,106 +4637,6 @@ html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary
   }
 }
 
-/* Give the two nature-inspired presets their own unmistakable surface palettes. */
-:root[data-lifeos-mode="light"][data-appearance-preset="forest"] .sanctuary-shell {
-  --om-card-base: #e1efda;
-  --om-card-soft-base: #cfe5c8;
-  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
-  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
-  --om-shell-surface: #d1e4c8;
-  --om-shell-surface-soft: #bdd8b5;
-  --om-line: color-mix(in srgb, #3f704b var(--om-card-border-alpha, 20%), transparent);
-  --om-glass-surface: var(--om-card);
-  --om-glass-border: var(--om-line);
-  --color-card: var(--om-card);
-  --color-card-soft: var(--om-card-soft);
-  --color-line: var(--om-line);
-}
-
-:root[data-lifeos-mode="light"][data-appearance-preset="sunset"] .sanctuary-shell {
-  --om-card-base: #ffeadb;
-  --om-card-soft-base: #f8d1c0;
-  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
-  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
-  --om-shell-surface: #f5d2c1;
-  --om-shell-surface-soft: #efbca9;
-  --om-line: color-mix(in srgb, #b94d58 var(--om-card-border-alpha, 20%), transparent);
-  --om-glass-surface: var(--om-card);
-  --om-glass-border: var(--om-line);
-  --color-card: var(--om-card);
-  --color-card-soft: var(--om-card-soft);
-  --color-line: var(--om-line);
-}
-
-:root.dark[data-appearance-preset="forest"] .sanctuary-shell {
-  --om-card-base: #1b2b21;
-  --om-card-soft-base: #23372a;
-  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
-  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
-  --om-shell-surface: #18251d;
-  --om-shell-surface-soft: #24332a;
-  --om-line: color-mix(in srgb, #76a783 var(--om-card-border-alpha, 20%), transparent);
-  --om-glass-surface: var(--om-card);
-  --om-glass-border: var(--om-line);
-  --color-card: var(--om-card);
-  --color-card-soft: var(--om-card-soft);
-  --color-line: var(--om-line);
-}
-
-:root.dark[data-appearance-preset="sunset"] .sanctuary-shell {
-  --om-card-base: #302127;
-  --om-card-soft-base: #3b2830;
-  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
-  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
-  --om-shell-surface: #291d24;
-  --om-shell-surface-soft: #35252d;
-  --om-line: color-mix(in srgb, #e18479 var(--om-card-border-alpha, 20%), transparent);
-  --om-glass-surface: var(--om-card);
-  --om-glass-border: var(--om-line);
-  --color-card: var(--om-card);
-  --color-card-soft: var(--om-card-soft);
-  --color-line: var(--om-line);
-}
-
-:root[data-appearance-preset="forest"] .sanctuary-shell::before {
-  background-image:
-    linear-gradient(180deg, rgb(12 38 25 / 12%), rgb(13 48 34 / 34%)),
-    var(--om-wallpaper-image);
-  background-position: center, var(--om-wallpaper-position, center 48%);
-  animation: none;
-}
-
-:root[data-appearance-preset="sunset"] .sanctuary-shell::before {
-  background-image:
-    linear-gradient(180deg, rgb(57 31 51 / 10%), rgb(73 35 48 / 28%)),
-    var(--om-wallpaper-image);
-  background-position: center, var(--om-wallpaper-position, center 48%);
-  animation: none;
-}
-
-:root[data-appearance-preset="ocean"] .sanctuary-shell::before {
-  background-image:
-    linear-gradient(180deg, rgb(5 32 57 / 10%), rgb(3 42 57 / 28%)),
-    var(--om-wallpaper-image);
-  background-position: center, var(--om-wallpaper-position, center 48%);
-  animation: none;
-}
-
-:root[data-appearance-preset="midnight"] .sanctuary-shell::before {
-  background-image:
-    linear-gradient(180deg, rgb(7 15 43 / 10%), rgb(8 19 48 / 32%)),
-    var(--om-wallpaper-image);
-  background-position: center, var(--om-wallpaper-position, center 48%);
-  animation: none;
-}
-
-@media (orientation: portrait) {
-  :root:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell::before {
-    background-size: cover, cover;
-    background-position: center, var(--om-wallpaper-position, center 48%);
-  }
-}
-
 /* Keep light-mode work surfaces crisp and readable across every module. */
 :root[data-lifeos-mode="light"] .sanctuary-shell {
   --om-card-blur: 0px;
@@ -4591,7 +4646,7 @@ html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary
 :root[data-lifeos-mode="light"] .sanctuary-shell .command-bar,
 :root[data-lifeos-mode="light"] .sanctuary-shell .sanctuary-sidebar,
 :root[data-lifeos-mode="light"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-hero,
-:root[data-lifeos-mode="light"] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not([class*="absolute"]):not([class*="fixed"]) {
+:root[data-lifeos-mode="light"] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]) {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   box-shadow: var(--om-glass-shadow) !important;
@@ -4601,107 +4656,6 @@ html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary
   :root[data-lifeos-mode="light"] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"] {
     transition: none;
   }
-}
-
-:root[data-appearance-preset="ocean"] .sanctuary-shell {
-  --om-wallpaper-surface-blur: 12px;
-  --om-wallpaper-glass-primary: rgb(14 116 144 / 16%);
-  --om-wallpaper-glass-secondary: rgb(56 189 248 / 11%);
-  --om-wallpaper-glass-tertiary: rgb(20 184 166 / 9%);
-  --om-wallpaper-glass-border: rgb(8 107 130 / 42%);
-  --om-wallpaper-chrome: rgb(219 241 247 / 86%);
-  --om-wallpaper-action-start: #0e7490;
-  --om-wallpaper-action-end: #0f9b9f;
-}
-
-:root.dark[data-appearance-preset="ocean"] .sanctuary-shell {
-  --om-wallpaper-surface-blur: 16px;
-  --om-wallpaper-chrome: rgb(5 32 48 / 82%);
-}
-
-:root[data-appearance-preset="forest"] .sanctuary-shell {
-  --om-wallpaper-surface-blur: 12px;
-  --om-wallpaper-glass-primary: rgb(34 105 59 / 16%);
-  --om-wallpaper-glass-secondary: rgb(132 204 22 / 10%);
-  --om-wallpaper-glass-tertiary: rgb(13 148 136 / 9%);
-  --om-wallpaper-glass-border: rgb(55 111 64 / 42%);
-  --om-wallpaper-chrome: rgb(229 242 222 / 86%);
-  --om-wallpaper-action-start: #287344;
-  --om-wallpaper-action-end: #4a963f;
-}
-
-:root.dark[data-appearance-preset="forest"] .sanctuary-shell {
-  --om-wallpaper-surface-blur: 16px;
-  --om-wallpaper-chrome: rgb(21 42 29 / 84%);
-}
-
-:root[data-appearance-preset="sunset"] .sanctuary-shell {
-  --om-wallpaper-surface-blur: 12px;
-  --om-wallpaper-glass-primary: rgb(214 95 51 / 15%);
-  --om-wallpaper-glass-secondary: rgb(244 145 85 / 12%);
-  --om-wallpaper-glass-tertiary: rgb(190 71 103 / 10%);
-  --om-wallpaper-glass-border: rgb(178 79 66 / 42%);
-  --om-wallpaper-chrome: rgb(255 235 220 / 87%);
-  --om-wallpaper-action-start: #d65b43;
-  --om-wallpaper-action-end: #bd4968;
-}
-
-:root.dark[data-appearance-preset="sunset"] .sanctuary-shell {
-  --om-wallpaper-surface-blur: 16px;
-  --om-wallpaper-chrome: rgb(49 30 35 / 84%);
-}
-
-:root[data-appearance-preset="midnight"] .sanctuary-shell {
-  --om-wallpaper-surface-blur: 16px;
-  --om-wallpaper-glass-primary: rgb(55 79 145 / 16%);
-  --om-wallpaper-glass-secondary: rgb(99 102 241 / 12%);
-  --om-wallpaper-glass-tertiary: rgb(14 116 144 / 9%);
-  --om-wallpaper-glass-border: rgb(127 151 213 / 42%);
-  --om-wallpaper-chrome: rgb(228 233 249 / 86%);
-  --om-wallpaper-action-start: #465eaa;
-  --om-wallpaper-action-end: #6558ad;
-}
-
-:root.dark[data-appearance-preset="midnight"] .sanctuary-shell {
-  --om-wallpaper-chrome: rgb(16 22 47 / 86%);
-}
-
-:root[data-lifeos-mode]:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="rounded-"][class*="border"]:not([class*="absolute"]):not([class*="fixed"]) {
-  border-color: var(--om-wallpaper-glass-border) !important;
-  background:
-    linear-gradient(135deg,
-      var(--om-wallpaper-glass-primary),
-      var(--om-wallpaper-glass-secondary) 55%,
-      var(--om-wallpaper-glass-tertiary)),
-    var(--om-card) !important;
-  box-shadow: 0 10px 30px rgb(18 32 48 / 10%),
-    inset 0 1px rgb(255 255 255 / 38%) !important;
-  backdrop-filter: blur(var(--om-wallpaper-surface-blur, 12px)) saturate(135%) !important;
-  -webkit-backdrop-filter: blur(var(--om-wallpaper-surface-blur, 12px)) saturate(135%) !important;
-}
-
-:root[data-lifeos-mode]:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .command-bar,
-:root[data-lifeos-mode]:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .sanctuary-sidebar {
-  background-color: var(--om-wallpaper-chrome) !important;
-  border-color: var(--om-wallpaper-glass-border) !important;
-  backdrop-filter: blur(var(--om-wallpaper-surface-blur, 16px)) saturate(140%) !important;
-  -webkit-backdrop-filter: blur(var(--om-wallpaper-surface-blur, 16px)) saturate(140%) !important;
-}
-
-:root:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .sanctuary-main [class~="bg-indigo-600"] {
-  border: 1px solid var(--om-wallpaper-glass-border);
-  background:
-    linear-gradient(115deg, rgb(255 255 255 / 20%), transparent 44%),
-    linear-gradient(115deg, var(--om-wallpaper-action-start), var(--om-wallpaper-action-end)) !important;
-  color: #fff !important;
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--om-wallpaper-action-start) 24%, transparent),
-    inset 0 1px rgb(255 255 255 / 38%);
-}
-
-:root:is([data-appearance-preset="ocean"], [data-appearance-preset="forest"], [data-appearance-preset="sunset"], [data-appearance-preset="midnight"]) .sanctuary-shell .sanctuary-main [class~="bg-indigo-600"]:hover:not(:disabled) {
-  filter: brightness(1.08);
-  box-shadow: 0 14px 32px color-mix(in srgb, var(--om-wallpaper-action-start) 34%, transparent),
-    inset 0 1px rgb(255 255 255 / 48%);
 }
 
 .drive-confirm-overlay {
@@ -4751,4 +4705,1632 @@ html[data-wallpaper-video="true"][data-appearance-preset="sanctuary"] .sanctuary
     padding-right: 1rem !important;
     padding-left: 1rem !important;
   }
+}
+
+.dashboard-view {
+  --om-card: var(--om-card-base);
+  --om-card-soft: var(--om-card-soft-base);
+}
+
+.sanctuary-shell .sanctuary-main.dashboard-canvas {
+  background-color: transparent !important;
+}
+
+html[data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel {
+  border-color: color-mix(in srgb, var(--om-ink-muted) 24%, transparent) !important;
+  background: var(--om-card) !important;
+  background-image: none !important;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-clear-state {
+  border-bottom: 1px solid color-mix(in srgb, var(--om-ink-muted) 20%, transparent);
+}
+
+.dashboard-view {
+  font-family: var(--font-sans);
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel[class*="bg-white"] {
+  border: 1px solid color-mix(in srgb, var(--om-ink-muted) 18%, var(--om-line)) !important;
+  border-radius: 1rem !important;
+  background: var(--om-card) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: border-color 160ms ease;
+}
+
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel[class*="bg-white"],
+:root[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel[class*="bg-white"]:hover {
+  border-color: color-mix(in srgb, #bd9874 var(--om-card-border-alpha, 20%), transparent) !important;
+  background-image: linear-gradient(
+    145deg,
+    rgb(245 229 209 / 8%),
+    rgb(240 220 195 / 6%) 58%,
+    rgb(234 211 183 / 4%)
+  ) !important;
+}
+
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel[class*="bg-white"],
+:root[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel[class*="bg-white"]:hover {
+  border-color: color-mix(in srgb, rgb(169 195 231) calc(34% * var(--om-foreground-opacity, 1)), transparent) !important;
+  background-image: linear-gradient(
+    135deg,
+    rgb(126 181 204 / 14%),
+    rgb(123 88 166 / 12%) 55%,
+    rgb(255 218 158 / 8%)
+  ) !important;
+}
+
+.dashboard-view .dashboard-panel h2 {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-view .dashboard-panel button {
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-item-row {
+  min-height: 3.5rem;
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--om-ink-muted) 16%, transparent) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-item-row:hover {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 5%, transparent) !important;
+  border-bottom-color: color-mix(in srgb, var(--color-brand, #b88648) 34%, var(--om-line)) !important;
+}
+
+.dashboard-view .dashboard-item-title {
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+}
+
+.dashboard-view .dashboard-item-meta {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+.dashboard-view .dashboard-transaction-row {
+  line-height: 1.45;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-bar {
+  width: min(0.75rem, 38%);
+  min-height: 2px;
+  border-radius: 0 !important;
+  transition: height 180ms ease;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-bar-income {
+  background: #34d399 !important;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-bar-spending {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 82%, var(--om-ink) 18%) !important;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-legend {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 0 !important;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-legend-income {
+  background: #34d399 !important;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-legend-spending {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 82%, var(--om-ink) 18%) !important;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-day-values {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  gap: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-day-values .income {
+  color: #34d399;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-day-values .outflow {
+  color: color-mix(in srgb, var(--color-brand, #b88648) 82%, var(--om-ink) 18%);
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-day.is-future {
+  opacity: 0.45;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-totals > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-total-label {
+  color: var(--om-ink-muted);
+  font-size: 0.625rem;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-view .dashboard-weekly-totals strong {
+  overflow: hidden;
+  color: var(--om-ink);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sanctuary-shell .sanctuary-main .dashboard-weekly-chart [title] {
+  cursor: default;
+}
+
+.dashboard-view .dashboard-goal-row {
+  padding: 0.125rem 0;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel :is(button, div, span) {
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel button:not(.dashboard-task-toggle) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  transform: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel .dashboard-section-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--color-brand, #b88648) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-task-toggle {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-width: 1px !important;
+  border-radius: 0.2rem !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-flat-action {
+  min-height: 2rem;
+  padding: 0.25rem 0 !important;
+  border-bottom: 1px solid currentColor !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel .h-2.w-full {
+  height: 0.25rem;
+  border-radius: 0 !important;
+  background: color-mix(in srgb, var(--om-ink-muted) 16%, transparent) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel .h-2.w-full > div {
+  border-radius: 0 !important;
+  background: var(--color-brand, #b88648) !important;
+  background-image: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel[class*="bg-white"] .grid > div[class*="rounded-"][class*="border"] {
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--om-ink-muted) 16%, transparent) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel[class*="bg-white"] .grid > div[class*="rounded-"][class*="border"]:last-child {
+  border-bottom: 0 !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel:hover {
+    border-color: color-mix(in srgb, var(--color-brand, #b88648) 36%, var(--om-line)) !important;
+  }
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-sidebar {
+  border-right-color: var(--om-line);
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-sidebar nav[aria-label="Main navigation"] > div > div > button {
+  position: relative;
+  min-height: 2rem;
+  color: var(--om-ink-soft);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-sidebar nav[aria-label="Main navigation"] > div > div > button:hover {
+  background: color-mix(in srgb, var(--om-ink) 5%, transparent);
+  color: var(--om-ink);
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-sidebar nav[aria-label="Main navigation"] > div > div > button[aria-current="page"] {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent);
+  color: var(--om-ink);
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-sidebar nav[aria-label="Main navigation"] > div > div > button[aria-current="page"]::before {
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  left: 0;
+  width: 2px;
+  background: var(--color-brand, #b88648);
+  content: "";
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-sidebar nav[aria-label="Main navigation"] > div > div > button[aria-current="page"] :is(svg, span) {
+  color: var(--color-brand, #b88648);
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-sidebar nav[aria-label="Main navigation"] h2 {
+  color: var(--om-ink-muted);
+  letter-spacing: 0.1em;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main button[aria-current="page"] {
+  border-bottom: 2px solid var(--color-brand, #b88648) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--om-ink) !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main :is(
+  .dashboard-hero,
+  .dashboard-panel,
+  div[class*="rounded-"][class*="border"]:not([class*="rounded-full"]):not(.dashboard-item-row):not(.vault-finance-link-panel):not(.journal-reflection-editor):not(.journal-reflection-toolbar *):not(.goal-tree-card--sub):not(.goal-tree-card--micro):not(.goal-tree-card--nano):not(.goal-tree-card--atomic):not([class*="absolute"]):not([class*="fixed"]),
+  section[class*="rounded-"][class*="border"]:not([class*="rounded-full"]):not(.dashboard-item-row):not(.vault-finance-link-panel):not(.goal-tree-card--sub):not(.goal-tree-card--micro):not(.goal-tree-card--nano):not(.goal-tree-card--atomic):not([class*="absolute"]):not([class*="fixed"]),
+  article[class*="rounded-"][class*="border"]:not([class*="rounded-full"]):not(.dashboard-item-row):not(.vault-finance-link-panel):not(.goal-tree-card--sub):not(.goal-tree-card--micro):not(.goal-tree-card--nano):not(.goal-tree-card--atomic):not([class*="absolute"]):not([class*="fixed"]),
+  details[class*="rounded-"][class*="border"]:not([class*="rounded-full"]):not(.dashboard-item-row):not(.vault-finance-link-panel):not(.goal-tree-card--sub):not(.goal-tree-card--micro):not(.goal-tree-card--nano):not(.goal-tree-card--atomic):not([class*="absolute"]):not([class*="fixed"])
+) {
+  border-style: solid !important;
+  border-width: 1px !important;
+  border-color: color-mix(in srgb, var(--om-ink-muted) 24%, var(--om-line)) !important;
+  border-radius: 1rem !important;
+  background-color: var(--om-card-base, var(--om-card)) !important;
+  background-image: none !important;
+  box-shadow: var(--om-glass-shadow) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main :is(
+  .dashboard-hero,
+  .dashboard-panel,
+  div[class*="rounded-"][class*="border"]:not([class*="rounded-full"]):not(.dashboard-item-row):not(.vault-finance-link-panel):not([class*="absolute"]):not([class*="fixed"]),
+  section[class*="rounded-"][class*="border"]:not([class*="rounded-full"]):not(.dashboard-item-row):not(.vault-finance-link-panel):not([class*="absolute"]):not([class*="fixed"]),
+  article[class*="rounded-"][class*="border"]:not([class*="rounded-full"]):not(.dashboard-item-row):not(.vault-finance-link-panel):not([class*="absolute"]):not([class*="fixed"]),
+  details[class*="rounded-"][class*="border"]:not([class*="rounded-full"]):not(.dashboard-item-row):not(.vault-finance-link-panel):not([class*="absolute"]):not([class*="fixed"])
+) h2 {
+  color: var(--om-ink);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-slide-tabs] {
+  border: 1px solid var(--om-line);
+  border-radius: 0.875rem;
+  background: var(--om-card-base, var(--om-card));
+  padding: 0.25rem;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main :has(> [data-slide-tabs]) {
+  border-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-slide-tabs] > div > button {
+  min-height: 2.25rem;
+  border: 1px solid transparent !important;
+  border-radius: 0.625rem !important;
+  background: transparent !important;
+  color: var(--om-ink-soft) !important;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-slide-tabs] > div > button[aria-current="page"] {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 28%, var(--om-line)) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 12%, var(--om-card-base, #151a2e)) !important;
+  color: var(--om-ink) !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-slide-tabs].calculator-flat-tabs {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-slide-tabs] > div > button:not([aria-current="page"]):hover {
+    background: color-mix(in srgb, var(--om-ink) 5%, var(--om-card-base, #151a2e)) !important;
+    color: var(--om-ink) !important;
+  }
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .om-empty-state {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .om-empty-state-icon {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 12%, var(--om-card-base, #151a2e)) !important;
+  color: var(--color-brand, #b88648) !important;
+}
+
+.sanctuary-shell .sanctuary-main .focus-alarm-save {
+  border-color: rgb(16 185 129 / 38%) !important;
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #047857 !important;
+}
+
+.sanctuary-shell .sanctuary-main .focus-alarm-mode {
+  color: #475569 !important;
+}
+
+.sanctuary-shell .sanctuary-main .focus-alarm-panel .om-empty-state-icon {
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #059669 !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main .focus-alarm-save {
+  border-color: rgb(16 185 129 / 38%) !important;
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #a7f3d0 !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main .focus-alarm-mode {
+  color: #cbd5e1 !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main .focus-alarm-panel .om-empty-state-icon {
+  background-color: rgb(16 185 129 / 12%) !important;
+  color: #6ee7b7 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .focus-alarm-panel .om-empty-state-icon {
+  background: rgb(16 185 129 / 10%) !important;
+  border-color: rgb(16 185 129 / 18%) !important;
+  color: #059669 !important;
+}
+
+html.dark[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .focus-alarm-panel .om-empty-state-icon {
+  background: rgb(16 185 129 / 12%) !important;
+  border-color: rgb(16 185 129 / 20%) !important;
+  color: #6ee7b7 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="border"][class*="bg-white"]:not(.journal-reflection-editor):not(.journal-reflection-toolbar *),
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="border"][class*="bg-card"]:not(.journal-reflection-editor):not(.journal-reflection-toolbar *) {
+  border: 1px solid color-mix(in srgb, var(--om-ink-muted) 24%, var(--om-line)) !important;
+  border-radius: 1rem !important;
+  background-color: var(--om-card-base, var(--om-card)) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main:not(.dashboard-canvas) :is(div, section, article, details)[class*="rounded-"][class*="border"]:is([class~="p-4"], [class~="p-5"], [class~="p-6"], [class~="sm:p-4"], [class~="sm:p-5"], [class~="sm:p-6"]):not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]) {
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .finance-view form label {
+  color: var(--om-ink-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .finance-view :is(
+  input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not(.calc-display-input),
+  select,
+  textarea
+) {
+  border-color: var(--om-line) !important;
+  border-radius: 0.625rem;
+  background-color: var(--om-card-soft) !important;
+  color: var(--om-ink) !important;
+  font-size: 0.875rem;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .finance-view :is(
+  input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not(.calc-display-input),
+  select,
+  textarea
+):focus {
+  border-color: #10b981 !important;
+  background-color: color-mix(in srgb, var(--om-card-soft) 82%, #10b981 18%) !important;
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 16%) !important;
+  outline: none;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .finance-view select.finance-flat-select {
+  border: 0 !important;
+  border-bottom: 1px solid var(--om-line) !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .settings-system-grid select.settings-flat-select {
+  border: 0 !important;
+  border-bottom: 1px solid var(--om-line) !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .finance-view form button[type="submit"] {
+  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 32%, transparent) !important;
+  border-radius: 0.625rem !important;
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 9%, transparent) !important;
+  background-image: none !important;
+  color: var(--om-ink) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .finance-view form button[type="submit"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 48%, transparent) !important;
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 16%, transparent) !important;
+}
+
+.life-view .adaptive-card-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.vault-view .adaptive-card-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem !important;
+  margin-top: 0 !important;
+}
+
+.vault-view .vault-submenu-layout {
+  gap: 1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view .vault-submenu-layout > div {
+  min-width: 0;
+  padding: 1.25rem !important;
+  border: 1px solid var(--om-glass-border) !important;
+  border-radius: 1rem !important;
+  background: var(--om-card-base) !important;
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view form.mt-4 > * + * {
+  margin-top: 0.875rem !important;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view form label {
+  font-size: 0.8125rem !important;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view form input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+.sanctuary-shell .sanctuary-main .vault-view form select {
+  height: 2.5rem !important;
+  min-height: 2.5rem !important;
+  border-radius: 0.75rem !important;
+  font-size: 0.9375rem !important;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view form textarea {
+  border-radius: 0.75rem !important;
+  font-size: 0.9375rem !important;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view .sanctuary-upload-control {
+  min-height: 2.5rem !important;
+  border-radius: 0.75rem !important;
+  font-size: 0.875rem !important;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view .vault-finance-link-panel {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.5rem 0 !important;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view .adaptive-card-grid > .dashboard-item-row {
+  border-radius: 0.75rem !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.75rem !important;
+}
+
+.sanctuary-shell .sanctuary-main .life-view form button[type="submit"] {
+  min-height: 3.0625rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.sanctuary-shell .sanctuary-main button.life-form-submit {
+  min-height: 3.0625rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view form button[type="submit"] {
+  min-height: 3.0625rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+:root[data-appearance-preset] .sanctuary-shell .sanctuary-main .life-view form button[type="submit"],
+.sanctuary-shell .sanctuary-main .life-view form button[type="submit"] {
+  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 36%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
+  background-image: none !important;
+  color: var(--color-indigo-700) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+:root[data-appearance-preset] .sanctuary-shell .sanctuary-main button.life-form-submit,
+.sanctuary-shell .sanctuary-main button.life-form-submit {
+  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 36%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
+  background-image: none !important;
+  color: var(--color-indigo-700) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+:root[data-appearance-preset] .sanctuary-shell .sanctuary-main .vault-view form button[type="submit"],
+.sanctuary-shell .sanctuary-main .vault-view form button[type="submit"] {
+  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 36%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
+  background-image: none !important;
+  color: var(--color-indigo-700) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+:root.dark[data-appearance-preset] .sanctuary-shell .sanctuary-main .life-view form button[type="submit"],
+.dark .sanctuary-shell .sanctuary-main .life-view form button[type="submit"] {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 8%, transparent) !important;
+  color: var(--color-indigo-300) !important;
+}
+
+:root.dark[data-appearance-preset] .sanctuary-shell .sanctuary-main button.life-form-submit,
+.dark .sanctuary-shell .sanctuary-main button.life-form-submit {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 8%, transparent) !important;
+  color: var(--color-indigo-300) !important;
+}
+
+:root.dark[data-appearance-preset] .sanctuary-shell .sanctuary-main .vault-view form button[type="submit"],
+.dark .sanctuary-shell .sanctuary-main .vault-view form button[type="submit"] {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 8%, transparent) !important;
+  color: var(--color-indigo-300) !important;
+}
+
+:root[data-appearance-preset] .sanctuary-shell .sanctuary-main .life-view form button[type="submit"]:hover:not(:disabled),
+.sanctuary-shell .sanctuary-main .life-view form button[type="submit"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 54%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 18%, transparent) !important;
+  color: var(--color-indigo-950) !important;
+}
+
+:root[data-appearance-preset] .sanctuary-shell .sanctuary-main button.life-form-submit:hover:not(:disabled),
+.sanctuary-shell .sanctuary-main button.life-form-submit:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 54%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 18%, transparent) !important;
+  color: var(--color-indigo-950) !important;
+}
+
+:root[data-appearance-preset] .sanctuary-shell .sanctuary-main .vault-view form button[type="submit"]:hover:not(:disabled),
+.sanctuary-shell .sanctuary-main .vault-view form button[type="submit"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 54%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 18%, transparent) !important;
+  color: var(--color-indigo-950) !important;
+}
+
+:root.dark[data-appearance-preset] .sanctuary-shell .sanctuary-main .life-view form button[type="submit"]:hover:not(:disabled),
+.dark .sanctuary-shell .sanctuary-main .life-view form button[type="submit"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 14%, transparent) !important;
+  color: var(--color-indigo-200) !important;
+}
+
+:root.dark[data-appearance-preset] .sanctuary-shell .sanctuary-main button.life-form-submit:hover:not(:disabled),
+.dark .sanctuary-shell .sanctuary-main button.life-form-submit:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 14%, transparent) !important;
+  color: var(--color-indigo-200) !important;
+}
+
+:root.dark[data-appearance-preset] .sanctuary-shell .sanctuary-main .vault-view form button[type="submit"]:hover:not(:disabled),
+.dark .sanctuary-shell .sanctuary-main .vault-view form button[type="submit"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 14%, transparent) !important;
+  color: var(--color-indigo-200) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .life-view .adaptive-card-grid > div[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]),
+.sanctuary-shell .sanctuary-main .life-view .adaptive-card-grid > div[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]) {
+  border: 1px solid var(--om-glass-border) !important;
+  border-radius: 0.75rem !important;
+  background: var(--om-card) !important;
+  box-shadow: none !important;
+  padding: 0.75rem !important;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .vault-view .adaptive-card-grid > div[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]),
+.sanctuary-shell .sanctuary-main .vault-view .adaptive-card-grid > div[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]) {
+  border: 1px solid var(--om-glass-border) !important;
+  border-radius: 0.75rem !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.75rem !important;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .life-view .adaptive-card-grid > div[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]):hover,
+.sanctuary-shell .sanctuary-main .life-view .adaptive-card-grid > div[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]):hover {
+  border-color: color-mix(in srgb, var(--om-line) 55%, var(--om-ink-muted) 45%) !important;
+  background: color-mix(in srgb, var(--om-ink) 3%, var(--om-card)) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .vault-view .adaptive-card-grid > div[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]):hover,
+.sanctuary-shell .sanctuary-main .vault-view .adaptive-card-grid > div[class*="rounded-"][class*="border"]:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not([class*="absolute"]):not([class*="fixed"]):hover {
+  border-color: color-mix(in srgb, var(--om-line) 55%, var(--om-ink-muted) 45%) !important;
+  background: color-mix(in srgb, var(--om-ink) 3%, var(--om-card)) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .task-area-card-view :is(div, section, article, form)[class*="rounded-"][class*="border"]:is([class~="p-2"], [class~="p-2.5"], [class~="p-3"], [class~="p-3.5"], [class~="p-4"], [class~="p-5"], [class~="p-6"], [class~="p-7"], [class~="p-8"], [class~="sm:p-3"], [class~="sm:p-4"], [class~="sm:p-5"], [class~="sm:p-6"], [class~="sm:p-8"]):not([class*="from-"]):not([class*="absolute"]):not([class*="fixed"]),
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .task-area-dropdown {
+  border-color: color-mix(in srgb, var(--om-ink-muted) 24%, var(--om-line)) !important;
+  border-radius: 1rem !important;
+  background: var(--om-card) !important;
+  background-image: none !important;
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-mode-toggle {
+  border-color: rgb(167 243 208) !important;
+  background-color: rgb(236 253 245 / 85%) !important;
+  color: #047857 !important;
+  font-size: 9px !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] h2 {
+  font-size: 14px !important;
+}
+
+.sanctuary-shell .sanctuary-main #task-roster-card .dashboard-item-row {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main #routine-history-card [data-routine-history-item] {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main #routine-history-card [data-routine-history-item] button {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main #task-roster-card > div:first-child > details > summary {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] form label {
+  font-size: 11px !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] form :is(input:not([type="checkbox"]), select, textarea, button:not(.task-genesis-mode-toggle)) {
+  font-size: 13px !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-goal-link-panel span {
+  font-size: 9px !important;
+}
+
+.sanctuary-shell [data-task-genesis-card] select.task-genesis-field {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--om-ink) !important;
+  text-align: left !important;
+  text-align-last: left !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sanctuary-shell [data-task-genesis-card] select.task-genesis-field option,
+.sanctuary-shell [data-task-genesis-card] select.task-genesis-field optgroup {
+  background-color: var(--om-card) !important;
+  color: var(--om-ink) !important;
+}
+
+@media (max-width: 420px) {
+  .sanctuary-shell [data-task-genesis-card] form > .grid.grid-cols-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sanctuary-shell [data-task-genesis-card] .task-genesis-field {
+    font-size: 16px !important;
+  }
+
+  .sanctuary-shell [data-task-genesis-card] textarea.task-genesis-field {
+    min-height: 6rem;
+  }
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-mode-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--om-card, #fff), 0 0 0 4px rgb(16 185 129 / 45%);
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-mode-toggle > span:last-child {
+  background-color: rgb(203 213 225) !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-mode-toggle[aria-checked="true"] > span:last-child {
+  background-color: #10b981 !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-mode-toggle {
+  border-color: rgb(6 78 59) !important;
+  background-color: rgb(2 44 34 / 70%) !important;
+  color: #6ee7b7 !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-mode-toggle > span:last-child {
+  background-color: rgb(51 65 85) !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-mode-toggle[aria-checked="true"] > span:last-child {
+  background-color: #059669 !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-goal-link-panel {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.sanctuary-shell .sanctuary-main :is([data-routine-genesis-card], [data-habit-genesis-card]) form button.bg-indigo-600[type="submit"] {
+  border: 1px solid #3b3b40 !important;
+  background: #1d2236 !important;
+  background-image: none !important;
+  color: #89867f !important;
+  box-shadow: none !important;
+}
+
+.sanctuary-shell .sanctuary-main :is([data-routine-genesis-card], [data-habit-genesis-card]) form button.bg-indigo-600[type="submit"]:hover:not(:disabled) {
+  border-color: #49494e !important;
+  background: #23283c !important;
+  background-image: none !important;
+  color: #a09d96 !important;
+}
+
+.sanctuary-shell .sanctuary-main :is([data-routine-genesis-card], [data-habit-genesis-card]) form button[type="submit"]:disabled {
+  opacity: 0.72;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-habit-tracker] [data-habit-item] {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-habit-tracker] [data-habit-item] button {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-habit-tracker] .progressive-actions__trigger {
+  min-width: 1.25rem !important;
+  min-height: 1.25rem !important;
+  border-radius: 0 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-habit-tracker-filters] button {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-goal-link-panel [aria-label="Filter goals by level"] {
+  gap: 1.25rem !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-goal-link-panel button.task-genesis-goal-level-tab {
+  min-height: 2rem;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  padding: 0.375rem 0 !important;
+  color: var(--om-ink-soft) !important;
+  box-shadow: none !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-goal-link-panel button.task-genesis-goal-level-tab[aria-pressed="true"] {
+  border-bottom-color: #10b981 !important;
+  background: transparent !important;
+  color: #047857 !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-goal-link-panel button.task-genesis-goal-level-tab:hover {
+  background: transparent !important;
+  color: #059669 !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-goal-link-panel select {
+  height: 2.5rem !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--om-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding-left: 0 !important;
+  box-shadow: none !important;
+}
+
+.sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-goal-link-panel select:focus {
+  border-bottom-color: #10b981 !important;
+  box-shadow: 0 1px 0 #10b981 !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main [data-task-genesis-card] .task-genesis-goal-link-panel button.task-genesis-goal-level-tab[aria-pressed="true"] {
+  color: #6ee7b7 !important;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) :is(div, section, article, form)[class*="rounded-"][class*="border"]:has(> form),
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form[class*="rounded-"][class*="border"] {
+  border-color: var(--om-glass-border) !important;
+  border-radius: 1rem !important;
+  background-color: var(--om-card) !important;
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) :is(div, section, article, form)[class*="rounded-"][class*="border"]:has(> form),
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form[class*="rounded-"][class*="border"] {
+  padding: 1rem !important;
+}
+
+@media (min-width: 640px) {
+  .sanctuary-shell :is(.sanctuary-main, [role="dialog"]) :is(div, section, article, form)[class*="rounded-"][class*="border"]:has(> form),
+  .sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form[class*="rounded-"][class*="border"] {
+    padding: 1.25rem !important;
+  }
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form label {
+  color: var(--om-ink-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form :is(
+  input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="search"]):not(.calc-display-input),
+  select:not(.finance-flat-select):not(.toolbar-flat-control),
+  textarea
+) {
+  min-height: 2.5rem;
+  border-color: var(--om-line) !important;
+  border-radius: 0.625rem;
+  background-color: var(--om-card-soft) !important;
+  color: var(--om-ink) !important;
+  font-size: 0.875rem;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form :is(
+  input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="search"]):not(.calc-display-input),
+  select:not(.finance-flat-select):not(.toolbar-flat-control),
+  textarea
+):focus {
+  border-color: #10b981 !important;
+  background-color: color-mix(in srgb, var(--om-card-soft) 82%, #10b981 18%) !important;
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 16%) !important;
+  outline: none;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form button[type="submit"] {
+  min-height: 3.0625rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar :is(select, button) {
+  border: 0 !important;
+  border-radius: 0.25rem !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar select.toolbar-flat-control {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-color: transparent !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar select[class*="rounded-"][class*="border"][class*="bg-white"] {
+  border: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  padding-left: 0.5rem;
+  padding-right: 1.5rem;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar button[class*="rounded-"][class*="border"][class*="bg-white"],
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar button[class*="rounded-"][class*="border"][class*="bg-"] {
+  border: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar button[class*="rounded-"][class*="border"][class*="bg-"] {
+  color: var(--color-brand, #b88648) !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar button[class*="rounded-"][class*="border"][class*="bg-"] svg {
+  color: var(--color-brand, #b88648) !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar button:hover,
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar select:hover {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 10%, transparent) !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .journal-reflection-toolbar div[class*="gap-0.5"][class*="rounded-"][class*="border"][class*="bg-white"] {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] :is(div, section, article, details)[class*="rounded-"][class*="border"]:not(.focus-flat-card):not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not(.vault-finance-link-panel):not(.journal-reflection-editor):not(.journal-reflection-toolbar *):not([class*="absolute"]):not([class*="fixed"]) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] .focus-telemetry-stat {
+  border: 0 !important;
+  background: var(--om-card-soft-base) !important;
+  padding: 1rem !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] :is(div, section, article, details)[class*="rounded-"][class*="border"].focus-telemetry-stat:not(.dashboard-hero):not(.dashboard-panel):not(.dashboard-item-row):not(.vault-finance-link-panel):not(.journal-reflection-editor):not(.journal-reflection-toolbar *):not([class*="absolute"]):not([class*="fixed"]) {
+  border: 0 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] .focus-telemetry-stat + .focus-telemetry-stat {
+  border-left: 0 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] .focus-preset-tab,
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] :is(.focus-timer-controls button, .focus-flat-field, .focus-flat-control) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] :is(.focus-flat-field, .focus-flat-control) {
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] .focus-flat-card {
+  background-color: var(--om-card-base) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] .focus-flat-field {
+  border: 0 !important;
+  background: var(--om-card-soft-base) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] .focus-flat-field:focus {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+html.dark[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] :is(input.focus-flat-field, select.focus-flat-field) {
+  background-color: var(--om-card-soft-base) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] .focus-flat-control {
+  border: 0 !important;
+  background: var(--om-card-soft-base) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] .focus-preset-tab {
+  border: 0 !important;
+  background: transparent !important;
+  text-decoration: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-focus-timer] .focus-preset-tab[aria-pressed="true"] {
+  text-decoration: underline !important;
+  text-decoration-color: var(--color-brand, #b88648) !important;
+  text-decoration-thickness: 2px !important;
+  text-underline-offset: 6px !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-controls] .focus-flat-card {
+  background-color: var(--om-card-base) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-controls] :is(.ringtone-flat-content, .ringtone-flat-control, .ringtone-flat-icon-action) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--om-card-soft-base) !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-controls] .ringtone-flat-action {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--color-brand, #b88648) !important;
+  color: var(--om-on-accent, #fff) !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-controls] .ringtone-upload-trigger {
+  border: 1px solid var(--om-line, #3b3b40) !important;
+  border-radius: 0.75rem !important;
+  background: transparent !important;
+  color: var(--om-text-muted, #89867f) !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-controls] .ringtone-upload-trigger:hover {
+  border-color: #49494e !important;
+  background: #23283c !important;
+  color: #a09d96 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-controls] :is(button, label, [class*="rounded-"]) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-controls] label.ringtone-upload-trigger {
+  border-radius: 0.75rem !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-catalog] .ringtone-flat-row {
+  border: 0 !important;
+  border-bottom: 1px solid var(--om-line) !important;
+  border-radius: 0 !important;
+  background: var(--om-card-base) !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-catalog] .ringtone-flat-row:last-child {
+  border-bottom: 0 !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-catalog] .ringtone-flat-preview {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--om-card-soft-base) !important;
+  box-shadow: none !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-catalog] .ringtone-flat-badge {
+  border-radius: 0 !important;
+  background: var(--om-card-soft-base) !important;
+}
+
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main [data-ringtone-catalog] .ringtone-flat-select {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Keep full data-entry cards consistent across modules. */
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) {
+  border-color: rgb(148 163 184 / 38%) !important;
+  background-color: var(--om-card) !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) > h2,
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) > div:first-child h2 {
+  font-size: 1.125rem !important;
+  line-height: 1.75rem !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) > h2 > span:first-child[class*="rounded"],
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) > div:first-child h2 > span:first-child[class*="rounded"] {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  border-radius: 0.75rem !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) > :is(h2, div:first-child) :is(span, div):first-child[class*="rounded"] {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  border-radius: 0.75rem !important;
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #059669 !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) > :is(h2, div:first-child) :is(span, div):first-child[class*="rounded"] {
+  background-color: rgb(16 185 129 / 12%) !important;
+  color: #6ee7b7 !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form :is(input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="search"]), select, textarea) {
+  min-height: 3.125rem !important;
+  border-color: rgb(100 116 139 / 72%) !important;
+  border-radius: 0.75rem !important;
+  background-color: var(--om-card-soft) !important;
+  color: var(--om-ink) !important;
+  font-size: 0.9375rem !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form textarea {
+  min-height: 6rem !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form label {
+  color: var(--om-ink-muted) !important;
+  font-size: 0.875rem !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form :is(input, select, textarea):focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 12%) !important;
+  outline: none;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form :is(button[role="switch"], button[aria-pressed]) {
+  border-radius: 0.75rem;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form button[role="switch"] {
+  border-color: rgb(100 116 139 / 45%) !important;
+  background-color: rgb(148 163 184 / 8%) !important;
+  color: #475569 !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form button[role="switch"] {
+  border-color: rgb(100 116 139 / 60%) !important;
+  background-color: rgb(148 163 184 / 8%) !important;
+  color: #cbd5e1 !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form button[aria-pressed="true"] {
+  border-color: rgb(16 185 129 / 45%) !important;
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #047857 !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form button[aria-pressed="true"] {
+  border-color: rgb(16 185 129 / 48%) !important;
+  background-color: rgb(16 185 129 / 14%) !important;
+  color: #a7f3d0 !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form button[type="submit"] {
+  min-height: 3.75rem !important;
+  border-radius: 0.75rem !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form button[type="submit"]:disabled {
+  border-color: color-mix(in srgb, var(--om-ink) 14%, transparent) !important;
+  background: color-mix(in srgb, var(--om-ink) 5%, var(--om-card)) !important;
+  color: var(--om-ink-muted) !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+}
+
+.dark .sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) {
+  border-color: rgb(100 116 139 / 62%) !important;
+}
+
+.dark .sanctuary-shell .sanctuary-main :is(
+  div[class*="rounded-2xl"][class*="border"],
+  section[class*="rounded-2xl"][class*="border"],
+  .vault-submenu-layout > div
+):has(form) form :is(input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="search"]), select, textarea) {
+  background-color: color-mix(in srgb, var(--om-card) 84%, #0b0f19) !important;
+}
+
+.sanctuary-shell .sanctuary-main .vault-submenu-layout > div:has(> form) {
+  border: 1px solid rgb(148 163 184 / 38%) !important;
+  border-radius: 1rem !important;
+  padding: 1rem !important;
+}
+
+@media (min-width: 640px) {
+  .sanctuary-shell .sanctuary-main .vault-submenu-layout > div:has(> form) {
+    padding: 1.25rem !important;
+  }
+}
+
+.dark .sanctuary-shell .sanctuary-main .vault-submenu-layout > div:has(> form) {
+  border-color: rgb(100 116 139 / 62%) !important;
+}
+
+/* Apply the reference form-control treatment even when a module uses a
+   different card wrapper or places its form directly in the view. */
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form :is(
+  input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="search"]):not(.calc-display-input):not(.focus-flat-field):not(.focus-flat-control),
+  select:not(.finance-flat-select):not(.toolbar-flat-control):not(.ringtone-flat-select):not(.focus-flat-control),
+  textarea
+) {
+  height: 3.125rem !important;
+  min-height: 3.125rem !important;
+  border: 1px solid color-mix(in srgb, var(--om-line) 45%, #64748b 55%) !important;
+  border-radius: 0.75rem !important;
+  background-color: var(--om-card-soft) !important;
+  color: var(--om-ink) !important;
+  font-size: 0.9375rem !important;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form textarea {
+  height: auto !important;
+  min-height: 6rem !important;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form label:not([class*="rounded-"]) {
+  color: var(--om-ink-muted) !important;
+  font-size: 0.875rem !important;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form :is(
+  input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="search"]):not(.calc-display-input):not(.focus-flat-field):not(.focus-flat-control),
+  select:not(.finance-flat-select):not(.toolbar-flat-control):not(.ringtone-flat-select):not(.focus-flat-control),
+  textarea
+):focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #10b981 14%, transparent) !important;
+  outline: none;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form button[type="submit"] {
+  height: 3.75rem !important;
+  min-height: 3.75rem !important;
+  border-radius: 0.75rem !important;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form button[type="submit"]:disabled {
+  border-color: color-mix(in srgb, var(--om-ink) 14%, transparent) !important;
+  background: color-mix(in srgb, var(--om-ink) 5%, var(--om-card)) !important;
+  color: var(--om-ink-muted) !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form button[aria-pressed="true"] {
+  border-color: rgb(16 185 129 / 45%) !important;
+  background-color: rgb(16 185 129 / 10%) !important;
+  color: #047857 !important;
+}
+
+.dark .sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form button[aria-pressed="true"] {
+  border-color: rgb(16 185 129 / 48%) !important;
+  background-color: rgb(16 185 129 / 14%) !important;
+  color: #a7f3d0 !important;
+}
+
+.dark .sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form button[role="switch"] {
+  border-color: rgb(100 116 139 / 45%) !important;
+  background-color: rgb(148 163 184 / 8%) !important;
+  color: #475569 !important;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) form button[role="switch"] {
+  border-color: rgb(100 116 139 / 60%) !important;
+  background-color: rgb(148 163 184 / 8%) !important;
+  color: #cbd5e1 !important;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) :is(div, section, article)[class*="rounded-"][class*="border"]:has(form) {
+  border-color: color-mix(in srgb, var(--om-line) 45%, #64748b 55%) !important;
+  border-radius: 1rem !important;
+  background-color: var(--om-card) !important;
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+.sanctuary-shell :is(.sanctuary-main, [role="dialog"]) :is(div, section, article)[class*="rounded-"][class*="border"]:has(form) > :is(h2, div:first-child) h2 {
+  font-size: 1.125rem !important;
+  line-height: 1.75rem !important;
+}
+
+.sanctuary-shell .sanctuary-main .vault-view .vault-submenu-layout > div:has(form) {
+  background-color: var(--om-card-base) !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(div, section)[class*="rounded-"][class*="border"]:has(> select[aria-label$="submenu"], > button[aria-label$="submenu"]) {
+  border-color: var(--om-line) !important;
+  border-radius: 0.75rem !important;
+  background-color: var(--om-card) !important;
+  color: var(--om-ink) !important;
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+.sanctuary-shell .sanctuary-main .grid:has(> :is(div, section) form) > :is(div, section)[class*="rounded-2xl"][class*="border"] {
+  border-color: color-mix(in srgb, var(--om-line) 45%, #64748b 55%) !important;
+  background-color: var(--om-card) !important;
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+.sanctuary-shell .sanctuary-main .grid:has(> :is(div, section) form) > :is(div, section) [class*="border-b"] {
+  border-color: color-mix(in srgb, var(--om-line) 36%, transparent) !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(.task-area-dropdown, [aria-label="Memo and journal sections"]) {
+  border-color: var(--om-line) !important;
+  border-radius: 0.875rem !important;
+  background-color: var(--om-card) !important;
+  color: var(--om-ink) !important;
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+.sanctuary-shell .sanctuary-main :is(.task-area-dropdown, [aria-label="Memo and journal sections"]) button[aria-current="page"] {
+  border-color: #10b981 !important;
+  color: #10b981 !important;
+}
+
+/* Preserve readable surfaces when a coordinated theme uses the opposite color mode. */
+:root.dark[data-appearance-preset="sanctuary"] .sanctuary-shell {
+  --om-card-base: color-mix(in srgb, #181c23 82%, #b88648 18%);
+  --om-card-soft-base: color-mix(in srgb, #20242a 70%, #b88648 30%);
+  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
+  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 92%), transparent);
+  --om-line: color-mix(in srgb, #d9b06d var(--om-card-border-alpha, 18%), transparent);
+  --om-ink: #f1f5f9;
+  --om-ink-soft: #cbd5e1;
+  --om-ink-muted: #94a3b8;
+  --om-shell-surface: color-mix(in srgb, #0b0f19 82%, #b88648 18%);
+  --om-shell-surface-soft: color-mix(in srgb, #0b0f19 70%, #b88648 30%);
+  --om-glass-surface: var(--om-card);
+  --om-glass-border: var(--om-line);
+  --om-glass-shadow: 0 3px 12px rgb(0 0 0 / var(--om-card-shadow-alpha, 18%)),
+    inset 0 1px color-mix(in srgb, var(--om-shell-surface-soft) var(--om-card-inset-alpha, 3%), transparent);
+  --color-card: var(--om-card);
+  --color-card-soft: var(--om-card-soft);
+  --color-line: var(--om-line);
+  --color-ink: var(--om-ink);
+  --color-ink-soft: var(--om-ink-soft);
+  --color-ink-muted: var(--om-ink-muted);
+  color: var(--om-ink);
+}
+
+:root.dark[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.journal-reflection-editor):not(.journal-reflection-toolbar *),
+:root.dark[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel[class*="bg-white"] {
+  border-color: var(--om-line) !important;
+  background-color: var(--om-card) !important;
+  background-image: linear-gradient(145deg, rgb(36 41 52 / 98%), rgb(27 31 42 / 98%) 58%, rgb(22 26 37 / 98%)) !important;
+  box-shadow: var(--om-glass-shadow) !important;
+}
+
+:root.dark[data-appearance-preset="sanctuary"] .sanctuary-shell .command-bar,
+:root.dark[data-appearance-preset="sanctuary"] .sanctuary-shell .sanctuary-sidebar {
+  border-color: var(--om-line) !important;
+  background-color: rgb(18 22 33 / 94%) !important;
+  background-image: linear-gradient(145deg, rgb(36 41 52 / 96%), rgb(20 24 35 / 96%) 60%, rgb(16 20 30 / 96%)) !important;
+}
+
+:root:not(.dark)[data-appearance-preset="private-cosmos"] .sanctuary-shell {
+  --color-indigo-700: color-mix(in srgb, var(--color-brand, #e5c777) 40%, #111827);
+  --om-card-base: #f5f6fa;
+  --om-card-soft-base: #e9edf4;
+  --om-card: color-mix(in srgb, var(--om-card-base) var(--om-card-alpha, 96%), transparent);
+  --om-card-soft: color-mix(in srgb, var(--om-card-soft-base) var(--om-card-soft-alpha, 90%), transparent);
+  --om-line: color-mix(in srgb, #61718a var(--om-card-border-alpha, 20%), transparent);
+  --om-ink: #1e293b;
+  --om-ink-soft: #475569;
+  --om-ink-muted: #64748b;
+  --om-shell-surface: #eef1f7;
+  --om-shell-surface-soft: #e4e9f2;
+  --om-glass-surface: var(--om-card);
+  --om-glass-border: var(--om-line);
+  --om-glass-shadow: 0 1px 2px rgb(32 38 47 / 4%), 0 8px 20px rgb(32 38 47 / 5%);
+  --color-card: var(--om-card);
+  --color-card-soft: var(--om-card-soft);
+  --color-line: var(--om-line);
+  --color-ink: var(--om-ink);
+  --color-ink-soft: var(--om-ink-soft);
+  --color-ink-muted: var(--om-ink-muted);
+  background-color: #eef1f7 !important;
+  color: var(--om-ink);
+}
+
+:root:not(.dark)[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-cosmos-atmosphere {
+  background-image:
+    radial-gradient(ellipse at 15% 80%, rgb(121 196 199 / 18%), transparent 44%),
+    radial-gradient(ellipse at 88% 18%, rgb(174 145 202 / 16%), transparent 42%),
+    linear-gradient(145deg, #f8f9fc, #e9edf5);
+}
+
+:root:not(.dark)[data-appearance-preset="private-cosmos"] .sanctuary-shell::before {
+  opacity: 0;
+  animation: none;
+}
+
+:root:not(.dark)[data-appearance-preset="private-cosmos"] .sanctuary-shell::after {
+  display: none;
+}
+
+:root:not(.dark)[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-main [class*="rounded-"][class*="border"][class*="bg-white"]:not(.journal-reflection-editor):not(.journal-reflection-toolbar *),
+:root:not(.dark)[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-main .dashboard-view .dashboard-panel[class*="bg-white"] {
+  border-color: var(--om-line) !important;
+  background-color: var(--om-card) !important;
+  background-image: linear-gradient(135deg, rgb(255 255 255 / 98%), rgb(244 247 251 / 98%) 58%, rgb(235 239 247 / 98%)) !important;
+  box-shadow: var(--om-glass-shadow) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:root:not(.dark)[data-appearance-preset="private-cosmos"] .sanctuary-shell .command-bar,
+:root:not(.dark)[data-appearance-preset="private-cosmos"] .sanctuary-shell .sanctuary-sidebar {
+  border-color: var(--om-line) !important;
+  background-color: rgb(248 249 252 / 96%) !important;
+  background-image: linear-gradient(145deg, rgb(255 255 255 / 98%), rgb(238 242 248 / 98%)) !important;
+  color: var(--om-ink);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }

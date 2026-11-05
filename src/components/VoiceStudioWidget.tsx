@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Volume2, Play, Pause, Square,
+  Volume2, Play, Pause, Square, Mic, MicOff,
   X, Sliders, Zap, RotateCcw,
   Waves, ArrowRight, ClipboardPaste
 } from 'lucide-react';
-import { globalTextReader, VoiceLanguage } from '../lib/voiceService';
+import { globalDictation, globalTextReader, VoiceLanguage } from '../lib/voiceService';
 import {
   VoicePersona, PERSONA_PRESETS, VOICE_MATCH_PRESETS,
   VoiceMatchPreset, estimatePitchFromAudioData, mapFrequencyToVoiceMatch
@@ -47,7 +47,12 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [activeTab, setActiveTab] = useState<'reader' | 'matcher'>('reader');
+  const [activeTab, setActiveTab] = useState<'reader' | 'dictation' | 'matcher'>('reader');
+  const [dictationLanguage, setDictationLanguage] = useState<VoiceLanguage>('hi-IN');
+  const [dictationText, setDictationText] = useState('');
+  const [dictationInterim, setDictationInterim] = useState('');
+  const [isDictating, setIsDictating] = useState(false);
+  const [dictationError, setDictationError] = useState<string | null>(null);
 
 
   // =========================================================================
@@ -96,6 +101,56 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
       return () => window.speechSynthesis.removeEventListener('voiceschanged', updateVoices);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'dictation') {
+      globalDictation.stop();
+      setIsDictating(false);
+      setDictationInterim('');
+    }
+    if (!isOpen || activeTab !== 'reader') globalTextReader.stop();
+  }, [isOpen, activeTab]);
+
+  const startDictation = async () => {
+    setDictationError(null);
+    setDictationInterim('');
+    globalDictation.setLanguage(dictationLanguage);
+    await globalDictation.start({
+      onResult: result => {
+        if (result.isFinal) {
+          setDictationText(current => current
+            ? `${current}${current.endsWith(' ') ? '' : ' '}${result.transcript}`
+            : result.transcript);
+          setDictationInterim('');
+        } else {
+          setDictationInterim(result.transcript);
+        }
+      },
+      onError: error => {
+        setDictationError(error === 'MIC_PERMISSION_DENIED'
+          ? 'Microphone access is blocked. Allow microphone access in your browser settings, then try again.'
+          : error === 'MIC_AUDIO_CAPTURE_ERROR'
+            ? 'No usable microphone was found. Check your microphone and try again.'
+            : error);
+      },
+      onStatusChange: setIsDictating
+    });
+  };
+
+  const stopDictation = () => {
+    globalDictation.stop();
+    setIsDictating(false);
+    setDictationInterim('');
+  };
 
   // Set initial tuning from default persona
   const applyPersonaPreset = useCallback((pKey: VoicePersona) => {
@@ -265,7 +320,12 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
       {/* Responsive Voice & Audio Studio Modal */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[92vh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-3xl border border-line bg-card shadow-2xl overflow-hidden flex flex-col transition-all">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Voice & Audio Studio"
+            className="w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[92vh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-3xl border border-line bg-card shadow-2xl overflow-hidden flex flex-col transition-all"
+          >
             
             {/* Header: Strict Clean Top Bar Contract */}
             <div className="flex items-center justify-between border-b border-line px-5 sm:px-6 py-4 bg-card-soft shrink-0">
@@ -278,9 +338,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                     Voice & Audio Studio
                   </h3>
                   <div className="flex items-center gap-1.5 text-[11px] text-ink-muted mt-0.5">
-                    <span>Text to Speech</span>
-                    <span aria-hidden="true">·</span>
-                    <span>Tuning (सुर मिलाना)</span>
+                    <span>Text to Speech · Speech to Text · Voice Tuning</span>
                   </div>
                 </div>
               </div>
@@ -288,6 +346,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
               <button
                 type="button"
                 onClick={onClose}
+                aria-label="Close Voice & Audio Studio"
                 className="rounded-full p-2 text-ink-muted hover:bg-card hover:text-ink transition-colors cursor-pointer"
                 title="Close"
               >
@@ -297,9 +356,13 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
 
             {/* Segmented Tab Switcher */}
             <div className="p-3 sm:px-6 border-b border-line bg-card shrink-0">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3" role="tablist" aria-label="Voice studio sections">
                 <button
                   type="button"
+                  role="tab"
+                  id="voice-studio-tab-reader"
+                  aria-controls="voice-studio-panel-reader"
+                  aria-selected={activeTab === 'reader'}
                   onClick={() => setActiveTab('reader')}
                   className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 px-2 text-xs font-medium transition-colors cursor-pointer truncate ${
                     activeTab === 'reader'
@@ -313,6 +376,27 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
 
                 <button
                   type="button"
+                  role="tab"
+                  id="voice-studio-tab-dictation"
+                  aria-controls="voice-studio-panel-dictation"
+                  aria-selected={activeTab === 'dictation'}
+                  onClick={() => setActiveTab('dictation')}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 px-2 text-xs font-medium transition-colors cursor-pointer truncate ${
+                    activeTab === 'dictation'
+                      ? 'border-indigo-200 bg-indigo-50/70 text-indigo-800 font-semibold dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200'
+                      : 'border-transparent text-ink-soft hover:border-line hover:bg-card-soft hover:text-ink'
+                  }`}
+                >
+                  <Mic className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Voice Dictation</span>
+                </button>
+
+                <button
+                  type="button"
+                  role="tab"
+                  id="voice-studio-tab-matcher"
+                  aria-controls="voice-studio-panel-matcher"
+                  aria-selected={activeTab === 'matcher'}
                   onClick={() => setActiveTab('matcher')}
                   className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 px-2 text-xs font-medium transition-colors cursor-pointer truncate ${
                     activeTab === 'matcher'
@@ -326,11 +410,94 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
               </div>
             </div>
 
+            {activeTab === 'dictation' && (
+              <div
+                role="tabpanel"
+                id="voice-studio-panel-dictation"
+                aria-labelledby="voice-studio-tab-dictation"
+                tabIndex={0}
+                className="flex-1 overflow-y-auto bg-card-soft/60 p-4 sm:p-6 space-y-4"
+              >
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <label className="grid min-w-40 flex-1 gap-1.5 text-xs font-semibold text-ink-soft">
+                    Dictation language
+                    <select
+                      aria-label="Dictation language"
+                      value={dictationLanguage}
+                      disabled={isDictating}
+                      onChange={event => setDictationLanguage(event.target.value as VoiceLanguage)}
+                      className="h-10 rounded-xl border border-line bg-card px-3 text-sm text-ink disabled:opacity-60"
+                    >
+                      <option value="hi-IN">Hindi</option>
+                      <option value="en-IN">English (India)</option>
+                      <option value="en-US">English (US)</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void (isDictating ? stopDictation() : startDictation())}
+                    className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors cursor-pointer ${
+                      isDictating
+                        ? 'border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                    }`}
+                  >
+                    {isDictating ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    {isDictating ? 'Stop Dictation' : 'Start Dictation'}
+                  </button>
+                </div>
+
+                <div className="flex min-h-8 items-center gap-2 text-xs" aria-live="polite">
+                  <span className={`h-2 w-2 rounded-full ${isDictating ? 'animate-pulse bg-rose-500' : 'bg-slate-400'}`} />
+                  <span className="text-ink-muted">
+                    {isDictating ? 'Listening… speak naturally' : 'Dictation is off'}
+                  </span>
+                  {dictationError && <span role="alert" className="text-rose-600 dark:text-rose-400">{dictationError}</span>}
+                </div>
+
+                <label className="grid gap-1.5 text-xs font-semibold text-ink-soft">
+                  Transcript
+                  <textarea
+                    aria-label="Dictation transcript"
+                    value={dictationText}
+                    onChange={event => setDictationText(event.target.value)}
+                    placeholder="Your spoken words will appear here. You can edit the transcript."
+                    className="min-h-48 w-full resize-y rounded-2xl border border-line bg-card p-3 text-sm font-normal leading-relaxed text-ink placeholder:text-ink-muted"
+                  />
+                </label>
+                {dictationInterim && (
+                  <p className="rounded-xl border border-dashed border-line px-3 py-2 text-sm text-ink-muted" aria-live="polite">
+                    {dictationInterim}
+                  </p>
+                )}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDictationText('');
+                      setDictationInterim('');
+                      setDictationError(null);
+                    }}
+                    disabled={!dictationText && !dictationInterim}
+                    className="rounded-lg px-3 py-2 text-xs font-semibold text-ink-muted hover:bg-card disabled:opacity-50"
+                  >
+                    Clear transcript
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ========================================================================= */}
             {/* TAB 1: VOICE TO TEXT (CLEAN, SPACIOUS, MODERN CANVAS)                     */}
             {/* ========================================================================= */}
             {activeTab === 'reader' && (
-              <div className="flex-1 overflow-y-auto bg-card-soft/60 p-4 sm:p-6 space-y-4">
+              <div
+                role="tabpanel"
+                id="voice-studio-panel-reader"
+                aria-labelledby="voice-studio-tab-reader"
+                tabIndex={0}
+                className="flex-1 overflow-y-auto bg-card-soft/60 p-4 sm:p-6 space-y-4"
+              >
                 
                 {/* Input text box with paste trigger */}
                 <div className="space-y-1.5">
@@ -550,7 +717,13 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
             {/* TAB 3: VOICE MATCHING & TUNING (सुर मिलाना)                                */}
             {/* ========================================================================= */}
             {activeTab === 'matcher' && (
-              <div className="flex-1 overflow-y-auto bg-card-soft/60 p-4 sm:p-6 space-y-4">
+              <div
+                role="tabpanel"
+                id="voice-studio-panel-matcher"
+                aria-labelledby="voice-studio-tab-matcher"
+                tabIndex={0}
+                className="flex-1 overflow-y-auto bg-card-soft/60 p-4 sm:p-6 space-y-4"
+              >
                 
                 {/* 1-Click Harmonization Presets */}
                 <div className="space-y-2">

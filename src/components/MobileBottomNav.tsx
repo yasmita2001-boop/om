@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  LayoutDashboard, CheckSquare, Repeat, Briefcase,
-  Target, Timer, MoreHorizontal, FileText, BookOpen, Calculator,
-  DollarSign, Heart, Users, Compass, Folder, Settings,
+  LayoutDashboard, CheckSquare, Target,
+  MoreHorizontal, FileText,
+  DollarSign, Heart, Folder, Settings,
   X
 } from 'lucide-react';
 import { NavModule } from '../types';
@@ -60,21 +60,17 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     { id: 'dashboard', label: 'Home', icon: <LayoutDashboard className="h-4 w-4" /> },
     { id: 'goals', label: 'Goals', icon: <Target className="h-4 w-4" /> },
     { id: 'tasks', label: 'Tasks', icon: <CheckSquare className="h-4 w-4" /> },
-    { id: 'routine', label: 'Routines', icon: <Repeat className="h-4 w-4" /> },
-    { id: 'work', label: 'Work', icon: <Briefcase className="h-4 w-4" /> },
   ];
 
   const secondaryModules: { id: NavModule; label: string; icon: React.ReactNode }[] = [
-    { id: 'focus', label: 'Focus', icon: <Timer className="h-4 w-4 text-indigo-500" /> },
-    { id: 'notes', label: 'Notes & Wiki', icon: <FileText className="h-4 w-4 text-indigo-500" /> },
-    { id: 'journal', label: 'Daily Journal', icon: <BookOpen className="h-4 w-4 text-indigo-500" /> },
-    { id: 'finance', label: 'Finance & Ledger', icon: <DollarSign className="h-4 w-4 text-indigo-500" /> },
-    { id: 'calculator', label: 'Calculators', icon: <Calculator className="h-4 w-4 text-indigo-500" /> },
-    { id: 'health', label: 'Health & Vitals', icon: <Heart className="h-4 w-4 text-indigo-500" /> },
-    { id: 'people', label: 'People & Relations', icon: <Users className="h-4 w-4 text-indigo-500" /> },
-    { id: 'spiritual', label: 'Values & Mind', icon: <Compass className="h-4 w-4 text-indigo-500" /> },
-    { id: 'things', label: 'Things & Assets', icon: <Folder className="h-4 w-4 text-indigo-500" /> },
-    { id: 'settings', label: 'Settings & Sync', icon: <Settings className="h-4 w-4 text-indigo-500" /> },
+    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4 text-indigo-500" /> },
+    { id: 'goals', label: 'Goals', icon: <Target className="h-4 w-4 text-indigo-500" /> },
+    { id: 'tasks', label: 'Tasks', icon: <CheckSquare className="h-4 w-4 text-indigo-500" /> },
+    { id: 'notes', label: 'Memo', icon: <FileText className="h-4 w-4 text-indigo-500" /> },
+    { id: 'finance', label: 'Finance', icon: <DollarSign className="h-4 w-4 text-indigo-500" /> },
+    { id: 'health', label: 'Life', icon: <Heart className="h-4 w-4 text-indigo-500" /> },
+    { id: 'things', label: 'Vault', icon: <Folder className="h-4 w-4 text-indigo-500" /> },
+    { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4 text-indigo-500" /> },
   ];
 
   const handleSelect = (id: NavModule) => {
@@ -175,7 +171,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           ref={moreButtonRef}
           onClick={() => setIsMoreOpen(true)}
           className={`flex h-14 flex-1 flex-col items-center justify-center gap-1 py-1.5 px-1 transition-colors cursor-pointer ${
-            secondaryModules.some(m => m.id === activeModule)
+            secondaryModules.some(m => m.id === activeModule) || activeModule === 'routine' || activeModule === 'focus'
             ? 'font-bold text-indigo-700 dark:text-indigo-300 [&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300'
             : 'text-indigo-800 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 font-medium'
           }`}

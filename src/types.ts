@@ -18,6 +18,26 @@ export type NavModule =
 
 export type TaskDomain = 'personal' | 'work' | 'health' | 'finance' | 'spiritual' | 'social' | 'learning';
 export type TaskPriority = 'High' | 'Medium' | 'Low';
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type RecurrenceEndType = 'never' | 'after' | 'by_date';
+
+export interface RecurrenceConfig {
+  frequency: RecurrenceFrequency;
+  interval: number;
+  endType: RecurrenceEndType;
+  endAfterOccurrences?: number;
+  endByDate?: string;
+  weekDays?: number[];
+  monthDay?: number;
+  occurrenceCount?: number;
+  lastGeneratedDate?: string;
+}
+
+export interface TaskChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
 
 export interface Task {
   id: string;
@@ -37,6 +57,10 @@ export interface Task {
   done: boolean;
   status: 'open' | 'done' | 'in-progress';
   linkedEntity?: { type: string; id: string } | null;
+  recurringConfig?: RecurrenceConfig;
+  isRecurringChild?: boolean;
+  recurringParentId?: string;
+  checklist?: TaskChecklistItem[];
   createdAt: number;
   updatedAt: number;
   sync?: SyncMeta;
@@ -1028,6 +1052,7 @@ export interface AppState {
   };
   themeMode: 'light' | 'dark' | 'system';
   accentColor: string;
+  currencySymbol?: import('./lib/currencyDisplay').CurrencySymbol;
   appearance?: import('./lib/appearance').AppearancePreferences;
   notificationsEnabled: boolean;
   storageEstimate?: {

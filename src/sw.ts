@@ -45,5 +45,8 @@ registerRoute(
 );
 
 serviceWorker.addEventListener('activate', event => {
-  event.waitUntil(serviceWorker.clients.claim());
+  event.waitUntil(Promise.all([
+    serviceWorker.clients.claim(),
+    caches.delete('om-theme-wallpapers')
+  ]));
 });

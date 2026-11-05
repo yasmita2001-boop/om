@@ -464,9 +464,9 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
         </button>
       )}
 
-      {/* DROPDOWN MENU PANEL (Opens Upward cleanly) */}
+      {/* Keep the nested panel below its trigger so it never climbs into the header. */}
       {isOpen && (
-        <div className="sanctuary-drive-panel absolute bottom-full left-0 right-0 mb-1.5 z-50 rounded-xl border border-slate-200/90 bg-white p-3 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900 space-y-2.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div className="sanctuary-drive-panel absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-slate-200/90 bg-white p-3 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-150">
           {/* Header */}
           <div className="flex min-w-0 items-center justify-between gap-1 border-b border-slate-100 pb-2 dark:border-slate-800">
           <div className="flex min-w-0 items-center gap-1">

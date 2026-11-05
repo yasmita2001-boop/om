@@ -1,13 +1,12 @@
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  CheckSquare, Trash2, Calendar, Target, CheckCircle2,
-  Circle, Edit3, Search, Check,
-  Download, Save, History, Layers, ArrowRight,
-  Volume2, Bell, BellRing, AlertTriangle, X, Flame, Plus
+  CheckSquare, Trash2, Target, CheckCircle2,
+  Circle, Edit3, Check, ChevronDown, Filter,
+  Download, Save,
+  Volume2, Bell, BellRing, AlertTriangle, X
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
-import { ShowMoreBar } from '../components/ShowMoreBar';
 import {
   Task, TaskDomain, TaskPriority, DailyPlanner, Goal,
   WorkProject, LearningItem, Skill, Routine, Habit, HabitLog, ReminderItem
@@ -15,14 +14,13 @@ import {
 import { storage, generateUUID } from '../lib/storage';
 import { resolveTaskGoalId, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { SlideTabs } from '../components/SlideTabs';
 import { globalTextReader } from '../lib/voiceService';
 import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
-import { FormDisclosure, FormDisclosureToggle } from '../components/FormDisclosure';
 import { ThemeIcon } from '../components/ThemeIcon';
+import { TaskRoutineFocusSwitcher, type WorkAreaSection } from '../components/TaskRoutineFocusSwitcher';
 import { GoalPicker } from '../components/GoalPicker';
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
@@ -38,6 +36,8 @@ interface TasksViewProps {
   habits?: Habit[];
   habitLogs?: HabitLog[];
   reminders?: ReminderItem[];
+  activeWorkAreaSection: WorkAreaSection;
+  onSelectWorkAreaSection: (section: WorkAreaSection) => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
@@ -62,11 +62,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
   learningItems = [],
   skills = [],
   routines = [],
+  activeWorkAreaSection,
+  onSelectWorkAreaSection,
   onRefresh,
   onSuccess
 }) => {
   const today = getLocalDateString();
-  const [activeSubMenu, setActiveSubMenu] = useState<'roster' | 'dailyCommand' | 'kanban'>('roster');
 
   // Quick preset alarm modal
   const [quickAlarmItem, setQuickAlarmItem] = useState<{
@@ -78,7 +79,6 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [quickCustomDate, setQuickCustomDate] = useState(today);
 
   // Progressive rendering: very long rosters choke scroll/input latency.
-  const [visibleTaskCount, setVisibleTaskCount] = useState(120);
   const [quickCustomTime, setQuickCustomTime] = useState('18:00');
   const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('digital_pulse');
 
@@ -144,14 +144,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   // Task Roster filters
   const [filterTab, setFilterTab] = useState<'all' | 'today' | 'high' | 'work' | 'personal' | 'done'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [taskGenesisOpen, setTaskGenesisOpen] = useState(false);
+  const taskFilterMenuRef = useRef<HTMLDetailsElement>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   // New/Edit task form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [checklistText, setChecklistText] = useState('');
   const [domain, setDomain] = useState<TaskDomain>('work');
   const [priority, setPriority] = useState<TaskPriority>('Medium');
   const [dueAt, setDueAt] = useState(today);
@@ -246,7 +246,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
         : null;
       const stored = localStorage.getItem(key) || legacy;
       if (stored) {
-        setSavedTargetsArchive(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        setSavedTargetsArchive(Array.isArray(parsed) ? parsed : []);
         if (legacy && !localStorage.getItem(key)) localStorage.setItem(key, legacy);
       }
     } catch {}
@@ -255,6 +256,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const handleCreateOrUpdateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    const existingChecklist = tasks.find(task => task.id === editingTaskId)?.checklist || [];
+    const checklist = checklistText.split('\n').map(value => value.trim()).filter(Boolean).map(text => {
+      const existing = existingChecklist.find(item => item.text === text);
+      return { id: existing?.id || generateUUID(), text, done: existing?.done || false };
+    });
 
     const now = Date.now();
     if (editingTaskId) {
@@ -270,6 +276,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           dueAt,
           date: dueAt,
           goalId: goalId || null,
+          checklist: checklist.length ? checklist : undefined,
           updatedAt: now
         };
         await storage.put('tasks', updated);
@@ -293,6 +300,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         dueAt,
         date: dueAt,
         goalId: goalId || null,
+        checklist: checklist.length ? checklist : undefined,
         done: false,
         status: 'open',
         createdAt: now,
@@ -332,15 +340,16 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
     setTitle('');
     setDescription('');
+    setChecklistText('');
     onRefresh();
   };
 
   const handleEditClick = (task: Task) => {
-    setActiveSubMenu('roster');
-    setTaskGenesisOpen(true);
+    onSelectWorkAreaSection('tasks-roster');
     setEditingTaskId(task.id);
     setTitle(task.title);
     setDescription(task.description || '');
+    setChecklistText((task.checklist || []).map(item => item.text).join('\n'));
     setDomain(task.domain || 'work');
     setPriority(task.priority || 'Medium');
     setDueAt(task.dueAt || today);
@@ -357,6 +366,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setEditingTaskId(null);
     setTitle('');
     setDescription('');
+    setChecklistText('');
   };
 
   const handleToggleTask = async (task: Task) => {
@@ -390,29 +400,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
     onRefresh();
   };
 
-  const handleUpdateTaskStatus = async (task: Task, status: 'open' | 'in-progress' | 'done') => {
-    const isDone = status === 'done';
-    if (isDone) {
-      soundEngine.play('taskComplete');
-    } else if (task.done && !isDone) {
-      soundEngine.play('taskUncheck');
-    } else {
-      soundEngine.play('tap');
-    }
-    const updated: Task = {
-      ...task,
-      status,
-      done: isDone,
-      updatedAt: Date.now()
-    };
-    await storage.put('tasks', updated);
-
-    const linkedGoalId = resolveTaskGoalId(task, { workProjects, routines, skills, learningItems });
-    if (linkedGoalId) {
-      await syncGoalProgressFromTasks(linkedGoalId, task.id, isDone, status);
-    }
-
-    onSuccess(`Task moved to ${status}`);
+  const handleToggleChecklistItem = async (task: Task, itemId: string) => {
+    const checklist = (task.checklist || []).map(item =>
+      item.id === itemId ? { ...item, done: !item.done } : item
+    );
+    await storage.put('tasks', { ...task, checklist, updatedAt: Date.now() });
     onRefresh();
   };
 
@@ -716,11 +708,6 @@ export const TasksView: React.FC<TasksViewProps> = ({
     if (filterTab === 'personal' && (t.domain !== 'personal' || t.done)) return false;
     if (filterTab === 'done' && !t.done) return false;
     if (filterTab === 'all' && t.done) return true;
-
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return `${t.title} ${t.description || ''} ${t.domain || ''}`.toLowerCase().includes(q);
-    }
     return true;
   });
 
@@ -732,75 +719,19 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const overdueTasks = sortedTasks
     .filter(t => !t.done && t.dueAt && t.dueAt < today)
     .sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || ''));
-  const todayTasks = sortedTasks
-    .filter(t => !t.done && t.dueAt === today)
-    .sort((a, b) => (priorityWeight[b.priority] || 0) - (priorityWeight[a.priority] || 0));
-  const upcomingTasks = sortedTasks
-    .filter(t => !t.done && t.dueAt && t.dueAt > today)
-    .sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || ''));
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="task-area-card-view space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
             Tasks & Planner
           </h1>
         </div>
-      </div>
-
-      {/* 4 Essential Metric Cards (Matching Dashboard Style) */}
-      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Open Tasks</span>
-            <CheckSquare className="h-4 w-4 text-emerald-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {openCount}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            {todayCount} due today
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">High Priority</span>
-            <Flame className="h-4 w-4 text-rose-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-rose-600 dark:text-rose-400 tabular-nums truncate">
-            {highCount}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            Urgent tasks
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Completed</span>
-            <CheckCircle2 className="h-4 w-4 text-indigo-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {tasks.filter(t => t.done).length}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            Done
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Scheduled</span>
-            <Calendar className="h-4 w-4 text-blue-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {todayTasks.length + upcomingTasks.length}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            {upcomingTasks.length} upcoming
-          </div>
-        </div>
+        <TaskRoutineFocusSwitcher
+          activeSection={activeWorkAreaSection}
+          taskCount={openCount}
+          onSelectSection={onSelectWorkAreaSection}
+        />
       </div>
 
       {/* Delay Alert Banner */}
@@ -836,50 +767,29 @@ export const TasksView: React.FC<TasksViewProps> = ({
         </div>
       )}
 
-      {/* Submenu Navigation Tabs (Full Width Responsive Slide Tab) */}
-      <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
-        <SlideTabs
-          activeId={activeSubMenu}
-          onChange={(id) => {
-            setActiveSubMenu(id as any);
-            if (id !== 'roster') setTaskGenesisOpen(false);
-          }}
-          tabs={[
-            { id: 'roster', label: `Task Roster (${openCount})`, shortLabel: `Roster (${openCount})`, icon: CheckSquare },
-            { id: 'dailyCommand', label: 'Daily Command Target', shortLabel: 'Daily Target', icon: Target },
-            { id: 'kanban', label: 'Status Board (Kanban)', shortLabel: 'Kanban Board', icon: Layers }
-          ]}
-        />
-      </div>
-
       {/* SUBMENU 1: TASK ROSTER & INLINE PLANNER */}
-      {activeSubMenu === 'roster' && (
-        <div className="space-y-4">
-          {/* Add/Edit Task Box (5 cols) */}
-          {taskGenesisOpen && (
-            <div
-              id="task-genesis-form"
-              ref={formRef}
-              className={`rounded-2xl border transition-all ${
+      {activeWorkAreaSection === 'tasks-roster' && (
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
+          {/* Keep the task entry card visible, and show roster data only when tasks exist. */}
+          <div
+            id="task-genesis-form"
+            ref={formRef}
+            data-task-genesis-card
+            className={`${tasks.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border transition-all ${
               editingTaskId
-                ? 'border-indigo-400 bg-indigo-50/20 dark:border-indigo-500/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
-                : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
-              } p-3.5 sm:p-6 shadow-xs`}
+                ? 'border-emerald-400 bg-emerald-50/20 dark:border-emerald-500/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                : 'border-slate-200/80 bg-white dark:border-slate-800/80 dark:bg-slate-900'
+              } p-4 sm:p-5 shadow-card`}
             >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 text-xs font-bold">
-                  ✓
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                  <CheckSquare className="h-4 w-4" />
                 </span>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                     {editingTaskId ? 'Edit Task' : 'Task Genesis'}
                   </h2>
-                  {!editingTaskId && (
-                    <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                      Action Unit
-                    </span>
-                  )}
                 </div>
               </div>
               {editingTaskId && (
@@ -893,11 +803,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
               )}
             </div>
 
-            <form onSubmit={handleCreateOrUpdateTask} className="mt-3 sm:mt-4 space-y-2.5 sm:space-y-3.5">
+            <form onSubmit={handleCreateOrUpdateTask} className="task-genesis-form mt-4 space-y-3">
               {/* TASK TITLE WITH INTEGRATED LINK GOAL / MANUAL TOGGLE (As in image.png) */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Task Title / Purpose
                   </label>
                   {/* Mode Selector: Link Goal vs Manual */}
@@ -906,35 +816,27 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     ariaLabel="Task goal link mode"
                     options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
                     onChange={mode => mode === 'link' ? switchToLinkMode() : switchToManualMode()}
+                    className="task-genesis-mode-toggle"
                   />
                 </div>
 
                 {/* When Link from Goal is active */}
                 {taskInputMode === 'link' && (
-                  <div className="mb-2 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
+                  <div className="task-genesis-goal-link-panel mb-2 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                         Select Target Goal to Link *
                       </label>
-                      {goalId && (
-                        <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
-                          {goals.find(g => g.id === goalId)?.progress}% Done
-                        </span>
-                      )}
                     </div>
                     <GoalPicker
                       goals={goals}
                       value={goalId}
                       onChange={handleSelectGoalForTask}
                       placeholder="-- Choose Goal --"
-                      className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer"
+                      flatFilters
+                      className="task-genesis-field h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                     />
 
-                    {goalId && (
-                      <span className="block text-[10px] text-indigo-700 dark:text-indigo-300">
-                        <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Completing this task will advance the goal's progress and roll up to parent goals!
-                      </span>
-                    )}
                   </div>
                 )}
 
@@ -944,123 +846,145 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   required
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  placeholder="e.g. Morning Sprint, Standup, Review Deliverables"
-                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="task-genesis-field mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 pr-8 text-left text-sm text-ellipsis text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Domain
                   </label>
-                  <select
-                    value={domain}
-                    onChange={e => setDomain(e.target.value as any)}
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  >
-                    <option value="work">Work</option>
-                    <option value="personal">Personal</option>
-                    <option value="health">Health</option>
-                    <option value="finance">Finance</option>
-                    <option value="spiritual">Spiritual</option>
-                    <option value="social">Social</option>
-                    <option value="learning">Learning</option>
-                  </select>
+                  <div className="relative mt-1">
+                    <select
+                      value={domain}
+                      onChange={e => setDomain(e.target.value as any)}
+                      className="task-genesis-field h-10 w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-slate-50/50 px-3 pr-9 text-left text-sm text-ellipsis text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="work">Work</option>
+                      <option value="personal">Personal</option>
+                      <option value="health">Health</option>
+                      <option value="finance">Finance</option>
+                      <option value="spiritual">Spiritual</option>
+                      <option value="social">Social</option>
+                      <option value="learning">Learning</option>
+                    </select>
+                    <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Priority
                   </label>
-                  <select
-                    value={priority}
-                    onChange={e => setPriority(e.target.value as any)}
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  >
-                    <option value="High">High Priority</option>
-                    <option value="Medium">Medium Priority</option>
-                    <option value="Low">Low Priority</option>
-                  </select>
+                  <div className="relative mt-1">
+                    <select
+                      value={priority}
+                      onChange={e => setPriority(e.target.value as any)}
+                      className="task-genesis-field h-10 w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-slate-50/50 px-3 pr-9 text-left text-sm text-ellipsis text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                    <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Due Date
                   </label>
                   <ThemedDateTimeInput
                     type="date"
                     value={dueAt}
                     onChange={e => setDueAt(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 font-mono text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="task-genesis-field mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Strategic Goal
                   </label>
-                  <select
-                    value={goalId}
-                    onChange={e => setGoalId(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  >
-                    <option value="">None (Independent)</option>
-                    {goals.map(g => (
-                      <option key={g.id} value={g.id}>{g.title}</option>
-                    ))}
-                  </select>
+                  <div className="relative mt-1">
+                    <select
+                      value={goalId}
+                      onChange={e => setGoalId(e.target.value)}
+                      className="task-genesis-field h-10 w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-slate-50/50 px-3 pr-9 text-left text-sm text-ellipsis text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="">None (Independent)</option>
+                      {goals.map(g => (
+                        <option key={g.id} value={g.id}>{g.title}</option>
+                      ))}
+                    </select>
+                    <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Description / Context
                 </label>
                 <textarea
                   rows={2}
                   value={description}
                   onChange={e => setDescription(e.target.value)}
-                  placeholder="Key deliverables, context, or links..."
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="task-genesis-field mt-1 h-[4.25rem] w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  Checklist / Subtasks
+                </label>
+                <textarea
+                  rows={3}
+                  value={checklistText}
+                  onChange={e => setChecklistText(e.target.value)}
+                  placeholder={'Enter one step per line'}
+                  className="task-genesis-field mt-1 h-[5.25rem] w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
               {!editingTaskId && (
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/20 space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer text-[11px] font-bold text-indigo-900 dark:text-indigo-200">
+                <div className="task-genesis-alarm-options space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-200">
                     <input
                       type="checkbox"
                       checked={armTaskGenesisAlarm}
                       onChange={e => setArmTaskGenesisAlarm(e.target.checked)}
-                      className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      className="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                     />
                     <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Arm Audio Reminder Alarm on Creation</span>
                   </label>
                   {armTaskGenesisAlarm && (
-                    <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
+                    <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
                       <div>
-                        <label className="text-slate-500 font-semibold">Alarm Time</label>
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Alarm Time</label>
                         <ThemedDateTimeInput
                           type="time"
                           value={taskGenesisAlarmTime}
                           onChange={e => setTaskGenesisAlarmTime(e.target.value)}
-                          className="mt-0.5 h-7 w-full rounded border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-800 text-[10px] font-mono"
+                          className="task-genesis-field mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm font-mono dark:border-slate-700 dark:bg-slate-800"
                         />
                       </div>
                       <div>
-                        <label className="text-slate-500 font-semibold">Ringtone</label>
-                        <select
-                          value={taskGenesisRingtone}
-                          onChange={e => setTaskGenesisRingtone(e.target.value)}
-                          className="mt-0.5 h-7 w-full rounded border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-800 text-[10px]"
-                        >
-                          {BUILTIN_RINGTONES.map(r => (
-                            <option key={r.id} value={r.id}>{r.name}</option>
-                          ))}
-                        </select>
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Ringtone</label>
+                        <div className="relative mt-1">
+                          <select
+                            value={taskGenesisRingtone}
+                            onChange={e => setTaskGenesisRingtone(e.target.value)}
+                            className="task-genesis-field h-10 w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-slate-50/50 px-3 pr-9 text-left text-sm text-ellipsis dark:border-slate-700 dark:bg-slate-800"
+                          >
+                            {BUILTIN_RINGTONES.map(r => (
+                              <option key={r.id} value={r.id}>{r.name}</option>
+                            ))}
+                          </select>
+                          <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1069,75 +993,58 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
               <button
                 type="submit"
-                className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 active:scale-98 transition-transform cursor-pointer"
+                disabled={!title.trim()}
+                className="w-full rounded-lg bg-emerald-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {editingTaskId ? 'Update Task' : '＋ Add Task to Planner'}
               </button>
             </form>
           </div>
-          )}
 
           {/* Task Filter Tabs & All Tasks List */}
-          <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                  <CheckSquare className="h-4.5 w-4.5" />
+          {tasks.length > 0 && <section id="task-roster-card" data-task-roster-card className="lg:col-span-7 rounded-lg border border-slate-200/80 bg-white p-5 shadow-none dark:border-slate-800/80 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Task Roster ({filteredTasks.length})
+              </h2>
+              <details ref={taskFilterMenuRef} className="relative shrink-0">
+                <summary className="flex h-5 cursor-pointer list-none items-center gap-2 rounded-none border-0 bg-transparent px-2.5 text-xs font-semibold text-slate-700 shadow-none hover:bg-slate-50 dark:bg-transparent dark:text-slate-200 dark:hover:bg-slate-800/40">
+                  <Filter className="h-3.5 w-3.5" />
+                  <span>Filter</span>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </summary>
+                <div className="absolute right-0 z-30 mt-2 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                  {[
+                    { id: 'all', label: `All Tasks (${tasks.length})` },
+                    { id: 'today', label: `Due Today (${todayCount})` },
+                    { id: 'high', label: `High Priority (${highCount})` },
+                    { id: 'work', label: 'Work' },
+                    { id: 'personal', label: 'Personal' },
+                    { id: 'done', label: `Completed (${tasks.filter(t => t.done).length})` }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        setFilterTab(tab.id as typeof filterTab);
+                        if (taskFilterMenuRef.current) taskFilterMenuRef.current.open = false;
+                      }}
+                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold transition-colors ${
+                        filterTab === tab.id
+                          ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200'
+                          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {tab.label}
+                      {filterTab === tab.id && <Check className="h-3.5 w-3.5" />}
+                    </button>
+                  ))}
                 </div>
-                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                  Task Roster ({filteredTasks.length})
-                </h2>
-              </div>
-
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <FormDisclosureToggle
-                  label="Task Genesis"
-                  openLabel="Close Task Genesis"
-                  isOpen={taskGenesisOpen}
-                  onToggle={() => setTaskGenesisOpen(open => !open)}
-                  icon={<Plus className="h-3.5 w-3.5" />}
-                  controls="task-genesis-form"
-                />
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search tasks..."
-                    className="h-8.5 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-8 pr-3 text-xs focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Tab Filter Chips */}
-            <div className="flex overflow-x-auto pb-1 gap-3 no-scrollbar">
-              {[
-                { id: 'all', label: `All Tasks (${tasks.length})` },
-                { id: 'today', label: `Due Today (${todayCount})` },
-                { id: 'high', label: `High Priority (${highCount})` },
-                { id: 'work', label: 'Work' },
-                { id: 'personal', label: 'Personal' },
-                { id: 'done', label: `Completed (${tasks.filter(t => t.done).length})` }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setFilterTab(tab.id as any)}
-                  className={`shrink-0 border-b-0 border-transparent px-2 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap tracking-normal transition-all cursor-pointer ${
-                    filterTab === tab.id
-                      ? 'text-amber-700 dark:text-amber-300'
-                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+              </details>
             </div>
 
             {/* Tasks List */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="space-y-2">
               {filteredTasks.length === 0 ? (
                 <div className="col-span-full">
                   <EmptyState
@@ -1148,16 +1055,66 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   />
                 </div>
               ) : (
-                filteredTasks.slice(0, visibleTaskCount).map(task => (
+                filteredTasks.map(task => (
                   <div
                     key={task.id}
-                    className="progressive-row flex min-w-0 items-start justify-between gap-3 rounded-xl border border-slate-100 p-3 transition-colors hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
+                    className="dashboard-item-row progressive-row flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-none border-0 p-3 text-sm shadow-none transition-all hover:border-0 hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
                   >
-                    <div className="flex min-w-0 items-start gap-3 pr-1">
+                    <div className="min-w-0 flex-1">
+                      <div className={`truncate font-semibold ${task.done ? 'line-through text-slate-400' : 'text-slate-900 dark:text-white'}`}>
+                        {task.title}
+                      </div>
+                      {task.description && (
+                        <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                          {task.description}
+                        </div>
+                      )}
+                      {(task.checklist || []).length > 0 && (
+                        <div className="mt-1.5 space-y-1">
+                          {task.checklist!.map(item => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => void handleToggleChecklistItem(task, item.id)}
+                              className="flex w-full items-center gap-2 text-left text-xs text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                            >
+                              <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${item.done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                                {item.done && <Check className="h-2.5 w-2.5" />}
+                              </span>
+                              <span className={item.done ? 'line-through opacity-60' : ''}>{item.text}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-slate-400">
+                        <span className="capitalize">{task.domain}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className={task.priority === 'High' ? 'text-rose-600 dark:text-rose-400' : task.priority === 'Medium' ? 'text-amber-600 dark:text-amber-400' : undefined}>
+                          {task.priority} Priority
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-mono">{task.dueAt ? `Due ${task.dueAt}` : 'No due date'}</span>
+                      {task.goalId && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="inline-flex min-w-0 items-center gap-1 text-indigo-600 dark:text-indigo-300">
+                              <Target className="h-3 w-3 shrink-0" />
+                              <span className="max-w-40 truncate">{goals.find(g => g.id === task.goalId)?.title || 'Goal'}</span>
+                            </span>
+                          </>
+                      )}
+                        {task.done && <span className="text-emerald-600 dark:text-emerald-400">· ✓ Reflected</span>}
+                      </div>
+
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleToggleTask(task)}
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-lg border transition-all cursor-pointer ${
+                        aria-label={task.done ? `Mark ${task.title} as not done` : `Mark ${task.title} as done`}
+                        title={task.done ? 'Mark incomplete' : 'Mark complete'}
+                        className={`flex h-5 w-5 items-center justify-center rounded-lg border transition-all cursor-pointer ${
                           task.done
                             ? 'border-emerald-600 bg-emerald-600 text-white shadow-xs'
                             : 'border-slate-300 hover:border-indigo-500 dark:border-slate-600'
@@ -1165,50 +1122,6 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       >
                         {task.done && <Check className="h-3.5 w-3.5" />}
                       </button>
-
-                      <div className="min-w-0">
-                        <div className={`text-xs font-semibold truncate ${task.done ? 'line-through text-slate-400' : 'text-slate-900 dark:text-white'}`}>
-                          {task.title}
-                        </div>
-                        {task.description && (
-                          <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-xl">
-                            {task.description}
-                          </div>
-                        )}
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
-                          <span className="whitespace-nowrap rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 capitalize font-medium text-slate-600 dark:text-slate-300">
-                            {task.domain}
-                          </span>
-                          <span className={`whitespace-nowrap rounded-md px-1.5 py-0.5 font-bold ${
-                            task.priority === 'High'
-                              ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
-                              : task.priority === 'Medium'
-                              ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'
-                              : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
-                          }`}>
-                            {task.priority}
-                          </span>
-                          {task.dueAt && (
-                            <span className="font-mono text-slate-500 flex items-center gap-1 whitespace-nowrap">
-                              <Calendar className="h-2.5 w-2.5" />
-                              <span>{task.dueAt}</span>
-                            </span>
-                          )}
-                          {task.goalId && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-950/80 px-1.5 py-0.5 font-bold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
-                              <Target className="h-2.5 w-2.5 text-indigo-600 dark:text-indigo-400" />
-                              <span className="truncate max-w-[130px]">
-                                {goals.find(g => g.id === task.goalId)?.title || 'Goal'}
-                              </span>
-                              {task.done && (
-                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold ml-0.5">✓ Reflected</span>
-                              )}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
                     <ProgressiveActions label={`More actions for ${task.title}`} className="shrink-0">
                       {/* DELAY ALARM TRIGGER BUTTON */}
                       {!task.done && task.dueAt && task.dueAt < today && (
@@ -1263,93 +1176,80 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </ProgressiveActions>
+                    </div>
                   </div>
                 ))
               )}
             </div>
-          </section>
+          </section>}
         </div>
       )}
 
       {/* SUBMENU 2: DAILY COMMAND TARGET (With File Save, Export, and History!) */}
-      {activeSubMenu === 'dailyCommand' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
-            {/* Main Command Operations Form (7 cols) */}
-            <div className="lg:col-span-7 rounded-2xl border border-[var(--om-line)] bg-card p-5 sm:p-6 shadow-sm">
-              <FormDisclosure
-                label="Edit daily command target"
-                header={
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 text-sm font-bold">
-                      <ThemeIcon name="target" className="h-4 w-4" />
-                    </span>
-                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Daily Command Target
-                    </h2>
-                  </div>
-                }
-              >
-              <div className="mt-5 space-y-5">
-                {/* Decisive Victory Target */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-ink-soft">
-                    Core Priority <span className="font-normal text-ink-muted">/ Decisive Victory Outcome</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={plannerTarget}
-                    onChange={e => setPlannerTarget(e.target.value)}
-                    placeholder="What single outcome will make today a decisive victory?"
-                    className="h-11 w-full rounded-xl border border-[var(--om-line)] bg-white px-3.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/10 dark:bg-slate-800 dark:text-white font-medium"
-                  />
-                </div>
-
-                {/* Progress Slider */}
-                <div className="rounded-xl border border-[var(--om-line)] bg-card-soft/70 px-3 py-3">
-                  <div className="flex min-h-6 items-center justify-between gap-3 text-xs font-semibold text-ink-soft">
-                    <label htmlFor="daily-command-progress" className="block min-w-0 flex-1 py-0.5 leading-5">
-                      Execution Progress
+      {activeWorkAreaSection === 'tasks-daily' && (
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className={`${savedTargetsArchive.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-300">
+                  <ThemeIcon name="target" className="h-4 w-4" />
+                </span>
+                <span>Daily Command Target</span>
+              </h2>
+              <div className="mt-4 space-y-3.5">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {/* Decisive Victory Target */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      Core Priority
                     </label>
-                    <span className="shrink-0 font-mono text-sm font-bold leading-5 text-amber-800 dark:text-amber-300">
-                      {plannerProgress}%
-                    </span>
-                  </div>
-                  <div className="mt-3 px-2">
                     <input
-                      id="daily-command-progress"
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="5"
-                      value={plannerProgress}
-                      onChange={e => setPlannerProgress(Number(e.target.value))}
-                      className="block h-2 w-full accent-amber-600 rounded-lg cursor-pointer"
+                      type="text"
+                      value={plannerTarget}
+                      onChange={e => setPlannerTarget(e.target.value)}
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm font-medium text-slate-900 transition focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
+                  </div>
+
+                  {/* Progress Slider */}
+                  <div>
+                    <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      <label htmlFor="daily-command-progress">
+                        Execution Progress
+                      </label>
+                      <span className="shrink-0 font-mono text-sm font-bold text-amber-600 dark:text-amber-300">
+                        {plannerProgress}%
+                      </span>
+                    </div>
+                    <div className="mt-2 px-1">
+                      <input
+                        id="daily-command-progress"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={plannerProgress}
+                        onChange={e => setPlannerProgress(Number(e.target.value))}
+                        className="block h-2 w-full accent-amber-600 rounded-lg cursor-pointer"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Action Checkpoints */}
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-ink-soft">
-                    Action Checkpoints <span className="font-normal text-ink-muted">· press Enter to add</span>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Action Checkpoints
                   </label>
                   <input
                     type="text"
                     value={pointText}
                     onChange={e => setPointText(e.target.value)}
                     onKeyDown={handleAddPlannerPoint}
-                    placeholder="Add a specific, actionable step..."
-                    className="h-10 w-full rounded-xl border border-[var(--om-line)] bg-white px-3.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/10 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
 
                   <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
-                    {(dailyPlanner?.points || []).length === 0 ? (
-                      <div className="flex items-center gap-2 rounded-lg bg-card-soft px-3 py-2.5 text-xs text-ink-muted">
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-700/70 dark:text-amber-300/70" />
-                        <span>No checkpoints yet. Add one above to plan your day.</span>
-                      </div>
-                    ) : (
+                    {(dailyPlanner?.points || []).length > 0 && (
                       (dailyPlanner?.points || []).map(pt => (
                         <div
                           key={pt.id}
@@ -1429,42 +1329,37 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </div>
 
                 {/* Wins & Reflections */}
-                <div className="grid grid-cols-1 gap-4 border-t border-[var(--om-line)] pt-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-ink-soft">
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                       Daily Victories & Wins
                     </label>
                     <textarea
                       rows={3}
                       value={dailyWins}
                       onChange={e => setDailyWins(e.target.value)}
-                      placeholder="One win per line..."
-                      className="w-full resize-y rounded-xl border border-[var(--om-line)] bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/10 dark:bg-slate-800 dark:text-white"
+                      className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 transition focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-ink-soft">
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                       Evening Reflection & Learnings
                     </label>
                     <textarea
                       rows={3}
                       value={eveningReview}
                       onChange={e => setEveningReview(e.target.value)}
-                      placeholder="What worked well? What could be better tomorrow?"
-                      className="w-full resize-y rounded-xl border border-[var(--om-line)] bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/10 dark:bg-slate-800 dark:text-white"
+                      className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 transition focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
                 </div>
               </div>
-              </FormDisclosure>
-
               <div className="flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
                   onClick={handleSaveToFile}
-                  className="flex items-center gap-1.5 rounded-xl border border-amber-200/80 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50 dark:border-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-950/30 cursor-pointer"
-                  title="Export and download command target as a file (.md)"
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-200/80 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-50 dark:border-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-950/30 cursor-pointer"
                 >
                   <Download className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
                   <span>Save to File</span>
@@ -1473,7 +1368,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 <button
                   type="button"
                   onClick={handleSavePlannerTarget}
-                  className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-transparent px-3.5 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-50 cursor-pointer dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950/30"
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-transparent px-3.5 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-50 cursor-pointer dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950/30"
                 >
                   <Save className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
                   <span>{editingSavedTargetId ? 'Update Saved Target' : 'Save Target'}</span>
@@ -1482,7 +1377,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   <button
                     type="button"
                     onClick={handleCancelEditSavedRecord}
-                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     Cancel
                   </button>
@@ -1490,198 +1385,75 @@ export const TasksView: React.FC<TasksViewProps> = ({
               </div>
             </div>
 
-            {/* Saved Command Target Files & Historical Archive (5 cols) */}
-            <div className="lg:col-span-5 space-y-5">
-              <div className="rounded-2xl border border-[var(--om-line)] bg-card p-5 sm:p-6 shadow-sm">
-                <div className="flex items-center justify-between border-b border-[var(--om-line)] pb-3">
-                  <div className="flex items-center gap-2">
-                    <History className="h-4 w-4 text-indigo-500" />
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Saved Command Targets & Files
-                    </h3>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {savedTargetsArchive.length} records
-                  </span>
+            {savedTargetsArchive.length > 0 && (
+              <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+                <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Command history
+                  </h2>
                 </div>
 
-                <div className="mt-4 space-y-3 max-h-[500px] overflow-y-auto">
-                  {savedTargetsArchive.length === 0 ? (
-                    <div className="flex min-h-36 flex-col items-center justify-center rounded-xl bg-card-soft/70 px-5 py-6 text-center">
-                      <History className="mb-2 h-5 w-5 text-amber-700/70 dark:text-amber-300/70" />
-                      <p className="text-sm font-semibold text-ink">No saved targets yet</p>
-                      <p className="mt-1 max-w-xs text-xs text-ink-muted">
-                        Save a target or export it to start your archive.
-                      </p>
-                    </div>
-                  ) : (
-                    savedTargetsArchive.map(rec => (
-                      <div
-                        key={rec.id}
-                        className="rounded-xl border border-[var(--om-line)] bg-white/70 p-3.5 text-xs transition-colors hover:bg-white dark:bg-slate-800/60 dark:hover:bg-slate-800 space-y-2 group"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-bold text-slate-900 dark:text-white text-xs">
-                              {rec.target}
-                            </div>
-                            <div className="text-[10px] text-slate-400 mt-0.5">
-                              Date: {rec.date} · {rec.pointsDone}/{rec.pointsCount} checkpoints
-                            </div>
-                          </div>
-                          <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
-                            {rec.progress}%
-                          </span>
+                <div className="mt-2 max-h-[500px] space-y-2 overflow-y-auto">
+                  {savedTargetsArchive.map(rec => (
+                    <div
+                      key={rec.id}
+                      className="dashboard-item-row group flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-slate-900 dark:text-white">
+                          {rec.target}
                         </div>
-
-                        <div className="flex items-center justify-between pt-1 border-t border-slate-50 dark:border-slate-800/40">
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => handleEditSavedRecord(rec)}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer"
-                            >
-                              <Edit3 className="h-3 w-3" />
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleLoadSavedRecord(rec)}
-                              className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
-                            >
-                              Load Into Editor
-                            </button>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = savedTargetsArchive.filter(r => r.id !== rec.id);
-                              try {
-                                localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updated));
-                                setSavedTargetsArchive(updated);
-                                if (editingSavedTargetId === rec.id) setEditingSavedTargetId(null);
-                              } catch (error) {
-                                console.error('Unable to remove saved command target', error);
-                                onSuccess('Unable to remove the saved target. Check browser storage and try again.');
-                              }
-                            }}
-                            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 p-1"
-                            title="Remove record"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                        <div className="mt-0.5 text-xs text-slate-400">
+                          {rec.date} · {rec.pointsDone}/{rec.pointsCount}
                         </div>
                       </div>
-                    ))
-                  )}
+                      <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
+                        {rec.progress}%
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEditSavedRecord(rec)}
+                          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-800"
+                          title="Edit saved target"
+                          aria-label={`Edit saved target ${rec.target}`}
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadSavedRecord(rec)}
+                          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/40 dark:hover:text-amber-300"
+                          title="Load saved target"
+                          aria-label={`Load saved target ${rec.target}`}
+                        >
+                          <Save className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = savedTargetsArchive.filter(r => r.id !== rec.id);
+                            try {
+                              localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updated));
+                              setSavedTargetsArchive(updated);
+                              if (editingSavedTargetId === rec.id) setEditingSavedTargetId(null);
+                            } catch (error) {
+                              console.error('Unable to remove saved command target', error);
+                              onSuccess('Unable to remove the saved target. Check browser storage and try again.');
+                            }
+                          }}
+                          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-950/40"
+                          title="Remove record"
+                          aria-label={`Remove saved target ${rec.target}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SUBMENU 3: KANBAN STATUS BOARD */}
-      {activeSubMenu === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Column 1: Open / Backlog */}
-          <div className=" border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 flex flex-col h-[650px]">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <span className="text-xs font-bold text-slate-900 dark:text-white">To Do / Open</span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                {tasks.filter(t => !t.done && (t.status === 'open' || !t.status)).length}
-              </span>
-            </div>
-            <div className="mt-3 flex-1 overflow-y-auto space-y-2.5 pr-1">
-              {tasks.filter(t => !t.done && (t.status === 'open' || !t.status)).map(t => (
-                <div key={t.id} className="rounded-2xl border border-slate-100 p-3.5 shadow-xs dark:border-slate-800 bg-white dark:bg-slate-800/60 text-xs space-y-2">
-                  <div className="font-semibold text-slate-900 dark:text-white">{t.title}</div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="capitalize">{t.domain}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateTaskStatus(t, 'in-progress')}
-                      className="flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
-                    >
-                      <span>Start</span>
-                      <ArrowRight className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {filteredTasks.length > visibleTaskCount && (
-                <div className="col-span-full">
-                  <ShowMoreBar
-                    remaining={filteredTasks.length - visibleTaskCount}
-                    step={120}
-                    onReveal={() => setVisibleTaskCount(c => c + 120)}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Column 2: In Progress */}
-          <div className="rounded-3xl border border-amber-200 bg-amber-50/30 p-5 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/10 flex flex-col h-[650px]">
-            <div className="flex items-center justify-between border-b border-amber-100 pb-3 dark:border-amber-900/30">
-              <span className="text-xs font-bold text-amber-900 dark:text-amber-200">In Progress</span>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
-                {tasks.filter(t => !t.done && t.status === 'in-progress').length}
-              </span>
-            </div>
-            <div className="mt-3 flex-1 overflow-y-auto space-y-2.5 pr-1">
-              {tasks.filter(t => !t.done && t.status === 'in-progress').map(t => (
-                <div key={t.id} className="rounded-2xl border border-amber-100 p-3.5 shadow-xs dark:border-slate-800 bg-white dark:bg-slate-800/60 text-xs space-y-2">
-                  <div className="font-semibold text-slate-900 dark:text-white">{t.title}</div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400">
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateTaskStatus(t, 'open')}
-                      className="text-slate-400 hover:text-slate-600"
-                    >
-                      ← Back
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateTaskStatus(t, 'done')}
-                      className="flex items-center gap-1 font-semibold text-emerald-600 hover:text-emerald-700"
-                    >
-                      <span>Complete</span>
-                      <Check className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Column 3: Completed */}
-          <div className="rounded-3xl border border-emerald-200 bg-emerald-50/30 p-5 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/10 flex flex-col h-[650px]">
-            <div className="flex items-center justify-between border-b border-emerald-100 pb-3 dark:border-emerald-900/30">
-              <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200">Completed</span>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
-                {tasks.filter(t => t.done).length}
-              </span>
-            </div>
-            <div className="mt-3 flex-1 overflow-y-auto space-y-2.5 pr-1">
-              {tasks.filter(t => t.done).map(t => (
-                <div key={t.id} className="rounded-2xl border border-emerald-100 p-3.5 shadow-xs dark:border-slate-800 bg-white dark:bg-slate-800/60 text-xs space-y-2">
-                  <div className="font-semibold line-through text-slate-400">{t.title}</div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="text-emerald-600 font-medium">✓ Done</span>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateTaskStatus(t, 'open')}
-                      className="text-slate-400 hover:text-indigo-600"
-                    >
-                      Reopen
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+            )}
         </div>
       )}
 

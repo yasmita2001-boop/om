@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from '../lib/currencyDisplay';
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useRef } from 'react';
 import {
@@ -14,9 +15,8 @@ import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ThemeIcon } from '../components/ThemeIcon';
-import { SlideTabs } from '../components/SlideTabs';
 import { ProgressiveActions } from '../components/ProgressiveActions';
-import { FormToggleButton } from '../components/FormToggleButton';
+import { HeaderDropdown } from '../components/HeaderDropdown';
 
 interface ThingsViewProps {
   things: ThingItem[];
@@ -47,6 +47,18 @@ interface EditItemTarget {
   item: any;
 }
 
+const getExpiryStatus = (expiry?: string): { label: string; className: string } => {
+  if (!expiry) return { label: 'No expiry set', className: 'text-slate-400' };
+  const today = getLocalDateString(new Date());
+  if (expiry < today) return { label: `Expired ${expiry}`, className: 'text-rose-600 dark:text-rose-400' };
+  const warningUntil = new Date();
+  warningUntil.setDate(warningUntil.getDate() + 30);
+  if (expiry <= getLocalDateString(warningUntil)) {
+    return { label: `Expires soon · ${expiry}`, className: 'text-amber-600 dark:text-amber-400' };
+  }
+  return { label: `Expires ${expiry}`, className: 'text-emerald-600 dark:text-emerald-400' };
+};
+
 export const ThingsView: React.FC<ThingsViewProps> = ({
   things,
   documents,
@@ -61,7 +73,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   onNavigate
 }) => {
   const [activeTab, setActiveTab] = useState<SubMenuTab>('things');
-  const [openThingsForm, setOpenThingsForm] = useState<SubMenuTab | null>(null);
+  const [openThingsForm, setOpenThingsForm] = useState<SubMenuTab | null>('things');
   const [searchQuery, setSearchQuery] = useState('');
   const today = getLocalDateString();
 
@@ -295,12 +307,17 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   const handleAddThing = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!thingName.trim()) return;
+    const numericValue = Number(thingValue);
+    if (thingValue && (!Number.isFinite(numericValue) || numericValue < 0)) {
+      onSuccess('Item value cannot be negative.');
+      return;
+    }
 
     const t: ThingItem = {
       id: generateUUID(),
       name: thingName.trim(),
       category: thingCategory,
-      value: Number(thingValue) || 0,
+      value: numericValue || 0,
       note: thingNote.trim() || undefined,
       fileName: attachedFile?.name,
       fileSize: attachedFile?.size,
@@ -546,11 +563,16 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     };
 
     if (store === 'things') {
+      const numericValue = Number(editValue);
+      if (editValue && (!Number.isFinite(numericValue) || numericValue < 0)) {
+        onSuccess('Item value cannot be negative.');
+        return;
+      }
       updated = {
         ...updated,
         name: editTitle.trim(),
         category: editCategory || 'Hardware',
-        value: Number(editValue) || 0,
+        value: numericValue || 0,
         note: editNote.trim() || undefined
       };
     } else if (store === 'documents') {
@@ -631,7 +653,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     const t = {
       id: generateUUID(),
       title: `Inspect / Maintain: ${thing.name}`,
-      description: `Category: ${thing.category} · Value: ₹${thing.value}`,
+      description: `Category: ${thing.category} · Value: ${getCurrencySymbol()} ${thing.value}`,
       domain: 'personal' as const,
       priority: 'Low' as const,
       dueAt: today,
@@ -652,36 +674,48 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   const totalReceiptsValue = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
   // Submenu tab items
-  const tabs = [
-    { id: 'things', label: `Things & Hardware (${things.length})`, shortLabel: `Things (${things.length})`, icon: Folder },
-    { id: 'documents', label: `Documents (${documents.length})`, shortLabel: `Docs (${documents.length})`, icon: FileCheck },
-    { id: 'warranties', label: `Warranties (${warranties.length})`, shortLabel: `Warranties (${warranties.length})`, icon: Shield },
-    { id: 'receipts', label: `Receipts (${receipts.length})`, shortLabel: `Receipts (${receipts.length})`, icon: Receipt },
-    { id: 'certificates', label: `Certificates (${certificates.length})`, shortLabel: `Certs (${certificates.length})`, icon: Award },
-    { id: 'records', label: `Important Records (${importantRecords.length})`, shortLabel: `Records (${importantRecords.length})`, icon: FileText }
+  const tabs: { id: SubMenuTab; label: string; count: number; icon: typeof Folder }[] = [
+    { id: 'things', label: `Things & Hardware (${things.length})`, count: things.length, icon: Folder },
+    { id: 'documents', label: `Documents (${documents.length})`, count: documents.length, icon: FileCheck },
+    { id: 'warranties', label: `Warranties (${warranties.length})`, count: warranties.length, icon: Shield },
+    { id: 'receipts', label: `Receipts (${receipts.length})`, count: receipts.length, icon: Receipt },
+    { id: 'certificates', label: `Certificates (${certificates.length})`, count: certificates.length, icon: Award },
+    { id: 'records', label: `Important Records (${importantRecords.length})`, count: importantRecords.length, icon: FileText }
   ];
 
-  const renderThingsFormAction = () => {
-    if (activeTab === 'things') {
-      return <FormToggleButton label="Add Item" open={openThingsForm === 'things'} onClick={() => setOpenThingsForm(openThingsForm === 'things' ? null : 'things')} />;
-    }
-    if (activeTab === 'documents') {
-      return <FormToggleButton label="Add Document" open={openThingsForm === 'documents'} onClick={() => setOpenThingsForm(openThingsForm === 'documents' ? null : 'documents')} />;
-    }
-    if (activeTab === 'warranties') {
-      return <FormToggleButton label="Add Warranty" open={openThingsForm === 'warranties'} onClick={() => setOpenThingsForm(openThingsForm === 'warranties' ? null : 'warranties')} />;
-    }
-    if (activeTab === 'receipts') {
-      return <FormToggleButton label="Add Receipt" open={openThingsForm === 'receipts'} onClick={() => setOpenThingsForm(openThingsForm === 'receipts' ? null : 'receipts')} />;
-    }
-    if (activeTab === 'certificates') {
-      return <FormToggleButton label="Add Certificate" open={openThingsForm === 'certificates'} onClick={() => setOpenThingsForm(openThingsForm === 'certificates' ? null : 'certificates')} />;
-    }
-    return <FormToggleButton label="Add Record" open={openThingsForm === 'records'} onClick={() => setOpenThingsForm(openThingsForm === 'records' ? null : 'records')} />;
-  };
+  const selectedTab = tabs.find(tab => tab.id === activeTab);
+  const selectedTabLabel = selectedTab?.label.replace(/\s\(\d+\)$/, '') || 'Things';
+  const hasVaultRecords = (selectedTab?.count || 0) > 0;
+  const SelectedTabIcon = selectedTab?.icon || Folder;
+  const vaultFormControlClasses = '[&_input]:h-10 [&_input]:rounded-lg [&_input]:text-sm [&_select]:h-10 [&_select]:rounded-lg [&_select]:text-sm [&_textarea]:rounded-lg [&_textarea]:text-sm [&_label]:text-xs';
+  const renderVaultImportAction = () => (
+    <button
+      type="button"
+      onClick={() => fileInputRef.current?.click()}
+      className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-300 dark:hover:text-amber-200"
+    >
+      <Upload className="h-3 w-3" />
+      <span>Import File</span>
+    </button>
+  );
+  const renderVaultTools = () => (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative w-full sm:w-44">
+        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={event => setSearchQuery(event.target.value)}
+          placeholder={`Search ${selectedTabLabel.toLowerCase()}...`}
+          className="h-8 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-8 pr-3 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
+        />
+      </div>
+      {renderVaultImportAction()}
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="vault-view space-y-4">
       {/* Hidden global file input for top Import File action */}
       <input
         ref={fileInputRef}
@@ -691,82 +725,60 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
         onChange={handleImportFileToCurrentTab}
       />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl flex items-center gap-2">
-            <span>Things, Assets & Document Vault</span>
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+            Vault
           </h1>
-        </div>
-
-        {/* Global Import File Button */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
-            title="Import a file (PDF, Image, Doc, Receipt, Scan) into current sub-menu"
+          <HeaderDropdown
+            label={selectedTabLabel}
+            menuLabel="Vault submenu"
+            icon={<SelectedTabIcon className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />}
           >
-            <Upload className="h-3.5 w-3.5" />
-            <span>Import File</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Navigation Sub-menu Tabs (Full Width Responsive Slide Tab) */}
-      <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
-        <SlideTabs
-          activeId={activeTab}
-          onChange={(id) => {
-            setActiveTab(id as any);
-            setAttachedFile(null);
-          }}
-          tabs={tabs}
-          extraRight={<div className="hidden sm:block">{renderThingsFormAction()}</div>}
-        />
-      </div>
-      <div className="flex justify-end sm:hidden">
-        {renderThingsFormAction()}
-      </div>
-
-      {/* SEARCH AND QUICK IMPORT ACTION STRIP */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder={`Search ${activeTab}...`}
-            className="h-8 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-8 pr-3 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          <span className="text-[11px] text-slate-400 hidden sm:inline">
-            Active Vault: <span className="font-semibold text-slate-700 dark:text-slate-200 capitalize">{activeTab}</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 transition-colors cursor-pointer"
-          >
-            <Upload className="h-3 w-3" />
-            <span>Import File to {activeTab}</span>
-          </button>
+            {closeMenu => tabs.map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="menuitem"
+                  aria-current={activeTab === tab.id ? 'page' : undefined}
+                  data-vault-tab={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setOpenThingsForm(tab.id);
+                    setSearchQuery('');
+                    setAttachedFile(null);
+                    closeMenu();
+                  }}
+                  className={`flex w-full min-w-0 items-center gap-2 border-b-2 px-2 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-200 ${
+                    activeTab === tab.id ? 'border-amber-300' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{tab.label}</span>
+                </button>
+              );
+            })}
+          </HeaderDropdown>
         </div>
       </div>
 
       {/* SUB MENU 1: THINGS & HARDWARE */}
       {activeTab === 'things' && (
-        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+        <section className="vault-submenu-layout grid w-full grid-cols-1 items-start gap-4 lg:grid-cols-12">
           {/* Add Item Form */}
-          {openThingsForm === 'things' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
-              <Folder className="h-4 w-4 text-indigo-500" />
+          {openThingsForm === 'things' && <div className={`min-w-0 ${hasVaultRecords ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <Folder className="h-4 w-4" />
+              </span>
               <span>Register Physical Item</span>
-            </h2>
-            <form onSubmit={handleAddThing} className="mt-4 space-y-3">
+              </h2>
+              {!hasVaultRecords && renderVaultImportAction()}
+            </div>
+            <form onSubmit={handleAddThing} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Item Name</label>
                 <input
@@ -796,9 +808,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Estimated Value (₹)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Estimated Value ({getCurrencySymbol()})</label>
                   <input
                     type="number"
+                    min="0"
                     value={thingValue}
                     onChange={e => setThingValue(e.target.value)}
                     placeholder="150000"
@@ -857,15 +870,18 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Items Registry List */}
-          <div className={`${openThingsForm === 'things' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3 dark:border-slate-800">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                Physical Inventory ({things.length})
-              </h2>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                  Total: ₹{totalPhysicalValue.toLocaleString('en-IN')}
-                </span>
+          <div className={`min-w-0 ${hasVaultRecords ? (openThingsForm === 'things' ? 'lg:col-span-7' : 'lg:col-span-12') : 'hidden'}`}>
+            <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="whitespace-nowrap text-left text-sm font-bold text-slate-900 dark:text-white">
+                  Physical Inventory ({things.length})
+                </h2>
+                <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+                  {renderVaultTools()}
+                  <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                    Total: {getCurrencySymbol()} {totalPhysicalValue.toLocaleString('en-IN')}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -879,11 +895,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.category.toLowerCase().includes(searchQuery.toLowerCase()))
                   .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
                   .map(t => (
-                    <div key={t.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
+                    <div key={t.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-900 dark:text-white truncate">{t.name}</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                          <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{t.name}</div>
+                          <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
                             <span className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-medium">{t.category}</span>
                             {t.note && <span className="truncate max-w-[200px]">{t.note}</span>}
                           </div>
@@ -906,7 +922,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         {/* Actions (Value, Task, Edit, Delete) */}
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <span className="font-mono font-bold text-slate-900 dark:text-white mr-1 tabular-nums">
-                            ₹{Number(t.value).toLocaleString('en-IN')}
+                            {getCurrencySymbol()} {Number(t.value).toLocaleString('en-IN')}
                           </span>
                           <button
                             type="button"
@@ -945,19 +961,24 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* SUB MENU 2: DOCUMENTS */}
       {activeTab === 'documents' && (
-        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+        <section className="vault-submenu-layout grid w-full grid-cols-1 items-start gap-4 lg:grid-cols-12">
           {/* Add Document Form */}
-          {openThingsForm === 'documents' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
-              <FileCheck className="h-4 w-4 text-emerald-500" />
+          {openThingsForm === 'documents' && <div className={`min-w-0 ${hasVaultRecords ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <FileCheck className="h-4 w-4" />
+              </span>
               <span>Add Official Document</span>
-            </h2>
-            <form onSubmit={handleAddDocument} className="mt-4 space-y-3">
+              </h2>
+              {!hasVaultRecords && renderVaultImportAction()}
+            </div>
+            <form onSubmit={handleAddDocument} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Document Title</label>
                 <input
@@ -1041,11 +1062,12 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Documents Registry List */}
-          <div className={`${openThingsForm === 'documents' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3 dark:border-slate-800">
+          <div className={`min-w-0 ${hasVaultRecords ? (openThingsForm === 'documents' ? 'lg:col-span-7' : 'lg:col-span-12') : 'hidden'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 Official Documents ({documents.length})
               </h2>
+              {renderVaultTools()}
             </div>
 
             <div className="adaptive-card-grid mt-4 gap-2.5">
@@ -1058,16 +1080,16 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   .filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()) || (d.type && d.type.toLowerCase().includes(searchQuery.toLowerCase())))
                   .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
                   .map(d => (
-                    <div key={d.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
+                    <div key={d.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-900 dark:text-white truncate">{d.title}</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{d.title}</div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                             <span className="rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 font-medium">{d.type}</span>
                             {d.reference && <span>Ref: {d.reference}</span>}
                             {d.date && <span>· Date: {d.date}</span>}
                           </div>
-                          {d.note && <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{d.note}</div>}
+                          {d.note && <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{d.note}</div>}
 
                           {/* Attached File Pill */}
                           {d.fileName && (
@@ -1109,19 +1131,24 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* SUB MENU 3: WARRANTIES */}
       {activeTab === 'warranties' && (
-        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+        <section className="vault-submenu-layout grid w-full grid-cols-1 items-start gap-4 lg:grid-cols-12">
           {/* Add Warranty Form */}
-          {openThingsForm === 'warranties' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
-              <Shield className="h-4 w-4 text-amber-500" />
+          {openThingsForm === 'warranties' && <div className={`min-w-0 ${hasVaultRecords ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <Shield className="h-4 w-4" />
+              </span>
               <span>Register Warranty</span>
-            </h2>
-            <form onSubmit={handleAddWarranty} className="mt-4 space-y-3">
+              </h2>
+              {!hasVaultRecords && renderVaultImportAction()}
+            </div>
+            <form onSubmit={handleAddWarranty} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Item / Equipment</label>
                 <input
@@ -1181,10 +1208,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Warranties List */}
-          <div className={`${openThingsForm === 'warranties' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
-              Active Warranties ({warranties.length})
-            </h2>
+          <div className={`min-w-0 ${hasVaultRecords ? (openThingsForm === 'warranties' ? 'lg:col-span-7' : 'lg:col-span-12') : 'hidden'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Active Warranties ({warranties.length})</h2>
+              {renderVaultTools()}
+            </div>
             <div className="adaptive-card-grid mt-4 gap-2.5">
               {warranties
                 .filter(w => w.title.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -1195,17 +1223,20 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   .filter(w => w.title.toLowerCase().includes(searchQuery.toLowerCase()))
                   .sort((a, b) => (b.expiry || '').localeCompare(a.expiry || '') || (b.createdAt || 0) - (a.createdAt || 0))
                   .map(w => (
-                    <div key={w.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
+                    <div key={w.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-900 dark:text-white truncate">{w.title}</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
-                            <span>Expires: {w.expiry || 'No date set'}</span>
+                          <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{w.title}</div>
+                          <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+                            {(() => {
+                              const expiryStatus = getExpiryStatus(w.expiry);
+                              return <span className={expiryStatus.className}>{expiryStatus.label}</span>;
+                            })()}
                             <span className="rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 font-bold text-[9px]">
                               Active
                             </span>
                           </div>
-                          {w.note && <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{w.note}</div>}
+                          {w.note && <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{w.note}</div>}
 
                           {/* Attached File */}
                           {w.fileName && (
@@ -1247,26 +1278,25 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* SUB MENU 4: RECEIPTS */}
       {activeTab === 'receipts' && (
-        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+        <section className="vault-submenu-layout grid w-full grid-cols-1 items-start gap-4 lg:grid-cols-12">
           {/* Add Receipt Form */}
-          {openThingsForm === 'receipts' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                  <Receipt className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">Add Purchase Receipt</h2>
-                </div>
-              </div>
+          {openThingsForm === 'receipts' && <div className={`min-w-0 ${hasVaultRecords ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <Receipt className="h-4 w-4" />
+              </span>
+              <span>Add Purchase Receipt</span>
+              </h2>
+              {!hasVaultRecords && renderVaultImportAction()}
             </div>
 
-            <form onSubmit={handleAddReceipt} className="mt-4 space-y-4">
+            <form onSubmit={handleAddReceipt} className={`mt-4 space-y-4 ${vaultFormControlClasses}`}>
               <div className="space-y-1">
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                   Item / Store / Asset Title <span className="text-rose-500">*</span>
@@ -1284,11 +1314,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                    Purchase Amount (₹)
+                    Purchase Amount ({getCurrencySymbol()})
                   </label>
                   <div className="relative">
                     <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-semibold text-slate-400">
-                      ₹
+                      {getCurrencySymbol()}
                     </span>
                     <input
                       type="number"
@@ -1372,60 +1402,49 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 />
               </div>
 
-              {/* Sync with Finance & Ledger (Custom Switch Panel) */}
-              <div className="sanctuary-link-panel rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3.5 space-y-3 transition-colors">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 shrink-0">
-                      <Landmark className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block text-[13px] font-semibold leading-5 text-slate-900 dark:text-white">
-                        Link to Finance ledger
-                      </span>
-                      <span className="block text-[11px] leading-4 text-slate-500 dark:text-slate-400">
-                        Choose an existing expense
-                      </span>
-                    </div>
-                  </div>
+              <div className="vault-finance-link-panel rounded-xl border border-slate-200 bg-slate-50/50 p-2.5 transition-colors dark:border-slate-700 dark:bg-slate-800/40">
+                <div className="flex min-h-8 items-center justify-between gap-3">
+                  <label htmlFor="receipt-finance-link" className="flex min-w-0 cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    <Landmark className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
+                    <span className="truncate">Link existing Finance expense</span>
+                  </label>
 
-                  {/* Accessible Toggle Switch */}
                   <button
                     type="button"
                     role="switch"
+                    id="receipt-finance-link"
                     aria-label="Link receipt to an existing Finance transaction"
                     title="Link receipt to an existing Finance transaction"
                     aria-checked={recLinkToFinance}
                     onClick={() => { setRecLinkToFinance(!recLinkToFinance); if (!recLinkToFinance) setRecFinanceMode('link_existing'); }}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
                       recLinkToFinance ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
                     }`}
                   >
                     <span
                       aria-hidden="true"
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                        recLinkToFinance ? 'translate-x-5' : 'translate-x-0'
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                        recLinkToFinance ? 'translate-x-4' : 'translate-x-0'
                       }`}
                     />
                   </button>
                 </div>
 
-                {/* Optional link to an existing Finance transaction; Receipt never creates Finance data automatically. */}
                 {recLinkToFinance && (
-                  <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/80 space-y-3 animate-in fade-in duration-150">
+                  <div className="mt-2 border-t border-slate-200/80 pt-2.5 dark:border-slate-700/80 animate-in fade-in duration-150">
                     <div className="space-y-1">
-                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                        Select Existing Transaction from Ledger
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        Select Finance transaction
                       </label>
                       <select
                         value={recSelectedTxId}
                         onChange={e => setRecSelectedTxId(e.target.value)}
-                        className="h-9.5 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer"
+                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                       >
                         <option value="">-- Choose Transaction --</option>
                         {financeTransactions?.map(tx => (
                           <option key={tx.id} value={tx.id}>
-                            {tx.category} - ₹{tx.amount} ({tx.date}) {tx.fileName && <ThemeIcon name="attachment" className="inline h-3.5 w-3.5" />}
+                            {tx.category} - {getCurrencySymbol()} {tx.amount} ({tx.date}) {tx.fileName && <ThemeIcon name="attachment" className="inline h-3.5 w-3.5" />}
                           </option>
                         ))}
                       </select>
@@ -1446,16 +1465,17 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Receipts Archive List */}
-          <div className={`${openThingsForm === 'receipts' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 flex flex-col`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800 gap-2">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Receipts Archive ({receipts.length})
-                </h2>
+          <div className={`min-w-0 ${hasVaultRecords ? (openThingsForm === 'receipts' ? 'lg:col-span-7' : 'lg:col-span-12') : 'hidden'} flex flex-col`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3.5 dark:border-slate-800">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Receipts Archive ({receipts.length})
+              </h2>
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+                {renderVaultTools()}
+                <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
+                  Total Value: {getCurrencySymbol()} {totalReceiptsValue.toLocaleString('en-IN')}
+                </span>
               </div>
-              <span className="font-mono text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
-                Total Value: ₹{totalReceiptsValue.toLocaleString('en-IN')}
-              </span>
             </div>
 
             <div className="adaptive-card-grid mt-4 gap-3">
@@ -1479,7 +1499,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     return (
                       <div
                         key={r.id}
-                        className="rounded-2xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/40 p-4 hover:border-slate-200 dark:hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 text-xs"
+                        className="dashboard-item-row rounded-xl border border-slate-100 dark:border-slate-800/60 p-3 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 text-xs"
                       >
                         <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex items-center justify-between sm:justify-start gap-2">
@@ -1488,11 +1508,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                             </span>
                             {/* Mobile Price Display */}
                             <span className="font-mono font-bold text-slate-900 dark:text-white tabular-nums sm:hidden">
-                              ₹{Number(r.amount).toLocaleString('en-IN')}
+                              {getCurrencySymbol()} {Number(r.amount).toLocaleString('en-IN')}
                             </span>
                           </div>
 
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-1.5">
+                          <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-1.5">
                             <span>{r.date || 'Undated'}</span>
                             {r.note && (
                               <>
@@ -1526,7 +1546,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                                 title="Open in Finance Ledger"
                               >
                                 <Landmark className="h-3 w-3" />
-                                <span>Ledger: {linkedTx ? `${linkedTx.category} (₹${linkedTx.amount})` : 'Linked'}</span>
+                                <span>Ledger: {linkedTx ? `${linkedTx.category} (${getCurrencySymbol()} ${linkedTx.amount})` : 'Linked'}</span>
                                 <ExternalLink className="h-2.5 w-2.5 ml-0.5" />
                               </button>
                             )}
@@ -1536,7 +1556,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         {/* Desktop Price & Edit/Delete Actions */}
                         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-2 dark:border-slate-800 sm:justify-end sm:border-t-0 sm:pt-0">
                           <span className="hidden sm:inline font-mono font-bold text-sm text-slate-900 dark:text-white tabular-nums">
-                            ₹{Number(r.amount).toLocaleString('en-IN')}
+                            {getCurrencySymbol()} {Number(r.amount).toLocaleString('en-IN')}
                           </span>
 
                           <ProgressiveActions label={`More actions for ${r.title}`}>
@@ -1564,19 +1584,24 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* SUB MENU 5: CERTIFICATES & CREDENTIALS */}
       {activeTab === 'certificates' && (
-        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+        <section className="vault-submenu-layout grid w-full grid-cols-1 items-start gap-4 lg:grid-cols-12">
           {/* Add Certificate Form */}
-          {openThingsForm === 'certificates' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
-              <Award className="h-4 w-4 text-purple-500" />
+          {openThingsForm === 'certificates' && <div className={`min-w-0 ${hasVaultRecords ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <Award className="h-4 w-4" />
+              </span>
               <span>Register Certificate</span>
-            </h2>
-            <form onSubmit={handleAddCertificate} className="mt-4 space-y-3">
+              </h2>
+              {!hasVaultRecords && renderVaultImportAction()}
+            </div>
+            <form onSubmit={handleAddCertificate} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Certificate Name</label>
                 <input
@@ -1648,10 +1673,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Certificates Registry List */}
-          <div className={`${openThingsForm === 'certificates' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
-              Certificates & Credentials ({certificates.length})
-            </h2>
+          <div className={`min-w-0 ${hasVaultRecords ? (openThingsForm === 'certificates' ? 'lg:col-span-7' : 'lg:col-span-12') : 'hidden'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Certificates & Credentials ({certificates.length})</h2>
+              {renderVaultTools()}
+            </div>
 
             <div className="adaptive-card-grid mt-4 gap-2.5">
               {certificates
@@ -1663,15 +1689,20 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
                   .sort((a, b) => (b.expiry || '').localeCompare(a.expiry || '') || (b.createdAt || 0) - (a.createdAt || 0))
                   .map(c => (
-                    <div key={c.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
+                    <div key={c.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-900 dark:text-white truncate">{c.title}</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                          <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{c.title}</div>
+                          <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
                             {c.issuer && <span className="rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 font-medium">{c.issuer}</span>}
-                            <span>Expires: {c.expiry || 'Permanent'}</span>
+                            {(() => {
+                              const expiryStatus = c.expiry
+                                ? getExpiryStatus(c.expiry)
+                                : { label: 'Permanent', className: 'text-slate-500' };
+                              return <span className={expiryStatus.className}>{expiryStatus.label}</span>;
+                            })()}
                           </div>
-                          {c.note && <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{c.note}</div>}
+                          {c.note && <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{c.note}</div>}
 
                           {/* Attached Certificate */}
                           {c.fileName && (
@@ -1713,19 +1744,24 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* SUB MENU 6: IMPORTANT RECORDS */}
       {activeTab === 'records' && (
-        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+        <section className="vault-submenu-layout grid w-full grid-cols-1 items-start gap-4 lg:grid-cols-12">
           {/* Add Record Form */}
-          {openThingsForm === 'records' && <div className="lg:col-span-5 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
-              <FileText className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+          {openThingsForm === 'records' && <div className={`min-w-0 ${hasVaultRecords ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <FileText className="h-4 w-4" />
+              </span>
               <span>Save Important Record</span>
-            </h2>
-            <form onSubmit={handleAddRecord} className="mt-4 space-y-3">
+              </h2>
+              {!hasVaultRecords && renderVaultImportAction()}
+            </div>
+            <form onSubmit={handleAddRecord} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Record Title</label>
                 <input
@@ -1785,10 +1821,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           </div>}
 
           {/* Important Records List */}
-          <div className={`${openThingsForm === 'records' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
-              Important Records ({importantRecords.length})
-            </h2>
+          <div className={`min-w-0 ${hasVaultRecords ? (openThingsForm === 'records' ? 'lg:col-span-7' : 'lg:col-span-12') : 'hidden'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Important Records ({importantRecords.length})</h2>
+              {renderVaultTools()}
+            </div>
 
             <div className="adaptive-card-grid mt-4 gap-2.5">
               {importantRecords
@@ -1800,11 +1837,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   .filter(ir => ir.title.toLowerCase().includes(searchQuery.toLowerCase()))
                   .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
                   .map(ir => (
-                    <div key={ir.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors">
+                    <div key={ir.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-900 dark:text-white truncate">{ir.title}</div>
-                          {ir.date && <div className="text-[10px] text-slate-400 mt-0.5">Recorded: {ir.date}</div>}
+                          <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{ir.title}</div>
+                          {ir.date && <div className="mt-0.5 text-xs text-slate-400">Recorded: {ir.date}</div>}
                           {ir.note && <div className="mt-1 text-slate-600 dark:text-slate-300 text-xs whitespace-pre-line">{ir.note}</div>}
 
                           {/* Attached Record File */}
@@ -1847,7 +1884,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* DEDICATED EDIT MODAL FOR ALL SUB-MENUS */}
@@ -1905,7 +1942,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               {(editTarget.store === 'things' || editTarget.store === 'receipts' || editTarget.store === 'documents') && (
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    {editTarget.store === 'documents' ? 'Reference Number' : 'Value / Amount (₹)'}
+                    {editTarget.store === 'documents' ? 'Reference Number' : ("Value / Amount (NPR)").split('NPR').join(getCurrencySymbol())}
                   </label>
                   <input
                     type={editTarget.store === 'documents' ? 'text' : 'number'}

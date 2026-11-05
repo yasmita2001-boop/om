@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from './currencyDisplay';
 /**
  * db.ts
  *
@@ -5,7 +6,9 @@
  * Preserves all 64 canonical entity stores, singletons, system stores, and legacy indices.
  */
 
-export const DB_NAME = 'om-lifeos-canonical-v4';
+export const DB_NAME = import.meta.env.MODE === 'review-copy'
+  ? 'om-lifeos-review-copy-v1'
+  : 'om-lifeos-canonical-v4';
 export const DB_VERSION = 9;
 
 export const ENTITY_STORES = [
@@ -181,7 +184,7 @@ export function describeDeletedRecord(storeName: string, item: any): {
 
     if (item.category) subtitle = `Category: ${item.category}`;
     else if (item.domain) subtitle = `Domain: ${item.domain}`;
-    else if (item.amount !== undefined) subtitle = `Amount: ₹${item.amount}`;
+    else if (item.amount !== undefined) subtitle = `Amount: ${getCurrencySymbol()} ${item.amount}`;
     else if (item.date) subtitle = `Date: ${item.date}`;
     else if (item.type) subtitle = `Type: ${item.type}`;
     else if (item.priority) subtitle = `Priority: ${item.priority}`;

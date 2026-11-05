@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from '../lib/currencyDisplay';
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -18,7 +19,7 @@ import {
 import { storage, generateUUID } from '../lib/storage';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ProjectTimelinePlan, computeItemDelay } from '../components/ProjectTimelinePlan';
-import { SlideTabs } from '../components/SlideTabs';
+import { GoalsSectionSwitcher, type GoalsSection } from '../components/GoalsSectionSwitcher';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { FormDisclosure, FormDisclosureToggle } from '../components/FormDisclosure';
 import { EmptyState } from '../components/EmptyState';
@@ -424,7 +425,7 @@ function GoalLinkedBreakdownWidget({
 }
 
 type GoalLevel = 1 | 2 | 3 | 4 | 5;
-type GoalsTab = 'goals' | 'timeline' | 'strategies' | 'milestones' | 'kpis' | 'missions' | 'mentor';
+type GoalsTab = GoalsSection;
 type EditableGoalRecord =
   | { type: 'strategy'; item: Strategy }
   | { type: 'milestone'; item: Milestone }
@@ -681,7 +682,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const [goalLevel, setGoalLevel] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [goalParentId, setGoalParentId] = useState<string>('');
   const [goalOrder, setGoalOrder] = useState<string>('');
-  const [goalFormOpen, setGoalFormOpen] = useState(false);
+  const [goalFormOpen, setGoalFormOpen] = useState(true);
 
   // Hierarchy viewing state
   const [goalViewMode, setGoalViewMode] = useState<'tree' | 'flat'>('tree');
@@ -817,9 +818,14 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   });
 
   const goalFormRef = useRef<HTMLDivElement>(null);
+  const previousGoalFormState = useRef({ isOpen: goalFormOpen, tab: activeTab });
 
   useEffect(() => {
-    if (!goalFormOpen || activeTab !== 'goals') return;
+    const previous = previousGoalFormState.current;
+    previousGoalFormState.current = { isOpen: goalFormOpen, tab: activeTab };
+    // Keep the header dropdown visible on entry and section changes; only scroll
+    // when opening the form from the portfolio or a child-goal action below it.
+    if (!goalFormOpen || activeTab !== 'goals' || previous.isOpen || previous.tab !== 'goals') return;
     goalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [goalFormOpen, activeTab]);
 
@@ -1626,11 +1632,20 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="goals-view space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
           Goals & Strategy
         </h1>
+        <GoalsSectionSwitcher
+          activeSection={activeTab}
+          counts={{ goals: goals.length, strategies: strategies.length, milestones: milestones.length, kpis: kpis.length, missions: missions.length }}
+          delayedCount={totalDelays}
+          onSelectSection={section => {
+            setActiveTab(section);
+            if (section === 'goals') setGoalFormOpen(true);
+          }}
+        />
       </div>
 
       {/* Validation / storage error banner (local, because onSuccess is a success channel) */}
@@ -1660,7 +1675,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            NPR {liquidCash.toLocaleString('en-IN')}
+            {getCurrencySymbol()} {liquidCash.toLocaleString('en-IN')}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
             {accounts.length} accounts
@@ -1688,11 +1703,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <Target className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            NPR {accessibleReserveCapital.toLocaleString('en-IN')}
+            {getCurrencySymbol()} {accessibleReserveCapital.toLocaleString('en-IN')}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
             {hasReserveTargets
-              ? `Target · NPR ${totalReserves.toLocaleString('en-IN')}`
+              ? `Target · ${getCurrencySymbol()} ${totalReserves.toLocaleString('en-IN')}`
               : 'Reserve targets not set'}
           </div>
         </div>
@@ -1704,11 +1719,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <TrendingUp className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {hasSavedDailyBurn ? `NPR ${savedDailyBurn.toLocaleString('en-IN')}/d` : 'Not set'}
+            {hasSavedDailyBurn ? `${getCurrencySymbol()} ${savedDailyBurn.toLocaleString('en-IN')}/d` : 'Not set'}
           </div>
           <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
             {hasSavedDailyBurn
-              ? `NPR ${(savedDailyBurn * 30).toLocaleString('en-IN')}/mo`
+              ? `${getCurrencySymbol()} ${(savedDailyBurn * 30).toLocaleString('en-IN')}/mo`
               : 'Enter an estimate in Mentor & Reserves'}
           </div>
         </div>
@@ -1750,27 +1765,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         return null;
       })()}
 
-      {/* Tabs navigation for Goals sub-features (Full-Width Responsive Slide Tab) */}
-      <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
-        <SlideTabs
-          activeId={activeTab}
-          onChange={(id) => setActiveTab(id as GoalsTab)}
-          tabs={[
-            {
-              id: 'timeline',
-              label: 'Timeline & Plan',
-              shortLabel: 'Timeline',
-              delayed: totalDelays
-            },
-            { id: 'goals', label: 'Strategic Goals', shortLabel: 'Goals', badge: goals.length },
-            { id: 'strategies', label: 'Strategies', badge: strategies.length },
-            { id: 'milestones', label: 'Milestones', badge: milestones.length },
-            { id: 'kpis', label: 'KPIs', badge: kpis.length },
-            { id: 'missions', label: 'Missions', badge: missions.length },
-            { id: 'mentor', label: 'Mentor & Reserves', shortLabel: 'Mentor' }
-          ]}
-        />
-      </div>
 
       {/* Tab 0: Project Timeline & Delay Alarms */}
       {activeTab === 'timeline' && (
@@ -1806,10 +1800,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       {/* Tab 1: Strategic Goals with 3-Tier Hierarchy & Linked Progress */}
       {activeTab === 'goals' && (
         <div className="space-y-6">
-          <div className="flex flex-col gap-6 w-full">
-            {/* Add Goal Form (Single Column - Upper) */}
-            {goalFormOpen && <div ref={goalFormRef} className="goal-form-container w-full flex flex-col">
-              <div className="flex-1  border-slate-200/80 bg-white p-4 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          <div className="goal-entry-layout grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+            {goalFormOpen && <div ref={goalFormRef} className={`goal-form-container flex flex-col ${goals.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
+              <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
                 <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
                   <div className="flex min-w-0 flex-1 items-start gap-2">
                     <Plus className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
@@ -1851,8 +1844,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         onClick={() => selectGoalLevel(1)}
                         className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 1
-                            ? 'text-amber-700 dark:text-amber-300'
-                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                            ? 'text-indigo-700 dark:text-indigo-300'
+                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                         }`}
                         title="Main Goal (Level 1)"
                       >
@@ -1864,8 +1857,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         onClick={() => selectGoalLevel(2)}
                         className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 2
-                            ? 'text-amber-700 dark:text-amber-300'
-                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                            ? 'text-indigo-700 dark:text-indigo-300'
+                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                         }`}
                         title="Sub Goal (Level 2)"
                       >
@@ -1877,8 +1870,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         onClick={() => selectGoalLevel(3)}
                         className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 3
-                            ? 'text-amber-700 dark:text-amber-300'
-                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                            ? 'text-indigo-700 dark:text-indigo-300'
+                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                         }`}
                         title="Micro Goal (Level 3)"
                       >
@@ -1890,8 +1883,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         onClick={() => selectGoalLevel(4)}
                         className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 4
-                            ? 'text-amber-700 dark:text-amber-300'
-                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                            ? 'text-indigo-700 dark:text-indigo-300'
+                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                         }`}
                         title="Nano Goal (Level 4)"
                       >
@@ -1903,8 +1896,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         onClick={() => selectGoalLevel(5)}
                         className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalLevel === 5
-                            ? 'text-amber-700 dark:text-amber-300'
-                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                            ? 'text-indigo-700 dark:text-indigo-300'
+                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                         }`}
                         title="Atomic Goal (Level 5)"
                       >
@@ -1976,9 +1969,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       onChange={e => setGoalTitle(e.target.value)}
                       placeholder={
                         goalLevel === 1
-                          ? 'e.g. Build NPR 1M Liquid Runway, Launch SaaS Product'
+                          ? ("e.g. Build NPR 1M Liquid Runway, Launch SaaS Product").split('NPR').join(getCurrencySymbol())
                           : goalLevel === 2
-                          ? 'e.g. Master Backend Architecture, Save First NPR 200k'
+                          ? ("e.g. Master Backend Architecture, Save First NPR 200k").split('NPR').join(getCurrencySymbol())
                           : goalLevel === 3
                           ? 'e.g. Complete Postgres Indexing, Automate Monthly SIP'
                           : goalLevel === 4
@@ -2070,7 +2063,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                   <button
                     type="submit"
-                    className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-indigo-500 cursor-pointer"
+                    className="life-form-submit w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-indigo-500 cursor-pointer"
                   >
                     {goalLevel === 1
                       ? 'Save Main Goal (Level 1)'
@@ -2086,9 +2079,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               </div>
             </div>}
 
-            {/* Strategic Goals Portfolio (Single Column - Lower) */}
-            <div className="w-full flex flex-col">
-              <div className="goal-portfolio-shell flex-1 rounded-2xl border border-slate-200/90 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900/90">
+            {goals.length > 0 && <div className={`flex flex-col ${goalFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
+              <div className="goal-portfolio-shell flex-1 rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
                 <div className="space-y-3 border-b border-slate-100 pb-3.5 dark:border-slate-800">
                   {/* Top Row: Title on Left, Hierarchy Counts on Right (Full Width) */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full">
@@ -2101,15 +2093,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                     <div className="flex flex-wrap items-center justify-end gap-2">
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs">
-                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{mainGoals.length} Main</span>
-                      <span className="text-amber-300 dark:text-amber-700">·</span>
-                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{subGoals.length} Sub</span>
-                      <span className="text-amber-300 dark:text-amber-700">·</span>
-                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{microGoals.length} Micro</span>
-                      <span className="text-amber-300 dark:text-amber-700">·</span>
-                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{nanoGoals.length} Nano</span>
-                      <span className="text-amber-300 dark:text-amber-700">·</span>
-                      <span className="font-semibold text-amber-800 dark:text-amber-300 whitespace-nowrap">{atomicGoals.length} Atomic</span>
+                      <span className="font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{mainGoals.length} Main</span>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
+                      <span className="font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{subGoals.length} Sub</span>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
+                      <span className="font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{microGoals.length} Micro</span>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
+                      <span className="font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{nanoGoals.length} Nano</span>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
+                      <span className="font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{atomicGoals.length} Atomic</span>
                       </div>
                       <FormDisclosureToggle
                         label={goalLevel === 1 ? 'Add Strategic Main Goal' : goalLevel === 2 ? 'Add Sub Goal' : goalLevel === 3 ? 'Add Micro Goal' : goalLevel === 4 ? 'Add Nano Goal' : 'Add Atomic Goal'}
@@ -2132,8 +2124,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         onClick={() => setGoalViewMode('tree')}
                         className={`flex items-center justify-center px-1.5 py-1.5 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalViewMode === 'tree'
-                            ? 'text-amber-700 dark:text-amber-300'
-                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                            ? 'text-indigo-700 dark:text-indigo-300'
+                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                         }`}
                       >
                         <span>Tree</span>
@@ -2143,8 +2135,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         onClick={() => setGoalViewMode('flat')}
                         className={`flex items-center justify-center px-1.5 py-1.5 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalViewMode === 'flat'
-                            ? 'text-amber-700 dark:text-amber-300'
-                            : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                            ? 'text-indigo-700 dark:text-indigo-300'
+                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                         }`}
                       >
                         <span>Flat</span>
@@ -2155,7 +2147,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     <div className="flex items-center justify-start gap-1 overflow-x-auto text-xs">
                       {(['all', '1', '2', '3', '4', '5'] as const).map(lvl => (
                         <React.Fragment key={lvl}>
-                          {lvl !== 'all' && <span aria-hidden="true" className="shrink-0 text-amber-300 dark:text-amber-700">·</span>}
+                          {lvl !== 'all' && <span aria-hidden="true" className="shrink-0 text-slate-300 dark:text-slate-600">·</span>}
                           <button
                             type="button"
                             onClick={() => {
@@ -2166,8 +2158,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                             }}
                             className={`shrink-0 px-1 py-1.5 text-[10px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                               levelFilter === lvl
-                                ? 'text-amber-700 dark:text-amber-300'
-                                : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                                ? 'text-indigo-700 dark:text-indigo-300'
+                                : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                             }`}
                           >
                             {lvl === 'all'
@@ -2946,17 +2938,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   )}
                 </div>
               </div>
-            </div>
+            </div>}
           </div>
         </div>
       )}
 
       {/* Tab 2: Strategies & Tactics (New & Fully Implemented!) */}
       {activeTab === 'strategies' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          {/* Add Strategy Form (6 cols) */}
-          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        <div className="strategy-entry-layout grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className={`${strategies.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <FormDisclosure
+              defaultOpen
               label="Create a strategy"
               header={
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
@@ -3030,7 +3022,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
               <button
                 type="submit"
-                className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
+                className="life-form-submit w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
               >
                 + Commit Tactical Strategy
               </button>
@@ -3038,8 +3030,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          {/* Strategies List (6 cols) */}
-          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          {strategies.length > 0 && <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
               <span>Operational Strategies ({strategies.length})</span>
               <span className="text-[10px] text-slate-400 font-normal">Click status pill to cycle</span>
@@ -3107,15 +3098,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 ))
               )}
             </div>
-          </div>
+          </div>}
         </div>
       )}
 
       {/* Tab 3: Milestones */}
       {activeTab === 'milestones' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        <div className="milestone-entry-layout grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className={`${milestones.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <FormDisclosure
+              defaultOpen
               label="Add a milestone"
               header={
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -3163,7 +3155,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               </div>
               <button
                 type="submit"
-                className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
+                className="life-form-submit w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
               >
                 + Register Milestone
               </button>
@@ -3171,7 +3163,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          {milestones.length > 0 && <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Milestones Overview ({milestones.length})
             </h2>
@@ -3235,15 +3227,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 ))
               )}
             </div>
-          </div>
+          </div>}
         </div>
       )}
 
       {/* Tab 4: KPIs */}
       {activeTab === 'kpis' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        <div className="kpi-entry-layout grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className={`${kpis.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <FormDisclosure
+              defaultOpen
               label="Add a KPI"
               header={
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -3309,14 +3302,14 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     type="text"
                     value={kpiUnit}
                     onChange={e => setKpiUnit(e.target.value)}
-                    placeholder="NPR, reps, hrs"
+                    placeholder={"NPR, reps, hrs".split('NPR').join(getCurrencySymbol())}
                     className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
               <button
                 type="submit"
-                className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
+                className="life-form-submit w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
               >
                 + Save Metric Tracking
               </button>
@@ -3324,7 +3317,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          {kpis.length > 0 && <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Tracked Metrics ({kpis.length})
             </h2>
@@ -3401,15 +3394,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 })
               )}
             </div>
-          </div>
+          </div>}
         </div>
       )}
 
       {/* Tab 5: Missions */}
       {activeTab === 'missions' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        <div className="mission-entry-layout grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className={`${missions.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <FormDisclosure
+              defaultOpen
               label="Create a mission"
               header={
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -3463,7 +3457,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               </div>
               <button
                 type="submit"
-                className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
+                className="life-form-submit w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
               >
                 + Launch Mission
               </button>
@@ -3471,7 +3465,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          <div className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          {missions.length > 0 && <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Active Missions ({missions.length})
             </h2>
@@ -3521,7 +3515,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 ))
               )}
             </div>
-          </div>
+          </div>}
         </div>
       )}
 
@@ -3529,6 +3523,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       {activeTab === 'mentor' && (
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 max-w-2xl">
           <FormDisclosure
+            defaultOpen
             label="Edit mentor strategy and reserves"
             header={
               <div>
@@ -3555,7 +3550,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Survival Reserve (NPR)
+                  Survival Reserve ({getCurrencySymbol()})
                 </label>
                 <input
                   type="number"
@@ -3569,7 +3564,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Daily Burn Rate (NPR)
+                  Daily Burn Rate ({getCurrencySymbol()})
                 </label>
                 <input
                   type="number"
@@ -3585,7 +3580,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Emergency Fund (NPR)
+                  Emergency Fund ({getCurrencySymbol()})
                 </label>
                 <input
                   type="number"
@@ -3599,7 +3594,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Annual Savings Goal (NPR)
+                  Annual Savings Goal ({getCurrencySymbol()})
                 </label>
                 <input
                   type="number"
@@ -3614,7 +3609,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
             <button
               type="submit"
-              className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
+              className="life-form-submit w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
             >
               Save Strategy & Allocation
             </button>
@@ -3805,7 +3800,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500"
+                  className="life-form-submit rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500"
                 >
                   Save Changes
                 </button>
@@ -4069,7 +4064,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
+                  className="life-form-submit rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
                 >
                   Save changes
                 </button>

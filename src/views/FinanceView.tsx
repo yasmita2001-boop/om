@@ -1,7 +1,8 @@
+import { getCurrencySymbol } from '../lib/currencyDisplay';
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  DollarSign, Plus, ArrowUpDown,
+  DollarSign, Plus, ArrowUpDown, Activity,
   ShieldCheck, Trash2, TrendingUp, Landmark,
   Download, Paperclip, Receipt, ExternalLink,
   FileText, X, Eye, ChevronDown, Pencil,
@@ -18,13 +19,30 @@ import { getLocalDateString, getLocalMonthString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { EmptyState } from '../components/EmptyState';
 import { ShowMoreBar } from '../components/ShowMoreBar';
+import { HeaderDropdown } from '../components/HeaderDropdown';
 import { SlideTabs } from '../components/SlideTabs';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { FormDisclosure } from '../components/FormDisclosure';
 import { syncGoalProgressFromFinance } from '../lib/goalTaskSync';
 import { addSchedulePeriod, advanceSchedule, getInvestmentMetrics } from '../lib/financeCalculations';
-import { calculatorEngine } from '../lib/calculatorEngine';
 import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
+import {
+  addLoanPaymentPeriod,
+  BANK_SAVINGS_PRODUCTS,
+  calculateTransactionAmount,
+  getFixedDepositValue,
+  getLoanInstallment,
+  getLoanPeriodsPerYear,
+  getSavingsMaturityDate,
+  getSavingsProductLabel,
+  isBankSavingsPlan,
+  LOAN_TYPE_OPTIONS,
+  PHYSICAL_ASSET_CATEGORIES,
+  SIMPLE_FREQUENCY_PRODUCTS,
+  SIMPLE_SAVINGS_PRODUCTS,
+  STANDARD_EXPENSE_CATEGORIES,
+  STANDARD_INCOME_CATEGORIES
+} from '../lib/financeViewHelpers';
 
 interface FinanceViewProps {
   accounts: FinanceAccount[];
@@ -46,220 +64,18 @@ interface FinanceViewProps {
   onNavigate?: (module: NavModule) => void;
 }
 
-const STANDARD_EXPENSE_CATEGORIES = [
-  'Food & Dining',
-  'Groceries',
-  'Rent & Housing',
-  'Bills & Utilities',
-  'Bank Charges & Fees',
-  'Taxes & TDS',
-  'Shopping',
-  'Travel & Commute',
-  'Entertainment',
-  'Healthcare & Medical',
-  'Education',
-  'Personal Care',
-  'EMI & Loans',
-  'Subscriptions',
-  'Home Maintenance',
-  'Gifts & Donations',
-  'General Expense'
-];
-
-const STANDARD_INCOME_CATEGORIES = [
-  'Salary',
-  'Freelance / Client Work',
-  'Business Income',
-  'Investment & Dividends',
-  'Rental Income',
-  'Interest & Cashback',
-  'Gifts & Grants',
-  'Bonus / Incentive',
-  'Other Income'
-];
-
-const getSavingsProductLabel = (productType?: SavingsPlan['productType']) => {
-  switch (productType) {
-    case 'fixed_deposit': return 'Fixed Deposit';
-    case 'recurring_deposit': return 'Recurring Deposit';
-    case 'bank_savings': return 'Bank Savings Account';
-    case 'remittance': return 'Remittance Deposit';
-    case 'salary_account': return 'Salary Account';
-    case 'pension_account': return 'Pension Account';
-    case 'call_deposit': return 'Call Deposit';
-    case 'special_deposit': return 'Special Deposit Scheme';
-    case 'senior_citizen': return 'Senior Citizen Deposit';
-    case 'children_deposit': return 'Children / Minor Deposit';
-    case 'student_savings': return 'Student Savings';
-    case 'women_savings': return 'Women Savings';
-    case 'foreign_currency': return 'Foreign Currency Deposit';
-    case 'pension': return 'Pension / Retirement';
-    case 'cooperative': return 'Cooperative Saving';
-    case 'bond': return 'Bond';
-    case 'per_transaction': return 'Every-time Savings';
-    case 'daily': return 'Daily Savings';
-    case 'weekly': return 'Weekly Savings';
-    case 'biweekly': return 'Biweekly Savings';
-    case 'monthly': return 'Monthly Savings';
-    case 'bimonthly': return 'Every 2 Months';
-    case 'quarterly': return 'Quarterly Savings';
-    case 'half_yearly': return 'Half-yearly Savings';
-    case 'yearly': return 'Yearly Savings';
-    case 'custom_period': return 'Custom-period Savings';
-    case 'goal_based': return 'Goal-based Savings';
-    case 'emergency': return 'Emergency Savings';
-    case 'round_up': return 'Round-up Savings';
-    case 'all_time': return 'All-time Savings';
-    case 'other': return 'Other Saving';
-    default: return 'Flexible Reserve';
-  }
-};
-
-const SIMPLE_SAVINGS_PRODUCTS: SavingsProductType[] = [
-  'reserve', 'per_transaction', 'daily', 'weekly', 'biweekly', 'monthly',
-  'bimonthly', 'quarterly', 'half_yearly', 'yearly', 'custom_period',
-  'goal_based', 'emergency', 'round_up', 'all_time'
-];
-
-const BANK_SAVINGS_PRODUCTS: SavingsProductType[] = [
-  'bank_savings', 'fixed_deposit', 'recurring_deposit', 'remittance',
-  'salary_account', 'pension_account', 'call_deposit', 'special_deposit',
-  'senior_citizen', 'children_deposit', 'student_savings', 'women_savings',
-  'foreign_currency', 'cooperative', 'bond', 'other'
-];
-
-const SIMPLE_FREQUENCY_PRODUCTS: Record<string, SavingsProductType> = {
-  every_time: 'reserve',
-  per_transaction: 'per_transaction',
-  daily: 'daily',
-  weekly: 'weekly',
-  biweekly: 'biweekly',
-  monthly: 'monthly',
-  bimonthly: 'bimonthly',
-  quarterly: 'quarterly',
-  half_yearly: 'half_yearly',
-  yearly: 'yearly',
-  custom: 'custom_period'
-};
-
-const calculateTransactionAmount = (value: string): number | null => {
-  const expression = value.trim();
-  if (!expression || !/^[\d+\-*/×÷−().%\s]+$/.test(expression)) return null;
-  try {
-    const result = calculatorEngine.scientific(expression);
-    return typeof result === 'number' && Number.isFinite(result) ? result : null;
-  } catch {
-    return null;
-  }
-};
-
-const isBankSavingsPlan = (plan: SavingsPlan) =>
-  plan.category === 'bank' || BANK_SAVINGS_PRODUCTS.includes(plan.productType || 'reserve');
-
-const LOAN_TYPE_OPTIONS = [
-  'Personal Loan', 'Home / Housing Loan', 'Land / Plot Loan', 'Vehicle Loan',
-  'Education Loan', 'Business Loan', 'Agriculture Loan', 'SME Loan',
-  'Working Capital Loan', 'Gold Loan', 'Loan Against Fixed Deposit',
-  'Overdraft (OD)', 'Cash Credit (CC)', 'Credit Card Debt', 'Microfinance Loan',
-  'Cooperative Loan', 'Foreign Employment Loan', 'Medical / Emergency Loan',
-  'Consumer Loan', 'Personal Borrowing', 'Loan Given to Others', 'Other / Custom'
-];
-
-const PHYSICAL_ASSET_CATEGORIES = [
-  { value: 'real_estate', label: 'Property & land' },
-  { value: 'vehicle', label: 'Vehicle & transport' },
-  { value: 'valuables', label: 'Gold, jewellery & valuables' },
-  { value: 'personal', label: 'Personal equipment' },
-  { value: 'business', label: 'Business equipment & stock' },
-  { value: 'agriculture', label: 'Agriculture & livestock' },
-  { value: 'other', label: 'Other physical asset' },
-  { value: 'custom', label: 'Custom asset type' }
-];
-
-const addMonthsToDate = (date: string, months: number) => {
-  const [year, month, day] = date.split('-').map(Number);
-  if (!year || !month || !day || !Number.isFinite(months)) return date;
-  const result = new Date(year, month - 1 + months, 1);
-  result.setDate(Math.min(day, new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate()));
-  return getLocalDateString(result);
-};
-
-const getLoanPeriodsPerYear = (frequency: Loan['repaymentFrequency'] = 'monthly') =>
-  frequency === 'weekly' ? 52 : frequency === 'biweekly' ? 26 : frequency === 'quarterly' ? 4 : 12;
-
-const getLoanInstallment = (
-  principal: number,
-  annualRate: number,
-  termMonths: number,
-  method: Loan['interestMethod'] = 'reducing',
-  frequency: Loan['repaymentFrequency'] = 'monthly'
-) => {
-  if (principal <= 0 || termMonths <= 0 || annualRate < 0) return 0;
-  const periodsPerYear = getLoanPeriodsPerYear(frequency);
-  const periodRate = annualRate / (100 * periodsPerYear);
-  const periods = Math.max(1, Math.ceil(termMonths * periodsPerYear / 12));
-  if (method === 'flat' || method === 'simple') {
-    return (principal + principal * periodRate * periods) / periods;
-  }
-  if (periodRate === 0) return principal / periods;
-  const factor = Math.pow(1 + periodRate, periods);
-  return principal * periodRate * factor / (factor - 1);
-};
-
-const addLoanPaymentPeriod = (date: string, frequency: Loan['repaymentFrequency'], count: number) => {
-  const result = new Date(`${date}T12:00:00`);
-  if (frequency === 'weekly') result.setDate(result.getDate() + 7 * count);
-  else if (frequency === 'biweekly') result.setDate(result.getDate() + 14 * count);
-  else return addMonthsToDate(date, (frequency === 'quarterly' ? 3 : 1) * count);
-  return getLocalDateString(result);
-};
-
-const getSavingsMaturityDate = (startDate: string, durationMonths: number) => {
-  const [year, month, day] = startDate.split('-').map(Number);
-  if (!year || !month || !day || !Number.isFinite(durationMonths)) return startDate;
-  const targetMonth = new Date(year, month - 1 + durationMonths, 1);
-  const lastDay = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate();
-  targetMonth.setDate(Math.min(day, lastDay));
-  return getLocalDateString(targetMonth);
-};
-
-const getFixedDepositValue = (plan: SavingsPlan, asOfDate = getLocalDateString()) => {
-  const principal = Math.max(0, Number(plan.currentAmount) || 0);
-  const annualRate = Math.max(0, Number(plan.annualInterestRate) || 0);
-  const compoundingPerYear = Math.max(1, Number(plan.compoundingPerYear) || 4);
-  const durationMonths = Math.max(1, Number(plan.durationMonths) || 1);
-  const startDate = plan.startDate || getLocalDateString(new Date(plan.createdAt || Date.now()));
-  const maturityDate = plan.maturityDate || getSavingsMaturityDate(startDate, durationMonths);
-  const toUtcDay = (value: string) => {
-    const [year, month, day] = value.split('-').map(Number);
-    return year && month && day ? Date.UTC(year, month - 1, day) : Number.NaN;
-  };
-  const start = toUtcDay(startDate);
-  const maturity = toUtcDay(maturityDate);
-  const asOf = toUtcDay(asOfDate);
-  if (![start, maturity, asOf].every(Number.isFinite)) {
-    return { currentValue: principal, maturityValue: principal, maturityDate: startDate };
-  }
-  const termDays = Math.max(1, (maturity - start) / 86_400_000);
-  const elapsedDays = Math.min(termDays, Math.max(0, (asOf - start) / 86_400_000));
-  const elapsedTermFraction = elapsedDays / termDays;
-  const termYears = termDays / 365.25;
-  const elapsedYears = termYears * elapsedTermFraction;
-  if (plan.interestMethod === 'simple') {
-    return {
-      currentValue: principal * (1 + annualRate / 100 * elapsedYears),
-      maturityValue: principal * (1 + annualRate / 100 * termYears),
-      maturityDate
-    };
-  }
-  const periods = termYears * compoundingPerYear * elapsedTermFraction;
-  const factor = 1 + annualRate / (100 * compoundingPerYear);
-  return {
-    currentValue: principal * Math.pow(factor, periods),
-    maturityValue: principal * Math.pow(factor, termYears * compoundingPerYear),
-    maturityDate
-  };
-};
+type OverviewPanel = 'transaction' | 'accounts' | 'scheduled';
+type FinanceTab = 'overview' | 'transactions' | 'loans' | 'investments' | 'savings' | 'balanceSheet' | 'capitalPlanning';
+type SectionActionPanel = 'loanActions' | 'investmentActions' | 'savings' | 'asset';
+type FinanceMenuAction =
+  | 'loanPayment'
+  | 'newLoan'
+  | 'addLiability'
+  | 'addInvestment'
+  | 'recordInvestmentActivity'
+  | 'registerSavings'
+  | 'addAsset';
+type FinanceMenuId = FinanceTab | OverviewPanel | FinanceMenuAction;
 
 export const FinanceView: React.FC<FinanceViewProps> = ({
   accounts,
@@ -272,6 +88,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   savingsPlans,
   assets = [],
   liabilities = [],
+  financialGoals = [],
   receipts = [],
   goals = [],
   onRefresh,
@@ -281,22 +98,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 }) => {
   const today = getLocalDateString();
   const reportError = onError || ((message: string) => onSuccess(`⚠️ ${message}`));
-  const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'accounts' | 'loans' | 'investments' | 'savings' | 'balanceSheet'>('overview');
-  const [overviewPanel, setOverviewPanel] = useState<'transaction' | 'accounts' | 'scheduled' | null>(null);
-  const [sectionActionPanel, setSectionActionPanel] = useState<'loanActions' | 'investmentActions' | 'savings' | 'asset' | null>(null);
+  const [activeTab, setActiveTab] = useState<FinanceTab>('overview');
+  const [overviewPanel, setOverviewPanel] = useState<OverviewPanel | null>(null);
+  const [sectionActionPanel, setSectionActionPanel] = useState<SectionActionPanel | null>(null);
   const transactionPanelRef = useRef<HTMLDivElement>(null);
   const accountsPanelRef = useRef<HTMLDivElement>(null);
-  const scheduledPanelRef = useRef<HTMLDetailsElement>(null);
+  const scheduledPanelRef = useRef<HTMLDivElement>(null);
   const loanActionsPanelRef = useRef<HTMLDivElement>(null);
   const investmentActionsPanelRef = useRef<HTMLDivElement>(null);
   const savingsPanelRef = useRef<HTMLDivElement>(null);
   const assetPanelRef = useRef<HTMLDivElement>(null);
-  const [showLoanSummary, setShowLoanSummary] = useState(false);
-  const [showSavingsSummary, setShowSavingsSummary] = useState(false);
-  const [showAssetSummary, setShowAssetSummary] = useState(false);
-  const [showLoanInfo, setShowLoanInfo] = useState(false);
-  const [showSavingsInfo, setShowSavingsInfo] = useState(false);
-  const [showAssetInfo, setShowAssetInfo] = useState(false);
   useEffect(() => {
     if (!overviewPanel) return;
     const panelRefs = {
@@ -745,13 +556,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   ]));
   const investmentValue = investments.reduce((sum, investment) =>
     sum + (investmentMetricsById.get(investment.id)?.currentValue || 0), 0);
+  const investmentCostBasis = investments.reduce((sum, investment) =>
+    sum + (investmentMetricsById.get(investment.id)?.costBasis || 0), 0);
+  const investmentGain = investments.reduce((sum, investment) =>
+    sum + (investmentMetricsById.get(investment.id)?.totalGain || 0), 0);
+  const savingsTransactions = transactions.filter(transaction => !!transaction.linkedSavingsPlanId);
   const totalSavings = savingsPlans.reduce((sum, plan) => {
     const balance = plan.productType === 'fixed_deposit'
       ? getFixedDepositValue(plan).currentValue
       : Number(plan.currentAmount) || 0;
     return sum + balance;
   }, 0);
-  const savingsTransactions = transactions.filter(transaction => !!transaction.linkedSavingsPlanId);
   const totalSavingsDeposited = savingsTransactions
     .filter(transaction => transaction.type === 'savings' && !transaction.ledgerOnly)
     .reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0);
@@ -765,8 +580,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     .reduce((sum, transaction) => sum + (Number(transaction.penalty) || 0), 0);
   const totalSavingsOtherDeductions = savingsTransactions
     .reduce((sum, transaction) => sum + (Number(transaction.otherDeduction) || 0), 0);
-  const totalSavingsSettlementVariance = savingsTransactions
-    .reduce((sum, transaction) => sum + (Number(transaction.settlementVariance) || 0), 0);
   const netSavingsInterest = totalSavingsInterest - totalSavingsTds - totalSavingsCharges -
     totalSavingsPenalty - totalSavingsOtherDeductions;
   const bankSavingsBalance = savingsPlans
@@ -786,18 +599,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         (!query || searchable.includes(query));
     })
     .sort((left, right) => (right.createdAt || 0) - (left.createdAt || 0));
-  const upcomingSavingsMaturities = activeSavingsPlans.filter(plan => {
-    const maturityDate = plan.maturityDate || (plan.productType === 'fixed_deposit' && plan.startDate
-      ? getSavingsMaturityDate(plan.startDate, Number(plan.durationMonths) || 1)
-      : '');
-    return !!maturityDate && maturityDate >= today;
-  });
-  const sumSavingsDepositsSince = (startDate: string) => savingsTransactions
-    .filter(transaction => transaction.type === 'savings' && !transaction.ledgerOnly && transaction.date >= startDate)
-    .reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0);
-  const savingsToday = sumSavingsDepositsSince(today);
-  const savingsThisMonth = sumSavingsDepositsSince(getLocalMonthString());
-  const savingsThisYear = sumSavingsDepositsSince(`${today.slice(0, 4)}-01-01`);
   const fixedDepositPreviewPlan: SavingsPlan | null = saveProductType === 'fixed_deposit'
     ? {
         id: 'preview',
@@ -859,19 +660,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     borrowedLoans.some(loan => loan.id === payment.loanId)
   );
   const totalPrincipalRepaid = borrowedLoanPayments.reduce((sum, payment) => sum + (Number(payment.principal) || 0), 0);
-  const totalInterestPaid = borrowedLoanPayments.reduce((sum, payment) => sum + (Number(payment.interest) || 0), 0);
-  const totalLoanRepayment = borrowedLoanPayments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
-  const totalLateFees = borrowedLoanPayments.reduce((sum, payment) => sum + (Number(payment.lateFee) || 0), 0);
-  const totalPenalInterest = borrowedLoanPayments.reduce((sum, payment) => sum + (Number(payment.penalInterest) || 0), 0);
-  const totalProcessingFees = borrowedLoans.reduce((sum, loan) => sum + (Number(loan.processingFee) || 0), 0) +
-    borrowedLoanPayments.reduce((sum, payment) => sum + (Number(payment.processingFee) || 0), 0);
-  const totalLoanFees = borrowedLoans.reduce((sum, loan) =>
-    sum + (Number(loan.administrativeFee) || 0) + (Number(loan.applicableTax) || 0) +
-      (Number(loan.insuranceCharge) || 0) + (Number(loan.otherFees) || 0),
-  0) + borrowedLoanPayments.reduce((sum, payment) =>
-    sum + (Number(payment.administrativeFee) || 0) + (Number(payment.applicableTax) || 0) +
-      (Number(payment.insuranceCharge) || 0) + (Number(payment.otherFees) || 0),
-  0);
   const loanMetrics = loans.map(loan => {
     const schedule = [...loanPayments]
       .filter(payment => payment.loanId === loan.id)
@@ -938,20 +726,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       overdueCount,
       overdueAmount: overduePeriods.reduce((sum, period) => sum + Math.max(0, installment - period.paid), 0)
     };
-  });
+  }  );
   const activeBorrowedMetrics = loanMetrics.filter(metric =>
     metric.loan.direction !== 'lent' && metric.loan.status !== 'closed' && Number(metric.loan.outstanding) > 0
   );
   const monthlyEmiBurden = activeBorrowedMetrics.reduce((sum, metric) => sum + metric.monthlyInstallment, 0);
-  const remainingInterestEstimate = activeBorrowedMetrics.reduce((sum, metric) => sum + metric.remainingInterest, 0);
-  const totalLoanClosureEstimate = activeBorrowedMetrics.reduce((sum, metric) => sum + metric.closureEstimate, 0);
   const overdueInstallments = activeBorrowedMetrics.reduce((sum, metric) => sum + metric.overdueCount, 0);
   const overdueEmiAmount = activeBorrowedMetrics.reduce((sum, metric) => sum + metric.overdueAmount, 0);
-  const upcomingLoanMetric = activeBorrowedMetrics
-    .filter(metric => !!metric.nextDue)
-    .sort((left, right) => left.nextDue.localeCompare(right.nextDue))[0];
-  const activeLoanCount = loans.filter(loan => loan.status !== 'closed' && Number(loan.outstanding) > 0).length;
-  const closedLoanCount = loans.filter(loan => loan.status === 'closed' || Number(loan.outstanding) <= 0).length;
   const visibleLoanMetrics = loanMetrics.filter(metric => {
     const isClosed = metric.loan.status === 'closed' || Number(metric.loan.outstanding) <= 0;
     return (loanStatusFilter === 'all' || (loanStatusFilter === 'closed' ? isClosed : !isClosed)) &&
@@ -1137,7 +918,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       }
       const sourceBalance = accountBalances.get(editingTransactionAccountId) || 0;
       if (amount > sourceBalance) {
-        reportError(`Transfer exceeds available balance of NPR ${sourceBalance.toLocaleString('en-IN')}.`);
+        reportError(`Transfer exceeds available balance of ${getCurrencySymbol()} ${sourceBalance.toLocaleString('en-IN')}.`);
         return;
       }
       adjust(editingTransactionAccountId, -amount);
@@ -1149,7 +930,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       }
       const balance = accountBalances.get(editingTransactionAccountId) || 0;
       if (transaction.type === 'expense' && amount > balance) {
-        reportError(`Expense exceeds available balance of NPR ${balance.toLocaleString('en-IN')}.`);
+        reportError(`Expense exceeds available balance of ${getCurrencySymbol()} ${balance.toLocaleString('en-IN')}.`);
         return;
       }
       adjust(editingTransactionAccountId, transaction.type === 'expense' ? -amount : amount);
@@ -1227,7 +1008,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (updated.goalId) await syncGoalProgressFromFinance(updated.goalId);
     setEditingInvestmentId(null);
     setEditingInvestmentValue('');
-    onSuccess(`Updated "${updated.name}" market value to NPR ${value.toLocaleString('en-IN')}.`);
+    onSuccess(`Updated "${updated.name}" market value to ${getCurrencySymbol()} ${value.toLocaleString('en-IN')}.`);
     onRefresh();
   };
 
@@ -1443,7 +1224,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       const fromBal = Number(fromAcct.balance) || 0;
       const toBal = Number(toAcct.balance) || 0;
       if (amt > fromBal) {
-        reportError(`Transfer exceeds the available account balance of NPR ${fromBal.toLocaleString('en-IN')}.`);
+        reportError(`Transfer exceeds the available account balance of ${getCurrencySymbol()} ${fromBal.toLocaleString('en-IN')}.`);
         return;
       }
       nextFromAccount = { ...fromAcct, balance: fromBal - amt };
@@ -1472,7 +1253,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       }
       if ((txType === 'expense' || txType === 'investment' || txType === 'repayment') &&
           amt > (Number(acct?.balance) || 0)) {
-        reportError(`This transaction exceeds the available account balance of NPR ${(Number(acct?.balance) || 0).toLocaleString('en-IN')}.`);
+        reportError(`This transaction exceeds the available account balance of ${getCurrencySymbol()} ${(Number(acct?.balance) || 0).toLocaleString('en-IN')}.`);
         return;
       }
 
@@ -1652,17 +1433,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
 
     if (txType === 'transfer' && nextFromAccount && nextToAccount) {
-      onSuccess(`NPR ${amt.toLocaleString('en-IN')} transferred from ${nextFromAccount.name} to ${nextToAccount.name}`);
+      onSuccess(`${getCurrencySymbol()} ${amt.toLocaleString('en-IN')} transferred from ${nextFromAccount.name} to ${nextToAccount.name}`);
     } else if (txType === 'income') {
-      onSuccess(`✓ Income of NPR ${amt.toLocaleString('en-IN')} added to account${tx.goalId ? ' & linked to Goal' : ''}`);
+      onSuccess(`✓ Income of ${getCurrencySymbol()} ${amt.toLocaleString('en-IN')} added to account${tx.goalId ? ' & linked to Goal' : ''}`);
     } else if (txType === 'expense') {
-      onSuccess(`✓ Expense of NPR ${amt.toLocaleString('en-IN')} recorded & deducted${tx.goalId ? ' & linked to Goal' : ''}`);
+      onSuccess(`✓ Expense of ${getCurrencySymbol()} ${amt.toLocaleString('en-IN')} recorded & deducted${tx.goalId ? ' & linked to Goal' : ''}`);
     } else if (txType === 'loan') {
-      onSuccess(`✓ Loan (+NPR ${amt.toLocaleString('en-IN')}) deposited into ${acct?.name || 'account'} & recorded in ledger!`);
+      onSuccess(`✓ Loan (+${getCurrencySymbol()} ${amt.toLocaleString('en-IN')}) deposited into ${acct?.name || 'account'} & recorded in ledger!`);
     } else if (txType === 'repayment') {
-      onSuccess(`✓ Loan payment of NPR ${amt.toLocaleString('en-IN')} deducted & outstanding reduced!`);
+      onSuccess(`✓ Loan payment of ${getCurrencySymbol()} ${amt.toLocaleString('en-IN')} deducted & outstanding reduced!`);
     } else if (txType === 'investment') {
-      onSuccess(`✓ Investment of NPR ${amt.toLocaleString('en-IN')} logged in ledger & portfolio!`);
+      onSuccess(`✓ Investment of ${getCurrencySymbol()} ${amt.toLocaleString('en-IN')} logged in ledger & portfolio!`);
     } else if (createdOrLinkedReceiptId) {
       onSuccess('✓ Transaction recorded & linked with Things Purchase Receipt Vault!');
     } else {
@@ -1931,7 +1712,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (loan.direction === 'lent' && p > (Number(acct.balance) || 0)) {
-      reportError(`Lending amount exceeds the available balance of NPR ${Number(acct.balance).toLocaleString('en-IN')}.`);
+      reportError(`Lending amount exceeds the available balance of ${getCurrencySymbol()} ${Number(acct.balance).toLocaleString('en-IN')}.`);
       return;
     }
     const operations: Array<{ storeName: string; item: any }> = [
@@ -1964,7 +1745,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (loan.goalId) {
       await syncGoalProgressFromFinance(loan.goalId);
     }
-    onSuccess(`✓ NPR ${p.toLocaleString('en-IN')} ${loan.direction === 'lent' ? 'lent from' : 'deposited into'} "${acct.name}" & recorded in Ledger!`);
+    onSuccess(`✓ ${getCurrencySymbol()} ${p.toLocaleString('en-IN')} ${loan.direction === 'lent' ? 'lent from' : 'deposited into'} "${acct.name}" & recorded in Ledger!`);
     onRefresh();
   };
 
@@ -2014,11 +1795,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (!Number.isFinite(basePrincipal) || !Number.isFinite(interest) || basePrincipal < 0 ||
         interest < 0 || principal > outstanding + 0.01 ||
         Math.abs(principal + interest + fees - amt) > 0.01) {
-      reportError(`Principal, interest, and actual fees must total NPR ${amt.toLocaleString('en-IN')}; principal cannot exceed NPR ${outstanding.toLocaleString('en-IN')}.`);
+      reportError(`Principal, interest, and actual fees must total ${getCurrencySymbol()} ${amt.toLocaleString('en-IN')}; principal cannot exceed ${getCurrencySymbol()} ${outstanding.toLocaleString('en-IN')}.`);
       return;
     }
     if (payIsClosure && Math.abs(principal - outstanding) > 0.01) {
-      reportError(`To close this loan, enter the full remaining principal of NPR ${outstanding.toLocaleString('en-IN')} in the principal split.`);
+      reportError(`To close this loan, enter the full remaining principal of ${getCurrencySymbol()} ${outstanding.toLocaleString('en-IN')} in the principal split.`);
       return;
     }
     const now = Date.now();
@@ -2031,7 +1812,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (loan.direction !== 'lent' && amt > (Number(sourceAccount.balance) || 0)) {
-      reportError(`Repayment exceeds the available account balance of NPR ${Number(sourceAccount.balance).toLocaleString('en-IN')}.`);
+      reportError(`Repayment exceeds the available account balance of ${getCurrencySymbol()} ${Number(sourceAccount.balance).toLocaleString('en-IN')}.`);
       return;
     }
     operations.push({
@@ -2098,7 +1879,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       category: closesLoan ? (loan.direction === 'lent' ? 'Loan Receivable Closed' : 'Loan Closure Settlement') :
         loan.direction === 'lent' ? 'Loan Principal Received' : 'Loan Repayment',
       date: payDate,
-      note: `${loan.name} (Principal: NPR ${principal.toFixed(2)}, Interest: NPR ${interest.toFixed(2)})`,
+      note: `${loan.name} (Principal: ${getCurrencySymbol()} ${principal.toFixed(2)}, Interest: ${getCurrencySymbol()} ${interest.toFixed(2)})`,
       accountId: sourceAccountId || null,
       goalId: loan.goalId || null,
       linkedLoanId: loan.id,
@@ -2112,7 +1893,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (loan.goalId) {
       await syncGoalProgressFromFinance(loan.goalId);
     }
-    onSuccess(`${closesLoan ? 'Loan closed' : 'Loan payment logged'}: Principal NPR ${principal.toLocaleString('en-IN')}, Interest NPR ${interest.toLocaleString('en-IN')}${fees ? `, fees NPR ${fees.toLocaleString('en-IN')}` : ''}`);
+    onSuccess(`${closesLoan ? 'Loan closed' : 'Loan payment logged'}: Principal ${getCurrencySymbol()} ${principal.toLocaleString('en-IN')}, Interest ${getCurrencySymbol()} ${interest.toLocaleString('en-IN')}${fees ? `, fees ${getCurrencySymbol()} ${fees.toLocaleString('en-IN')}` : ''}`);
     setPayAmount('');
     setPayPrincipalInput('');
     setPayInterestInput('');
@@ -2192,7 +1973,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       await syncGoalProgressFromFinance(l.goalId);
     }
     onSuccess(liabRecordMode === 'borrowed'
-      ? `NPR ${amount.toLocaleString('en-IN')} borrowed into "${depositAccount?.name}" and added to liabilities`
+      ? `${getCurrencySymbol()} ${amount.toLocaleString('en-IN')} borrowed into "${depositAccount?.name}" and added to liabilities`
       : `Existing liability "${liabName}" recorded without changing account balance${l.goalId ? ' & linked to Goal' : ''}`);
     setLiabName('');
     setLiabVal('');
@@ -2214,7 +1995,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (amount > outstanding) {
-      reportError(`Repayment exceeds the outstanding liability of NPR ${outstanding.toLocaleString('en-IN')}.`);
+      reportError(`Repayment exceeds the outstanding liability of ${getCurrencySymbol()} ${outstanding.toLocaleString('en-IN')}.`);
       return;
     }
     if (!account) {
@@ -2222,7 +2003,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (amount > (Number(account.balance) || 0)) {
-      reportError(`Repayment exceeds the available account balance of NPR ${Number(account.balance).toLocaleString('en-IN')}.`);
+      reportError(`Repayment exceeds the available account balance of ${getCurrencySymbol()} ${Number(account.balance).toLocaleString('en-IN')}.`);
       return;
     }
 
@@ -2258,7 +2039,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (liability.goalId) {
       await syncGoalProgressFromFinance(liability.goalId);
     }
-    onSuccess(`NPR ${amount.toLocaleString('en-IN')} repayment deducted from "${account.name}" and liability reduced`);
+    onSuccess(`${getCurrencySymbol()} ${amount.toLocaleString('en-IN')} repayment deducted from "${account.name}" and liability reduced`);
     setLiabilityRepaymentId(null);
     setLiabilityRepaymentAmount('');
     onRefresh();
@@ -2333,7 +2114,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         return;
       }
       if (totalCost > (Number(acct.balance) || 0)) {
-        reportError(`Investment exceeds the available account balance of NPR ${Number(acct.balance).toLocaleString('en-IN')}.`);
+        reportError(`Investment exceeds the available account balance of ${getCurrencySymbol()} ${Number(acct.balance).toLocaleString('en-IN')}.`);
         return;
       }
       if (acct) {
@@ -2404,7 +2185,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         return;
       }
       if (amt > (Number(acct.balance) || 0)) {
-        reportError(`Investment exceeds the available account balance of NPR ${Number(acct.balance).toLocaleString('en-IN')}.`);
+        reportError(`Investment exceeds the available account balance of ${getCurrencySymbol()} ${Number(acct.balance).toLocaleString('en-IN')}.`);
         return;
       }
       if (acct) {
@@ -2458,7 +2239,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (inv.goalId) {
       await syncGoalProgressFromFinance(inv.goalId);
     }
-    onSuccess(`✓ NPR ${amt.toLocaleString('en-IN')} logged in ledger for "${inv.name}"!`);
+    onSuccess(`✓ ${getCurrencySymbol()} ${amt.toLocaleString('en-IN')} logged in ledger for "${inv.name}"!`);
     onRefresh();
   };
 
@@ -2535,7 +2316,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
     const isOutflow = investmentActivityKind === 'buy' || investmentActivityKind === 'fee' || investmentActivityKind === 'tax';
     if (account && isOutflow && ledgerAmount > (Number(account.balance) || 0)) {
-      reportError(`This investment activity exceeds the account balance of NPR ${Number(account.balance).toLocaleString('en-IN')}.`);
+      reportError(`This investment activity exceeds the account balance of ${getCurrencySymbol()} ${Number(account.balance).toLocaleString('en-IN')}.`);
       return;
     }
 
@@ -2681,7 +2462,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
     const amount = Number(schedule.amount) || 0;
     if (schedule.type === 'expense' && account && amount > (Number(account.balance) || 0)) {
-      reportError(`This payment exceeds the selected account balance of NPR ${Number(account.balance).toLocaleString('en-IN')}.`);
+      reportError(`This payment exceeds the selected account balance of ${getCurrencySymbol()} ${Number(account.balance).toLocaleString('en-IN')}.`);
       return;
     }
     const transaction: FinanceTransaction = {
@@ -2717,7 +2498,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       reportError('The actual transaction could not be recorded. This occurrence may already have been settled in another tab; refresh and verify before retrying.');
       return;
     }
-    onSuccess(`Recorded actual ${schedule.type} of NPR ${amount.toLocaleString('en-IN')}; schedule advanced without double-posting.`);
+    onSuccess(`Recorded actual ${schedule.type} of ${getCurrencySymbol()} ${amount.toLocaleString('en-IN')}; schedule advanced without double-posting.`);
     onRefresh();
   };
 
@@ -2863,7 +2644,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (fundingAccount && initialAmt > (Number(fundingAccount.balance) || 0)) {
-      reportError(`Starting deposit exceeds the selected account balance of NPR ${Number(fundingAccount.balance).toLocaleString('en-IN')}.`);
+      reportError(`Starting deposit exceeds the selected account balance of ${getCurrencySymbol()} ${Number(fundingAccount.balance).toLocaleString('en-IN')}.`);
       return;
     }
 
@@ -3004,7 +2785,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (amt > (Number(sourceAccount.balance) || 0)) {
-      reportError(`Deposit exceeds the selected account balance of NPR ${Number(sourceAccount.balance).toLocaleString('en-IN')}.`);
+      reportError(`Deposit exceeds the selected account balance of ${getCurrencySymbol()} ${Number(sourceAccount.balance).toLocaleString('en-IN')}.`);
       return;
     }
 
@@ -3048,7 +2829,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (depositTargetPlan.goalId) {
       await syncGoalProgressFromFinance(depositTargetPlan.goalId);
     }
-    onSuccess(`✓ NPR ${amt.toLocaleString('en-IN')} moved from "${sourceAccount.name}" into "${depositTargetPlan.name}"`);
+    onSuccess(`✓ ${getCurrencySymbol()} ${amt.toLocaleString('en-IN')} moved from "${sourceAccount.name}" into "${depositTargetPlan.name}"`);
     setDepositTargetPlan(null);
     setDepositAmount('');
     setDepositNote('');
@@ -3127,7 +2908,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       await syncGoalProgressFromFinance(plan.goalId);
     }
     const variance = payout - expectedSettlement;
-    onSuccess(`NPR ${payout.toLocaleString('en-IN', { maximumFractionDigits: 2 })} payout recorded in "${account.name}"${isFixedDeposit ? ' as the actual bank payout entered' : ''}${Math.abs(variance) > 0.01 ? ` · actual differs from entered split by NPR ${variance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : ''}`);
+    onSuccess(`${getCurrencySymbol()} ${payout.toLocaleString('en-IN', { maximumFractionDigits: 2 })} payout recorded in "${account.name}"${isFixedDeposit ? ' as the actual bank payout entered' : ''}${Math.abs(variance) > 0.01 ? ` · actual differs from entered split by ${getCurrencySymbol()} ${variance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : ''}`);
     setWithdrawalTargetPlan(null);
     setWithdrawalAmount('');
     setWithdrawalIsFinalSettlement(false);
@@ -3177,7 +2958,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     setEditingSavingsBalanceId(null);
-    onSuccess(`"${plan.name}" actual balance updated to NPR ${newBalance.toLocaleString('en-IN')}.`);
+    onSuccess(`"${plan.name}" actual balance updated to ${getCurrencySymbol()} ${newBalance.toLocaleString('en-IN')}.`);
     onRefresh();
   };
 
@@ -3221,7 +3002,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return;
     }
     if (purchaseAccount && paidAmount > (Number(purchaseAccount.balance) || 0)) {
-      reportError(`Asset purchase exceeds the available account balance of NPR ${Number(purchaseAccount.balance).toLocaleString('en-IN')}.`);
+      reportError(`Asset purchase exceeds the available account balance of ${getCurrencySymbol()} ${Number(purchaseAccount.balance).toLocaleString('en-IN')}.`);
       return;
     }
     const existing = editingAssetId ? assets.find(asset => asset.id === editingAssetId) : undefined;
@@ -3296,7 +3077,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (existing?.goalId && existing.goalId !== a.goalId) {
       await syncGoalProgressFromFinance(existing.goalId);
     }
-    onSuccess(`${existing ? 'Updated' : 'Added'} asset "${a.name}"${purchaseAccount && paidAmount > 0 ? ` and recorded NPR ${paidAmount.toLocaleString('en-IN')} purchase payment` : ''}${a.goalId ? ' & linked to Goal' : ''}`);
+    onSuccess(`${existing ? 'Updated' : 'Added'} asset "${a.name}"${purchaseAccount && paidAmount > 0 ? ` and recorded ${getCurrencySymbol()} ${paidAmount.toLocaleString('en-IN')} purchase payment` : ''}${a.goalId ? ' & linked to Goal' : ''}`);
     setAssetName('');
     setAssetVal('');
     setAssetPurchaseCost('');
@@ -3573,7 +3354,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     lines.push(`"Active Period Scope: ${periodLabel}"`);
     lines.push('');
     lines.push('"=== PERIOD CASH FLOW STATEMENT ==="');
-    lines.push('"Activity","Direction","Amount (NPR)"');
+    lines.push(("\"Activity\",\"Direction\",\"Amount (NPR)\"").split('NPR').join(getCurrencySymbol()));
     lines.push(`"Gross Income Received","Inflow",${periodIncome}`);
     lines.push(`"Operating Expenses Paid","Outflow",-${periodExpense}`);
     lines.push(`"Loan Interest Paid","Outflow",-${periodInterestExpense}`);
@@ -3592,7 +3373,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 2: TRANSACTIONS LEDGER
     lines.push('"=== TRANSACTIONS LEDGER (FILTERED PERIOD) ==="');
-    lines.push('"ID","Date","Type","Category","Amount (NPR)","Principal (NPR)","Interest (NPR)","TDS (NPR)","Service Charge (NPR)","Penalty (NPR)","Late Fee (NPR)","Penal Interest (NPR)","Processing Fee (NPR)","Administrative Fee (NPR)","Applicable Tax (NPR)","Insurance Charge (NPR)","Other Fees (NPR)","Other Deduction (NPR)","Settlement Variance (NPR)","Note","AccountId","Adjustment Direction","Linked Asset ID","Ledger Only"');
+    lines.push(("\"ID\",\"Date\",\"Type\",\"Category\",\"Amount (NPR)\",\"Principal (NPR)\",\"Interest (NPR)\",\"TDS (NPR)\",\"Service Charge (NPR)\",\"Penalty (NPR)\",\"Late Fee (NPR)\",\"Penal Interest (NPR)\",\"Processing Fee (NPR)\",\"Administrative Fee (NPR)\",\"Applicable Tax (NPR)\",\"Insurance Charge (NPR)\",\"Other Fees (NPR)\",\"Other Deduction (NPR)\",\"Settlement Variance (NPR)\",\"Note\",\"AccountId\",\"Adjustment Direction\",\"Linked Asset ID\",\"Ledger Only\"").split('NPR').join(getCurrencySymbol()));
     filteredTransactions.forEach(t => {
       lines.push([
         t.id,
@@ -3625,7 +3406,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 3: INVESTMENT PORTFOLIO
     lines.push('"=== INVESTMENT PORTFOLIO ==="');
-    lines.push('"ID","Asset Name","Type","Remaining Cost Basis (NPR)","Current Valuation (NPR)","Realized Gain (NPR)","Unrealized Gain (NPR)","Net Income (NPR)","Total Gain (NPR)","ROI %","Units","Valuation Date","Date"');
+    lines.push(("\"ID\",\"Asset Name\",\"Type\",\"Remaining Cost Basis (NPR)\",\"Current Valuation (NPR)\",\"Realized Gain (NPR)\",\"Unrealized Gain (NPR)\",\"Net Income (NPR)\",\"Total Gain (NPR)\",\"ROI %\",\"Units\",\"Valuation Date\",\"Date\"").split('NPR').join(getCurrencySymbol()));
     investments.forEach(i => {
       const metrics = getInvestmentMetrics(i, investmentActivities);
       lines.push([
@@ -3646,7 +3427,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     });
     lines.push('');
     lines.push('"=== INVESTMENT ACTIVITY HISTORY ==="');
-    lines.push('"ID","Investment ID","Activity","Date","Amount (NPR)","Quantity","Fees (NPR)","Tax (NPR)","Cost Basis Removed (NPR)","Account ID","Linked Transaction ID","Reversed"');
+    lines.push(("\"ID\",\"Investment ID\",\"Activity\",\"Date\",\"Amount (NPR)\",\"Quantity\",\"Fees (NPR)\",\"Tax (NPR)\",\"Cost Basis Removed (NPR)\",\"Account ID\",\"Linked Transaction ID\",\"Reversed\"").split('NPR').join(getCurrencySymbol()));
     investmentActivities.forEach(activity => {
       lines.push([
         activity.id, activity.investmentId, activity.kind, activity.date, activity.amount,
@@ -3657,7 +3438,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     });
     lines.push('');
     lines.push('"=== EXPECTED CASH FLOW SCHEDULES (NOT ACTUAL TRANSACTIONS) ==="');
-    lines.push('"ID","Name","Type","Category","Expected Amount (NPR)","Frequency","Next Due Date","Account ID","Status"');
+    lines.push(("\"ID\",\"Name\",\"Type\",\"Category\",\"Expected Amount (NPR)\",\"Frequency\",\"Next Due Date\",\"Account ID\",\"Status\"").split('NPR').join(getCurrencySymbol()));
     cashFlowSchedules.forEach(schedule => {
       lines.push([
         schedule.id, `"${schedule.name.replace(/"/g, '""')}"`, schedule.type,
@@ -3669,7 +3450,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 4: SAVINGS PLANS & TARGETS
     lines.push('"=== SAVINGS PLANS & FINANCIAL TARGETS ==="');
-    lines.push('"ID","Status","Category","Product Type","Plan Name","Bank / Institution","Branch","Safe Reference","Balance / Principal (NPR)","Estimated Current Value (NPR)","Target / Maturity Value (NPR)","Annual Interest %","Interest Method","TDS Rate % (manual)","Service Charges (NPR)","Penalty (NPR)","Other Deductions (NPR)","Frequency","Custom Period Days","Planned Contribution (NPR)","Start Date","Maturity Date","Term Months","Notes"');
+    lines.push(("\"ID\",\"Status\",\"Category\",\"Product Type\",\"Plan Name\",\"Bank / Institution\",\"Branch\",\"Safe Reference\",\"Balance / Principal (NPR)\",\"Estimated Current Value (NPR)\",\"Target / Maturity Value (NPR)\",\"Annual Interest %\",\"Interest Method\",\"TDS Rate % (manual)\",\"Service Charges (NPR)\",\"Penalty (NPR)\",\"Other Deductions (NPR)\",\"Frequency\",\"Custom Period Days\",\"Planned Contribution (NPR)\",\"Start Date\",\"Maturity Date\",\"Term Months\",\"Notes\"").split('NPR').join(getCurrencySymbol()));
     savingsPlans.forEach(s => {
       const cur = Number(s.currentAmount) || 0;
       const isFixedDeposit = s.productType === 'fixed_deposit';
@@ -3707,7 +3488,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 5: LOANS & LIABILITIES
     lines.push('"=== ACTIVE LOANS & LIABILITIES ==="');
-    lines.push('"ID","Status","Direction","Category","Loan Type","Name","Lender / Borrower","Branch","Reference","Principal (NPR)","Disbursed / Lent (NPR)","Outstanding (NPR)","Interest Rate %","Rate Type","Calculation Method","Repayment Frequency","Installment (NPR)","Installment Source","Term Months","Start Date","First Due Date","Maturity Date","Processing Fee (NPR)","Admin Fee (NPR)","Tax (NPR)","Insurance (NPR)","Other Fees (NPR)","Foreclosure Charge Estimate (NPR)","Collateral Value (NPR)","LTV %","Closure Reference"');
+    lines.push(("\"ID\",\"Status\",\"Direction\",\"Category\",\"Loan Type\",\"Name\",\"Lender / Borrower\",\"Branch\",\"Reference\",\"Principal (NPR)\",\"Disbursed / Lent (NPR)\",\"Outstanding (NPR)\",\"Interest Rate %\",\"Rate Type\",\"Calculation Method\",\"Repayment Frequency\",\"Installment (NPR)\",\"Installment Source\",\"Term Months\",\"Start Date\",\"First Due Date\",\"Maturity Date\",\"Processing Fee (NPR)\",\"Admin Fee (NPR)\",\"Tax (NPR)\",\"Insurance (NPR)\",\"Other Fees (NPR)\",\"Foreclosure Charge Estimate (NPR)\",\"Collateral Value (NPR)\",\"LTV %\",\"Closure Reference\"").split('NPR').join(getCurrencySymbol()));
     loans.forEach(l => {
       const emi = l.emiAmount || getLoanInstallment(l.principal, l.rate, l.tenure, l.interestMethod, l.repaymentFrequency);
       lines.push([
@@ -3745,7 +3526,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       ].join(','));
     });
     lines.push('"=== LOAN PAYMENT HISTORY ==="');
-    lines.push('"Payment ID","Loan ID","Loan Name","Direction","Date","Total (NPR)","Principal (NPR)","Extra Principal (NPR)","Interest (NPR)","Late Fee (NPR)","Penal Interest (NPR)","Processing Fee (NPR)","Admin Fee (NPR)","Tax (NPR)","Insurance (NPR)","Other Fees (NPR)","Closure"');
+    lines.push(("\"Payment ID\",\"Loan ID\",\"Loan Name\",\"Direction\",\"Date\",\"Total (NPR)\",\"Principal (NPR)\",\"Extra Principal (NPR)\",\"Interest (NPR)\",\"Late Fee (NPR)\",\"Penal Interest (NPR)\",\"Processing Fee (NPR)\",\"Admin Fee (NPR)\",\"Tax (NPR)\",\"Insurance (NPR)\",\"Other Fees (NPR)\",\"Closure\"").split('NPR').join(getCurrencySymbol()));
     loanPayments.forEach(payment => {
       const loan = loans.find(item => item.id === payment.loanId);
       lines.push([
@@ -3782,7 +3563,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 6: PHYSICAL & BUSINESS ASSETS
     lines.push('"=== PHYSICAL & BUSINESS ASSETS ==="');
-    lines.push('"ID","Status","Category","Name","Purchase Date","Purchase Cost (NPR)","Acquisition Costs (NPR)","Cost Basis (NPR)","Current Market Value (NPR)","Unrealized Gain / Loss (NPR)","Valuation Date","Quantity","Unit","Location","Condition","Depreciation Method","Useful Life (Years)","Salvage Value (NPR)","Depreciation Estimate (NPR)","Sale Date","Actual Sale Proceeds (NPR)","Gross Realized Gain / Loss before costs/tax (NPR)","Notes"');
+    lines.push(("\"ID\",\"Status\",\"Category\",\"Name\",\"Purchase Date\",\"Purchase Cost (NPR)\",\"Acquisition Costs (NPR)\",\"Cost Basis (NPR)\",\"Current Market Value (NPR)\",\"Unrealized Gain / Loss (NPR)\",\"Valuation Date\",\"Quantity\",\"Unit\",\"Location\",\"Condition\",\"Depreciation Method\",\"Useful Life (Years)\",\"Salvage Value (NPR)\",\"Depreciation Estimate (NPR)\",\"Sale Date\",\"Actual Sale Proceeds (NPR)\",\"Gross Realized Gain / Loss before costs/tax (NPR)\",\"Notes\"").split('NPR').join(getCurrencySymbol()));
     assets.forEach(asset => {
       const costBasis = getAssetCostBasis(asset);
       const proceeds = Number(asset.salePrice) || 0;
@@ -3813,7 +3594,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       ].join(','));
     });
     lines.push('"=== ASSET VALUATION HISTORY ==="');
-    lines.push('"Asset ID","Asset Name","Valuation Date","Market Value (NPR)","Note"');
+    lines.push(("\"Asset ID\",\"Asset Name\",\"Valuation Date\",\"Market Value (NPR)\",\"Note\"").split('NPR').join(getCurrencySymbol()));
     assets.forEach(asset => (asset.valueHistory || []).forEach(entry => {
       lines.push([
         asset.id,
@@ -3827,7 +3608,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
     // SECTION 6: SOVEREIGN BALANCE SHEET & NET WORTH
     lines.push('"=== SOVEREIGN BALANCE SHEET & NET WORTH ==="');
-    lines.push('"Asset / Liability Component","Sub-Category","Amount (NPR)"');
+    lines.push(("\"Asset / Liability Component\",\"Sub-Category\",\"Amount (NPR)\"").split('NPR').join(getCurrencySymbol()));
     lines.push(`"Liquid Checking & Cash","Assets",${liquidCash}`);
     lines.push(`"Investment Portfolio Market Value","Assets",${investmentValue}`);
     lines.push(`"Savings & Term Deposits (estimated current value)","Assets",${totalSavings}`);
@@ -3940,179 +3721,165 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const periodInvestingFlow = -periodInvestmentFlow;
   const periodFinancingFlow = periodLoanReceived - periodRepaymentFlow - periodLoanGiven + periodLoanRecovered;
   const periodNetCashFlow = periodOperatingFlow + periodInvestingFlow - periodSavingsFlow + periodFinancingFlow + periodAdjustmentFlow;
+  const hasLoanRecords = loans.length > 0 || liabilities.length > 0 || loanPayments.length > 0;
+  const hasInvestmentRecords = investments.length > 0;
+  const hasSavingsRecords = savingsPlans.length > 0;
+  const hasBalanceSheetRecords =
+    accounts.length > 0 ||
+    transactions.length > 0 ||
+    loans.length > 0 ||
+    loanPayments.length > 0 ||
+    liabilities.length > 0 ||
+    investments.length > 0 ||
+    savingsPlans.length > 0 ||
+    assets.length > 0;
+  const financeMenuOptions: { id: FinanceMenuId; label: string; optionLabel: string; icon: typeof Landmark }[] = [
+    { id: 'overview', label: 'Cash Flow & Accounts', optionLabel: 'Cash Flow & Accounts', icon: Landmark },
+    { id: 'transaction', label: 'Record Transaction', optionLabel: '　↳ Record Transaction', icon: Plus },
+    { id: 'accounts', label: 'Accounts & Wallets', optionLabel: `　↳ Accounts & Wallets (${accounts.length})`, icon: Landmark },
+    { id: 'scheduled', label: 'Scheduled Cash Flow', optionLabel: '　↳ Scheduled Cash Flow', icon: RefreshCw },
+    { id: 'transactions', label: 'Transactions', optionLabel: `Transactions (${transactions.length})`, icon: ArrowUpDown },
+    { id: 'loans', label: 'Loans & Debt', optionLabel: `Loans & Debt (${loans.length + liabilities.length})`, icon: DollarSign },
+    { id: 'loanPayment', label: 'EMI / Payment', optionLabel: '　↳ EMI / Payment', icon: ArrowUpDown },
+    { id: 'newLoan', label: 'New Loan', optionLabel: '　↳ New Loan', icon: Plus },
+    { id: 'addLiability', label: 'Add Liability', optionLabel: '　↳ Add Liability', icon: Plus },
+    { id: 'investments', label: 'Investments', optionLabel: `Investments (${investments.length})`, icon: TrendingUp },
+    { id: 'addInvestment', label: 'Add Investment', optionLabel: '　↳ Add Investment', icon: Plus },
+    { id: 'recordInvestmentActivity', label: 'Record Investment Activity', optionLabel: '　↳ Record Activity', icon: Activity },
+    { id: 'savings', label: 'Savings & Deposits', optionLabel: `Savings & Deposits (${savingsPlans.length})`, icon: ShieldCheck },
+    { id: 'registerSavings', label: 'Register Savings / Deposit', optionLabel: '　↳ Register Savings / Deposit', icon: Plus },
+    { id: 'balanceSheet', label: 'Balance Sheet', optionLabel: `Balance Sheet (${assets.length})`, icon: FileText },
+    { id: 'capitalPlanning', label: 'Capital & Financial Planning', optionLabel: `Capital & Financial Planning (${financialGoals.length})`, icon: TrendingUp },
+    { id: 'addAsset', label: 'Add Asset', optionLabel: '　↳ Add Asset', icon: Plus }
+  ];
+  const selectedFinanceMenuId: FinanceMenuId = activeTab === 'overview' && overviewPanel
+    ? overviewPanel
+    : activeTab === 'loans' && sectionActionPanel === 'loanActions'
+    ? activeLoanAction === 'payment' ? 'loanPayment' : activeLoanAction === 'newLoan' ? 'newLoan' : 'addLiability'
+    : activeTab === 'investments' && sectionActionPanel === 'investmentActions'
+    ? activeInvestmentAction === 'asset' ? 'addInvestment' : 'recordInvestmentActivity'
+    : activeTab === 'savings' && sectionActionPanel === 'savings'
+    ? 'registerSavings'
+    : activeTab === 'balanceSheet' && sectionActionPanel === 'asset'
+    ? 'addAsset'
+    : activeTab;
+  const selectedFinanceTab = financeMenuOptions.find(tab => tab.id === selectedFinanceMenuId) || financeMenuOptions[0];
+  const SelectedFinanceTabIcon = selectedFinanceTab.icon;
+  const selectFinanceMenu = (nextTab: typeof financeMenuOptions[number], closeMenu: () => void) => {
+    closeMenu();
+    if (nextTab.id === 'transaction' || nextTab.id === 'accounts' || nextTab.id === 'scheduled') {
+      setActiveTab('overview');
+      setOverviewPanel(nextTab.id);
+      setSectionActionPanel(null);
+      return;
+    }
+    setOverviewPanel(null);
+    if (nextTab.id === 'loanPayment' || nextTab.id === 'newLoan' || nextTab.id === 'addLiability') {
+      setActiveTab('loans');
+      setSectionActionPanel('loanActions');
+      setActiveLoanAction(nextTab.id === 'loanPayment' ? 'payment' : nextTab.id === 'newLoan' ? 'newLoan' : 'liability');
+      return;
+    }
+    if (nextTab.id === 'addInvestment' || nextTab.id === 'recordInvestmentActivity') {
+      setActiveTab('investments');
+      setSectionActionPanel('investmentActions');
+      setActiveInvestmentAction(nextTab.id === 'addInvestment' ? 'asset' : 'activity');
+      return;
+    }
+    if (nextTab.id === 'registerSavings') {
+      setActiveTab('savings');
+      setSectionActionPanel('savings');
+      return;
+    }
+    if (nextTab.id === 'addAsset') {
+      setActiveTab('balanceSheet');
+      setSectionActionPanel('asset');
+      return;
+    }
+    setActiveTab(nextTab.id);
+    setSectionActionPanel(null);
+  };
 
   return (
-    <div className="finance-view space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-600 dark:text-indigo-400">
-            Personal finance
-          </p>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-            Finance & Ledger
+    <div className="finance-view space-y-4">
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+            Finance
           </h1>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {(activeTab === 'overview' || activeTab === 'loans' || activeTab === 'investments' || activeTab === 'savings' || activeTab === 'balanceSheet') && (
-            <div className="flex flex-wrap items-center gap-3" aria-label="Cash flow and account tools">
-              {(activeTab === 'overview'
-                ? [
-                    { id: 'transaction', label: 'Record Transaction', icon: Plus },
-                    { id: 'accounts', label: `Accounts & Wallets (${accounts.length})`, icon: Landmark },
-                    { id: 'scheduled', label: 'Scheduled Cash Flow', icon: RefreshCw }
-                  ]
-                : activeTab === 'loans'
-                ? [{ id: 'loanActions', label: 'Loan actions', icon: Plus }]
-                : activeTab === 'investments'
-                ? [{ id: 'investmentActions', label: 'Investment actions', icon: Plus }]
-                : activeTab === 'savings'
-                ? [{ id: 'savings', label: 'Register Savings / Deposit', icon: Plus }]
-                : [{ id: 'asset', label: editingAssetId ? 'Edit Asset' : 'Add Asset', icon: Plus }]
-              ).map(panel => {
-                const Icon = panel.icon;
-                const isOverviewPanel = activeTab === 'overview';
-                const isSelected = isOverviewPanel
-                  ? overviewPanel === panel.id
-                  : sectionActionPanel === panel.id;
-                return (
-                  <button
-                    key={panel.id}
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => {
-                      if (isOverviewPanel) {
-                        setOverviewPanel(current => current === panel.id ? null : panel.id as 'transaction' | 'accounts' | 'scheduled');
-                      } else {
-                        setSectionActionPanel(current => current === panel.id ? null : panel.id as 'loanActions' | 'investmentActions' | 'savings' | 'asset');
-                      }
-                    }}
-                    className={`inline-flex items-center gap-1.5 border-b-0 border-transparent px-2 py-2 text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-                      isSelected
-                        ? 'text-amber-700 dark:text-amber-300'
-                        : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span>{panel.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 border-b-0 border-transparent px-2 py-2 text-xs font-semibold text-amber-800 transition-colors hover:border-amber-500 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
-            title="Export Ledger as CSV"
+          <HeaderDropdown
+            label={selectedFinanceTab.label}
+            menuLabel="Finance submenu"
+            icon={<SelectedFinanceTabIcon className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />}
           >
-            <Download className="h-4 w-4" />
-            <span>Export CSV</span>
-          </button>
+            {closeMenu => financeMenuOptions.map(tab => {
+              const MenuIcon = tab.icon;
+              const isAction = tab.optionLabel.startsWith('　↳');
+              const label = tab.optionLabel.replace(/^　↳\s*/, '');
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="menuitem"
+                  aria-current={selectedFinanceMenuId === tab.id ? 'page' : undefined}
+                  aria-label={`Finance submenu item: ${label}`}
+                  data-finance-menu-id={tab.id}
+                  onClick={() => selectFinanceMenu(tab, closeMenu)}
+                  className={`flex w-full min-w-0 items-center gap-2 border-b-2 px-2 py-2 text-left text-sm ${
+                    isAction
+                      ? 'pl-7 font-normal text-slate-600 dark:text-slate-400'
+                      : 'font-semibold text-slate-700 dark:text-slate-200'
+                  } ${
+                    selectedFinanceMenuId === tab.id
+                      ? 'border-amber-300'
+                      : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {!isAction && <MenuIcon className="h-4 w-4 shrink-0" />}
+                  <span className="truncate">{label}</span>
+                </button>
+              );
+            })}
+          </HeaderDropdown>
         </div>
-      </div>
-
-      {/* Core finance figures stay separate in a compact grid. */}
-      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {[
-          {
-            label: 'Net worth',
-            value: `NPR ${netWorth.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
-            note: `Assets ${totalAssets.toLocaleString('en-IN')} · Debt ${totalLiabilities.toLocaleString('en-IN')}`,
-            tone: 'text-slate-900 dark:text-white'
-          },
-          {
-            label: 'Liquid cash',
-            value: `NPR ${liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
-            note: `${accounts.length} accounts`,
-            tone: 'text-emerald-600 dark:text-emerald-400'
-          },
-          {
-            label: 'Investments',
-            value: `NPR ${investmentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
-            note: `${investments.length} assets`,
-            tone: 'text-slate-900 dark:text-white'
-          },
-          {
-            label: 'Total debt',
-            value: `NPR ${totalLiabilities.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
-            note: `${loans.length} loans · ${liabilities.length} other debt`,
-            tone: 'text-rose-600 dark:text-rose-400'
-          }
-        ].map(metric => (
-          <section key={metric.label} className="min-w-0 rounded-xl border-2 border-dashed border-slate-200 p-3 dark:border-slate-800 sm:p-4">
-            <div className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{metric.label}</div>
-            <div className={`mt-1 truncate font-mono text-lg font-extrabold tracking-tight tabular-nums sm:text-xl ${metric.tone}`}>{metric.value}</div>
-            <div className="mt-0.5 truncate text-[10px] font-medium text-slate-400">{metric.note}</div>
-          </section>
-        ))}
-      </div>
-
-      {/* Submenu Tabs (Full Width Responsive Slide Tab) */}
-      <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
-        <SlideTabs
-          activeId={activeTab}
-          onChange={(id) => setActiveTab(id as any)}
-          tabs={[
-            { id: 'overview', label: 'Cash Flow & Accounts', shortLabel: 'Cash Flow', icon: Landmark },
-            { id: 'transactions', label: `Transactions (${transactions.length})`, shortLabel: `Txns (${transactions.length})`, icon: ArrowUpDown },
-            { id: 'loans', label: `Loans & Debt (${loans.length + liabilities.length})`, shortLabel: `Loans (${loans.length + liabilities.length})`, icon: DollarSign },
-            { id: 'investments', label: `Investments (${investments.length})`, shortLabel: `Invest (${investments.length})`, icon: TrendingUp },
-            { id: 'savings', label: `Savings & Deposits (${savingsPlans.length})`, shortLabel: `Savings (${savingsPlans.length})`, icon: ShieldCheck },
-            { id: 'balanceSheet', label: `Balance Sheet (${assets.length})`, shortLabel: `Sheet (${assets.length})`, icon: FileText }
-          ]}
-        />
       </div>
 
       {/* Tab: Overview & Accounts */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          {/* Record Transaction is opened from the compact toolbar beside Export CSV. */}
-          {overviewPanel === 'transaction' && <div ref={transactionPanelRef} className="lg:col-span-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                  <Plus className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">Record Transaction</h2>
-                </div>
+        <div className={`${overviewPanel === 'transaction' ? 'finance-unified-pane finance-unified-split' : ''} grid grid-cols-1 items-start gap-6 lg:grid-cols-12`}>
+          {/* Cash-flow actions remain beside the statement they affect. */}
+          {overviewPanel === 'transaction' && <div ref={transactionPanelRef} className="lg:col-span-8 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+              <Plus className="h-4 w-4" />
               </div>
+              <h2>Record Transaction</h2>
             </div>
 
-            <form onSubmit={handleCreateTransaction} className="mt-4 space-y-4">
+            <form onSubmit={handleCreateTransaction} className="finance-transaction-form mt-4 space-y-3.5">
               {/* Segmented Transaction Type Selector */}
-              <div className="grid grid-cols-3 gap-3 text-xs">
+              <div role="group" aria-label="Transaction type" className="finance-transaction-type-tabs grid grid-cols-3 gap-1 rounded-xl p-1">
                 <button
                   type="button"
+                  aria-pressed={txType === 'expense'}
                   onClick={() => setTxType('expense')}
-                  className={`flex h-9 sm:h-9.5 items-center justify-center border-b-0 border-transparent px-2 font-semibold transition-colors cursor-pointer ${
-                    txType === 'expense'
-                      ? 'text-amber-700 dark:text-amber-300'
-                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
-                  }`}
+                  className="finance-transaction-type flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition-colors cursor-pointer"
                 >
                   Expense
                 </button>
                 <button
                   type="button"
+                  aria-pressed={txType === 'income'}
                   onClick={() => setTxType('income')}
-                  className={`flex h-9 sm:h-9.5 items-center justify-center border-b-0 border-transparent px-2 font-semibold transition-colors cursor-pointer ${
-                    txType === 'income'
-                      ? 'text-amber-700 dark:text-amber-300'
-                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
-                  }`}
+                  className="finance-transaction-type flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition-colors cursor-pointer"
                 >
                   Income
                 </button>
                 <button
                   type="button"
+                  aria-pressed={txType === 'transfer'}
                   onClick={() => setTxType('transfer')}
-                  className={`flex h-9 sm:h-9.5 items-center justify-center border-b-0 border-transparent px-2 font-semibold transition-colors cursor-pointer ${
-                    txType === 'transfer'
-                      ? 'text-amber-700 dark:text-amber-300'
-                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
-                  }`}
+                  className="finance-transaction-type flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition-colors cursor-pointer"
                 >
                   Transfer
                 </button>
@@ -4131,8 +3898,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               {/* Amount & Date Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                    Amount (NPR) <span className="text-rose-500">*</span>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Amount ({getCurrencySymbol()}) <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -4147,18 +3914,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         }
                       }}
                       placeholder="0.00"
-                      className="finance-transaction-field h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs sm:text-sm font-semibold text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
+                      className="finance-transaction-field mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm font-semibold text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
                   {txAmountHasCalculation && txAmountResult !== null && (
                     <p className="text-[11px] font-medium text-teal-700 dark:text-teal-400" aria-live="polite">
-                      Final amount: NPR {txAmountResult.toLocaleString('en-NP', { maximumFractionDigits: 10 })}
+                      Final amount: {getCurrencySymbol()} {txAmountResult.toLocaleString('en-NP', { maximumFractionDigits: 10 })}
                     </p>
                   )}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Transaction Date <span className="text-rose-500">*</span>
                   </label>
                   <ThemedDateTimeInput
@@ -4167,7 +3934,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     max={today}
                     value={txDate}
                     onChange={e => setTxDate(e.target.value)}
-                    className="finance-transaction-field h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
+                    className="finance-transaction-field mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
@@ -4176,30 +3943,30 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               {txType === 'transfer' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                       From Account
                     </label>
                     <select
                       value={txAccount || accounts[0]?.id || ''}
                       onChange={e => setTxAccount(e.target.value)}
-                      className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     >
                       {accounts.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})</option>
+                        <option key={a.id} value={a.id}>{a.name} ({getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')})</option>
                       ))}
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                       To Account
                     </label>
                     <select
                       value={txToAccount || accounts[1]?.id || accounts[0]?.id || ''}
                       onChange={e => setTxToAccount(e.target.value)}
-                      className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-2.5 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     >
                       {accounts.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})</option>
+                        <option key={a.id} value={a.id}>{a.name} ({getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')})</option>
                       ))}
                     </select>
                   </div>
@@ -4208,7 +3975,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div ref={categoryDropdownRef} className="relative space-y-1">
                     <div className="flex items-center justify-between">
-                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                         Category {txType === 'income' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-rose-500">*</span>}
                       </label>
                     </div>
@@ -4226,7 +3993,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             ? 'Select or type (Default: Income)'
                             : 'Select or type (e.g. Food, Groceries)'
                         }
-                        className="finance-transaction-field h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 pl-3 pr-16 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
+                        className="finance-transaction-field mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-3 pr-16 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                       <div className="absolute inset-y-0 right-0 flex items-center pr-1.5 gap-0.5">
                         {txCategory && (
@@ -4312,7 +4079,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     )}
                   </div>
                   <div className="min-w-0 space-y-1">
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                       {txType === 'income' ? 'Deposit account' : 'Payment account'}
                     </label>
                     <div className="relative min-w-0">
@@ -4320,14 +4087,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         value={txAccount || accounts[0]?.id || ''}
                         onChange={e => setTxAccount(e.target.value)}
                         title={accounts.length === 0 ? 'A default account will be created automatically when you save this transaction.' : undefined}
-                        className="h-10 sm:h-10.5 min-w-0 w-full appearance-none truncate rounded-xl border border-slate-200 py-0 pl-2.5 pr-8 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none cursor-pointer transition-all"
+                        className="mt-1 h-10 min-w-0 w-full appearance-none truncate rounded-lg border border-slate-200 bg-slate-50/50 py-0 pl-3 pr-8 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       >
                         {accounts.length === 0 ? (
                           <option value="">Default Account (auto)</option>
                         ) : (
                           accounts.map(a => (
                             <option key={a.id} value={a.id}>
-                              {a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})
+                              {a.name} ({getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')})
                             </option>
                           ))
                         )}
@@ -4343,7 +4110,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
               {/* Note / Memo */}
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Note (optional)
                 </label>
                 <input
@@ -4351,7 +4118,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   value={txNote}
                   onChange={e => setTxNote(e.target.value)}
                   placeholder="Order ID, vendor details, memo..."
-                  className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
@@ -4441,7 +4208,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         <option value="">-- Choose Vault Receipt --</option>
                         {receipts?.map(r => (
                           <option key={r.id} value={r.id}>
-                            {r.title} {r.amount ? `(NPR ${r.amount})` : ''} {r.fileName && <ThemeIcon name="attachment" className="inline h-3.5 w-3.5" />}
+                            {r.title} {r.amount ? `(${getCurrencySymbol()} ${r.amount})` : ''} {r.fileName && <ThemeIcon name="attachment" className="inline h-3.5 w-3.5" />}
                           </option>
                         ))}
                       </select>
@@ -4453,15 +4220,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               {/* Submit Button */}
               <button
                 type="submit"
-                className={`flex h-11 sm:h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-xs sm:text-sm font-semibold text-white shadow-xs active:scale-[0.99] transition-all cursor-pointer ${
-                  txType === 'loan'
-                    ? 'bg-teal-600 hover:bg-teal-500'
-                    : txType === 'repayment'
-                    ? 'bg-purple-600 hover:bg-purple-500'
-                    : txType === 'investment'
-                    ? 'bg-blue-600 hover:bg-blue-500'
-                    : 'bg-indigo-600 hover:bg-indigo-500'
-                }`}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus className="h-4 w-4" />
                 <span>
@@ -4478,14 +4237,50 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </div>}
 
           {/* Top Right: Operating & Cash Flow Summary */}
-          <div className={`${overviewPanel === 'transaction' ? 'lg:col-span-6' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 flex flex-col justify-between`}>
+          <div className={`${overviewPanel === 'transaction' ? 'finance-unified-overview-column lg:col-span-4' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 flex flex-col justify-between`}>
             <div>
-              <h2 className="flex items-center justify-between border-b border-slate-100 pb-3 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-white">
-                <span>Cash Flow Statement</span>
-                <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
-                  {dateFilterMode === 'all' ? 'All-Time' : dateFilterMode === 'this_month' ? 'This Month' : dateFilterMode === 'last_30_days' ? 'Last 30 Days' : 'Custom Range'}
-                </span>
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Cash Flow Statement</h2>
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+                    {dateFilterMode === 'all' ? 'All-Time' : dateFilterMode === 'this_month' ? 'This Month' : dateFilterMode === 'last_30_days' ? 'Last 30 Days' : 'Custom Range'}
+                  </span>
+                </div>
+              </div>
+              <div className={`mt-4 grid grid-cols-2 gap-3 border-b border-slate-100 pb-4 dark:border-slate-800 ${overviewPanel === 'transaction' ? 'sm:grid-cols-2' : 'sm:grid-cols-4'}`}>
+                {[
+                  {
+                    label: 'Net worth',
+                    value: `${getCurrencySymbol()} ${netWorth.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+                    note: `Assets ${totalAssets.toLocaleString('en-IN')} · Debt ${totalLiabilities.toLocaleString('en-IN')}`,
+                    tone: 'text-slate-900 dark:text-white'
+                  },
+                  {
+                    label: 'Liquid cash',
+                    value: `${getCurrencySymbol()} ${liquidCash.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+                    note: `${accounts.length} accounts`,
+                    tone: 'text-emerald-600 dark:text-emerald-400'
+                  },
+                  {
+                    label: 'Investments',
+                    value: `${getCurrencySymbol()} ${investmentValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+                    note: `${investments.length} assets`,
+                    tone: 'text-slate-900 dark:text-white'
+                  },
+                  {
+                    label: 'Total debt',
+                    value: `${getCurrencySymbol()} ${totalLiabilities.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+                    note: `${loans.length} loans · ${liabilities.length} other debt`,
+                    tone: 'text-rose-600 dark:text-rose-400'
+                  }
+                ].map(metric => (
+                  <div key={metric.label} className="min-w-0">
+                    <div className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{metric.label}</div>
+                    <div className={`mt-1 truncate font-mono text-lg font-extrabold tracking-tight tabular-nums sm:text-xl ${metric.tone}`}>{metric.value}</div>
+                    <div className="mt-0.5 truncate text-[10px] font-medium text-slate-400">{metric.note}</div>
+                  </div>
+                ))}
+              </div>
               <div className="mt-4 space-y-2 text-sm">
                 {/* 1. Operating Activities */}
                 <div className="pt-1 text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -4493,24 +4288,24 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Gross Income Received:</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+NPR {periodIncome.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+{getCurrencySymbol()} {periodIncome.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Operating Expenses Paid:</span>
-                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-NPR {periodExpense.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-{getCurrencySymbol()} {periodExpense.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Loan Interest Paid:</span>
-                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-NPR {periodInterestExpense.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-{getCurrencySymbol()} {periodInterestExpense.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Loan Fees & Penalties Paid:</span>
-                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-NPR {periodLoanFeeExpense.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-{getCurrencySymbol()} {periodLoanFeeExpense.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
                   <span className="text-slate-700 dark:text-slate-300">Net Operating Flow:</span>
                   <span className={`font-mono font-bold ${periodOperatingFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    NPR {periodOperatingFlow.toLocaleString('en-IN')}
+                    {getCurrencySymbol()} {periodOperatingFlow.toLocaleString('en-IN')}
                   </span>
                 </div>
 
@@ -4520,7 +4315,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
                   <span className="text-slate-500">Investments Capital Deployed:</span>
-                  <span className="font-mono font-bold text-blue-600">-NPR {periodInvestmentFlow.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-blue-600">-{getCurrencySymbol()} {periodInvestmentFlow.toLocaleString('en-IN')}</span>
                 </div>
 
                 {/* 3. Savings Capital Allocation */}
@@ -4530,7 +4325,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
                   <span className="text-slate-500">Net moved into savings:</span>
                   <span className={`font-mono font-bold ${periodSavingsFlow > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                    {periodSavingsFlow > 0 ? '-' : '+'}NPR {Math.abs(periodSavingsFlow).toLocaleString('en-IN')}
+                    {periodSavingsFlow > 0 ? '-' : '+'}{getCurrencySymbol()} {Math.abs(periodSavingsFlow).toLocaleString('en-IN')}
                   </span>
                 </div>
 
@@ -4540,24 +4335,24 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Loans Borrowed / Received:</span>
-                  <span className="font-mono font-bold text-teal-600 dark:text-teal-400">+NPR {periodLoanReceived.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-teal-600 dark:text-teal-400">+{getCurrencySymbol()} {periodLoanReceived.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Loan Principal Repaid:</span>
-                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">-NPR {periodRepaymentFlow.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">-{getCurrencySymbol()} {periodRepaymentFlow.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Loan Given / Receivable Created:</span>
-                  <span className="font-mono font-bold text-blue-600 dark:text-blue-400">-NPR {periodLoanGiven.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-blue-600 dark:text-blue-400">-{getCurrencySymbol()} {periodLoanGiven.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Loan Receipts from Others:</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+NPR {periodLoanRecovered.toLocaleString('en-IN')}</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+{getCurrencySymbol()} {periodLoanRecovered.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40 font-semibold">
                   <span className="text-slate-700 dark:text-slate-300">Net Financing Flow:</span>
                   <span className={`font-mono font-bold ${periodFinancingFlow >= 0 ? 'text-teal-600' : 'text-purple-600'}`}>
-                    NPR {periodFinancingFlow.toLocaleString('en-IN')}
+                    {getCurrencySymbol()} {periodFinancingFlow.toLocaleString('en-IN')}
                   </span>
                 </div>
                 <div className="pt-2 text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -4566,7 +4361,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <div className="flex justify-between py-1 border-b border-slate-50 dark:border-slate-800/40">
                   <span className="text-slate-500">Adjustments & asset sale proceeds:</span>
                   <span className={`font-mono font-bold ${periodAdjustmentFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {periodAdjustmentFlow >= 0 ? '+' : '-'}NPR {Math.abs(periodAdjustmentFlow).toLocaleString('en-IN')}
+                    {periodAdjustmentFlow >= 0 ? '+' : '-'}{getCurrencySymbol()} {Math.abs(periodAdjustmentFlow).toLocaleString('en-IN')}
                   </span>
                 </div>
               </div>
@@ -4576,7 +4371,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <div className="mt-4 flex flex-wrap justify-between gap-x-4 gap-y-1 border-t border-slate-200 pt-3 py-1 text-sm font-bold text-slate-900 dark:border-slate-700 dark:text-white">
               <span>Net Ledger Delta ({dateFilterMode === 'all' ? 'All-Time' : 'Selected Period'}):</span>
               <span className={`font-mono text-base ${periodNetCashFlow >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                NPR {periodNetCashFlow.toLocaleString('en-IN')}
+                {getCurrencySymbol()} {periodNetCashFlow.toLocaleString('en-IN')}
               </span>
             </div>
           </div>
@@ -4630,7 +4425,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <div className="text-[10px] text-slate-400 capitalize mt-0.5">{a.type} account</div>
                       {recon.isMismatch && (
                         <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-                          Ledger expects: NPR {recon.calculatedBalance.toLocaleString('en-IN')}
+                          Ledger expects: {getCurrencySymbol()} {recon.calculatedBalance.toLocaleString('en-IN')}
                         </div>
                       )}
                       <button
@@ -4669,7 +4464,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <div className="flex items-center gap-2">
                       <div className="text-right">
                         <div className="font-mono text-sm font-extrabold text-slate-900 dark:text-white tabular-nums">
-                          NPR {Number(a.balance).toLocaleString('en-IN')}
+                          {getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')}
                         </div>
                         {recon.isMismatch && (
                           <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
@@ -4722,7 +4517,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </select>
               <input
                 type="number"
-                placeholder="Opening NPR "
+                placeholder={"Opening NPR ".split('NPR').join(getCurrencySymbol())}
                 value={acctBalance}
                 onChange={e => setAcctBalance(e.target.value)}
                 className="w-28 h-9 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -4737,167 +4532,94 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </FormDisclosure>
             </div>
           </div>}
-          {overviewPanel === 'scheduled' && <details ref={scheduledPanelRef} open className="finance-details finance-schedule-panel lg:col-span-12 p-5 sm:p-6">
-            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 border-b border-amber-900/10 pb-3.5 text-sm font-bold text-slate-900 dark:border-amber-200/10 dark:text-white">
-              <span>Scheduled Cash Flow</span>
-              <div className="flex flex-wrap gap-3 text-[10px]">
-                {[7, 30, 90].map(days => (
-                  <div key={days} className="rounded-lg border border-amber-900/10 bg-amber-50/60 px-2.5 py-1.5 dark:border-amber-200/10 dark:bg-amber-100/5">
-                    <span className="text-slate-400">{days}d est.</span>
-                    <strong className={`ml-1.5 font-mono ${getForecastNetChange(days) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {getForecastNetChange(days) >= 0 ? '+' : ''}NPR {getForecastNetChange(days).toLocaleString('en-IN')}
-                    </strong>
-                  </div>
-                ))}
-              </div>
-            </summary>
-            <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-12">
-              <form onSubmit={handleCreateCashFlowSchedule} className="lg:col-span-5 grid grid-cols-2 gap-3">
-                <input required value={scheduleName} onChange={event => setScheduleName(event.target.value)} placeholder="Name (e.g. House rent)" className="col-span-2 h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+          {overviewPanel === 'scheduled' && <div ref={scheduledPanelRef} className="finance-schedule-panel lg:col-span-12">
+            <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+              <div className={`${cashFlowSchedules.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+                {cashFlowSchedules.length === 0 && <h2 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">Scheduled Cash Flow</h2>}
+                <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-200">Create a schedule</h3>
+                <form onSubmit={handleCreateCashFlowSchedule} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-2">
+                <input required value={scheduleName} onChange={event => setScheduleName(event.target.value)} placeholder="Name (e.g. House rent)" className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white sm:col-span-2" />
                 <select value={scheduleType} onChange={event => setScheduleType(event.target.value as 'income' | 'expense')} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="expense">Expected expense</option><option value="income">Expected income</option></select>
                 <select value={scheduleFrequency} onChange={event => setScheduleFrequency(event.target.value as CashFlowScheduleFrequency)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="once">One time</option><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>
                 <input required value={scheduleCategory} onChange={event => setScheduleCategory(event.target.value)} placeholder="Category (e.g. Rent)" className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
-                <input required type="number" min="0.01" step="0.01" value={scheduleAmount} onChange={event => setScheduleAmount(event.target.value)} placeholder="Amount NPR" className="h-10 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input required type="number" min="0.01" step="0.01" value={scheduleAmount} onChange={event => setScheduleAmount(event.target.value)} placeholder={"Amount NPR".split('NPR').join(getCurrencySymbol())} className="h-10 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 <ThemedDateTimeInput required type="date" value={scheduleNextDueDate} onChange={event => setScheduleNextDueDate(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 <select value={scheduleAccountId} onChange={event => setScheduleAccountId(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="">No tracked account</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select>
-                <button type="submit" className="sanctuary-flat-primary col-span-2 h-10 rounded-xl px-3 text-xs font-semibold">+ Save expected schedule</button>
-              </form>
-              <div className="lg:col-span-7 divide-y divide-slate-100 dark:divide-slate-800">
-                {cashFlowSchedules.length === 0 ? <EmptyState icon={ArrowUpDown} compact title="No schedules yet" hint="Register expected bills and recurring income to see them on a timeline." /> : (
-                  [...cashFlowSchedules].sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate)).map(schedule => (
-                    <div key={schedule.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200">{schedule.name} <span className={`ml-1 rounded px-1.5 py-0.5 text-[9px] ${schedule.status === 'active' ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>{schedule.status}</span></div>
-                        <div className="mt-0.5 text-[10px] text-slate-400">{schedule.category} · {schedule.frequency} · Due {schedule.nextDueDate} · expected {schedule.type}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <strong className={`font-mono text-xs ${schedule.type === 'income' ? 'text-emerald-600' : 'text-slate-800 dark:text-slate-200'}`}>{schedule.type === 'income' ? '+' : '−'}NPR {Number(schedule.amount).toLocaleString('en-IN')}</strong>
-                        {schedule.status === 'active' && schedule.nextDueDate <= today && <button type="button" onClick={() => void handleSettleCashFlowSchedule(schedule)} className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[10px] font-semibold text-white hover:bg-emerald-500">Record actual</button>}
-                        {schedule.status !== 'completed' && <button type="button" onClick={() => void handleToggleCashFlowSchedule(schedule)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{schedule.status === 'active' ? 'Pause' : 'Resume'}</button>}
-                        {schedule.frequency !== 'once' && schedule.status !== 'completed' && <button type="button" onClick={() => void handleCompleteCashFlowSchedule(schedule)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">Complete</button>}
-                        <button type="button" onClick={() => setDeleteTarget({ store: 'cashFlowSchedules', id: schedule.id, name: schedule.name })} className="rounded-lg p-1.5 text-slate-400 hover:text-rose-600" title="Delete schedule" aria-label={`Delete schedule ${schedule.name}`}><Trash2 className="h-3.5 w-3.5" /></button>
-                      </div>
-                    </div>
-                  ))
-                )}
+                    <button type="submit" className="sanctuary-flat-primary h-10 rounded-xl px-3 text-xs font-semibold sm:col-span-2">+ Save expected schedule</button>
+                </form>
               </div>
+              {cashFlowSchedules.length > 0 && (
+                <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 lg:col-span-7">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">Scheduled Cash Flow ({cashFlowSchedules.length})</h2>
+                    <div className="flex flex-wrap gap-2 text-[10px]">
+                      {[7, 30, 90].map(days => (
+                        <div key={days} className="rounded-lg border border-amber-900/10 bg-amber-50/60 px-2.5 py-1.5 dark:border-amber-200/10 dark:bg-amber-100/5">
+                          <span className="text-slate-400">{days}d est.</span>
+                          <strong className={`ml-1.5 font-mono ${getForecastNetChange(days) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {getForecastNetChange(days) >= 0 ? '+' : ''}{getCurrencySymbol()} {getForecastNetChange(days).toLocaleString('en-IN')}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+                    {[...cashFlowSchedules].sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate)).map(schedule => (
+                      <div key={schedule.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200">{schedule.name} <span className={`ml-1 rounded px-1.5 py-0.5 text-[9px] ${schedule.status === 'active' ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>{schedule.status}</span></div>
+                          <div className="mt-0.5 text-[10px] text-slate-400">{schedule.category} · {schedule.frequency} · Due {schedule.nextDueDate} · expected {schedule.type}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <strong className={`font-mono text-xs ${schedule.type === 'income' ? 'text-emerald-600' : 'text-slate-800 dark:text-slate-200'}`}>{schedule.type === 'income' ? '+' : '−'}{getCurrencySymbol()} {Number(schedule.amount).toLocaleString('en-IN')}</strong>
+                          {schedule.status === 'active' && schedule.nextDueDate <= today && <button type="button" onClick={() => void handleSettleCashFlowSchedule(schedule)} className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[10px] font-semibold text-white hover:bg-emerald-500">Record actual</button>}
+                          {schedule.status !== 'completed' && <button type="button" onClick={() => void handleToggleCashFlowSchedule(schedule)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">{schedule.status === 'active' ? 'Pause' : 'Resume'}</button>}
+                          {schedule.frequency !== 'once' && schedule.status !== 'completed' && <button type="button" onClick={() => void handleCompleteCashFlowSchedule(schedule)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">Complete</button>}
+                          <button type="button" onClick={() => setDeleteTarget({ store: 'cashFlowSchedules', id: schedule.id, name: schedule.name })} className="rounded-lg p-1.5 text-slate-400 hover:text-rose-600" title="Delete schedule" aria-label={`Delete schedule ${schedule.name}`}><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {accounts.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                      {accounts.map(account => (
+                        <span key={account.id} className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px] dark:border-slate-800">
+                          <span className="text-slate-400">{account.name} · 30d est.</span>
+                          <strong className="ml-1.5 font-mono text-slate-700 dark:text-slate-200">{getCurrencySymbol()} {getForecastAccountBalance(account.id, 30).toLocaleString('en-IN')}</strong>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            {accounts.length > 0 && (
+            {cashFlowSchedules.length === 0 && accounts.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {accounts.map(account => (
                   <span key={account.id} className="rounded-lg border border-slate-100 px-2.5 py-1.5 text-[10px] dark:border-slate-800">
                     <span className="text-slate-400">{account.name} · 30d est.</span>
-                    <strong className="ml-1.5 font-mono text-slate-700 dark:text-slate-200">NPR {getForecastAccountBalance(account.id, 30).toLocaleString('en-IN')}</strong>
+                    <strong className="ml-1.5 font-mono text-slate-700 dark:text-slate-200">{getCurrencySymbol()} {getForecastAccountBalance(account.id, 30).toLocaleString('en-IN')}</strong>
                   </span>
                 ))}
               </div>
             )}
-          </details>}
+          </div>}
         </div>
       )}
 
       {/* Tab: Loans & Liabilities */}
       {activeTab === 'loans' && (
-        <div className="space-y-5">
-        <section className="finance-summary-card rounded-2xl border-2 border-solid border-amber-200/80 bg-white p-4 dark:border-amber-900/50 dark:bg-slate-900 sm:p-5">
-          <button
-            type="button"
-            aria-expanded={showLoanSummary}
-            onClick={() => setShowLoanSummary(open => {
-              if (open) setShowLoanInfo(false);
-              return !open;
-            })}
-            className="flex w-full cursor-pointer items-center justify-between gap-3 text-left text-sm font-bold text-slate-900 dark:text-white"
-          >
-            <span>Loan summary</span>
-            <span aria-hidden="true" className="text-base leading-none text-slate-400">{showLoanSummary ? '−' : '+'}</span>
-          </button>
-          {showLoanSummary && (
-          <>
-          <button
-            type="button"
-            aria-expanded={showLoanInfo}
-            onClick={() => setShowLoanInfo(open => !open)}
-            className="mt-3 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200"
-          >
-            {showLoanInfo ? 'Hide supporting info' : 'Show supporting info'}
-          </button>
-          {showLoanInfo && (
-            <div className="mt-2 text-right text-[10px] font-medium text-slate-400">
-              {activeLoanCount} active · {closedLoanCount} closed
-            </div>
-          )}
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {[
-              { label: 'Total loan amount', value: totalLoanAmount, suffix: `Borrowed · ${activeLoanCount} active` },
-              { label: 'Outstanding principal', value: totalLoanLiabilities, suffix: `Receivable NPR ${totalLoanReceivables.toLocaleString('en-IN')}` },
-              { label: 'Principal repaid', value: totalPrincipalRepaid, suffix: 'Actual payments' },
-              { label: 'Interest paid', value: totalInterestPaid, suffix: 'Actual payments' },
-              { label: 'Remaining interest', value: remainingInterestEstimate, suffix: 'Estimate only' },
-              { label: 'Monthly EMI burden', value: monthlyEmiBurden, suffix: 'Active borrowed loans' },
-              { label: 'Late fees / penalties', value: totalLateFees + totalPenalInterest, suffix: `Fees NPR ${(totalProcessingFees + totalLoanFees).toLocaleString('en-IN')}` },
-              { label: 'Closure amount', value: totalLoanClosureEstimate, suffix: 'Estimate · excludes bank quote' },
-              { label: 'Total repayment', value: totalLoanRepayment, suffix: `Closed ${closedLoanCount} · Overdue est. ${overdueInstallments}` }
-            ].map(metric => (
-              <div
-                key={metric.label}
-                className="finance-summary-metric min-w-0 rounded-xl border border-solid border-slate-200 bg-slate-50 px-2.5 py-2.5 dark:border-slate-800 dark:bg-slate-950/40"
-              >
-                <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
-                <div className="mt-1 truncate font-mono text-xs font-bold tabular-nums text-slate-900 dark:text-white">
-                  NPR {metric.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                </div>
-                {showLoanInfo && <div className="mt-0.5 truncate text-[9px] text-slate-400">{metric.suffix}</div>}
-              </div>
-            ))}
-          </div>
-          </>
-          )}
-        </section>
-        <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs dark:border-slate-800 dark:bg-slate-900">
-          <span className="text-slate-500">{upcomingLoanMetric && upcomingLoanMetric.nextDue < today ? 'Next unpaid installment (estimate)' : 'Upcoming installment'}</span>
-          {upcomingLoanMetric ? (
-            <strong className="font-mono text-slate-800 dark:text-slate-200">
-              {upcomingLoanMetric.loan.name} · {upcomingLoanMetric.nextDue} · NPR {upcomingLoanMetric.installment.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-            </strong>
-          ) : <strong className="text-slate-500">No scheduled installment recorded</strong>}
-          {overdueInstallments > 0 && (
-            <span className="font-semibold text-rose-600 dark:text-rose-400">
-              Overdue estimate: {overdueInstallments} installments · NPR {overdueEmiAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-            </span>
-          )}
-        </div>
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="finance-unified-pane finance-loans-card">
+        <div className="finance-unified-split grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Left Forms: Create Loan, Record Payment & Add Liability */}
-          <div ref={loanActionsPanelRef} className={sectionActionPanel === 'loanActions' ? 'lg:col-span-5' : 'hidden'}>
-            <div className=" border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Loan actions</h2>
-              <div className="mt-4 flex flex-wrap gap-3">
-                {([
-                  ['payment', 'EMI / Payment'],
-                  ['newLoan', 'New Loan'],
-                  ['liability', 'Add Liability']
-                ] as const).map(([action, label]) => (
-                  <button
-                    key={action}
-                    type="button"
-                    onClick={() => setActiveLoanAction(action)}
-                    aria-pressed={activeLoanAction === action}
-                    className={`min-h-9 border-b-0 border-transparent px-2 text-[10px] font-semibold transition-colors sm:text-xs ${
-                      activeLoanAction === action
-                        ? 'text-amber-700 dark:text-amber-300'
-                        : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+        <div ref={loanActionsPanelRef} className={`${sectionActionPanel === 'loanActions' ? hasLoanRecords ? 'lg:col-span-7' : 'lg:col-span-12' : 'hidden'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+            <div className="p-1">
             {/* Record EMI / Payment Form */}
-            <div className={activeLoanAction === 'payment' ? 'mt-4' : 'hidden'}>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center justify-between">
-                <span>Record Loan EMI / Payment</span>
-              </h2>
+            <div className={activeLoanAction === 'payment' ? '' : 'hidden'}>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+              <DollarSign className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
+              <span>Record Loan EMI / Payment</span>
+            </h2>
               <form onSubmit={handleRecordLoanPayment} className="mt-4 space-y-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
@@ -4914,7 +4636,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     ) : (
                       loans.filter(l => l.status !== 'closed' && Number(l.outstanding) > 0).map(l => (
                         <option key={l.id} value={l.id}>
-                          {l.direction === 'lent' ? 'Receivable · ' : 'Borrowed · '}{l.name} — NPR {Number(l.outstanding).toLocaleString('en-IN')}
+                          {l.direction === 'lent' ? 'Receivable · ' : 'Borrowed · '}{l.name} — {getCurrencySymbol()} {Number(l.outstanding).toLocaleString('en-IN')}
                         </option>
                       ))
                     )}
@@ -4922,7 +4644,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">{loans.find(loan => loan.id === payLoanId)?.direction === 'lent' ? 'Amount received (NPR)' : 'Total payment (NPR)'}</label>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">{loans.find(loan => loan.id === payLoanId)?.direction === 'lent' ? ("Amount received (NPR)").split('NPR').join(getCurrencySymbol()) : ("Total payment (NPR)").split('NPR').join(getCurrencySymbol())}</label>
                     <input
                       type="number"
                       min="0.01"
@@ -4943,7 +4665,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-50"
                     >
                       {accounts.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})</option>
+                        <option key={a.id} value={a.id}>{a.name} ({getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')})</option>
                       ))}
                     </select>
                   </div>
@@ -4958,7 +4680,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </summary>
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <label className="text-[10px] font-medium text-slate-500">
-                      Principal applied (NPR)
+                      Principal applied ({getCurrencySymbol()})
                       <input
                         type="number"
                         min="0"
@@ -4970,12 +4692,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </label>
                     {loans.find(loan => loan.id === payLoanId)?.direction !== 'lent' && (
                       <label className="text-[10px] font-medium text-slate-500">
-                        Extra principal (NPR)
+                        Extra principal ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={payExtraPrincipal} onChange={event => setPayExtraPrincipal(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                     )}
                     <label className="text-[10px] font-medium text-slate-500">
-                      Interest (NPR)
+                      Interest ({getCurrencySymbol()})
                       <input
                         type="number"
                         min="0"
@@ -4998,7 +4720,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         ['Other fees', payOtherFees, setPayOtherFees]
                       ].map(([label, value, setter]) => (
                         <label key={label as string} className="text-[10px] font-medium text-slate-500">
-                          {label as string} (NPR)
+                          {label as string} ({getCurrencySymbol()})
                           <input type="number" min="0" step="0.01" value={value as string} onChange={event => (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                         </label>
                       ))}
@@ -5033,8 +4755,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </div>
 
             {/* Register Loan Liability */}
-            <div className={activeLoanAction === 'newLoan' ? 'mt-4' : 'hidden'}>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div className={activeLoanAction === 'newLoan' ? '' : 'hidden'}>
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+                <DollarSign className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
                 {editingLoanId ? 'Edit Loan' : 'Register New Loan'}
               </h2>
               {editingLoanId && (
@@ -5101,7 +4824,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </select>
                   </label>
                   <div>
-                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Principal (NPR)</label>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Principal ({getCurrencySymbol()})</label>
                     <input
                       type="number"
                       min="0.01"
@@ -5144,7 +4867,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </div>
                 </div>
                 <div className="rounded-xl bg-indigo-50 px-3 py-2 text-[11px] text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200">
-                  {loanActualInstallment ? 'Actual entered' : 'Estimated'} {loanRepaymentFrequency} installment: <strong className="font-mono">NPR {(Number(loanActualInstallment) || getLoanInstallment(Number(loanPrincipal) || 0, Number(loanRate) || 0, Number(loanTenure) || 0, loanInterestMethod, loanRepaymentFrequency)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
+                  {loanActualInstallment ? 'Actual entered' : 'Estimated'} {loanRepaymentFrequency} installment: <strong className="font-mono">{getCurrencySymbol()} {(Number(loanActualInstallment) || getLoanInstallment(Number(loanPrincipal) || 0, Number(loanRate) || 0, Number(loanTenure) || 0, loanInterestMethod, loanRepaymentFrequency)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
                 </div>
                 <details className="rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
                   <summary className="cursor-pointer text-[10px] font-semibold text-slate-500 dark:text-slate-400">Dates, lender details, rate & actual fees</summary>
@@ -5178,7 +4901,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <label className="text-[10px] font-medium text-slate-500">Interest calculation
                       <select value={loanInterestMethod} onChange={event => setLoanInterestMethod(event.target.value as NonNullable<Loan['interestMethod']>)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="reducing">Reducing balance</option><option value="flat">Flat rate</option><option value="simple">Simple interest</option></select>
                     </label>
-                    <label className="col-span-2 text-[10px] font-medium text-slate-500">Actual disbursed / received amount (NPR)
+                    <label className="col-span-2 text-[10px] font-medium text-slate-500">Actual disbursed / received amount ({getCurrencySymbol()})
                       <input type="number" min="0.01" step="0.01" value={loanDisbursedAmount} disabled={Boolean(editingLoanId)} onChange={event => setLoanDisbursedAmount(event.target.value)} placeholder={loanPrincipal || 'Defaults to principal'} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-60" />
                     </label>
                     <label className="col-span-2 text-[10px] font-medium text-slate-500">Lender's installment amount per period (actual, optional)
@@ -5192,11 +4915,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       ['Other fee', loanOtherFees, setLoanOtherFees],
                       ['Foreclosure charge estimate', loanForeclosureCharge, setLoanForeclosureCharge]
                     ].map(([label, value, setter]) => (
-                      <label key={label as string} className="text-[10px] font-medium text-slate-500">{label as string} (NPR)
+                      <label key={label as string} className="text-[10px] font-medium text-slate-500">{label as string} ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={value as string} onChange={event => (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                     ))}
-                    <label className="col-span-2 text-[10px] font-medium text-slate-500">Collateral / asset value for LTV (optional, NPR)
+                    <label className="col-span-2 text-[10px] font-medium text-slate-500">Collateral / asset value for LTV (optional, {getCurrencySymbol()})
                       <input type="number" min="0.01" step="0.01" value={loanCollateralValue} onChange={event => setLoanCollateralValue(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </label>
                   </div>
@@ -5214,7 +4937,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <option value="">{loanDirection === 'lent' ? 'Select lending account' : 'Funds already outside tracked accounts'}</option>
                     {accounts.map(a => (
                       <option key={a.id} value={a.id}>
-                        {a.name} (Balance: NPR {Number(a.balance).toLocaleString('en-IN')})
+                        {a.name} (Balance: {getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')})
                       </option>
                     ))}
                   </select>
@@ -5229,8 +4952,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </div>
 
             {/* Add Other Liabilities & Payables Form */}
-            <div className={activeLoanAction === 'liability' ? 'mt-4' : 'hidden'}>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div className={activeLoanAction === 'liability' ? '' : 'hidden'}>
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+                <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
                 Add Liability
               </h2>
               <form onSubmit={handleAddLiability} className="mt-4 space-y-3">
@@ -5284,7 +5008,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Amount Due (NPR)</label>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Amount Due ({getCurrencySymbol()})</label>
                     <input
                       type="number"
                       min="0.01"
@@ -5323,27 +5047,55 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </div>
 
           {/* Right Lists: Active Loans and Other Liabilities */}
-          <div className={`${sectionActionPanel === 'loanActions' ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-6`}>
+          {hasLoanRecords && <div className={`finance-unified-list-column ${sectionActionPanel === 'loanActions' ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 divide-y divide-slate-100 dark:divide-slate-800`}>
+            {loans.length > 0 && (
+              <section className="finance-summary-card border-b border-slate-100 pb-4 dark:border-slate-800">
+                <h2 className="border-b border-slate-100 pb-3 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-white">
+                  Loan overview
+                </h2>
+                <div className={`mt-4 grid grid-cols-2 gap-3 ${sectionActionPanel === 'loanActions' ? 'sm:grid-cols-2' : 'sm:grid-cols-4'}`}>
+                  {[
+                    { label: 'Loan amount', value: totalLoanAmount },
+                    { label: 'Outstanding', value: totalLoanLiabilities },
+                    { label: 'Monthly payment', value: monthlyEmiBurden },
+                    { label: 'Principal repaid', value: totalPrincipalRepaid }
+                  ].map(metric => (
+                    <div key={metric.label} className="min-w-0">
+                      <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
+                      <div className="mt-1 truncate font-mono text-base font-bold tabular-nums text-slate-900 dark:text-white">
+                        {getCurrencySymbol()} {metric.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            {overdueInstallments > 0 && (
+              <div className="border-b border-slate-100 py-3 text-xs font-medium text-rose-700 dark:border-slate-800 dark:text-rose-300">
+                {overdueInstallments} overdue · {getCurrencySymbol()} {overdueEmiAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              </div>
+            )}
             {/* Active Loans List with Amortization */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+            {loans.length > 0 && (
+            <div className="pb-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <h2 className="shrink-0 text-sm font-bold text-slate-900 dark:text-white">
-                    Loans ({visibleLoanMetrics.length}{visibleLoanMetrics.length !== loans.length ? ` / ${loans.length}` : ''})
-                  </h2>
-                  <select value={loanStatusFilter} onChange={event => setLoanStatusFilter(event.target.value as 'active' | 'closed' | 'all')} className="h-8 rounded-lg border border-slate-200 px-2 text-[11px] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                <h2 className="shrink-0 text-sm font-bold text-slate-900 dark:text-white">
+                  Loans ({visibleLoanMetrics.length}{visibleLoanMetrics.length !== loans.length ? ` / ${loans.length}` : ''})
+                </h2>
+                <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                  <select value={loanStatusFilter} onChange={event => setLoanStatusFilter(event.target.value as 'active' | 'closed' | 'all')} className="finance-flat-select h-8 rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-[11px] dark:border-slate-700 dark:text-white">
                     <option value="active">Active loans</option><option value="closed">Closed loans</option><option value="all">All loan statuses</option>
                   </select>
-                  <select value={loanDirectionFilter} onChange={event => setLoanDirectionFilter(event.target.value as 'all' | 'borrowed' | 'lent')} className="h-8 rounded-lg border border-slate-200 px-2 text-[11px] dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                  <select value={loanDirectionFilter} onChange={event => setLoanDirectionFilter(event.target.value as 'all' | 'borrowed' | 'lent')} className="finance-flat-select h-8 rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-[11px] dark:border-slate-700 dark:text-white">
                     <option value="all">Borrowed & given</option><option value="borrowed">Borrowed only</option><option value="lent">Given to others</option>
                   </select>
+                  <span className="shrink-0 font-mono text-xs font-bold text-rose-600 dark:text-rose-400">
+                    Debt {getCurrencySymbol()} {totalLoanLiabilities.toLocaleString('en-IN')} · Given {getCurrencySymbol()} {totalLoanReceivables.toLocaleString('en-IN')}
+                  </span>
                 </div>
-                <span className="shrink-0 font-mono text-xs font-bold text-rose-600 dark:text-rose-400">
-                  Debt NPR {totalLoanLiabilities.toLocaleString('en-IN')} · Given NPR {totalLoanReceivables.toLocaleString('en-IN')}
-                </span>
-              </div>
+            </div>
 
-              <div className="mt-4 space-y-3">
+              <div className="mt-3">
                 {visibleLoanMetrics.length === 0 ? (
                   <EmptyState
                     icon={Landmark}
@@ -5359,7 +5111,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     const hasLinkedDisbursement = !!linkedDisbursementTx;
                     const depositedAccount = linkedDisbursementTx?.accountId ? accounts.find(a => a.id === linkedDisbursementTx.accountId) : null;
                     return (
-                      <div key={l.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 transition-all hover:border-slate-200 dark:hover:border-slate-700">
+                      <div key={l.id} className="border-b border-slate-100 py-3 text-xs last:border-0 dark:border-slate-800">
                         <div className="flex justify-between items-start">
                           <div>
                             <div className="font-bold text-slate-900 dark:text-white text-sm flex flex-wrap items-center gap-2">
@@ -5368,21 +5120,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                               <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase ${isClosed ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' : isLent ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'}`}>
                                 {isClosed ? 'Closed' : isLent ? 'Receivable' : 'Active'}
                               </span>
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                {l.loanType || l.category || 'Loan'} · {l.rate}% p.a. · {l.tenure} mos
-                              </span>
-                            </div>
-                            <div className="text-[11px] text-slate-400 mt-1">
-                              {isLent ? 'Original amount lent' : 'Original principal'}: NPR {Number(l.principal).toLocaleString('en-IN')}
-                              {l.lenderName ? ` · ${isLent ? 'Borrower' : 'Lender'}: ${l.lenderName}` : ''}
-                              {l.reference ? ` · Ref: ${l.reference}` : ''}
                             </div>
                           </div>
                           <div className="text-right flex items-start gap-2">
                             <div>
                               <div className="text-[10px] uppercase font-bold text-slate-400">{isLent ? 'Receivable' : 'Outstanding'}</div>
                               <div className="font-mono text-base font-extrabold text-rose-600 dark:text-rose-400 tabular-nums">
-                                NPR {Number(l.outstanding).toLocaleString('en-IN')}
+                                {getCurrencySymbol()} {Number(l.outstanding).toLocaleString('en-IN')}
                               </div>
                             </div>
                             <button
@@ -5406,23 +5150,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
                         {/* Principal Disbursement Status & Action Banner */}
                         {!hasLinkedDisbursement && !isClosed ? (
-                          <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-3 text-xs dark:border-amber-900/60 dark:bg-amber-950/30">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                              <div>
-                                <div className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
-                                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                                  <span>{isLent ? 'Loan Not Yet Paid to Borrower' : 'Principal Not Yet Deposited in Account'}</span>
-                                </div>
-                              </div>
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 py-2 dark:border-slate-800">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                              <span>{isLent ? 'Not yet given' : 'Not deposited'}</span>
+                            </div>
                               <div className="flex items-center gap-2 shrink-0">
                                 <select
                                   id={`loan-deposit-${l.id}`}
                                   defaultValue={accounts[0]?.id || ''}
-                                  className="h-8.5 rounded-xl border border-amber-300 bg-white px-2.5 text-xs text-slate-800 dark:border-amber-800 dark:bg-slate-900 dark:text-white outline-none cursor-pointer"
+                                  className="finance-flat-select h-8.5 rounded-none border-0 border-b border-slate-300 bg-transparent px-2.5 text-xs text-slate-800 dark:border-slate-700 dark:text-white outline-none cursor-pointer"
                                 >
                                   {accounts.map(a => (
                                     <option key={a.id} value={a.id}>
-                                      {a.name} (NPR {Number(a.balance).toLocaleString('en-IN')})
+                                      {a.name} ({getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')})
                                     </option>
                                   ))}
                                 </select>
@@ -5432,76 +5173,80 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                     const sel = (document.getElementById(`loan-deposit-${l.id}`) as HTMLSelectElement)?.value || accounts[0]?.id;
                                     handleDepositExistingLoan(l, sel);
                                   }}
-                                  className="h-8.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-500 font-semibold text-white text-xs transition-colors cursor-pointer shadow-xs flex items-center gap-1 shrink-0"
+                                  className="h-8.5 px-3 rounded-lg border border-slate-700 bg-slate-800/60 font-semibold text-slate-300 text-xs transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-white cursor-pointer flex items-center gap-1 shrink-0"
                                 >
                                   <Plus className="h-3.5 w-3.5" />
-                                  <span>Deposit to Account</span>
+                                  <span>{isLent ? 'Record loan' : 'Deposit'}</span>
                                 </button>
                               </div>
-                            </div>
                           </div>
                         ) : (
-                          <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2.5 py-1 rounded-lg border border-teal-200 dark:border-teal-900/50 w-fit">
+                          <div className="mt-2 flex w-fit items-center gap-1.5 rounded-lg text-[11px] font-medium text-teal-700 dark:text-teal-300">
                             <Check className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-                            <span>{isLent ? 'Loan given' : 'Disbursed amount'} NPR {Number(l.disbursedAmount ?? l.principal).toLocaleString('en-IN')} {isLent ? 'from' : 'deposited into'} {depositedAccount?.name || 'Bank Account'} & recorded in ledger</span>
+                            <span>{isLent ? 'Given' : 'Deposited'} · {depositedAccount?.name || 'Bank Account'}</span>
                           </div>
                         )}
 
-                        <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/60 text-[11px]">
-                          <span className="text-slate-500">{isLent ? 'Expected installment:' : l.emiAmountIsActual ? 'Lender installment:' : 'Estimated installment:'}</span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-white">
-                            NPR {installment.toLocaleString('en-IN', { maximumFractionDigits: 2 })} <span className="font-sans text-[9px] font-normal text-slate-400">/{l.repaymentFrequency || 'monthly'}</span>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5 text-xs dark:border-slate-800">
+                          <span className="text-slate-500 dark:text-slate-400">
+                            {getCurrencySymbol()} {installment.toLocaleString('en-IN', { maximumFractionDigits: 2 })} / {l.repaymentFrequency || 'monthly'}
                           </span>
+                          {nextDue && !isClosed && <span className={overdueCount ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}>
+                            {overdueCount ? `${overdueCount} overdue` : 'Due'} · {nextDue}
+                          </span>}
                         </div>
-                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400 sm:grid-cols-4">
-                          <span>Paid principal: NPR {schedule.reduce((sum, payment) => sum + (Number(payment.principal) || 0), 0).toLocaleString('en-IN')}</span>
-                          <span>Interest paid: NPR {schedule.reduce((sum, payment) => sum + (Number(payment.interest) || 0), 0).toLocaleString('en-IN')}</span>
-                          {!isLent && <span>Remaining interest est.: NPR {remainingInterest.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>}
-                          {l.startDate && <span>Started: {l.startDate}</span>}
-                          {nextDue && !isClosed && <span className={overdueCount ? 'text-rose-600 dark:text-rose-400' : ''}>{overdueCount ? `Overdue: ${overdueCount} installment(s)` : 'Next due'} · {nextDue}</span>}
-                          {l.collateralValue && Number(l.collateralValue) > 0 && <span>LTV: {((Number(l.principal) / Number(l.collateralValue)) * 100).toFixed(1)}%</span>}
-                          {!isLent && !isClosed && <span>Closure estimate: NPR {closureEstimate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>}
-                        </div>
-                        {schedule.length > 0 && (
-                          <details className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
-                            <summary className="cursor-pointer text-[10px] font-semibold text-slate-500 dark:text-slate-400">Payment history ({schedule.length})</summary>
-                            <div className="mt-2 space-y-1.5">
+                        <details className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                          <summary className="cursor-pointer text-[10px] font-semibold text-slate-500 dark:text-slate-400">Details{schedule.length > 0 ? ` · ${schedule.length} payments` : ''}</summary>
+                          <div className="mt-2 space-y-1.5">
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                <span>{l.loanType || l.category || 'Loan'} · {l.rate}% p.a. · {l.tenure} mos</span>
+                                <span>Principal {getCurrencySymbol()} {Number(l.principal).toLocaleString('en-IN')}</span>
+                                {l.lenderName && <span>{l.lenderName}</span>}
+                                {l.reference && <span>Ref {l.reference}</span>}
+                                <span>Principal paid {getCurrencySymbol()} {schedule.reduce((sum, payment) => sum + (Number(payment.principal) || 0), 0).toLocaleString('en-IN')}</span>
+                                <span>Interest paid {getCurrencySymbol()} {schedule.reduce((sum, payment) => sum + (Number(payment.interest) || 0), 0).toLocaleString('en-IN')}</span>
+                                {!isLent && <span>Remaining interest {getCurrencySymbol()} {remainingInterest.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>}
+                                {l.startDate && <span>Started {l.startDate}</span>}
+                                {l.collateralValue && Number(l.collateralValue) > 0 && <span>LTV {((Number(l.principal) / Number(l.collateralValue)) * 100).toFixed(1)}%</span>}
+                                {!isLent && !isClosed && <span>Closure estimate {getCurrencySymbol()} {closureEstimate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>}
+                              </div>
                               {[...schedule].reverse().map(payment => (
                                 <div key={payment.id} className="flex flex-wrap justify-between gap-x-3 text-[10px]">
                                   <span className="text-slate-500">{payment.date}{payment.isClosure ? ' · Final settlement' : ''}</span>
                                   <span className="font-mono text-slate-700 dark:text-slate-300">
-                                    Total NPR {Number(payment.amount).toLocaleString('en-IN')} · principal {Number(payment.principal).toLocaleString('en-IN')} · interest {Number(payment.interest).toLocaleString('en-IN')}
+                                    Total {getCurrencySymbol()} {Number(payment.amount).toLocaleString('en-IN')} · principal {Number(payment.principal).toLocaleString('en-IN')} · interest {Number(payment.interest).toLocaleString('en-IN')}
                                     {(Number(payment.lateFee) || 0) + (Number(payment.penalInterest) || 0) > 0 ? ` · penalty ${((Number(payment.lateFee) || 0) + (Number(payment.penalInterest) || 0)).toLocaleString('en-IN')}` : ''}
                                   </span>
                                 </div>
                               ))}
-                            </div>
-                          </details>
-                        )}
+                          </div>
+                        </details>
                       </div>
                     );
                   })
                 )}
               </div>
             </div>
+            )}
 
             {/* Other Liabilities List */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+            {liabilities.length > 0 && (
+            <div className="py-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <h2 className="min-w-0 text-sm font-bold text-slate-900 dark:text-white">
                   Other liabilities ({liabilities.length})
                 </h2>
                 <span className="shrink-0 font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
-                  Total NPR {manualLiabilitiesVal.toLocaleString('en-IN')}
+                  Total {getCurrencySymbol()} {manualLiabilitiesVal.toLocaleString('en-IN')}
                 </span>
               </div>
 
-              <div className="mt-4 space-y-2.5">
+              <div className="mt-3 space-y-2">
                 {liabilities.length === 0 ? (
                   <EmptyState icon={AlertCircle} compact title="No short-term liabilities" hint="Log dues, EMIs and obligations to keep the balance honest." />
                 ) : (
                   liabilities.map(l => (
-                    <div key={l.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 group">
+                    <div key={l.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 group">
                       <div className="flex justify-between items-center gap-3">
                         <div>
                           <div className="font-bold text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
@@ -5512,7 +5257,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="font-mono text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums">
-                            NPR {Number(l.amount).toLocaleString('en-IN')}
+                            {getCurrencySymbol()} {Number(l.amount).toLocaleString('en-IN')}
                           </div>
                           {Number(l.amount) > 0 && (
                             <button
@@ -5546,7 +5291,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             required
                             value={liabilityRepaymentAmount}
                             onChange={e => setLiabilityRepaymentAmount(e.target.value)}
-                            placeholder="Repayment NPR "
+                            placeholder={"Repayment NPR ".split('NPR').join(getCurrencySymbol())}
                             aria-label={`Repayment amount for ${l.name}`}
                             className="h-9 rounded-lg border border-slate-200 px-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                           />
@@ -5559,7 +5304,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           >
                             <option value="" disabled>{accounts.length ? 'Select account' : 'Create an account first'}</option>
                             {accounts.map(account => (
-                              <option key={account.id} value={account.id}>{account.name} · NPR {Number(account.balance).toLocaleString('en-IN')}</option>
+                              <option key={account.id} value={account.id}>{account.name} · {getCurrencySymbol()} {Number(account.balance).toLocaleString('en-IN')}</option>
                             ))}
                           </select>
                           <button type="submit" className="h-9 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500">
@@ -5572,10 +5317,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 )}
               </div>
             </div>
+            )}
 
             {/* Loan Payment History */}
             {loanPayments.length > 0 && (
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+              <div className="py-4">
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
                   Recent Repayment Receipts ({loanPayments.length})
                 </h2>
@@ -5585,50 +5331,61 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <div>
                         <div className="font-semibold text-slate-900 dark:text-white">{p.loanName}</div>
                         <div className="text-[10px] text-slate-400">
-                          {p.date} · Principal NPR {p.principal.toFixed(0)} + Interest NPR {p.interest.toFixed(0)}
+                          {p.date} · Principal {getCurrencySymbol()} {p.principal.toFixed(0)} + Interest {getCurrencySymbol()} {p.interest.toFixed(0)}
                         </div>
                       </div>
                       <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        NPR {Number(p.amount).toLocaleString('en-IN')}
+                        {getCurrencySymbol()} {Number(p.amount).toLocaleString('en-IN')}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-          </div>
+          </div>}
+          {!hasLoanRecords && sectionActionPanel !== 'loanActions' && (
+            <div className="finance-loans-empty-state lg:col-span-12 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
+              <EmptyState
+                icon={Landmark}
+                compact
+                title="No loans or liabilities yet"
+                hint="Create a loan or add an existing liability to start tracking your debt."
+              />
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSectionActionPanel('loanActions');
+                    setActiveLoanAction('newLoan');
+                  }}
+                  className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
+                >
+                  + New Loan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSectionActionPanel('loanActions');
+                    setActiveLoanAction('liability');
+                  }}
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  + Add Liability
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         </div>
       )}
 
       {/* Tab: Investments Portfolio */}
       {activeTab === 'investments' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div ref={investmentActionsPanelRef} className={sectionActionPanel === 'investmentActions' ? 'lg:col-span-5' : 'hidden'}>
-          <div className=" border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Investment actions</h2>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {([
-                ['asset', 'Add investment'],
-                ['activity', 'Record activity']
-              ] as const).map(([action, label]) => (
-                <button
-                  key={action}
-                  type="button"
-                  onClick={() => setActiveInvestmentAction(action)}
-                  aria-pressed={activeInvestmentAction === action}
-                  className={`min-h-9 border-b-0 border-transparent px-2 text-xs font-semibold transition-colors ${
-                    activeInvestmentAction === action
-                      ? 'text-amber-700 dark:text-amber-300'
-                      : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          <div className={activeInvestmentAction === 'asset' ? 'mt-4' : 'hidden'}>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+        <div className="finance-unified-pane finance-unified-split grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div ref={investmentActionsPanelRef} className={`${sectionActionPanel === 'investmentActions' ? hasInvestmentRecords ? 'lg:col-span-7' : 'lg:col-span-12' : 'hidden'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+          <div className={activeInvestmentAction === 'asset' ? '' : 'hidden'}>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+              <TrendingUp className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
               Add Investment Asset
             </h2>
             <form onSubmit={handleCreateInvestment} className="mt-4 space-y-3">
@@ -5661,7 +5418,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Purchase Cost (NPR)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Purchase Cost ({getCurrencySymbol()})</label>
                   <input
                     type="number"
                     required
@@ -5672,7 +5429,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Current Value (NPR)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Current Value ({getCurrencySymbol()})</label>
                   <input
                     type="number"
                     value={invCurrentVal}
@@ -5686,7 +5443,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <input type="number" min="0" step="any" value={invUnits} onChange={event => setInvUnits(event.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Purchase Fees (NPR)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Purchase Fees ({getCurrencySymbol()})</label>
                   <input type="number" min="0" step="0.01" value={invFees} onChange={event => setInvFees(event.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 </div>
               </div>
@@ -5703,7 +5460,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <option value="">Already funded outside tracked accounts</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.name} (Balance: NPR {Number(a.balance).toLocaleString('en-IN')})
+                      {a.name} (Balance: {getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')})
                     </option>
                   ))}
                 </select>
@@ -5716,7 +5473,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </button>
             </form>
           </div>
-          <div className={activeInvestmentAction === 'activity' ? 'mt-4' : 'hidden'}>
+          <div className={activeInvestmentAction === 'activity' ? '' : 'hidden'}>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <Activity className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
+              Record Investment Activity
+            </h2>
             {investments.length === 0 ? <div className="mt-4 rounded-xl bg-slate-50 px-3 py-4 text-xs text-slate-500 dark:bg-slate-800/60">No investment holdings.</div> : (
               <form onSubmit={handleRecordInvestmentActivity} className="mt-4 space-y-3">
                 <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Investment
@@ -5733,7 +5494,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <label className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">Date
                     <ThemedDateTimeInput type="date" required max={today} value={investmentActivityDate} onChange={event => setInvestmentActivityDate(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
-                  <label className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">{investmentActivityKind === 'sell' ? 'Gross sale proceeds' : investmentActivityKind === 'dividend' || investmentActivityKind === 'interest' ? 'Gross income' : investmentActivityKind === 'fee' ? 'Fee paid' : investmentActivityKind === 'tax' ? 'Tax paid' : 'Purchase amount'} (NPR)
+                  <label className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">{investmentActivityKind === 'sell' ? 'Gross sale proceeds' : investmentActivityKind === 'dividend' || investmentActivityKind === 'interest' ? 'Gross income' : investmentActivityKind === 'fee' ? 'Fee paid' : investmentActivityKind === 'tax' ? 'Tax paid' : 'Purchase amount'} ({getCurrencySymbol()})
                     <input type="number" min="0.01" step="0.01" required value={investmentActivityAmount} onChange={event => setInvestmentActivityAmount(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
                   {investmentActivityKind === 'buy' || investmentActivityKind === 'sell' ? (
@@ -5742,16 +5503,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </label>
                   ) : null}
                   {investmentActivityKind === 'sell' && !(investmentMetricsById.get(investmentActivityTargetId)?.units) && (
-                    <label className="col-span-2 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Sold portion cost basis (NPR)
+                    <label className="col-span-2 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Sold portion cost basis ({getCurrencySymbol()})
                       <input type="number" min="0" step="0.01" value={investmentCostBasisSold} onChange={event => setInvestmentCostBasisSold(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </label>
                   )}
                   {['buy', 'sell', 'dividend', 'interest'].includes(investmentActivityKind) && (
                     <>
-                      <label className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">Fees (NPR)
+                      <label className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">Fees ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={investmentActivityFees} onChange={event => setInvestmentActivityFees(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
-                      <label className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">Tax (NPR)
+                      <label className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">Tax ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={investmentActivityTax} onChange={event => setInvestmentActivityTax(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                     </>
@@ -5759,7 +5520,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
                 <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Account (optional)
                   <select value={investmentActivityAccountId} onChange={event => setInvestmentActivityAccountId(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-                    <option value="">Funds outside tracked accounts</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · NPR {Number(account.balance).toLocaleString('en-IN')}</option>)}
+                    <option value="">Funds outside tracked accounts</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {getCurrencySymbol()} {Number(account.balance).toLocaleString('en-IN')}</option>)}
                   </select>
                 </label>
                 <button type="submit" className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white hover:bg-indigo-500">Record Activity</button>
@@ -5767,19 +5528,37 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             )}
           </div>
           </div>
-          </div>
 
-          <div className={`${sectionActionPanel === 'investmentActions' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+          {(sectionActionPanel !== 'investmentActions' || hasInvestmentRecords) && <div className={`finance-unified-list-column ${sectionActionPanel === 'investmentActions' ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+            {investments.length > 0 && (
+              <section className="finance-summary-card border-b border-slate-100 pb-4 dark:border-slate-800">
+                <h2 className="border-b border-slate-100 pb-3 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-white">
+                  Investment overview
+                </h2>
+                <div className={`mt-4 grid grid-cols-2 gap-3 ${sectionActionPanel === 'investmentActions' ? 'sm:grid-cols-2' : 'sm:grid-cols-4'}`}>
+                  {[
+                    { label: 'Market value', value: investmentValue, tone: 'text-slate-900 dark:text-white' },
+                    { label: 'Cost basis', value: investmentCostBasis, tone: 'text-slate-900 dark:text-white' },
+                    { label: 'Total gain', value: investmentGain, tone: investmentGain >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' },
+                    { label: 'Holdings', value: investments.length, tone: 'text-slate-900 dark:text-white', currency: false }
+                  ].map(metric => (
+                    <div key={metric.label} className="min-w-0">
+                      <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
+                      <div className={`mt-1 truncate font-mono text-base font-bold tabular-nums ${metric.tone}`}>
+                        {metric.currency === false ? metric.value : `${getCurrencySymbol()} ${Number(metric.value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            <div className="flex items-center justify-between border-b border-slate-100 py-3 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                Investment Portfolio ({investments.length})
+                Portfolio ({investments.length})
               </h2>
-              <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">
-                Portfolio: NPR {investmentValue.toLocaleString('en-IN')}
-              </span>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-3">
               {investments.length === 0 ? (
                 <EmptyState icon={TrendingUp} compact title="No investment assets yet" hint="Record holdings to track value, gains and allocation." />
               ) : (
@@ -5797,7 +5576,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     investmentHistory.some(activity => activity.id === transaction.linkedInvestmentActivityId)
                   );
                   return (
-                    <div key={i.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 transition-all hover:border-slate-200 dark:hover:border-slate-700">
+                    <div key={i.id} className="border-b border-slate-100 py-3 text-xs last:border-0 dark:border-slate-800">
                       <div className="flex justify-between items-start">
                         <div>
                           <div className="font-bold text-slate-900 dark:text-white text-sm flex flex-wrap items-center gap-2">
@@ -5805,16 +5584,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             {renderGoalBadge(i.goalId)}
                           </div>
                           <div className="text-[11px] text-slate-400 mt-0.5">
-                            {i.instrumentType || 'Investment'} · Cost basis NPR {invested.toLocaleString('en-IN')} · {metrics.units > 0 ? `${metrics.units} units · ` : ''}Valued {i.valuationDate || 'manually recorded'}
+                            {i.instrumentType || 'Investment'} · Cost basis {getCurrencySymbol()} {invested.toLocaleString('en-IN')} · {metrics.units > 0 ? `${metrics.units} units · ` : ''}Valued {i.valuationDate || 'manually recorded'}
                           </div>
                         </div>
                         <div className="text-right flex items-start gap-3">
                           <div>
                             <div className="font-mono text-sm font-bold text-slate-900 dark:text-white tabular-nums">
-                              NPR {current.toLocaleString('en-IN')}
+                              {getCurrencySymbol()} {current.toLocaleString('en-IN')}
                             </div>
                             <div className={`font-mono text-[11px] font-bold ${gain >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                              {gain >= 0 ? '+' : ''}NPR {gain.toLocaleString('en-IN')} ({roiPct.toFixed(1)}%)
+                              {gain >= 0 ? '+' : ''}{getCurrencySymbol()} {gain.toLocaleString('en-IN')} ({roiPct.toFixed(1)}%)
                             </div>
                             <div className="mt-1 text-[10px] text-slate-400">Unrealized {metrics.unrealizedGain.toLocaleString('en-IN')} · Realized {metrics.realizedGain.toLocaleString('en-IN')} · Income {metrics.netIncome.toLocaleString('en-IN')}</div>
                           </div>
@@ -5850,7 +5629,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           }}
                         >
                           <label className="min-w-36 flex-1 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                            Current market value (NPR)
+                            Current market value ({getCurrencySymbol()})
                             <input
                               type="number"
                               min="0"
@@ -5881,7 +5660,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             {investmentHistory.slice(0, 10).map(activity => (
                               <div key={activity.id} className={`flex justify-between gap-3 py-1.5 text-[10px] ${activity.reversedAt ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-300'}`}>
                                 <span>{activity.date} · {activity.kind}{activity.quantity ? ` · ${activity.quantity} units` : ''}{activity.reversedAt ? ' · reversed' : ''}</span>
-                                <span className="font-mono">NPR {Number(activity.amount).toLocaleString('en-IN')}</span>
+                                <span className="font-mono">{getCurrencySymbol()} {Number(activity.amount).toLocaleString('en-IN')}</span>
                               </div>
                             ))}
                           </div>
@@ -5912,75 +5691,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 })
               )}
             </div>
-          </div>
+          </div>}
         </div>
       )}
 
       {/* Tab: Savings & Goals */}
       {activeTab === 'savings' && (
-        <div className="space-y-4">
-        <section className="finance-summary-card rounded-2xl border-2 border-solid border-amber-200/80 bg-white p-4 dark:border-amber-900/50 dark:bg-slate-900 sm:p-5">
-          <button
-            type="button"
-            aria-expanded={showSavingsSummary}
-            onClick={() => setShowSavingsSummary(open => {
-              if (open) setShowSavingsInfo(false);
-              return !open;
-            })}
-            className="flex w-full cursor-pointer items-center justify-between gap-3 text-left text-sm font-bold text-slate-900 dark:text-white"
-          >
-            <span>Savings summary</span>
-            <span aria-hidden="true" className="text-base leading-none text-slate-400">{showSavingsSummary ? '−' : '+'}</span>
-          </button>
-          {showSavingsSummary && (
-          <>
-          <button
-            type="button"
-            aria-expanded={showSavingsInfo}
-            onClick={() => setShowSavingsInfo(open => !open)}
-            className="mt-3 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200"
-          >
-            {showSavingsInfo ? 'Hide supporting info' : 'Show supporting info'}
-          </button>
-          {showSavingsInfo && (
-            <div className="mt-2 text-right font-mono text-xs text-amber-700 dark:text-amber-300">
-              NPR {totalSavings.toLocaleString('en-IN', { maximumFractionDigits: 2 })} · {activeSavingsPlans.length} active
-            </div>
-          )}
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-            {[
-              { label: 'Savings Value (FD est.)', value: `NPR ${totalSavings.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: 'text-indigo-600 dark:text-indigo-400' },
-              { label: 'Bank Deposits (FD est.)', value: `NPR ${bankSavingsBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: 'text-blue-600 dark:text-blue-400' },
-              { label: 'Recorded Deposits', value: `NPR ${totalSavingsDeposited.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: 'text-slate-700 dark:text-slate-200' },
-              { label: 'Gross Interest', value: `NPR ${totalSavingsInterest.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: 'text-emerald-600 dark:text-emerald-400' },
-              { label: 'TDS Recorded', value: `NPR ${totalSavingsTds.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: 'text-amber-600 dark:text-amber-400' },
-              { label: 'Service Charges', value: `NPR ${totalSavingsCharges.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: 'text-rose-600 dark:text-rose-400' },
-              { label: 'Penalty / Other', value: `NPR ${(totalSavingsPenalty + totalSavingsOtherDeductions).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: 'text-rose-600 dark:text-rose-400' },
-              { label: 'Settlement Variance', value: `NPR ${totalSavingsSettlementVariance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: totalSavingsSettlementVariance === 0 ? 'text-slate-700 dark:text-slate-200' : 'text-amber-600 dark:text-amber-400' },
-              { label: 'Net Interest', value: `NPR ${netSavingsInterest.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`, tone: netSavingsInterest >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' },
-              { label: 'Upcoming Maturity', value: `${upcomingSavingsMaturities.length} plans`, tone: 'text-slate-700 dark:text-slate-200' },
-              { label: 'Active Plans', value: `${activeSavingsPlans.length} plans`, tone: 'text-slate-700 dark:text-slate-200' }
-            ].map(metric => (
-              <div key={metric.label} className="finance-summary-metric min-w-0 rounded-xl border border-solid border-slate-200 bg-slate-50 px-2.5 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
-                <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
-                <div className={`mt-1 truncate font-mono text-[11px] font-bold tabular-nums ${metric.tone}`}>{metric.value}</div>
-              </div>
-            ))}
-          </div>
-          </>
-          )}
-        </section>
-        {showSavingsSummary && showSavingsInfo && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[11px] dark:border-slate-800 dark:bg-slate-900">
-          <span className="font-semibold text-slate-500">Recorded deposits</span>
-          <span>Today <strong className="font-mono text-slate-800 dark:text-slate-200">NPR {savingsToday.toLocaleString('en-IN')}</strong></span>
-          <span>This month <strong className="font-mono text-slate-800 dark:text-slate-200">NPR {savingsThisMonth.toLocaleString('en-IN')}</strong></span>
-          <span>This year <strong className="font-mono text-slate-800 dark:text-slate-200">NPR {savingsThisYear.toLocaleString('en-IN')}</strong></span>
-        </div>
-        )}
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div ref={savingsPanelRef} className={`${sectionActionPanel === 'savings' ? 'lg:col-span-5' : 'hidden'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+        <div className="finance-unified-pane space-y-4">
+        <div className="finance-unified-split grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div ref={savingsPanelRef} className={`${sectionActionPanel === 'savings' ? hasSavingsRecords ? 'lg:col-span-7' : 'lg:col-span-12' : 'hidden'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+              <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
               {editingSavingsPlanId ? 'Edit Savings / Deposit' : 'Register Savings / Deposit'}
             </h2>
             {editingSavingsPlanId && (
@@ -6090,7 +5811,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    {saveProductType === 'fixed_deposit' ? 'FD Principal (NPR)' : 'Current Balance (NPR)'}
+                    {saveProductType === 'fixed_deposit' ? ("FD Principal (NPR)").split('NPR').join(getCurrencySymbol()) : ("Current Balance (NPR)").split('NPR').join(getCurrencySymbol())}
                   </label>
                   <input
                     type="number"
@@ -6104,7 +5825,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   />
                 </div>
                 {saveCategory === 'simple' ? <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target (optional, NPR)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target (optional, {getCurrencySymbol()})</label>
                   <input
                     type="number"
                     min="0"
@@ -6161,7 +5882,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </select>
                   </label>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Planned contribution (NPR)
+                    Planned contribution ({getCurrencySymbol()})
                     <input
                       type="number"
                       min="0"
@@ -6242,7 +5963,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </select>
                   </label>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Planned installment (NPR)
+                    Planned installment ({getCurrencySymbol()})
                     <input
                       type="number"
                       min="0"
@@ -6310,7 +6031,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       />
                     </label>
                     <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                      Service charge (NPR)
+                      Service charge ({getCurrencySymbol()})
                       <input
                         type="number"
                         min="0"
@@ -6322,7 +6043,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       />
                     </label>
                     <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                      Penalty / other deduction (NPR)
+                      Penalty / other deduction ({getCurrencySymbol()})
                       <input
                         type="number"
                         min="0"
@@ -6334,7 +6055,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       />
                     </label>
                     <label className="col-span-2 block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                      Other deductions (NPR)
+                      Other deductions ({getCurrencySymbol()})
                       <input
                         type="number"
                         min="0"
@@ -6371,8 +6092,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               {saveProductType === 'fixed_deposit' && Number(saveCurrent) > 0 && (
                 <div className="rounded-xl bg-indigo-50 p-3 text-[10px] text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200">
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
-                    <span>Compound scenario <strong>NPR {Number(fixedDepositCompoundPreview || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></span>
-                    <span>Simple interest <strong>NPR {Number(fixedDepositSimplePreview || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></span>
+                    <span>Compound scenario <strong>{getCurrencySymbol()} {Number(fixedDepositCompoundPreview || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></span>
+                    <span>Simple interest <strong>{getCurrencySymbol()} {Number(fixedDepositSimplePreview || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></span>
                   </div>
                 </div>
               )}
@@ -6397,7 +6118,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <option value="already-funded">Already funded outside tracked accounts</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.name} · NPR {Number(a.balance).toLocaleString('en-IN')}
+                      {a.name} · {getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')}
                     </option>
                   ))}
                 </select>
@@ -6421,38 +6142,68 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </form>
           </div>
 
-          <div className={`${sectionActionPanel === 'savings' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-              My Savings ({visibleSavingsPlans.length}{visibleSavingsPlans.length !== savingsPlans.length ? ` / ${savingsPlans.length}` : ''})
-            </h2>
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <input
-                type="search"
-                value={savingsSearch}
-                onChange={event => setSavingsSearch(event.target.value)}
-                placeholder="Search name, bank or reference"
-                className="h-8 rounded-lg border border-amber-200 bg-amber-50/40 px-2.5 text-[11px] focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
-              />
-              <select
-                value={savingsCategoryFilter}
-                onChange={event => setSavingsCategoryFilter(event.target.value as 'all' | 'simple' | 'bank')}
-                className="h-8 rounded-lg border border-amber-200 bg-amber-50/40 px-2 text-[11px] focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
-              >
-                <option value="all">All savings categories</option>
-                <option value="simple">Simple savings</option>
-                <option value="bank">Bank deposits</option>
-              </select>
-              <select
-                value={savingsStatusFilter}
-                onChange={event => setSavingsStatusFilter(event.target.value as 'all' | 'active' | 'closed')}
-                className="h-8 rounded-lg border border-amber-200 bg-amber-50/40 px-2 text-[11px] focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
-              >
-                <option value="active">Active plans</option>
-                <option value="closed">Closed plans</option>
-                <option value="all">All statuses</option>
-              </select>
+          {(sectionActionPanel !== 'savings' || hasSavingsRecords) && <div className={`finance-unified-list-column ${sectionActionPanel === 'savings' ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+            {savingsPlans.length > 0 && (
+              <section className="finance-summary-card border-b border-slate-100 pb-4 dark:border-slate-800">
+                <h2 className="border-b border-slate-100 pb-3 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-white">
+                  Savings summary
+                </h2>
+                <div className="mt-4">
+                  <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Total savings value</div>
+                  <div className="mt-1 font-mono text-lg font-extrabold tracking-tight tabular-nums text-slate-900 dark:text-white sm:text-xl">
+                    {getCurrencySymbol()} {totalSavings.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className={`mt-4 grid grid-cols-2 gap-3 border-b border-slate-100 pb-4 dark:border-slate-800 ${sectionActionPanel === 'savings' ? 'sm:grid-cols-2' : 'sm:grid-cols-4'}`}>
+                  {[
+                    { label: 'Bank deposits', value: bankSavingsBalance },
+                    { label: 'Recorded deposits', value: totalSavingsDeposited },
+                    { label: 'Net interest', value: netSavingsInterest },
+                    { label: 'Active plans', value: activeSavingsPlans.length, currency: false }
+                  ].map(metric => (
+                    <div key={metric.label} className="min-w-0">
+                      <div className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{metric.label}</div>
+                      <div className="mt-1 truncate font-mono text-lg font-extrabold tracking-tight tabular-nums text-slate-900 dark:text-white sm:text-xl">
+                        {metric.currency === false ? metric.value : `${getCurrencySymbol()} ${Number(metric.value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-3 dark:border-slate-800">
+              <h2 className="shrink-0 text-sm font-bold text-slate-900 dark:text-white">
+                My Savings ({visibleSavingsPlans.length}{visibleSavingsPlans.length !== savingsPlans.length ? ` / ${savingsPlans.length}` : ''})
+              </h2>
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                <input
+                  type="search"
+                  value={savingsSearch}
+                  onChange={event => setSavingsSearch(event.target.value)}
+                  placeholder="Search name / bank / ref"
+                  className="finance-flat-select h-8 w-36 rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-[11px] focus:outline-none dark:border-slate-700 dark:text-white"
+                />
+                <select
+                  value={savingsCategoryFilter}
+                  onChange={event => setSavingsCategoryFilter(event.target.value as 'all' | 'simple' | 'bank')}
+                  className="finance-flat-select h-8 rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-[11px] dark:border-slate-700 dark:text-white"
+                >
+                  <option value="all">All categories</option>
+                  <option value="simple">Simple savings</option>
+                  <option value="bank">Bank deposits</option>
+                </select>
+                <select
+                  value={savingsStatusFilter}
+                  onChange={event => setSavingsStatusFilter(event.target.value as 'all' | 'active' | 'closed')}
+                  className="finance-flat-select h-8 rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-[11px] dark:border-slate-700 dark:text-white"
+                >
+                  <option value="active">Active plans</option>
+                  <option value="closed">Closed plans</option>
+                  <option value="all">All statuses</option>
+                </select>
+              </div>
             </div>
-            <div className="mt-4 space-y-4">
+            <div className="mt-3">
               {visibleSavingsPlans.length === 0 ? (
                 savingsPlans.length === 0 ? (
                 <EmptyState icon={Receipt} compact title="No savings plans yet" hint="Register a plan to track deposits, targets and withdrawals." />
@@ -6469,91 +6220,86 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   const current = isFixedDeposit ? (valuation?.currentValue || 0) : principal;
                   const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
                   return (
-                    <div key={sp.id} className="min-w-0 rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 group">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div key={sp.id} className="group min-w-0 border-b border-slate-100 py-3 text-xs last:border-0 dark:border-slate-800">
+                      <div className="flex min-w-0 items-start justify-between gap-2">
                         <div className="flex min-w-0 flex-1 items-center gap-2 flex-wrap">
                           <span className="min-w-0 break-words font-bold text-slate-900 dark:text-white text-sm">{sp.name}</span>
                           {renderGoalBadge(sp.goalId)}
                           {isClosed && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">Closed</span>}
                         </div>
-                        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
-                          <div className="min-w-0 flex-[1_1_100%] text-left sm:flex-1 sm:text-right">
-                            <div className="min-w-0 break-words font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                              {isFixedDeposit
-                                ? <><span className="whitespace-nowrap tabular-nums">NPR {current.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span> est. / <span className="whitespace-nowrap tabular-nums">NPR {target.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span> at maturity</>
-                                : <><span className="whitespace-nowrap tabular-nums">NPR {current.toLocaleString('en-IN')}</span> · {getSavingsProductLabel(sp.productType)}{target > 0 && <> / <span className="whitespace-nowrap tabular-nums">NPR {target.toLocaleString('en-IN')}</span> target</>}</>}
-                            </div>
-                            {isFixedDeposit && (
-                              <div className="break-words text-[10px] text-slate-400">
-                                Principal NPR {principal.toLocaleString('en-IN')} · {sp.annualInterestRate}% p.a. · maturity {valuation?.maturityDate}
-                              </div>
-                            )}
+                        <div className="shrink-0 text-right">
+                          <div className="font-mono text-sm font-bold tabular-nums text-indigo-600 dark:text-indigo-400">
+                            {getCurrencySymbol()} {current.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                           </div>
-                          {!isFixedDeposit && !isClosed && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDepositTargetPlan(sp);
-                                setDepositAmount('');
-                                setDepositNote('');
-                              }}
-                              className="rounded-lg bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-1"
-                              title={`Record a manual contribution to this ${getSavingsProductLabel(sp.productType).toLowerCase()}`}
-                            >
-                              <Plus className="h-3 w-3" />
-                              <span>Deposit</span>
-                            </button>
-                          )}
-                          {!isFixedDeposit && !isClosed && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingSavingsBalanceId(editingSavingsBalanceId === sp.id ? null : sp.id);
-                                setEditingSavingsBalance(String(principal));
-                              }}
-                              className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                              title="Enter the latest actual balance from your statement"
-                            >
-                              Update balance
-                            </button>
-                          )}
-                          {current > 0 && !isClosed && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setWithdrawalTargetPlan(sp);
-                                setWithdrawalAmount('');
-                                setWithdrawalIsFinalSettlement(isFixedDeposit || isBankSavingsPlan(sp));
-                                setWithdrawalInterest('');
-                                setWithdrawalTds('');
-                                setWithdrawalServiceCharge('');
-                                setWithdrawalPenalty('');
-                                setWithdrawalOtherDeduction('');
-                              }}
-                              className="rounded-lg border border-amber-200 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-300 dark:hover:bg-amber-950/40"
-                              title="Record actual payout to an account"
-                            >
-                              Withdraw
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleStartEditSavingsPlan(sp)}
-                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
-                            title="Edit savings plan"
-                            aria-label={`Edit savings plan ${sp.name}`}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget({ store: 'savingsPlans', id: sp.id, name: sp.name })}
-                            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
-                            title="Delete savings plan"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                            {isFixedDeposit ? `Est. at maturity · ${valuation?.maturityDate || ''}` : getSavingsProductLabel(sp.productType)}
+                          </div>
                         </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {!isFixedDeposit && !isClosed && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDepositTargetPlan(sp);
+                              setDepositAmount('');
+                              setDepositNote('');
+                            }}
+                            className="rounded-lg bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-600 transition-colors hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-400"
+                            title={`Record a manual contribution to this ${getSavingsProductLabel(sp.productType).toLowerCase()}`}
+                          >
+                            + Deposit
+                          </button>
+                        )}
+                        {!isFixedDeposit && !isClosed && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSavingsBalanceId(editingSavingsBalanceId === sp.id ? null : sp.id);
+                              setEditingSavingsBalance(String(principal));
+                            }}
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            title="Enter the latest actual balance from your statement"
+                          >
+                            Update balance
+                          </button>
+                        )}
+                        {current > 0 && !isClosed && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setWithdrawalTargetPlan(sp);
+                              setWithdrawalAmount('');
+                              setWithdrawalIsFinalSettlement(isFixedDeposit || isBankSavingsPlan(sp));
+                              setWithdrawalInterest('');
+                              setWithdrawalTds('');
+                              setWithdrawalServiceCharge('');
+                              setWithdrawalPenalty('');
+                              setWithdrawalOtherDeduction('');
+                            }}
+                            className="rounded-lg border border-amber-200 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                            title="Record actual payout to an account"
+                          >
+                            Withdraw
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditSavingsPlan(sp)}
+                          className="ml-auto p-1 text-slate-400 transition-colors hover:text-indigo-600"
+                          title="Edit savings plan"
+                          aria-label={`Edit savings plan ${sp.name}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget({ store: 'savingsPlans', id: sp.id, name: sp.name })}
+                          className="p-1 text-slate-300 transition-colors hover:text-rose-500"
+                          title="Delete savings plan"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                       <div className="mt-2 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                         <div
@@ -6567,7 +6313,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           onSubmit={event => void handleSaveSavingsBalance(event, sp)}
                         >
                           <label className="min-w-40 flex-1 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                            Actual balance (NPR)
+                            Actual balance ({getCurrencySymbol()})
                             <input
                               type="number"
                               min="0"
@@ -6591,7 +6337,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           {sp.bankName && <span>{sp.bankName}{sp.branchName ? ` · ${sp.branchName}` : ''}</span>}
                           {sp.reference && <span>Ref: {sp.reference}</span>}
                           {sp.frequency && <span>Frequency: {sp.frequency.replace(/_/g, ' ')}</span>}
-                          {sp.contributionAmount ? <span>Planned: NPR {Number(sp.contributionAmount).toLocaleString('en-IN')}</span> : null}
+                          {sp.contributionAmount ? <span>Planned: {getCurrencySymbol()} {Number(sp.contributionAmount).toLocaleString('en-IN')}</span> : null}
                           {sp.maturityDate && <span>Matures: {sp.maturityDate}</span>}
                           {sp.annualInterestRate != null && <span>Rate: {sp.annualInterestRate}% p.a.</span>}
                         </div>
@@ -6612,7 +6358,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                 <div key={transaction.id} className="flex flex-wrap justify-between gap-x-3 text-[10px]">
                                   <span className="text-slate-500">{transaction.date} · {transaction.category}</span>
                                   <span className="font-mono text-slate-700 dark:text-slate-300">
-                                    NPR {Number(transaction.amount).toLocaleString('en-IN')}
+                                    {getCurrencySymbol()} {Number(transaction.amount).toLocaleString('en-IN')}
                                     {transaction.interest ? ` · interest ${Number(transaction.interest).toLocaleString('en-IN')}` : ''}
                                     {transaction.tds ? ` · TDS ${Number(transaction.tds).toLocaleString('en-IN')}` : ''}
                                     {transaction.serviceCharge ? ` · fee ${Number(transaction.serviceCharge).toLocaleString('en-IN')}` : ''}
@@ -6630,68 +6376,56 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 })
               )}
             </div>
-          </div>
+          </div>}
         </div>
+        </div>
+      )}
+
+      {activeTab === 'capitalPlanning' && (
+        <div className="finance-unified-pane rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Capital & Financial Planning</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Dedicated view for saved financial targets previously hidden from the Finance menu.</p>
+            </div>
+            <TrendingUp className="h-5 w-5 text-indigo-500" />
+          </div>
+          {financialGoals.length === 0 ? (
+            <div className="py-10 text-center">
+              <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">No financial goals yet</div>
+              <div className="mt-1 text-xs text-slate-400">Create one from the Goals workspace; its contribution will appear here.</div>
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {financialGoals.map(goal => {
+                const target = Number(goal.target) || 0;
+                const current = Number(goal.current) || 0;
+                const progress = target > 0 ? Math.min(100, Math.max(0, (current / target) * 100)) : 0;
+                return (
+                  <div key={goal.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                    <div className="font-semibold text-slate-900 dark:text-white">{goal.name}</div>
+                    <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      {getCurrencySymbol()} {current.toLocaleString('en-IN')} / {getCurrencySymbol()} {target.toLocaleString('en-IN')}
+                    </div>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                      <div className="h-full rounded-full bg-indigo-500" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
       {/* Tab: Assets & Balance Sheet */}
       {activeTab === 'balanceSheet' && (
-        <div className="space-y-4">
-        <section className="finance-summary-card rounded-2xl border-2 border-solid border-amber-200/80 bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-slate-900 sm:px-5">
-          <div>
-            <button
-              type="button"
-              aria-expanded={showAssetSummary}
-              onClick={() => setShowAssetSummary(open => {
-                if (open) setShowAssetInfo(false);
-                return !open;
-              })}
-              className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] font-semibold text-amber-700 dark:text-amber-300"
-            >
-              <span>Asset summary</span>
-              <span aria-hidden="true" className="text-base leading-none text-slate-400">{showAssetSummary ? '−' : '+'}</span>
-            </button>
-            {showAssetSummary && (
-            <>
-            <button
-              type="button"
-              aria-expanded={showAssetInfo}
-              onClick={() => setShowAssetInfo(open => !open)}
-              className="mt-3 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200"
-            >
-              {showAssetInfo ? 'Hide supporting info' : 'Show supporting info'}
-            </button>
-            <div className="mt-3">
-              <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Total asset value</div>
-              <div className="mt-0.5 font-mono text-lg font-bold tabular-nums text-slate-900 dark:text-white">
-                NPR {totalAssets.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                { label: 'Purchase cost', value: physicalAssetCostBasis, note: `${activePhysicalAssets.length} active assets` },
-                { label: 'Market value', value: manualAssetsVal, note: 'Latest recorded valuations' },
-                { label: 'Unrealized gain / loss', value: physicalAssetGainLoss, note: 'Market value minus recorded cost' },
-                { label: 'Depreciation estimate', value: physicalAssetDepreciationEstimate, note: 'Straight-line book estimate only' }
-              ].map(metric => (
-                <div key={metric.label} className="finance-summary-metric min-w-0 rounded-xl border border-solid border-slate-200 bg-slate-50 px-2.5 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
-                  <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</div>
-                  <div className={`mt-0.5 truncate font-mono text-[11px] font-semibold tabular-nums ${metric.label === 'Unrealized gain / loss' ? (metric.value >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-900 dark:text-white'}`}>
-                    NPR {metric.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                  </div>
-                  {showAssetInfo && <div className="mt-0.5 truncate text-[9px] text-slate-400">{metric.note}</div>}
-                </div>
-              ))}
-            </div>
-            </>
-            )}
-          </div>
-        </section>
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="finance-unified-pane">
+        <div className="finance-unified-split grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
           {/* Add Asset Form */}
-          <div ref={assetPanelRef} className={`${sectionActionPanel === 'asset' ? 'lg:col-span-5' : 'hidden'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+          <div ref={assetPanelRef} className={`${sectionActionPanel === 'asset' ? hasBalanceSheetRecords ? 'lg:col-span-7' : 'lg:col-span-12' : 'hidden'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+              <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
               {editingAssetId ? 'Edit Asset' : 'Add Asset'}
             </h2>
             <form onSubmit={handleAddAsset} className="mt-4 space-y-3">
@@ -6727,10 +6461,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </label>
               )}
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Purchase cost (NPR)
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Purchase cost ({getCurrencySymbol()})
                   <input type="number" min="0" step="0.01" value={assetPurchaseCost} onChange={event => setAssetPurchaseCost(event.target.value)} placeholder={assetVal || 'Defaults to value'} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 </label>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Latest market value (NPR)
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Latest market value ({getCurrencySymbol()})
                 <input
                   type="number"
                   min="0"
@@ -6752,17 +6486,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <label className="text-[10px] font-medium text-slate-500">Valuation date
                     <ThemedDateTimeInput type="date" max={today} value={assetValuationDate} onChange={event => setAssetValuationDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
-                  <label className="text-[10px] font-medium text-slate-500">Purchase / legal costs (NPR)
+                  <label className="text-[10px] font-medium text-slate-500">Purchase / legal costs ({getCurrencySymbol()})
                     <input type="number" min="0" step="0.01" value={assetAcquisitionCosts} onChange={event => setAssetAcquisitionCosts(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
                   {!editingAssetId && (
                     <>
-                      <label className="text-[10px] font-medium text-slate-500">Purchase payment (optional, NPR)
+                      <label className="text-[10px] font-medium text-slate-500">Purchase payment (optional, {getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={assetPaidAmount} onChange={event => setAssetPaidAmount(event.target.value)} placeholder="Blank = cost basis if account selected" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="text-[10px] font-medium text-slate-500">Paid from account (optional)
                         <select value={assetPurchaseAccountId} onChange={event => setAssetPurchaseAccountId(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-                          <option value="">Already owned / not tracked</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · NPR {Number(account.balance).toLocaleString('en-IN')}</option>)}
+                          <option value="">Already owned / not tracked</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {getCurrencySymbol()} {Number(account.balance).toLocaleString('en-IN')}</option>)}
                         </select>
                       </label>
                     </>
@@ -6789,7 +6523,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <label className="text-[10px] font-medium text-slate-500">Useful life (years)
                         <input type="number" min="0.1" step="0.1" value={assetUsefulLifeYears} onChange={event => setAssetUsefulLifeYears(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
-                      <label className="text-[10px] font-medium text-slate-500">Salvage value (NPR)
+                      <label className="text-[10px] font-medium text-slate-500">Salvage value ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={assetSalvageValue} onChange={event => setAssetSalvageValue(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                     </>
@@ -6832,59 +6566,81 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </div>
 
           {/* Full Sovereign Balance Sheet */}
-          <div className={`${sectionActionPanel === 'asset' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4`}>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
-              <span>Sovereign Balance Sheet</span>
-              <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                Net Worth: NPR {netWorth.toLocaleString('en-IN')}
-              </span>
-            </h2>
-
+          {(sectionActionPanel !== 'asset' || hasBalanceSheetRecords) && <div className={`finance-unified-list-column finance-balance-sheet-card ${sectionActionPanel === 'asset' ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6 space-y-4`}>
+            <section className="finance-asset-summary">
+              <h2 className="border-b border-slate-100 pb-3 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-white">
+                Asset summary
+              </h2>
+              <div className="finance-asset-summary-overview mt-4 flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+                <div>
+                  <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Total asset value</div>
+                  <div className="mt-1 font-mono text-lg font-extrabold tracking-tight tabular-nums text-slate-900 dark:text-white sm:text-xl">
+                    {getCurrencySymbol()} {totalAssets.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+              <div className={`mt-4 grid grid-cols-2 gap-3 border-b border-slate-100 pb-4 dark:border-slate-800 ${sectionActionPanel === 'asset' ? 'sm:grid-cols-2' : 'sm:grid-cols-4'}`}>
+                {[
+                  { label: 'Purchase cost', value: physicalAssetCostBasis, tone: 'text-slate-900 dark:text-white' },
+                  { label: 'Market value', value: manualAssetsVal, tone: 'text-slate-900 dark:text-white' },
+                  { label: 'Unrealized gain / loss', value: physicalAssetGainLoss, tone: physicalAssetGainLoss >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' },
+                  { label: 'Depreciation estimate', value: physicalAssetDepreciationEstimate, tone: 'text-slate-900 dark:text-white' }
+                ].map(metric => (
+                  <div key={metric.label} className="min-w-0">
+                    <div className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{metric.label}</div>
+                    <div className={`mt-1 truncate font-mono text-lg font-extrabold tracking-tight tabular-nums sm:text-xl ${metric.tone}`}>
+                      {getCurrencySymbol()} {metric.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
             <div className="space-y-4 text-xs">
-              <div>
-                <h3 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px] mb-2">
-                  Total Assets (NPR {totalAssets.toLocaleString('en-IN')})
-                </h3>
-                <div className="space-y-1.5 pl-2 border-l-2 border-emerald-500">
-                  <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
-                    <span>Liquid Bank & Cash ({accounts.length} accounts):</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">NPR {liquidCash.toLocaleString('en-IN')}</span>
+            <div>
+              <h3 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px] mb-2">
+                Assets
+              </h3>
+                <div className="finance-balance-sheet-rows finance-balance-sheet-rows--assets space-y-0.5 pl-2">
+                  <div className="flex items-baseline justify-between gap-2 py-1.5 text-slate-600 dark:text-slate-400">
+                    <span className="min-w-0">Liquid Bank & Cash ({accounts.length} accounts):</span>
+                    <span className="shrink-0 font-mono font-bold text-slate-900 dark:text-white">{getCurrencySymbol()} {liquidCash.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
-                    <span>Investment Portfolio ({investments.length} holdings):</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">NPR {investmentValue.toLocaleString('en-IN')}</span>
+                  <div className="flex items-baseline justify-between gap-2 py-1.5 text-slate-600 dark:text-slate-400">
+                    <span className="min-w-0">Investment Portfolio ({investments.length} holdings):</span>
+                    <span className="shrink-0 font-mono font-bold text-slate-900 dark:text-white">{getCurrencySymbol()} {investmentValue.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
-                    <span>Savings & Term Deposits ({savingsPlans.length} items):</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">NPR {totalSavings.toLocaleString('en-IN')}</span>
+                  <div className="flex items-baseline justify-between gap-2 py-1.5 text-slate-600 dark:text-slate-400">
+                    <span className="min-w-0">Savings & Term Deposits ({savingsPlans.length} items):</span>
+                    <span className="shrink-0 font-mono font-bold text-slate-900 dark:text-white">{getCurrencySymbol()} {totalSavings.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
-                    <span>Loans receivable ({lentLoans.length}):</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">NPR {totalLoanReceivables.toLocaleString('en-IN')}</span>
+                  <div className="flex items-baseline justify-between gap-2 py-1.5 text-slate-600 dark:text-slate-400">
+                    <span className="min-w-0">Loans receivable ({lentLoans.length}):</span>
+                    <span className="shrink-0 font-mono font-bold text-slate-900 dark:text-white">{getCurrencySymbol()} {totalLoanReceivables.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
-                    <span>Physical & business assets ({activePhysicalAssets.length} active):</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">NPR {manualAssetsVal.toLocaleString('en-IN')}</span>
+                  <div className="flex items-baseline justify-between gap-2 py-1.5 text-slate-600 dark:text-slate-400">
+                    <span className="min-w-0">Physical & business assets ({activePhysicalAssets.length} active):</span>
+                    <span className="shrink-0 font-mono font-bold text-slate-900 dark:text-white">{getCurrencySymbol()} {manualAssetsVal.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
 
               <div className="pt-2">
                 <h3 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px] mb-2">
-                  Total Liabilities (NPR {totalLiabilities.toLocaleString('en-IN')})
+                  Total Liabilities ({getCurrencySymbol()} {totalLiabilities.toLocaleString('en-IN')})
                 </h3>
-                <div className="space-y-1.5 pl-2 border-l-2 border-rose-500">
-                  <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
-                    <span>Loan Balances ({activeBorrowedLoans.length} active):</span>
-                    <span className="font-mono font-bold text-rose-600 dark:text-rose-400">NPR {totalLoanLiabilities.toLocaleString('en-IN')}</span>
+                <div className="finance-balance-sheet-rows space-y-0.5 pl-2">
+                  <div className="flex items-baseline justify-between gap-2 py-1.5 text-slate-600 dark:text-slate-400">
+                    <span className="min-w-0">Loan Balances ({activeBorrowedLoans.length} active):</span>
+                    <span className="shrink-0 font-mono font-bold text-rose-600 dark:text-rose-400">{getCurrencySymbol()} {totalLoanLiabilities.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between py-1 text-slate-600 dark:text-slate-400">
-                    <span>Other Liabilities ({liabilities.length} items):</span>
-                    <span className="font-mono font-bold text-rose-600 dark:text-rose-400">NPR {manualLiabilitiesVal.toLocaleString('en-IN')}</span>
+                  <div className="flex items-baseline justify-between gap-2 py-1.5 text-slate-600 dark:text-slate-400">
+                    <span className="min-w-0">Other Liabilities ({liabilities.length} items):</span>
+                    <span className="shrink-0 font-mono font-bold text-rose-600 dark:text-rose-400">{getCurrencySymbol()} {manualLiabilitiesVal.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
 
+              {assets.length > 0 && (
               <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="font-bold uppercase tracking-wider text-[10px] text-slate-700 dark:text-slate-300">
@@ -6941,7 +6697,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {Object.entries(physicalAssetCategoryTotals).map(([category, value]) => (
                       <span key={category} className="rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                        {PHYSICAL_ASSET_CATEGORIES.find(item => item.value === category)?.label || category} · NPR {value.toLocaleString('en-IN')}
+                        {PHYSICAL_ASSET_CATEGORIES.find(item => item.value === category)?.label || category} · {getCurrencySymbol()} {value.toLocaleString('en-IN')}
                       </span>
                     ))}
                   </div>
@@ -6980,12 +6736,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             </div>
                           </div>
                           <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-4">
-                            <div><span className="text-slate-400">Cost basis</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">NPR {costBasis.toLocaleString('en-IN')}</div></div>
-                            <div><span className="text-slate-400">Market value · {asset.valuationDate || 'date not set'}</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">NPR {value.toLocaleString('en-IN')}</div></div>
-                            <div><span className="text-slate-400">Unrealized gain / loss</span><div className={`font-mono font-semibold ${gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{gain >= 0 ? '+' : ''}NPR {gain.toLocaleString('en-IN')}</div></div>
-                            <div><span className="text-slate-400">Depreciation estimate</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">NPR {depreciation.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div></div>
+                            <div><span className="text-slate-400">Cost basis</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">{getCurrencySymbol()} {costBasis.toLocaleString('en-IN')}</div></div>
+                            <div><span className="text-slate-400">Market value · {asset.valuationDate || 'date not set'}</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">{getCurrencySymbol()} {value.toLocaleString('en-IN')}</div></div>
+                            <div><span className="text-slate-400">Unrealized gain / loss</span><div className={`font-mono font-semibold ${gain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{gain >= 0 ? '+' : ''}{getCurrencySymbol()} {gain.toLocaleString('en-IN')}</div></div>
+                            <div><span className="text-slate-400">Depreciation estimate</span><div className="font-mono font-semibold text-slate-700 dark:text-slate-300">{getCurrencySymbol()} {depreciation.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div></div>
                           </div>
-                          {status === 'sold' && <div className="mt-2 text-[10px] font-medium text-slate-500">Sold {asset.saleDate || ''} · Actual proceeds NPR {(Number(asset.salePrice) || 0).toLocaleString('en-IN')} · Gross realized gain/loss before selling costs or tax NPR {((Number(asset.salePrice) || 0) - costBasis).toLocaleString('en-IN')}</div>}
+                          {status === 'sold' && <div className="mt-2 text-[10px] font-medium text-slate-500">Sold {asset.saleDate || ''} · Actual proceeds {getCurrencySymbol()} {(Number(asset.salePrice) || 0).toLocaleString('en-IN')} · Gross realized gain/loss before selling costs or tax {getCurrencySymbol()} {((Number(asset.salePrice) || 0) - costBasis).toLocaleString('en-IN')}</div>}
                           {asset.notes && <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">{asset.notes}</p>}
                           {(asset.valueHistory?.length || 0) > 0 && (
                             <details className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
@@ -6994,7 +6750,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                 {[...(asset.valueHistory || [])].sort((left, right) => right.date.localeCompare(left.date)).map((entry, index) => (
                                   <div key={`${entry.date}-${index}`} className="flex justify-between gap-3 text-[10px] text-slate-500">
                                     <span>{entry.date}{entry.note ? ` · ${entry.note}` : ''}</span>
-                                    <span className="font-mono">NPR {Number(entry.value).toLocaleString('en-IN')}</span>
+                                    <span className="font-mono">{getCurrencySymbol()} {Number(entry.value).toLocaleString('en-IN')}</span>
                                   </div>
                                 ))}
                               </div>
@@ -7004,7 +6760,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             <div className="mt-2">
                               {sellingAssetId === asset.id ? (
                                 <form onSubmit={event => void handleSellAsset(event, asset)} className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50">
-                                  <label className="text-[10px] text-slate-500">Actual sale proceeds (NPR)
+                                  <label className="text-[10px] text-slate-500">Actual sale proceeds ({getCurrencySymbol()})
                                     <input required min="0" step="0.01" type="number" value={assetSalePrice} onChange={event => setAssetSalePrice(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
                                   </label>
                                   <label className="text-[10px] text-slate-500">Sale date
@@ -7028,8 +6784,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     })}
                   </div>
                 </div>
+              )}
             </div>
-          </div>
+          </div>}
         </div>
         </div>
       )}
@@ -7374,7 +7131,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             ? 'text-purple-600 dark:text-purple-400'
                             : 'text-indigo-600 dark:text-indigo-400'
                         }`}>
-                          {tx.ledgerOnly ? '' : tx.type === 'income' || tx.type === 'loan' || tx.type === 'loanReceipt' || tx.type === 'savingsWithdrawal' || (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit') ? '+' : tx.type === 'transfer' ? '⇄ ' : '-'}NPR {Number(tx.amount || 0).toLocaleString('en-IN')}
+                          {tx.ledgerOnly ? '' : tx.type === 'income' || tx.type === 'loan' || tx.type === 'loanReceipt' || tx.type === 'savingsWithdrawal' || (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit') ? '+' : tx.type === 'transfer' ? '⇄ ' : '-'}{getCurrencySymbol()} {Number(tx.amount || 0).toLocaleString('en-IN')}
                         </span>
                         <div className="text-[10px] font-medium text-slate-400">
                           {tx.type === 'income' && 'Income Inflow'}
@@ -7408,7 +7165,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       )}
                       <button
                         type="button"
-                        onClick={() => setDeleteTarget({ store: 'finance', id: tx.id, name: `${tx.category} (NPR ${tx.amount})` })}
+                        onClick={() => setDeleteTarget({ store: 'finance', id: tx.id, name: `${tx.category} (${getCurrencySymbol()} ${tx.amount})` })}
                         className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors cursor-pointer"
                         title="Delete transaction record"
                       >
@@ -7589,14 +7346,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* SAVINGS DEPOSIT / CONTRIBUTION MODAL */}
       {depositTargetPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                   Record Contribution
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {depositTargetPlan.name} (Current: NPR {Number(depositTargetPlan.currentAmount).toLocaleString('en-IN')})
+                  {depositTargetPlan.name} (Current: {getCurrencySymbol()} {Number(depositTargetPlan.currentAmount).toLocaleString('en-IN')})
                 </p>
               </div>
               <button
@@ -7611,7 +7368,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <form onSubmit={handleDepositToSavings} className="mt-4 space-y-3.5">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Deposit Amount (NPR) <span className="text-rose-500">*</span>
+                  Deposit Amount ({getCurrencySymbol()}) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -7637,7 +7394,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <option value="" disabled>Select source account</option>
                   {accounts.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.name} (Balance: NPR {Number(a.balance).toLocaleString('en-IN')})
+                      {a.name} (Balance: {getCurrencySymbol()} {Number(a.balance).toLocaleString('en-IN')})
                     </option>
                   ))}
                 </select>
@@ -7678,7 +7435,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
       {withdrawalTargetPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -7697,7 +7454,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <form onSubmit={handleWithdrawSavings} className="mt-4 space-y-3.5">
               {withdrawalTargetPlan.productType === 'fixed_deposit' && (
                 <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                  {withdrawalTargetPlan.interestMethod === 'simple' ? 'Simple-interest comparison' : 'Compound estimate'}: <strong>NPR {getFixedDepositValue(withdrawalTargetPlan).currentValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>. Enter the actual amount paid by the bank.
+                  {withdrawalTargetPlan.interestMethod === 'simple' ? 'Simple-interest comparison' : 'Compound estimate'}: <strong>{getCurrencySymbol()} {getFixedDepositValue(withdrawalTargetPlan).currentValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>. Enter the actual amount paid by the bank.
                 </div>
               )}
               {isBankSavingsPlan(withdrawalTargetPlan) && (
@@ -7715,27 +7472,27 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   {withdrawalIsFinalSettlement && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                        Interest received (NPR)
+                        Interest received ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={withdrawalInterest} onChange={event => setWithdrawalInterest(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                        TDS / tax deducted (NPR)
+                        TDS / tax deducted ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={withdrawalTds} onChange={event => setWithdrawalTds(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                        Service charge (NPR)
+                        Service charge ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={withdrawalServiceCharge} onChange={event => setWithdrawalServiceCharge(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                        Penalty (NPR)
+                        Penalty ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={withdrawalPenalty} onChange={event => setWithdrawalPenalty(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="col-span-2 block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                        Other deduction (NPR)
+                        Other deduction ({getCurrencySymbol()})
                         <input type="number" min="0" step="0.01" value={withdrawalOtherDeduction} onChange={event => setWithdrawalOtherDeduction(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <div className="col-span-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                        Manual net comparison: NPR {Math.max(
+                        Manual net comparison: {getCurrencySymbol()} {Math.max(
                           0,
                           Number(withdrawalTargetPlan.currentAmount) +
                           (Number(withdrawalInterest) || 0) -
@@ -7751,7 +7508,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               )}
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Actual payout amount{withdrawalTargetPlan.productType !== 'fixed_deposit' && ` (available NPR ${Number(withdrawalTargetPlan.currentAmount).toLocaleString('en-IN')})`}
+                  Actual payout amount{withdrawalTargetPlan.productType !== 'fixed_deposit' && ` (available ${getCurrencySymbol()} ${Number(withdrawalTargetPlan.currentAmount).toLocaleString('en-IN')})`}
                 </label>
                 <input
                   type="number"
@@ -7766,7 +7523,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               {isBankSavingsPlan(withdrawalTargetPlan) && withdrawalIsFinalSettlement && Number(withdrawalAmount) > 0 && (
                 <div className="rounded-lg bg-slate-50 px-3 py-2 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                   Actual payout variance vs entered breakdown: <strong className="font-mono">
-                    NPR {(Number(withdrawalAmount) - Math.max(
+                    {getCurrencySymbol()} {(Number(withdrawalAmount) - Math.max(
                       0,
                       Number(withdrawalTargetPlan.currentAmount) +
                       (Number(withdrawalInterest) || 0) -

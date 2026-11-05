@@ -295,9 +295,8 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
           )}
         </div>
       )}
-
       {/* Unified Compact Main Recycle Bin Card */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
         {/* Card Header & Telemetry */}
         <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">

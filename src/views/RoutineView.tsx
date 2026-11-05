@@ -3,9 +3,8 @@ import React, { useRef, useState } from 'react';
 import {
   Repeat, Clock, Trash2, CheckCircle2,
   Flame, Check, Bell, Link2, Edit3, X,
-  BellRing, Zap, CheckSquare, Plus
+  BellRing, Zap
 } from 'lucide-react';
-import { EmptyState } from '../components/EmptyState';
 import { Routine, Habit, HabitLog, Goal, Task, TaskPriority, ReminderItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { resolveHabitGoalId, syncGoalProgressFromHabits, syncGoalProgressFromRoutines, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
@@ -14,12 +13,12 @@ import { alarmService } from '../lib/alarmService';
 import { computeItemDelay } from '../components/ProjectTimelinePlan';
 import { BUILTIN_RINGTONES, getDefaultRingtoneId } from '../lib/alarmAudio';
 import { soundEngine } from '../lib/soundEngine';
-import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
+import { getLocalDateString } from '../lib/dateUtils';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
-import { FormDisclosureToggle } from '../components/FormDisclosure';
 import { GoalPicker } from '../components/GoalPicker';
 import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
+import { TaskRoutineFocusSwitcher, type WorkAreaSection } from '../components/TaskRoutineFocusSwitcher';
 
 interface RoutineViewProps {
   routines: Routine[];
@@ -28,6 +27,8 @@ interface RoutineViewProps {
   goals?: Goal[];
   tasks?: Task[];
   reminders?: ReminderItem[];
+  activeWorkAreaSection: WorkAreaSection;
+  onSelectWorkAreaSection: (section: WorkAreaSection) => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
@@ -54,6 +55,9 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   habits,
   habitLogs,
   goals = [],
+  tasks = [],
+  activeWorkAreaSection,
+  onSelectWorkAreaSection,
   onRefresh,
   onSuccess
 }) => {
@@ -65,6 +69,14 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   const [habitFilter, setHabitFilter] = useState<'all' | 'linked' | 'standalone' | string>('all');
   const [routineFormOpen, setRoutineFormOpen] = useState(false);
   const [habitFormOpen, setHabitFormOpen] = useState(false);
+  const [routineMenuSection, setRoutineMenuSection] = useState<WorkAreaSection>(
+    activeWorkAreaSection === 'routine' || activeWorkAreaSection === 'routine-genesis' ? 'routine-genesis' : 'routine'
+  );
+  const [habitMenuSection, setHabitMenuSection] = useState<WorkAreaSection>(
+    activeWorkAreaSection === 'routine-habits' || activeWorkAreaSection === 'routine-habit-genesis'
+      ? 'routine-habit-genesis'
+      : 'routine-habits'
+  );
 
   // Creation form Genesis options
   const [routineArmGenesis, setRoutineArmGenesis] = useState(false);
@@ -74,16 +86,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   const [habitArmGenesis, setHabitArmGenesis] = useState(false);
   const [habitTaskPriority, setHabitTaskPriority] = useState<TaskPriority>('Medium');
   const [habitAlarmRingtone, setHabitAlarmRingtone] = useState<string>(() => getDefaultRingtoneId());
-
-  // Quick preset alarm modal
-  const [quickAlarmItem, setQuickAlarmItem] = useState<{
-    id: string;
-    title: string;
-    type: 'routine' | 'habit';
-    scheduledTime?: string;
-  } | null>(null);
-  const [alarmPresetChoice, setAlarmPresetChoice] = useState<'5m' | '15m' | '30m' | '1h' | 'tonight' | 'tomorrow'>('15m');
-  const [quickAlarmRingtone, setQuickAlarmRingtone] = useState<string>(() => getDefaultRingtoneId());
 
   // Task Genesis Modal State
   const [genesisModal, setGenesisModal] = useState<{
@@ -129,7 +131,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
   const [slotTimes, setSlotTimes] = useState<string[]>([
     '08:00', '14:00', '20:00', '10:00', '16:00', '18:00', '21:00', '22:00'
   ]);
-  const [time1, setTime1] = useState('08:00');
   const [linkedRoutineId, setLinkedRoutineId] = useState<string>('');
 
   const handleUpdateSlotTime = (index: number, val: string) => {
@@ -138,7 +139,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       next[index] = val;
       return next;
     });
-    if (index === 0) setTime1(val);
   };
 
   // Past 7 days calculation for streak visualization
@@ -160,7 +160,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
           setHabitName(match.name);
         }
         if (match.startTime) {
-          setTime1(match.startTime);
           handleUpdateSlotTime(0, match.startTime);
         }
       }
@@ -395,47 +394,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     setLinkedRoutineId('');
     setHabitArmGenesis(false);
     setHabitFormOpen(false);
-    onRefresh();
-  };
-
-  const handleSaveQuickAlarm = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!quickAlarmItem) return;
-
-    let targetDueAt = '';
-    const now = new Date();
-
-    if (alarmPresetChoice === '5m') {
-      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 5 * 60 * 1000));
-    } else if (alarmPresetChoice === '15m') {
-      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 15 * 60 * 1000));
-    } else if (alarmPresetChoice === '30m') {
-      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 30 * 60 * 1000));
-    } else if (alarmPresetChoice === '1h') {
-      targetDueAt = getLocalDateTimeString(new Date(now.getTime() + 60 * 60 * 1000));
-    } else if (alarmPresetChoice === 'tonight') {
-      targetDueAt = `${today}T20:00`;
-    } else if (alarmPresetChoice === 'tomorrow') {
-      const tm = new Date();
-      tm.setDate(tm.getDate() + 1);
-      targetDueAt = `${getLocalDateString(tm)}T08:00`;
-    }
-
-    await storage.put('reminders', {
-      id: generateUUID(),
-      title: `Reminder Alarm: ${quickAlarmItem.title}`,
-      dueAt: targetDueAt,
-      repeatRule: 'none',
-      status: 'open',
-      linkedId: quickAlarmItem.id,
-      alarmEnabled: true,
-      ringtone: quickAlarmRingtone,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    });
-
-    onSuccess(`Reminder alarm scheduled for "${quickAlarmItem.title}" at ${targetDueAt.replace('T', ' ')}!`);
-    setQuickAlarmItem(null);
     onRefresh();
   };
 
@@ -756,100 +714,42 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
   const linkedHabitsCount = habits.filter(h => h.linkedRoutineId || h.routineId).length;
   const standaloneHabitsCount = habits.length - linkedHabitsCount;
+  const isRoutineWorkspace = activeWorkAreaSection === 'routine' || activeWorkAreaSection === 'routine-genesis';
+  const isHabitWorkspace = activeWorkAreaSection === 'routine-habits' || activeWorkAreaSection === 'routine-habit-genesis';
+  const showRoutineGenesisForm = isRoutineWorkspace && (routineMenuSection === 'routine-genesis' || routineFormOpen);
+  const showHabitGenesisForm = isHabitWorkspace && (habitMenuSection === 'routine-habit-genesis' || habitFormOpen);
 
   return (
-    <div className="space-y-6">
+    <div className="task-area-card-view space-y-6">
       {/* Top Header & Architecture Manual CTA */}
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
-            Routine & Habits Architecture
+            {isHabitWorkspace ? 'Habit' : 'Routine'}
           </h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <FormDisclosureToggle
-            label={editingRoutine ? 'Edit Routine' : 'Routine Genesis'}
-            openLabel="Close Routine"
-            isOpen={routineFormOpen}
-            onToggle={() => {
-              if (routineFormOpen && editingRoutine) handleCancelRoutineEdit();
-              else setRoutineFormOpen(open => !open);
-            }}
-            icon={editingRoutine ? <Edit3 className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-          />
-          <FormDisclosureToggle
-            label="Habit Genesis"
-            openLabel="Close Habit"
-            isOpen={habitFormOpen}
-            onToggle={() => setHabitFormOpen(open => !open)}
-            icon={<Plus className="h-3.5 w-3.5" />}
-          />
-        </div>
-      </div>
-
-      {/* 4 Essential Metric Cards (Matching Dashboard Style) */}
-      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Routine Blocks</span>
-            <Clock className="h-4 w-4 text-indigo-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {routines.length}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            {routines.filter(r => r.frequency === 'daily').length} scheduled daily
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Active Habits</span>
-            <Repeat className="h-4 w-4 text-amber-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {habits.length}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            {linkedHabitsCount} linked
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Habits Today</span>
-            <CheckSquare className="h-4 w-4 text-emerald-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {habits.filter(h => habitLogs.some(l => l.habitId === h.id && l.date === today)).length}/{habits.length || 0}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            Logged for today
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Adherence Rate</span>
-            <Flame className="h-4 w-4 text-rose-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {habits.length > 0
-              ? Math.round((habits.filter(h => habitLogs.some(l => l.habitId === h.id && l.date === today)).length / habits.length) * 100)
-              : 0}%
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            Today
-          </div>
-        </div>
+        <TaskRoutineFocusSwitcher
+          activeSection={activeWorkAreaSection}
+          taskCount={tasks.filter(task => !task.done).length}
+          onSelectSection={section => {
+            if (section === 'routine') {
+              setRoutineMenuSection('routine-genesis');
+            } else if (section === 'routine-habits') {
+              setHabitMenuSection('routine-habit-genesis');
+            }
+            onSelectWorkAreaSection(section);
+          }}
+        />
       </div>
 
       {/* Routine Delay Alert Banner in RoutineView */}
       {(() => {
-        const delayedRoutines = routines.filter(r => computeItemDelay(r).isDelayed && r.completedDate !== today);
+        const delayedRoutines = isRoutineWorkspace
+          ? routines.filter(r => computeItemDelay(r).isDelayed && r.completedDate !== today)
+          : [];
         const nowTimeStr = new Date().toTimeString().slice(0, 5);
-        const delayedHabits = habits.filter(h => {
+        const delayedHabits = isHabitWorkspace ? habits.filter(h => {
           if (h.times && h.times.length > 0) {
             return h.times.some((t, idx) => {
               const isPast = t < nowTimeStr;
@@ -859,7 +759,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             });
           }
           return false;
-        });
+        }) : [];
         const totalRoutineDelays = delayedRoutines.length + delayedHabits.length;
 
         if (totalRoutineDelays > 0) {
@@ -872,10 +772,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 </span>
                 <div>
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
-                    <span>Routine & Habit Delays (⚠️ {totalRoutineDelays})</span>
+                    <span>{isRoutineWorkspace ? 'Routine' : 'Habit'} Delays (⚠️ {totalRoutineDelays})</span>
                   </div>
                   <h4 className="text-[13px] sm:text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
-                    {totalRoutineDelays} items overdue today: {delayedRoutines.length > 0 ? `${delayedRoutines.length} routine time blocks ` : ''}{delayedHabits.length > 0 ? `· ${delayedHabits.length} atomic habits` : ''}
+                    {totalRoutineDelays} items overdue today: {delayedRoutines.length > 0 ? `${delayedRoutines.length} routine time blocks` : `${delayedHabits.length} atomic habits`}
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
                     Past scheduled window without execution. Ring alarm or deploy Task Genesis.
@@ -910,26 +810,26 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         return null;
       })()}
 
-      {/* Forms Grid (Routine Genesis & Habit Genesis) */}
-      <div className={`grid grid-cols-1 gap-6 ${routineFormOpen && habitFormOpen ? 'lg:grid-cols-2' : ''}`}>
+      {/* Forms and routine history */}
+      <div className={`grid grid-cols-1 items-start gap-6 ${isRoutineWorkspace || isHabitWorkspace ? 'lg:grid-cols-12' : showRoutineGenesisForm && showHabitGenesisForm ? 'lg:grid-cols-2' : ''}`}>
         {/* Schedule Routine Block (1st col) */}
-        {routineFormOpen && <section ref={routineFormRef} className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
+        {showRoutineGenesisForm && <section ref={routineFormRef} data-routine-genesis-card className={`${isRoutineWorkspace ? routines.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12' : ''} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 text-xs">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 text-xs">
                 <Clock className="h-4 w-4" />
               </span>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 {editingRoutine ? 'Edit Routine Block' : 'Routine Genesis'}
               </h2>
             </div>
           </div>
 
-          <form onSubmit={handleAddRoutine} className="mt-4 space-y-3.5">
+          <form onSubmit={handleAddRoutine} className="mt-4 space-y-3">
             {/* BLOCK TITLE WITH INTEGRATED LINK GOAL / MANUAL TOGGLE (As in image.png) */}
             <div>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
-                <label className="block min-w-0 basis-36 flex-1 text-xs leading-4 font-semibold text-slate-700 dark:text-slate-300">
+                <label className="block min-w-0 basis-36 flex-1 text-xs leading-4 font-semibold text-slate-600 dark:text-slate-300">
                   Block Title / Purpose
                 </label>
                 {/* Mode Selector: Link Goal vs Manual */}
@@ -951,14 +851,10 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
               {routineInputMode === 'link' && (
                 <div className="mb-2 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
-                  <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                    Select Target Goal (Main, Sub, or Micro):
-                  </label>
                   <GoalPicker
                     goals={goals || []}
                     value={routineGoalId}
                     onChange={handleSelectGoalForRoutine}
-                    placeholder="-- Choose Goal --"
                     className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer"
                   />
                 </div>
@@ -969,46 +865,45 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 required
                 value={routineName}
                 onChange={e => setRoutineName(e.target.value)}
-                placeholder="e.g. Morning Protocol & Meditation"
-                className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Start Time
                 </label>
                 <ThemedDateTimeInput
                   type="time"
                   value={startTime}
                   onChange={e => setStartTime(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   End Time
                 </label>
                 <ThemedDateTimeInput
                   type="time"
                   value={endTime}
                   onChange={e => setEndTime(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Category
                 </label>
                 <select
                   value={routineCat}
                   onChange={e => setRoutineCat(e.target.value as any)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
                   <option value="health">Health & Vitality</option>
                   <option value="work">Work & Deep Focus</option>
@@ -1020,65 +915,60 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Cadence
                 </label>
                 <select
                   value={routineFreq}
                   onChange={e => setRoutineFreq(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                 >
-                  <optgroup label="Standard Cadence">
-                    <option value="daily">Daily</option>
-                    <option value="weekdays">Weekdays (Mon-Fri)</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </optgroup>
-                  <optgroup label="Specific Day of Week">
-                    <option value="sunday">Every Sunday</option>
-                    <option value="monday">Every Monday</option>
-                    <option value="tuesday">Every Tuesday</option>
-                    <option value="wednesday">Every Wednesday</option>
-                    <option value="thursday">Every Thursday</option>
-                    <option value="friday">Every Friday</option>
-                    <option value="saturday">Every Saturday</option>
-                  </optgroup>
+                  <option value="daily">Daily</option>
+                  <option value="weekdays">Weekdays (Mon-Fri)</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="sunday">Every Sunday</option>
+                  <option value="monday">Every Monday</option>
+                  <option value="tuesday">Every Tuesday</option>
+                  <option value="wednesday">Every Wednesday</option>
+                  <option value="thursday">Every Thursday</option>
+                  <option value="friday">Every Friday</option>
+                  <option value="saturday">Every Saturday</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                Notes / Checklist Instructions
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Notes
               </label>
               <input
                 type="text"
                 value={routineNote}
                 onChange={e => setRoutineNote(e.target.value)}
-                placeholder="Key action steps during this block..."
-                className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
             {/* Deploy Task Genesis with Alarm on Creation */}
-            {!editingRoutine && <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/20 space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer text-[11px] font-bold text-indigo-900 dark:text-indigo-200">
+            {!editingRoutine && <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-300">
                 <input
                   type="checkbox"
                   checked={routineArmGenesis}
                   onChange={e => setRoutineArmGenesis(e.target.checked)}
-                  className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
-                <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Deploy Task Genesis with Alarm on Creation</span>
+                <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3 text-amber-500" /> Deploy Task Genesis with Alarm on Creation</span>
               </label>
               {routineArmGenesis && (
-                <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
+                <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
                   <div>
-                    <label className="text-slate-500 font-semibold">Priority</label>
+                    <label className="font-semibold text-slate-600 dark:text-slate-300">Priority</label>
                     <select
                       value={routineTaskPriority}
                       onChange={e => setRoutineTaskPriority(e.target.value as any)}
-                      className="mt-0.5 h-7 w-full rounded border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-800 text-[10px]"
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     >
                       <option value="High">High</option>
                       <option value="Medium">Medium</option>
@@ -1086,11 +976,11 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className="text-slate-500 font-semibold">Alarm Ringtone</label>
+                    <label className="font-semibold text-slate-600 dark:text-slate-300">Alarm Ringtone</label>
                     <select
                       value={routineAlarmRingtone}
                       onChange={e => setRoutineAlarmRingtone(e.target.value)}
-                      className="mt-0.5 h-7 w-full rounded border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-800 text-[10px]"
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     >
                       {BUILTIN_RINGTONES.map(r => (
                         <option key={r.id} value={r.id}>
@@ -1105,7 +995,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
             <button
               type="submit"
-              className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 active:scale-98 transition-transform cursor-pointer"
+              className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >
               {editingRoutine ? 'Save Routine Changes' : '＋ Add Routine Block'}
             </button>
@@ -1113,7 +1003,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               <button
                 type="button"
                 onClick={handleCancelRoutineEdit}
-                className="w-full rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                className="w-full rounded-lg border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 Cancel edit
               </button>
@@ -1122,24 +1012,24 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         </section>}
 
         {/* Create Habit & Link Routine in Habit (2nd col) */}
-        {habitFormOpen && <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800">
+        {showHabitGenesisForm && <section data-habit-genesis-card className={`${isHabitWorkspace ? habits.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12' : ''} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 text-xs">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 text-xs">
                 <Repeat className="h-4 w-4" />
               </span>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 Habit Genesis
               </h2>
             </div>
           </div>
 
-          <form onSubmit={handleAddHabit} className="mt-4 space-y-3.5">
+          <form onSubmit={handleAddHabit} className="mt-4 space-y-3">
             {/* HABIT TITLE WITH INTEGRATED LINK & MANUAL OPTIONS (As in image.png) */}
             <div>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
-                <label className="block min-w-0 basis-36 flex-1 text-xs leading-4 font-semibold text-slate-700 dark:text-slate-300">
-                  Habit Title / Purpose
+                <label className="block min-w-0 basis-36 flex-1 text-xs leading-4 font-semibold text-slate-600 dark:text-slate-300">
+                  Habit Title
                 </label>
 
                 {/* Habit linking is limited to a routine or no link. */}
@@ -1159,8 +1049,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
               {habitInputMode === 'linkRoutine' && (
                 <div className="mb-2 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
-                  <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                    Select Routine to Link *
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Routine
                   </label>
                   <select
                     value={linkedRoutineId}
@@ -1168,7 +1058,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
                   >
                     {routines.length === 0 ? (
-                      <option value="">No routines created yet. Add a routine block first!</option>
+                      <option value="">—</option>
                     ) : (
                       routines.map(r => (
                         <option key={r.id} value={r.id}>
@@ -1177,14 +1067,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       ))
                     )}
                   </select>
-                  {linkedRoutineId && (
-                    <div className="flex items-center gap-1.5 text-[10px] text-indigo-700 dark:text-indigo-300">
-                      <CheckCircle2 className="h-3 w-3 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                      <span>
-                        Linked to <strong>{routines.find(r => r.id === linkedRoutineId)?.name}</strong> — Slot synced to {time1}
-                      </span>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1193,48 +1075,43 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 required
                 value={habitName}
                 onChange={e => setHabitName(e.target.value)}
-                placeholder="e.g. Read 20 pages, 100 Pushups, Cold Shower"
-                className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Cadence
                 </label>
                 <select
                   value={habitFrequency}
                   onChange={e => setHabitFrequency(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                 >
-                  <optgroup label="Standard Cadence">
-                    <option value="Daily">Daily</option>
-                    <option value="Weekdays">Weekdays (Mon-Fri)</option>
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
-                  </optgroup>
-                  <optgroup label="Specific Day of Week">
-                    <option value="Sunday">Sunday</option>
-                    <option value="Monday">Monday</option>
-                    <option value="Tuesday">Tuesday</option>
-                    <option value="Wednesday">Wednesday</option>
-                    <option value="Thursday">Thursday</option>
-                    <option value="Friday">Friday</option>
-                    <option value="Saturday">Saturday</option>
-                  </optgroup>
+                  <option value="Daily">Daily</option>
+                  <option value="Weekdays">Weekdays (Mon-Fri)</option>
+                  <option value="Weekly">Weekly</option>
+                  <option value="Monthly">Monthly</option>
+                  <option value="Sunday">Sunday</option>
+                  <option value="Monday">Monday</option>
+                  <option value="Tuesday">Tuesday</option>
+                  <option value="Wednesday">Wednesday</option>
+                  <option value="Thursday">Thursday</option>
+                  <option value="Friday">Friday</option>
+                  <option value="Saturday">Saturday</option>
                 </select>
               </div>
 
               <div>
                 <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Target Occurrences
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Occurrences
                   </label>
                   <button
                     type="button"
                     onClick={() => setIsOccurrencesManual(prev => !prev)}
-                    className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                    className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 hover:underline cursor-pointer"
                   >
                     <span className="inline-flex items-center gap-1">
                       <ThemeIcon name={isOccurrencesManual ? 'presets' : 'hand'} className="h-3 w-3" />
@@ -1254,11 +1131,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         const val = Math.max(1, Math.min(24, Number(e.target.value) || 1));
                         setTimesPerDay(val);
                       }}
-                      className="h-9 w-24 rounded-xl border border-slate-200 bg-white px-2.5 font-mono text-xs text-center font-bold dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      className="h-10 w-24 rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-center font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
-                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                      times per day
-                    </span>
                   </div>
                 ) : (
                   <select
@@ -1270,14 +1144,14 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         setTimesPerDay(Number(e.target.value));
                       }
                     }}
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   >
                     <option value={1}>1 time per day</option>
                     <option value={2}>2 times per day</option>
                     <option value={3}>3 times per day</option>
                     <option value={4}>4 times per day</option>
                     <option value={5}>5 times per day</option>
-                    <option value="manual">✍️ Manual / Custom count...</option>
+                    <option value="manual">Custom</option>
                   </select>
                 )}
               </div>
@@ -1285,48 +1159,43 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
             {/* Time Slot Inputs */}
             <div>
-              <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                Time Slots ({timesPerDay} {timesPerDay === 1 ? 'Slot' : 'Slots'}):
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                Time Slots
               </label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className={`grid gap-3 ${timesPerDay === 1 ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3'}`}>
                 {Array.from({ length: Math.min(timesPerDay, 6) }).map((_, idx) => (
                   <div key={idx}>
-                    <label className="block text-[10px] text-slate-500 dark:text-slate-400">Slot {idx + 1}</label>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Slot {idx + 1}</label>
                     <ThemedDateTimeInput
                       type="time"
                       value={slotTimes[idx] || '08:00'}
                       onChange={e => handleUpdateSlotTime(idx, e.target.value)}
-                      className="mt-0.5 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800"
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
                 ))}
               </div>
-              {timesPerDay > 6 && (
-                <p className="mt-1 text-[10px] text-slate-400">
-                  Additional slots (7 to {timesPerDay}) can be logged flexibly at any time of day.
-                </p>
-              )}
             </div>
 
             {/* Deploy Habit Genesis Task with Alarm on Creation */}
-            <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-2.5 dark:border-amber-900/60 dark:bg-amber-950/20 space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer text-[11px] font-bold text-amber-900 dark:text-amber-200">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-300">
                 <input
                   type="checkbox"
                   checked={habitArmGenesis}
                   onChange={e => setHabitArmGenesis(e.target.checked)}
                   className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
-                <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Deploy Habit Genesis Task with Alarm on Creation</span>
+                <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3 text-amber-500" /> Deploy Habit Genesis Task with Alarm on Creation</span>
               </label>
               {habitArmGenesis && (
-                <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
+                <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
                   <div>
-                    <label className="text-slate-500 font-semibold">Priority</label>
+                    <label className="font-semibold text-slate-600 dark:text-slate-300">Priority</label>
                     <select
                       value={habitTaskPriority}
                       onChange={e => setHabitTaskPriority(e.target.value as any)}
-                      className="mt-0.5 h-7 w-full rounded border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-800 text-[10px]"
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     >
                       <option value="High">High</option>
                       <option value="Medium">Medium</option>
@@ -1334,11 +1203,11 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className="text-slate-500 font-semibold">Alarm Ringtone</label>
+                    <label className="font-semibold text-slate-600 dark:text-slate-300">Alarm Ringtone</label>
                     <select
                       value={habitAlarmRingtone}
                       onChange={e => setHabitAlarmRingtone(e.target.value)}
-                      className="mt-0.5 h-7 w-full rounded border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-800 text-[10px]"
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     >
                       {BUILTIN_RINGTONES.map(r => (
                         <option key={r.id} value={r.id}>
@@ -1353,39 +1222,22 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
             <button
               type="submit"
-              className="w-full rounded-xl bg-amber-500 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-amber-600 active:scale-98 transition-transform cursor-pointer"
+              className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >
               ＋ Save Habit Ritual
             </button>
           </form>
         </section>}
-      </div>
-
       {/* Routine Time Blocks Display with Nested Linked Habits */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-2">
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-              Daily Routine Timeline ({routines.length} {routines.length === 1 ? 'Block' : 'Blocks'})
-            </h2>
-          </div>
-          <span className="text-[11px] font-medium text-slate-400">
-            {habits.filter(h => h.linkedRoutineId || h.routineId).length} Habits assigned to routines
-          </span>
+      {isRoutineWorkspace && routines.length > 0 && <section id="routine-history-card" className={`${showRoutineGenesisForm ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
+        <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+            Routine history
+          </h2>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {routines.length === 0 ? (
-            <div className="col-span-full">
-              <EmptyState
-                icon={Repeat}
-                compact
-                title="No routine blocks defined"
-                hint="Add one above or load an Architecture Blueprint from the manual."
-              />
-            </div>
-          ) : (
-            [...routines].sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || '')).map(r => {
+        <div className="mt-2 space-y-1">
+          {[...routines].sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || '')).map(r => {
               const linkedHabits = habits.filter(h => h.linkedRoutineId === r.id || h.routineId === r.id);
               const doneCount = linkedHabits.filter(h => habitLogs.some(l => l.habitId === h.id && l.date === today)).length;
               const percentDone = linkedHabits.length > 0 ? Math.round((doneCount / linkedHabits.length) * 100) : 0;
@@ -1393,17 +1245,18 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               return (
                 <div
                   key={r.id}
-                  className="progressive-row group relative rounded-2xl border border-slate-200/80 p-4 transition-all hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700 flex flex-col justify-between bg-slate-50/40 dark:bg-slate-800/20"
+                  data-routine-history-item
+                  className="dashboard-item-row progressive-row group relative flex min-w-0 flex-col gap-2 rounded-none border-0 p-3 text-sm leading-5 shadow-none transition-colors hover:bg-slate-50/80"
                 >
-                  <div>
+                  <div className="space-y-2">
                     {/* Header info */}
-                    <div className="flex items-start justify-between gap-2 min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                        <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-200/50 dark:border-indigo-800/50 whitespace-nowrap shrink-0">
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="shrink-0 whitespace-nowrap px-0 py-0.5 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
                           {r.startTime || r.time} {r.endTime ? `→ ${r.endTime}` : ''}
                         </span>
                         {computeItemDelay(r).isDelayed && r.completedDate !== today && (
-                          <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white animate-pulse">
+                          <span className="rounded-none bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white animate-pulse">
                             ⚠️ {computeItemDelay(r).label}
                           </span>
                         )}
@@ -1413,7 +1266,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleTriggerUrgentAlarm(r.name, `Scheduled for ${r.startTime || r.time} — past time!`)}
-                            className="h-6 px-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-2xs whitespace-nowrap shrink-0"
+                            className="h-6 px-1.5 rounded-none bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold whitespace-nowrap shrink-0"
                             title="Ring Urgent Alarm"
                           >
                             <BellRing className="h-3 w-3 animate-bounce" />
@@ -1422,17 +1275,22 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         )}
                         <button
                           type="button"
-                          onClick={() => setQuickAlarmItem({ id: r.id, title: r.name, type: 'routine', scheduledTime: r.startTime || r.time })}
-                          className="h-6 px-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold whitespace-nowrap shrink-0"
-                          title="Schedule Reminder Alarm"
+                          onClick={() => handleToggleRoutineBlock(r)}
+                          className={`flex h-6 shrink-0 items-center gap-1 px-1.5 rounded-none text-[10px] font-bold leading-none transition-colors cursor-pointer ${
+                            r.completedDate === today
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-slate-100 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300'
+                          }`}
+                          aria-label={r.completedDate === today ? 'Mark routine block incomplete' : 'Mark routine block complete'}
+                          title={r.completedDate === today ? 'Block completed today' : 'Mark block complete'}
                         >
-                          <Bell className="h-3 w-3" />
-                          <span>Set Alarm</span>
+                          <CheckCircle2 className="h-3 w-3" />
+                          <span>{r.completedDate === today ? 'Done' : 'Complete'}</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => handleOpenGenesisForRoutine(r)}
-                          className="h-6 rounded-lg bg-indigo-50 px-1.5 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
+                          className="h-6 rounded-none bg-indigo-50 px-1.5 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
                           title="Task Genesis with Reminder Alarm"
                         >
                           <Zap className="h-3 w-3 text-amber-500" />
@@ -1441,7 +1299,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleSetAlarmFromRoutine(r)}
-                          className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
+                          className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 rounded-none hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
                           title="Schedule Zen Bell Alarm for this routine block"
                         >
                           <Bell className="h-3.5 w-3.5" />
@@ -1449,7 +1307,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleStartEditRoutine(r)}
-                          className="text-slate-400 hover:text-indigo-600 transition-colors p-1 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
+                          className="text-slate-400 hover:text-indigo-600 transition-colors p-1 rounded-none hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
                           title="Edit routine block"
                           aria-label={`Edit routine block ${r.name}`}
                         >
@@ -1458,7 +1316,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDeleteRoutine(r)}
-                          className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-none hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
                           title="Delete routine block"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -1466,22 +1324,22 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       </ProgressiveActions>
                     </div>
 
-                    <div className="mt-2 min-w-0 break-words text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                    <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                      <div className="min-w-0 break-words text-xs font-bold leading-5 text-slate-900 dark:text-white sm:text-sm">
                       {r.name}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 text-[11px] leading-4 text-slate-400">
+                        <span className="capitalize">{r.category}</span>
+                        <span>·</span>
+                        <span className="capitalize">{formatCadenceLabel(r.frequency)}</span>
+                      </div>
                     </div>
-
-                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
-                      <span className="capitalize">{r.category}</span>
-                      <span>·</span>
-                      <span className="capitalize">{formatCadenceLabel(r.frequency)}</span>
-                    </div>
-
                     {r.goalId && (() => {
                       const g = goals.find(goal => goal.id === r.goalId);
                       if (!g) return null;
                       const lvl = g.level === 5 ? 'Atomic' : g.level === 4 ? 'Nano' : g.level === 3 ? 'Micro' : g.level === 2 ? 'Sub' : 'Main';
                       return (
-                        <div className="mt-2 inline-flex max-w-full min-w-0 items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/80 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                        <div className="inline-flex max-w-full min-w-0 items-center gap-1 text-[10px] font-bold leading-4 text-indigo-700 dark:text-indigo-300">
                           <GoalTierIcon level={g.level} className="h-3 w-3" />
                           <span className="min-w-0 break-words">{lvl}: {g.title} ({g.progress}%)</span>
                         </div>
@@ -1489,34 +1347,20 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     })()}
 
                     {r.note && (
-                      <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                      <p className="text-xs leading-5 text-slate-500 dark:text-slate-400 line-clamp-2">
                         {r.note}
                       </p>
                     )}
 
-                    {/* Block Completion Action */}
-                    <button
-                      type="button"
-                      onClick={() => handleToggleRoutineBlock(r)}
-                      className={`mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        r.completedDate === today
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700'
-                      }`}
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>{r.completedDate === today ? '✓ Block Completed Today' : 'Mark Block Complete'}</span>
-                    </button>
-
                     {/* NESTED LINKED HABITS SECTION */}
-                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] mb-2">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] leading-4">
                         <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                           <Repeat className="h-3 w-3 text-amber-500" />
                           <span>Linked Habits ({linkedHabits.length})</span>
                         </span>
                         {linkedHabits.length > 0 && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-none ${
                             percentDone === 100
                               ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                               : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
@@ -1527,16 +1371,16 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       </div>
 
                       {linkedHabits.length > 0 ? (
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           {linkedHabits.map(h => {
                             const isDone = habitLogs.some(l => l.habitId === h.id && l.date === today);
                             return (
                               <div
                                 key={h.id}
-                                className={`flex items-center justify-between p-2 rounded-xl text-xs transition-colors ${
+                                className={`flex items-center justify-between gap-2 p-2 text-xs leading-4 transition-colors ${
                                   isDone
-                                    ? 'bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 border border-emerald-200/60 dark:border-emerald-800/50'
-                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/60'
+                                    ? 'bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200'
+                                    : 'bg-transparent text-slate-700 dark:text-slate-300'
                                 }`}
                               >
                                 <span className={`truncate text-[11px] font-medium ${isDone ? 'line-through text-emerald-700 dark:text-emerald-400' : ''}`}>
@@ -1545,9 +1389,9 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => handleLogHabit(h.id, 0)}
-                                  className={`h-5.5 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                  className={`h-5.5 px-2 rounded-none text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                                     isDone
-                                      ? 'bg-emerald-600 text-white shadow-xs'
+                                      ? 'bg-emerald-600 text-white'
                                       : 'bg-slate-100 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-emerald-950'
                                   }`}
                                 >
@@ -1565,38 +1409,37 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                             handleSelectRoutineForHabit(r.id);
                             window.scrollTo({ top: 200, behavior: 'smooth' });
                           }}
-                          className="w-full py-2 px-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-[10px] text-slate-400 hover:text-indigo-600 hover:border-indigo-300 dark:hover:text-indigo-400 dark:hover:border-indigo-800 text-center transition-colors cursor-pointer"
+                          className="w-full py-2 px-2.5 rounded-none text-[10px] leading-4 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 text-center transition-colors cursor-pointer"
                         >
                           ＋ Link habit to this routine block
                         </button>
                       )}
                     </div>
+
                   </div>
                 </div>
               );
-            })
-          )}
+            })}
         </div>
-      </section>
-
+      </section>}
       {/* Habit Tracker Table & 7-Day Consistency Grid with Routine Link Badges */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
+      {isHabitWorkspace && habits.length > 0 && <section data-habit-tracker className={`${showHabitGenesisForm ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-3 sm:p-5`}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3.5 dark:border-slate-800 gap-3">
           <div className="flex items-center gap-2.5">
             <Repeat className="h-4.5 w-4.5 text-amber-500" />
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                Habit Tracker & 7-Day Consistency (Today: {today})
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Habit history
               </h2>
             </div>
           </div>
 
           {/* Habit Filters */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div data-habit-tracker-filters className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => setHabitFilter('all')}
-              className={`border-b-0 border-transparent px-2 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`rounded-none border-0 bg-transparent px-2 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                 habitFilter === 'all'
                   ? 'text-amber-700 dark:text-amber-300'
                   : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
@@ -1607,7 +1450,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             <button
               type="button"
               onClick={() => setHabitFilter('linked')}
-              className={`border-b-0 border-transparent px-2 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`rounded-none border-0 bg-transparent px-2 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                 habitFilter === 'linked'
                   ? 'text-amber-700 dark:text-amber-300'
                   : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
@@ -1618,7 +1461,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
             <button
               type="button"
               onClick={() => setHabitFilter('standalone')}
-              className={`border-b-0 border-transparent px-2 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`rounded-none border-0 bg-transparent px-2 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                 habitFilter === 'standalone'
                   ? 'text-amber-700 dark:text-amber-300'
                   : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
@@ -1629,16 +1472,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
           </div>
         </div>
 
-        <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-          {filteredHabits.length === 0 ? (
-            <EmptyState
-              icon={Repeat}
-              compact
-              title="No habits found"
-              hint="Define one above or clear the active filter."
-            />
-          ) : (
-            filteredHabits.map(h => {
+        <div>
+          {filteredHabits.map(h => {
               const occCount = h.timesPerDay || 1;
               const streak = getStreak(h.id);
               const parentRoutine = routines.find(r => r.id === (h.linkedRoutineId || h.routineId));
@@ -1653,58 +1488,57 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               return (
                 <div
                   key={h.id}
-                  className="progressive-row flex flex-col md:flex-row md:items-center md:justify-between py-3.5 gap-3"
+                  data-habit-item
+                  className="progressive-row flex flex-col py-1.5 gap-1.5"
                 >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">{h.name}</div>
-                      {isHabitOverdue && (
-                        <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white animate-pulse">
-                          ⚠️ Overdue Today
-                        </span>
-                      )}
-                      {streak > 0 && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                          <Flame className="h-3 w-3 fill-current" />
-                          <span>{streak}d</span>
-                        </span>
-                      )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <div className="text-xs font-bold text-slate-900 dark:text-white">{h.name}</div>
+                        {isHabitOverdue && (
+                          <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white animate-pulse">
+                            ⚠️ Overdue Today
+                          </span>
+                        )}
+                        {streak > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                            <Flame className="h-3 w-3 fill-current" />
+                            <span>{streak}d</span>
+                          </span>
+                        )}
 
-                      {/* LINKED ROUTINE BADGE */}
-                      {parentRoutine ? (
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
-                          <Clock className="h-3 w-3 text-indigo-500" />
-                          <span>Routine: {parentRoutine.name} ({parentRoutine.startTime || parentRoutine.time})</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                          Standalone
-                        </span>
-                      )}
-
-                    </div>
-
-                    <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                      <span>{formatCadenceLabel(h.frequency)} · {occCount}x per day</span>
+                      </div>
+                      <div className="flex min-w-0 shrink-0 items-center gap-2 text-[11px] leading-4 text-slate-400 sm:justify-end">
+                        {parentRoutine ? (
+                          <span className="inline-flex min-w-0 items-center gap-1">
+                            <Clock className="h-3 w-3 text-indigo-500" />
+                            <span className="truncate">{parentRoutine.name}</span>
+                          </span>
+                        ) : (
+                          <span>Standalone</span>
+                        )}
+                        <span>·</span>
+                        <span>{formatCadenceLabel(h.frequency)} · {occCount}x</span>
+                      </div>
                     </div>
                   </div>
 
                   {/* 7-Day Mini Dots + Today's Actions */}
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-col items-stretch gap-1">
                     {/* 7-day mini bubbles */}
-                    <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-0.5 px-0">
                       {past7Days.map(day => {
                         const dayLogged = habitLogs.some(l => l.habitId === h.id && l.date === day.iso);
                         const isToday = day.iso === today;
                         return (
                           <div
                             key={day.iso}
-                            className="flex flex-col items-center gap-0.5"
+                            className="flex flex-col items-center gap-0"
                             title={`${day.iso}: ${dayLogged ? 'Completed' : 'Not logged'}`}
                           >
                             <span className="text-[8px] font-medium text-slate-400">{day.label}</span>
                             <div
-                              className={`h-4 w-4 rounded-full flex items-center justify-center text-[8px] transition-colors ${
+                              className={`h-3.5 w-3.5 rounded-full flex items-center justify-center text-[7px] transition-colors ${
                                 dayLogged
                                   ? 'bg-emerald-500 text-white font-bold'
                                   : isToday
@@ -1720,7 +1554,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     </div>
 
                     {/* Today's log buttons */}
-                    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5">
+                    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1">
                       {Array.from({ length: occCount }).map((_, idx) => {
                         const key = `${h.id}|${today}|${idx}`;
                         const isDone = habitLogs.some(l => l.key === key);
@@ -1729,19 +1563,18 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                             key={idx}
                             type="button"
                             onClick={() => handleLogHabit(h.id, idx)}
-                            className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
+                            className={`flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 text-[10px] font-semibold transition-all active:scale-95 cursor-pointer ${
                               isDone
                                 ? 'bg-emerald-600 text-white shadow-xs'
                                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                             }`}
                           >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <CheckCircle2 className="h-3 w-3" />
                             <span>{h.times?.[idx] || `Slot ${idx + 1}`}</span>
                           </button>
                         );
                       })}
-
-                      <ProgressiveActions label={`More actions for ${h.name}`} className="min-w-0 ml-auto">
+                    <ProgressiveActions label={`More actions for ${h.name}`} className="min-w-0 ml-auto">
                         <div className="inline-flex items-center gap-1">
                           <Link2 className="h-3 w-3 text-slate-400" />
                           <select
@@ -1762,7 +1595,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleTriggerUrgentAlarm(h.name, 'Habit slot overdue today!')}
-                          className="h-7 px-2 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-2xs whitespace-nowrap shrink-0"
+                          className="h-6 px-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-2xs whitespace-nowrap shrink-0"
                           title="Ring Urgent Alarm"
                         >
                           <BellRing className="h-3 w-3 animate-bounce" />
@@ -1772,18 +1605,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setQuickAlarmItem({ id: h.id, title: h.name, type: 'habit', scheduledTime: h.times?.[0] })}
-                        className="h-7 px-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold whitespace-nowrap shrink-0"
-                        title="Schedule Reminder Alarm"
-                      >
-                        <Bell className="h-3 w-3" />
-                        <span>Set Alarm</span>
-                      </button>
-
-                      <button
-                        type="button"
                         onClick={() => handleOpenGenesisForHabit(h)}
-                        className="h-7 rounded-lg bg-indigo-50 px-2 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
+                        className="h-6 rounded-lg bg-indigo-50 px-1.5 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
                         title="Task Genesis with Reminder Alarm"
                       >
                         <Zap className="h-3 w-3 text-amber-500" />
@@ -1807,15 +1630,15 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                      </ProgressiveActions>
+                    </ProgressiveActions>
                     </div>
                   </div>
                 </div>
               );
-            })
-          )}
+            })}
         </div>
-      </section>
+      </section>}
+      </div>
 
       {/* EDIT HABIT & ROUTINE LINK MODAL */}
       {editingHabit && (
@@ -1837,29 +1660,29 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditedHabit} className="mt-4 space-y-3.5">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-800/40 space-y-2">
-                <label className="block text-[11px] font-bold text-slate-900 dark:text-white">
-                  Habit Name & Routine Anchor
-                </label>
+            <form onSubmit={handleSaveEditedHabit} className="mt-4 space-y-3">
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Habit Title
+                  </label>
 
-                <input
-                  type="text"
-                  required
-                  value={editingHabit.name}
-                  onChange={e => setEditingHabit({ ...editingHabit, name: e.target.value })}
-                  placeholder="Habit name..."
-                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                />
+                  <input
+                    type="text"
+                    required
+                    value={editingHabit.name}
+                    onChange={e => setEditingHabit({ ...editingHabit, name: e.target.value })}
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
 
-                <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                    <Link2 className="h-3 w-3 text-indigo-500" />
-                    <span>Link Routine:</span>
-                  </span>
-                  <select
-                    value={editingHabit.linkedRoutineId || editingHabit.routineId || ''}
-                    onChange={e => {
+                <div className="grid grid-cols-2 items-center gap-3">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      <Link2 className="h-3 w-3 text-indigo-500" />
+                      <span className="ml-1">Routine</span>
+                    </label>
+                    <select
+                      value={editingHabit.linkedRoutineId || editingHabit.routineId || ''}
+                      onChange={e => {
                       const newRId = e.target.value;
                       const matched = routines.find(r => r.id === newRId);
                       setEditingHabit({
@@ -1869,7 +1692,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         linkedRoutineName: matched?.name || null
                       });
                     }}
-                    className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-transparent border-0 focus:outline-none cursor-pointer max-w-[200px] truncate"
+                    className="h-10 min-w-0 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                   >
                     <option value="">None (Standalone)</option>
                     {routines.map(r => (
@@ -1878,47 +1701,41 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                       </option>
                     ))}
                   </select>
-                </div>
-
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Cadence
                   </label>
                   <select
                     value={editingHabit.frequency}
                     onChange={e => setEditingHabit({ ...editingHabit, frequency: e.target.value })}
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                   >
-                    <optgroup label="Standard Cadence">
-                      <option value="Daily">Daily</option>
-                      <option value="Weekdays">Weekdays (Mon-Fri)</option>
-                      <option value="Weekly">Weekly</option>
-                      <option value="Monthly">Monthly</option>
-                    </optgroup>
-                    <optgroup label="Specific Day of Week">
-                      <option value="Sunday">Sunday</option>
-                      <option value="Monday">Monday</option>
-                      <option value="Tuesday">Tuesday</option>
-                      <option value="Wednesday">Wednesday</option>
-                      <option value="Thursday">Thursday</option>
-                      <option value="Friday">Friday</option>
-                      <option value="Saturday">Saturday</option>
-                    </optgroup>
+                    <option value="Daily">Daily</option>
+                    <option value="Weekdays">Weekdays (Mon-Fri)</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="Monthly">Monthly</option>
+                    <option value="Sunday">Sunday</option>
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                    <option value="Saturday">Saturday</option>
                   </select>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      Target Occurrences
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      Occurrences
                     </label>
                     <button
                       type="button"
                       onClick={() => setEditOccurrencesManual(prev => !prev)}
-                      className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                      className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 hover:underline cursor-pointer"
                     >
                       <span className="inline-flex items-center gap-1">
                         <ThemeIcon name={editOccurrencesManual ? 'presets' : 'hand'} className="h-3 w-3" />
@@ -1938,11 +1755,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           const val = Math.max(1, Math.min(24, Number(e.target.value) || 1));
                           setEditingHabit({ ...editingHabit, timesPerDay: val });
                         }}
-                        className="h-9 w-24 rounded-xl border border-slate-200 bg-white px-2.5 font-mono text-xs text-center font-bold dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        className="h-10 w-24 rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-center font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                        times per day
-                      </span>
                     </div>
                   ) : (
                     <select
@@ -1954,30 +1768,30 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           setEditingHabit({ ...editingHabit, timesPerDay: Number(e.target.value) });
                         }
                       }}
-                      className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     >
                       <option value={1}>1 time per day</option>
                       <option value={2}>2 times per day</option>
                       <option value={3}>3 times per day</option>
                       <option value={4}>4 times per day</option>
                       <option value={5}>5 times per day</option>
-                      <option value="manual">✍️ Manual / Custom count...</option>
+                      <option value="manual">Custom</option>
                     </select>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-col gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setEditingHabit(null)}
-                  className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  className="w-full rounded-lg border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500"
+                  className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white"
                 >
                   Save Changes
                 </button>
@@ -2141,100 +1955,6 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   className="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-extrabold text-white shadow-xs hover:bg-indigo-500 cursor-pointer"
                 >
                   Deploy Task Genesis
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* QUICK PRESET ALARM MODAL FOR ROUTINES OR HABITS */}
-      {quickAlarmItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500 text-white font-black">
-                  <Bell className="h-4 w-4" />
-                </span>
-                <div>
-                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                    Set Reminder Alarm
-                  </h3>
-                  <p className="text-[10px] text-slate-500 truncate max-w-[240px]">
-                    {quickAlarmItem.title}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setQuickAlarmItem(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveQuickAlarm} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                  When should the alarm ring?
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: '5m', label: 'In 5 Mins' },
-                    { id: '15m', label: 'In 15 Mins' },
-                    { id: '30m', label: 'In 30 Mins' },
-                    { id: '1h', label: 'In 1 Hour' },
-                    { id: 'tonight', label: 'Tonight 8 PM' },
-                    { id: 'tomorrow', label: 'Tomorrow 8 AM' }
-                  ].map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setAlarmPresetChoice(p.id as any)}
-                      className={`py-2 px-1 text-center text-xs font-bold transition-colors cursor-pointer ${
-                        alarmPresetChoice === p.id
-                          ? 'text-amber-700 dark:text-amber-300'
-                          : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Alarm Ringtone
-                </label>
-                <select
-                  value={quickAlarmRingtone}
-                  onChange={e => setQuickAlarmRingtone(e.target.value)}
-                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                >
-                  {BUILTIN_RINGTONES.map(r => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setQuickAlarmItem(null)}
-                  className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-amber-500 px-5 py-2 text-xs font-extrabold text-white shadow-xs hover:bg-amber-600 cursor-pointer"
-                >
-                  Arm Alarm
                 </button>
               </div>
             </form>

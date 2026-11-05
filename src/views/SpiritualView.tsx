@@ -14,6 +14,8 @@ interface SpiritualViewProps {
   practices: SpiritualPractice[];
   commitments: Commitment[];
   goals?: Goal[];
+  embedded?: boolean;
+  initialForm?: 'values' | 'practices' | 'commitments';
   onNavigate: (module: NavModule) => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
@@ -24,6 +26,8 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   practices,
   commitments,
   goals = [],
+  embedded = false,
+  initialForm,
   onNavigate,
   onRefresh,
   onSuccess
@@ -32,8 +36,8 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   const [valTitle, setValTitle] = useState('');
   const [valDesc, setValDesc] = useState('');
   const [valType, setValType] = useState<'value' | 'principle'>('value');
-  const [activeAction, setActiveAction] = useState<'values' | 'practices' | 'commitments'>('values');
-  const [openSpiritualForm, setOpenSpiritualForm] = useState<'values' | 'practices' | 'commitments' | null>(null);
+  const [activeAction, setActiveAction] = useState<'values' | 'practices' | 'commitments'>(initialForm || 'values');
+  const [openSpiritualForm, setOpenSpiritualForm] = useState<'values' | 'practices' | 'commitments' | null>(initialForm || null);
 
   const [pracName, setPracName] = useState('');
   const [pracFreq, setPracFreq] = useState('Daily');
@@ -285,9 +289,15 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     onRefresh();
   };
 
+  const activeFoundationCount = activeAction === 'values'
+    ? values.length
+    : activeAction === 'practices'
+      ? practices.length
+      : commitments.length;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className={embedded ? 'space-y-4' : 'space-y-6'}>
+      {!embedded && <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
           Values, Principles & Spiritual Foundations
         </h1>
@@ -308,13 +318,15 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             setActiveAction('commitments');
           }} />
         </div>
-      </div>
+      </div>}
 
-      <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
-        {openSpiritualForm && <section className="lg:col-span-5  border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+        {openSpiritualForm && <section className={`rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${
+          embedded && activeFoundationCount === 0 ? 'lg:col-span-12' : 'lg:col-span-5'
+        }`}>
 
         {/* Core Values */}
-        <div className={activeAction === 'values' ? 'mt-4' : 'hidden'}>
+        <div className={activeAction === 'values' ? (embedded ? '' : 'mt-4') : 'hidden'}>
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Compass className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Values & Principles ({values.length})</h2>
@@ -328,12 +340,12 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                 value={valTitle}
                 onChange={e => setValTitle(e.target.value)}
                 placeholder="Title (e.g. Sovereign Truth)"
-                className="h-8 min-w-0 flex-1 rounded-xl border border-slate-200 px-2.5 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
+                className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
               />
               <select
                 value={valType}
                 onChange={e => setValType(e.target.value as any)}
-                className="h-8 w-24 sm:w-28 shrink-0 rounded-xl border border-slate-200 px-2 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800 cursor-pointer"
+                className="h-10 w-24 shrink-0 rounded-lg border border-slate-200 bg-slate-50/50 px-2 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800 cursor-pointer sm:w-28"
               >
                 <option value="value">Value</option>
                 <option value="principle">Principle</option>
@@ -344,11 +356,11 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               value={valDesc}
               onChange={e => setValDesc(e.target.value)}
               placeholder="What does living this standard look like?"
-              className="w-full min-w-0 resize-y rounded-xl border border-slate-200 p-2 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
+              className="w-full min-w-0 resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <button
               type="submit"
-              className="w-full rounded-xl bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer"
+              className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 cursor-pointer"
             >
               + Define Value
             </button>
@@ -357,7 +369,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         </div>
 
         {/* Spiritual Practices */}
-        <div className={activeAction === 'practices' ? 'mt-4' : 'hidden'}>
+        <div className={activeAction === 'practices' ? (embedded ? '' : 'mt-4') : 'hidden'}>
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Heart className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Daily Practices ({practices.length})</h2>
@@ -377,18 +389,18 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               value={pracName}
               onChange={e => setPracName(e.target.value)}
               placeholder="Practice (e.g. Breathwork, Meditation)"
-              className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2.5 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
+              className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <input
               type="text"
               value={pracFreq}
               onChange={e => setPracFreq(e.target.value)}
               placeholder="Frequency (e.g. Daily, Weekly)"
-              className="h-8 w-full min-w-0 rounded-xl border border-slate-200 px-2.5 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
+              className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <button
               type="submit"
-              className="w-full rounded-xl bg-rose-600 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 cursor-pointer"
+              className="w-full rounded-lg bg-rose-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-rose-500 cursor-pointer"
             >
               + Add Practice & Linked Habit
             </button>
@@ -397,7 +409,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         </div>
 
         {/* Personal Commitments */}
-        <div className={activeAction === 'commitments' ? 'mt-4' : 'hidden'}>
+        <div className={activeAction === 'commitments' ? (embedded ? '' : 'mt-4') : 'hidden'}>
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Shield className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Commitments & Vows ({commitments.length})</h2>
@@ -410,11 +422,11 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               value={commText}
               onChange={e => setCommText(e.target.value)}
               placeholder="A binding personal standard or moral commitment..."
-              className="w-full min-w-0 resize-y rounded-xl border border-slate-200 p-2 text-xs text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
+              className="w-full min-w-0 resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <button
               type="submit"
-              className="w-full rounded-xl bg-amber-500 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 cursor-pointer"
+              className="w-full rounded-lg bg-amber-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-amber-600 cursor-pointer"
             >
               + Commit Vow
             </button>
@@ -423,10 +435,10 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         </div>
         </section>}
 
-        <section className={`${openSpiritualForm ? 'lg:col-span-7' : 'lg:col-span-12'}  border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6`}>
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white">Saved foundations</h2>
+        {(!embedded || activeFoundationCount > 0) && <section className={`${openSpiritualForm ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+          {!embedded && <h2 className="text-sm font-bold text-slate-900 dark:text-white">Saved foundations</h2>}
           <div className="mt-4 space-y-5">
-            <div>
+            <div className={embedded && activeAction !== 'values' ? 'hidden' : undefined}>
               <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
                 <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Values & Principles ({values.length})
@@ -436,7 +448,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                 {values.length === 0 ? (
                   <div className="col-span-full"><EmptyState icon={Shield} compact title="No values or principles yet" hint="Define what you stand for - they anchor goal choices." /></div>
                 ) : [...values].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(v => (
-                  <div key={v.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
+                  <div key={v.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800">
                     <div className="flex flex-wrap justify-between items-start gap-1">
                       <span className="font-bold text-slate-900 dark:text-white">{v.title}</span>
                       <ProgressiveActions label={`More actions for ${v.title}`}>
@@ -466,7 +478,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               </div>
             </div>
 
-            <div>
+            <div className={embedded && activeAction !== 'practices' ? 'hidden' : undefined}>
               <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
                 <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Daily Practices ({practices.length})
@@ -485,7 +497,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                         handleDeletePractice(p);
                       }
                     }}
-                    className="group flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-100 p-3.5 text-xs transition-colors hover:border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-400/50 dark:border-slate-800 dark:hover:border-slate-700"
+                    className="dashboard-item-row group flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 p-3 text-xs transition-colors hover:border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-400/50 dark:border-slate-800 dark:hover:border-slate-700"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -529,7 +541,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               </div>
             </div>
 
-            <div>
+            <div className={embedded && activeAction !== 'commitments' ? 'hidden' : undefined}>
               <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
                 <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Commitments & Vows ({commitments.length})
@@ -539,7 +551,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                 {commitments.length === 0 ? (
                   <div className="col-span-full"><EmptyState icon={Compass} compact title="No commitments yet" hint="Declare commitments you intend to keep visible." /></div>
                 ) : [...commitments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(c => (
-                  <div key={c.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800">
+                  <div key={c.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800">
                     <div className="flex flex-wrap justify-between items-start">
                       <div className="min-w-0 flex-1 font-medium italic leading-relaxed text-slate-800 dark:text-slate-200">
                         "{c.text}"
@@ -570,11 +582,11 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               </div>
             </div>
           </div>
-        </section>
+        </section>}
       </div>
 
       {/* Cross-module links */}
-      <div className="rounded-3xl border border-slate-200 bg-indigo-50/40 p-5 dark:border-slate-800 dark:bg-indigo-950/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      {!embedded && <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="text-xs text-slate-600 dark:text-slate-400">
           <span className="font-bold text-slate-900 dark:text-white">Cross-System Alignment: </span>
           Practice → Habit/Routine · Reflection → Journal · Spiritual outcome → Goal.
@@ -595,7 +607,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             Open Habits →
           </button>
         </div>
-      </div>
+      </div>}
 
       {editingFoundation && (
         <div

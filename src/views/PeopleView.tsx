@@ -12,6 +12,8 @@ interface PeopleViewProps {
   people: Person[];
   interactions: Interaction[];
   reminders?: ReminderItem[];
+  embedded?: boolean;
+  initialForm?: 'person' | 'interaction';
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
@@ -20,6 +22,8 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   people,
   interactions,
   reminders = [],
+  embedded = false,
+  initialForm,
   onRefresh,
   onSuccess
 }) => {
@@ -28,8 +32,8 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   const [contact, setContact] = useState('');
   const [importantDate, setImportantDate] = useState('');
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
-  const [activeAction, setActiveAction] = useState<'person' | 'interaction'>('person');
-  const [openPeopleForm, setOpenPeopleForm] = useState<'person' | 'interaction' | null>(null);
+  const [activeAction, setActiveAction] = useState<'person' | 'interaction'>(initialForm || 'person');
+  const [openPeopleForm, setOpenPeopleForm] = useState<'person' | 'interaction' | null>(initialForm || null);
   // Interaction logger & editor state
   const [selectedPersonId, setSelectedPersonId] = useState(people[0]?.id || '');
   const [interactionText, setInteractionText] = useState('');
@@ -197,10 +201,11 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
     if (diffDays > 7) return { label: `In ${diffDays}d`, style: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300' };
     return { label: `${Math.abs(diffDays)}d ago`, style: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' };
   };
+  const hasDirectoryRecords = people.length > 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className={embedded ? 'space-y-4' : 'space-y-6'}>
+      {!embedded && <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
             People & Relationships
@@ -218,11 +223,13 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
             setActiveAction('interaction');
           }} />
         </div>
-      </div>
+      </div>}
 
-      <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
-        {openPeopleForm && <section className="lg:col-span-5  border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
-          <div className={activeAction === 'person' ? 'mt-4' : 'hidden'}>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+        {openPeopleForm && <section className={`rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${
+          embedded && !hasDirectoryRecords ? 'lg:col-span-12' : 'lg:col-span-5'
+        }`}>
+          <div className={activeAction === 'person' ? (embedded ? '' : 'mt-4') : 'hidden'}>
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
               <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">{editingPerson ? 'Edit Important Person' : 'Add Important Person'}</h2>
@@ -242,7 +249,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="e.g. Elena Rostova"
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
@@ -252,7 +259,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   <select
                     value={relationship}
                     onChange={e => setRelationship(e.target.value)}
-                    className="mt-1 h-9 w-full min-w-0 rounded-lg border border-slate-200 px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+                    className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                   >
                     <option value="Mentor">Mentor</option>
                     <option value="Friend">Friend</option>
@@ -267,7 +274,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                     type="date"
                     value={importantDate}
                     onChange={e => setImportantDate(e.target.value)}
-                    className="mt-1 h-9 w-full min-w-0 rounded-lg border border-slate-200 px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
@@ -279,13 +286,13 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   value={contact}
                   onChange={e => setContact(e.target.value)}
                   placeholder="elena@example.com or phone"
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer"
+                className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 cursor-pointer"
               >
                 {editingPerson ? 'Update Contact' : 'Save Contact'}
               </button>
@@ -293,7 +300,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
           </div>
 
           {/* Log / Edit Interaction */}
-          <div className={`${activeAction === 'interaction' ? 'mt-4' : 'hidden'} ${editingInteraction ? 'rounded-xl border border-amber-400 bg-amber-50/20 p-4 dark:border-amber-700 dark:bg-amber-950/20' : ''} transition-colors`}>
+          <div className={`${activeAction === 'interaction' ? (embedded ? '' : 'mt-4') : 'hidden'} ${editingInteraction ? 'rounded-xl border border-amber-400 bg-amber-50/20 p-4 dark:border-amber-700 dark:bg-amber-950/20' : ''} transition-colors`}>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 {editingInteraction ? (
@@ -327,7 +334,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                 <select
                   value={selectedPersonId}
                   onChange={e => setSelectedPersonId(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                 >
                   <option value="">Select a contact</option>
                   {people.map(p => (
@@ -344,7 +351,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   value={interactionText}
                   onChange={e => setInteractionText(e.target.value)}
                   placeholder="Discussed architecture direction and mutual project goals..."
-                  className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
@@ -354,7 +361,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   className={`w-full rounded-lg py-2 text-xs font-semibold text-white cursor-pointer transition-colors ${
                     editingInteraction
                       ? 'bg-amber-600 hover:bg-amber-500'
-                      : 'bg-slate-900 hover:bg-slate-800 dark:bg-slate-700'
+                        : 'bg-indigo-600 hover:bg-indigo-500'
                   }`}
                 >
                   {editingInteraction ? 'Update Touchpoint Memo' : 'Log Interaction'}
@@ -374,8 +381,8 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
         </section>}
 
         {/* Contacts Directory */}
-        <div className={`${openPeopleForm ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-4`}>
-          <div className=" border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        {(!embedded || hasDirectoryRecords) && <div className={`${openPeopleForm ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-4`}>
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
             <h2 className="border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               <span>Relationships Directory ({people.length})</span>
             </h2>
@@ -387,7 +394,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                     icon={Phone}
                     compact
                     title="No contacts yet"
-                    hint="Add your first connection using the button above."
+                    hint={embedded ? 'Add your first connection using the form.' : 'Add your first connection using the button above.'}
                   />
                 </div>
               ) : (
@@ -397,7 +404,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   const displayedInteractions = isExpanded ? pInteractions : pInteractions.slice(0, 2);
 
                   return (
-                    <div key={p.id} className="rounded-xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex flex-col justify-between">
+                    <div key={p.id} className="dashboard-item-row flex flex-col justify-between rounded-xl border border-slate-100 p-3 text-xs transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
                       <div>
                         <div className="flex flex-wrap justify-between items-start gap-1">
                           <div className="min-w-0 flex-1">
@@ -489,14 +496,14 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                             {displayedInteractions.map(i => (
                               <div
                                 key={i.id}
-                                className={`group flex flex-wrap items-start justify-between gap-1.5 rounded-lg p-2 text-[10px] transition-colors ${
+                                className={`dashboard-item-row group flex flex-wrap items-start justify-between gap-2 rounded-xl border p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40 ${
                                   editingInteraction?.id === i.id
                                     ? 'bg-amber-100/70 border border-amber-300 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200'
-                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:text-slate-300'
+                                    : 'border-slate-100 bg-transparent hover:bg-slate-50/80 text-slate-600 dark:border-slate-800/60 dark:hover:bg-slate-800/40 dark:text-slate-300'
                                 }`}
                               >
                                 <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1 text-[9px] text-slate-400 font-mono mb-0.5">
+                                  <div className="mb-0.5 flex items-center gap-1 font-mono text-xs text-slate-400">
                                     <span>{i.date}</span>
                                   </div>
                                   <p className="italic leading-relaxed break-words">"{i.text}"</p>
@@ -530,7 +537,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );

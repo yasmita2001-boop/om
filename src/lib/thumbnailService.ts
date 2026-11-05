@@ -245,6 +245,11 @@ export function createLightweightEntities(
     }
 
     result[storeName] = rows.map((row) => {
+      if (typeof row.fileData === 'string' && row.fileData.length > 0) {
+        strippedCount++;
+        savedBytes += row.fileData.length;
+      }
+
       if (Array.isArray(row.attachments) && row.attachments.length > 0) {
         const sanitizedAttachments = row.attachments.map((att: any) => {
           if (!att || typeof att !== 'object') return att;
@@ -278,10 +283,11 @@ export function createLightweightEntities(
         });
         return {
           ...row,
+          fileData: undefined,
           attachments: sanitizedAttachments
         };
       }
-      return row;
+      return row.fileData ? { ...row, fileData: undefined } : row;
     });
   }
 

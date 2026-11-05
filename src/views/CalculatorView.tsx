@@ -5,14 +5,13 @@ import {
   History,
   Copy,
   Check,
-  Search,
   ArrowRightLeft,
   Trash2,
   Sparkles,
   Info,
-  Sliders
+  Sliders,
+  ChevronDown
 } from 'lucide-react';
-import { EmptyState } from '../components/EmptyState';
 import {
   CALCULATOR_CATALOG,
   CALC_UNIT_FACTORS,
@@ -20,13 +19,17 @@ import {
 } from '../lib/calculatorEngine';
 import { getToolConfig } from '../lib/calculatorConfig';
 import { InteractiveKeypad } from '../components/InteractiveKeypad';
-import { SlideTabs } from '../components/SlideTabs';
 import { CalcHistoryItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { getCurrencySymbol } from '../lib/currencyDisplay';
+import { NotesJournalSwitcher } from '../components/NotesJournalSwitcher';
 
 interface CalculatorViewProps {
   history: CalcHistoryItem[];
   favorites: string[];
+  noteCount: number;
+  journalCount: number;
+  onSelectNotesJournalAction: (action: 'note' | 'reflection' | 'note-filters' | 'journal-timeline' | 'calculator') => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
@@ -34,12 +37,14 @@ interface CalculatorViewProps {
 export const CalculatorView: React.FC<CalculatorViewProps> = ({
   history,
   favorites,
+  noteCount,
+  journalCount,
+  onSelectNotesJournalAction,
   onRefresh,
   onSuccess
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('quick');
   const [selectedTool, setSelectedTool] = useState<string>('Basic');
-  const [searchQuery, setSearchQuery] = useState('');
   const [useKeypad, setUseKeypad] = useState(true);
   const [keypadExpression, setKeypadExpression] = useState<string>('');
 
@@ -52,6 +57,10 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
   const [copied, setCopied] = useState(false);
 
   const currentConfig = useMemo(() => getToolConfig(selectedTool), [selectedTool]);
+  const formatResultForDisplay = (value: string, tool = selectedTool) =>
+    getToolConfig(tool).unitType === 'currency'
+      ? value
+      : value.replace(/NPR/g, getCurrencySymbol());
 
   // Set default units and inputs when tool changes
   useEffect(() => {
@@ -154,7 +163,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
   };
 
   const handleCopyResult = () => {
-    navigator.clipboard.writeText(result);
+    navigator.clipboard.writeText(formatResultForDisplay(result));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
     onSuccess('Result copied to clipboard');
@@ -168,22 +177,8 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
 
   const isFavorite = favorites.includes(selectedTool);
 
-  // Filter tools by search query across all categories or current category
-  const filteredTools = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return CALCULATOR_CATALOG[selectedCategory] || [];
-    }
-    const q = searchQuery.toLowerCase().trim();
-    const matches: string[] = [];
-    Object.entries(CALCULATOR_CATALOG).forEach(([cat, list]) => {
-      list.forEach(t => {
-        if (t.toLowerCase().includes(q) || cat.toLowerCase().includes(q)) {
-          if (!matches.includes(t)) matches.push(t);
-        }
-      });
-    });
-    return matches;
-  }, [searchQuery, selectedCategory]);
+  const categoryTools = CALCULATOR_CATALOG[selectedCategory] || [];
+  const calculatorCategories = Object.keys(CALCULATOR_CATALOG);
 
   // Unit options generator for converter tools
   const renderUnitOptions = () => {
@@ -252,100 +247,83 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
 
   return (
     <div className="space-y-6 pb-28 sm:pb-8">
-      {/* Header and Search Bar */}
+      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl flex items-center gap-2">
             <Calculator className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-            Computational & Multi-Domain Calculator
+            Calculator
           </h1>
         </div>
 
-        {/* Search Input */}
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search 108 calculators..."
-            className="h-9 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-9 pr-3 text-xs placeholder:text-slate-500 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-400"
+        <div className="flex min-w-0 items-center gap-2">
+          <NotesJournalSwitcher
+            activeModule="calculator"
+            noteCount={noteCount}
+            journalCount={journalCount}
+            onSelectAction={onSelectNotesJournalAction}
           />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-            >
-              ×
-            </button>
-          )}
         </div>
-      </div>
-
-      {/* Category Tabs (Full Width Responsive Slide Tab) */}
-      <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
-        <SlideTabs
-          activeId={selectedCategory}
-          onChange={(catKey) => {
-            setSelectedCategory(catKey);
-            setSearchQuery('');
-            const first = CALCULATOR_CATALOG[catKey]?.[0] || 'Basic';
-            setSelectedTool(first);
-          }}
-          tabs={Object.keys(CALCULATOR_CATALOG).map(catKey => ({
-            id: catKey,
-            label: `${catKey} (${CALCULATOR_CATALOG[catKey]?.length || 0})`,
-            shortLabel: catKey
-          }))}
-        />
       </div>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* Tool Selector + Calculator Engine (8 cols) */}
         <div className="lg:col-span-8 flex flex-col gap-6">
-          {/* Tool Pills */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                {searchQuery ? `Search Results (${filteredTools.length})` : `${selectedCategory} Calculators (${filteredTools.length})`}
-              </span>
-              <button
-                type="button"
-                onClick={handleToggleFavorite}
-                className={`flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                  isFavorite ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-                }`}
-              >
-                <Star className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current' : ''}`} />
-                <span>{isFavorite ? 'Favorited' : 'Favorite'}</span>
-              </button>
-            </div>
-
-            <SlideTabs
-              activeId={selectedTool}
-              onChange={tool => setSelectedTool(tool)}
-              size="sm"
-              tabs={filteredTools.map(tool => ({
-                id: tool,
-                label: tool,
-                icon: favorites.includes(tool)
-                  ? <Star className="h-3 w-3 fill-amber-400 text-amber-400 shrink-0" />
-                  : undefined
-              }))}
-            />
-          </div>
-
           {/* Calculator Workstation Box */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                  <Calculator className="h-4 w-4" />
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <div className="relative flex h-9 min-w-0 max-w-full items-center gap-2 border-0 border-b border-slate-300 bg-transparent px-1 transition-colors hover:border-indigo-500 focus-within:border-indigo-500 dark:border-slate-700 dark:hover:border-indigo-400 dark:focus-within:border-indigo-400">
+                  <Calculator className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
+                  <span className="pointer-events-none truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {selectedCategory} ({categoryTools.length})
+                  </span>
+                  <ChevronDown className="pointer-events-none h-4 w-4 shrink-0 text-slate-500" />
+                  <select
+                    aria-label="Calculator category"
+                    value={selectedCategory}
+                    onChange={event => {
+                      const category = event.currentTarget.value;
+                      setSelectedCategory(category);
+                      setSelectedTool(CALCULATOR_CATALOG[category]?.[0] || 'Basic');
+                    }}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  >
+                    {calculatorCategories.map(category => (
+                      <option key={category} value={category}>
+                        {category} ({CALCULATOR_CATALOG[category]?.length || 0})
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                  {selectedTool}
-                </h2>
+                <div className="relative flex h-9 min-w-0 max-w-full items-center gap-2 border-0 border-b border-slate-300 bg-transparent px-1 transition-colors hover:border-indigo-500 focus-within:border-indigo-500 dark:border-slate-700 dark:hover:border-indigo-400 dark:focus-within:border-indigo-400">
+                  <span className="pointer-events-none truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {selectedTool}
+                  </span>
+                  <ChevronDown className="pointer-events-none h-4 w-4 shrink-0 text-slate-500" />
+                  <select
+                    aria-label="Calculator tool"
+                    value={selectedTool}
+                    onChange={event => setSelectedTool(event.currentTarget.value)}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  >
+                    {categoryTools.map(tool => (
+                      <option key={tool} value={tool}>
+                        {favorites.includes(tool) ? `★ ${tool}` : tool}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleFavorite}
+                  aria-label={isFavorite ? 'Remove favorite' : 'Add favorite'}
+                  className={`flex shrink-0 items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    isFavorite ? 'text-amber-500' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                >
+                  <Star className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current' : ''}`} />
+                </button>
               </div>
               {(selectedTool === 'Basic' || selectedTool === 'Scientific') && (
                 <button
@@ -391,7 +369,9 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                       return (
                         <div key={fieldKey}>
                           <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                            {field.label}
+                            {currentConfig.unitType === 'currency'
+                              ? field.label
+                              : field.label.replace(/NPR/g, getCurrencySymbol())}
                           </label>
 
                           {field.type === 'select' && field.options ? (
@@ -502,7 +482,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                     </button>
                   </div>
                   <div className="mt-2 font-mono text-base font-bold text-slate-900 dark:text-white break-words">
-                    {result}
+                    {formatResultForDisplay(result)}
                   </div>
                 </div>
               )}
@@ -511,7 +491,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
         </div>
 
         {/* Calculation History & Favorites (4 cols) */}
-        <div className="lg:col-span-4 space-y-6">
+        {history.length > 0 && <div className="lg:col-span-4 space-y-6">
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
@@ -520,28 +500,23 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                   Calculation History
                 </h2>
               </div>
-              {history.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClearHistory}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-400"
-                  title="Clear history"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  <span>Clear</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleClearHistory}
+                className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-400"
+                title="Clear history"
+              >
+                <Trash2 className="h-3 w-3" />
+                <span>Clear</span>
+              </button>
             </div>
 
             <div className="mt-3 space-y-2.5 max-h-96 overflow-y-auto">
-              {history.length === 0 ? (
-                <EmptyState icon={History} compact title="No calculations yet" hint="Results of your conversions will stack up here." />
-              ) : (
-                history
-                  .slice()
-                  .reverse()
-                  .slice(0, 15)
-                  .map(h => (
+              {history
+                .slice()
+                .reverse()
+                .slice(0, 15)
+                .map(h => (
                     <div
                       key={h.id}
                       className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-indigo-800"
@@ -567,14 +542,13 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                         className="mt-1 font-mono text-[11px] text-indigo-600 dark:text-indigo-400 break-words font-medium cursor-pointer hover:underline"
                         title="Click to recall into Calculator"
                       >
-                        {h.result}
+                        {formatResultForDisplay(h.result, h.tool)}
                       </div>
                     </div>
-                  ))
-              )}
+                ))}
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );

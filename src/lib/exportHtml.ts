@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from './currencyDisplay';
 /**
  * Generates a complete, self-contained, standalone single-file HTML application (.html)
  * containing the entire Om-LifeOS personal operating system with all user data embedded.
@@ -200,7 +201,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
         progress: prog,
         goalId: s.goalId,
         goalTitle: s.goalId ? goalsMap.get(s.goalId) : undefined,
-        description: `Target: ₹${(Number(s.targetAmount) || 0).toLocaleString('en-IN')} · Saved: ₹${(Number(s.currentAmount) || 0).toLocaleString('en-IN')}`,
+        description: `Target: ${getCurrencySymbol()} ${(Number(s.targetAmount) || 0).toLocaleString('en-IN')} · Saved: ${getCurrencySymbol()} ${(Number(s.currentAmount) || 0).toLocaleString('en-IN')}`,
         ...checkDelay(targetDate, prog >= 100 ? 'completed' : 'in_progress', prog)
       };
     }),
@@ -220,7 +221,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
         progress: prog,
         goalId: l.goalId,
         goalTitle: l.goalId ? goalsMap.get(l.goalId) : undefined,
-        description: `Principal: ₹${principal.toLocaleString('en-IN')} · Paid: ₹${paid.toLocaleString('en-IN')} · Outstanding: ₹${outstanding.toLocaleString('en-IN')}`,
+        description: `Principal: ${getCurrencySymbol()} ${principal.toLocaleString('en-IN')} · Paid: ${getCurrencySymbol()} ${paid.toLocaleString('en-IN')} · Outstanding: ${getCurrencySymbol()} ${outstanding.toLocaleString('en-IN')}`,
         ...checkDelay(l.targetDate || l.dueDate, isPaid ? 'completed' : 'active', prog)
       };
     }),
@@ -234,11 +235,11 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
         typeLabel: 'Investment Asset',
         title: inv.name || 'Investment',
         dueDate: inv.targetDate || inv.maturityDate || inv.horizonDate,
-        status: gain >= 0 ? `+₹${gain.toLocaleString('en-IN')}` : `-₹${Math.abs(gain).toLocaleString('en-IN')}`,
+        status: gain >= 0 ? `+${getCurrencySymbol()} ${gain.toLocaleString('en-IN')}` : `-${getCurrencySymbol()} ${Math.abs(gain).toLocaleString('en-IN')}`,
         progress: amount > 0 ? Math.min(100, Math.round((currentVal / amount) * 100)) : 100,
         goalId: inv.goalId,
         goalTitle: inv.goalId ? goalsMap.get(inv.goalId) : undefined,
-        description: `Invested: ₹${amount.toLocaleString('en-IN')} · Current Value: ₹${currentVal.toLocaleString('en-IN')}`,
+        description: `Invested: ${getCurrencySymbol()} ${amount.toLocaleString('en-IN')} · Current Value: ${getCurrencySymbol()} ${currentVal.toLocaleString('en-IN')}`,
         ...checkDelay(inv.targetDate || inv.maturityDate || inv.horizonDate, 'ongoing', 100)
       };
     })
@@ -858,7 +859,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
           </div>
           <div class="metric-card">
             <div class="title">Liquid Cash & Accounts</div>
-            <div class="value">₹${totalLiquidCash.toLocaleString('en-IN')}</div>
+            <div class="value">${getCurrencySymbol()} ${totalLiquidCash.toLocaleString('en-IN')}</div>
             <div class="sub">${financeAccounts.length} active accounts</div>
           </div>
           <div class="metric-card">
@@ -961,7 +962,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
                   <td><strong>${escapeHtml(a.name)}</strong></td>
                   <td><span class="badge badge-low">${escapeHtml(a.type || 'Bank')}</span></td>
                   <td>${escapeHtml(a.institution || 'Local')}</td>
-                  <td style="font-weight:700">₹${(Number(a.balance) || 0).toLocaleString('en-IN')}</td>
+                  <td style="font-weight:700">${getCurrencySymbol()} ${(Number(a.balance) || 0).toLocaleString('en-IN')}</td>
                 </tr>
               `).join('') || '<tr><td colspan="4">No accounts found.</td></tr>'}
             </tbody>
@@ -1115,7 +1116,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
             ${financeAccounts.map(a => `
               <div class="metric-card">
                 <div class="title">${escapeHtml(a.name)}</div>
-                <div class="value">₹${(Number(a.balance) || 0).toLocaleString('en-IN')}</div>
+                <div class="value">${getCurrencySymbol()} ${(Number(a.balance) || 0).toLocaleString('en-IN')}</div>
                 <div class="sub">${escapeHtml(a.institution || 'Bank')} · ${escapeHtml(a.type || 'Account')}</div>
               </div>
             `).join('') || '<p style="font-size:0.8rem; color:var(--text-muted)">No accounts found.</p>'}
@@ -1144,7 +1145,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
                   <td><span class="badge ${tx.type === 'income' ? 'badge-success' : 'badge-high'}">${escapeHtml(tx.type || 'Expense')}</span></td>
                   <td>${escapeHtml(tx.note || tx.description || '-')}</td>
                   <td style="font-weight:700; color:${tx.type === 'income' ? 'var(--success)' : 'var(--danger)'}">
-                    ${tx.type === 'income' ? '+' : '-'}₹${(Number(tx.amount) || 0).toLocaleString('en-IN')}
+                    ${tx.type === 'income' ? '+' : '-'}${getCurrencySymbol()} ${(Number(tx.amount) || 0).toLocaleString('en-IN')}
                   </td>
                 </tr>
               `).join('') || '<tr><td colspan="5">No transactions recorded.</td></tr>'}

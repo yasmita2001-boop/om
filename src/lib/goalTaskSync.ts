@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from './currencyDisplay';
 import { storage } from './storage';
 import { getLocalDateString } from './dateUtils';
 import {
@@ -450,7 +451,7 @@ export function computeGoalAggregateBreakdown(
       id: s.id,
       type: 'savingsPlan',
       typeLabel: 'Savings Goal',
-      title: `${s.name} (₹${current.toLocaleString()} / ₹${target.toLocaleString()})`,
+      title: `${s.name} (${getCurrencySymbol()} ${current.toLocaleString()} / ${getCurrencySymbol()} ${target.toLocaleString()})`,
       progress: prog,
       isCompleted: prog >= 100
     });
@@ -466,7 +467,7 @@ export function computeGoalAggregateBreakdown(
       id: l.id,
       type: 'loan',
       typeLabel: 'Loan Repayment',
-      title: `${l.name} (Paid: ₹${repaid.toLocaleString()})`,
+      title: `${l.name} (Paid: ${getCurrencySymbol()} ${repaid.toLocaleString()})`,
       progress: prog,
       isCompleted: principal > 0 && (outstanding <= 0 || prog >= 100)
     });
@@ -481,7 +482,7 @@ export function computeGoalAggregateBreakdown(
       id: i.id,
       type: 'investment',
       typeLabel: 'Investment',
-      title: `${i.name} (₹${val.toLocaleString()})`,
+      title: `${i.name} (${getCurrencySymbol()} ${val.toLocaleString()})`,
       progress: prog,
       isCompleted: amt > 0 && val >= amt
     });
@@ -493,7 +494,7 @@ export function computeGoalAggregateBreakdown(
       id: a.id,
       type: 'asset',
       typeLabel: 'Asset Holding',
-      title: `${a.name} (₹${(Number(a.value) || 0).toLocaleString()})`,
+      title: `${a.name} (${getCurrencySymbol()} ${(Number(a.value) || 0).toLocaleString()})`,
       progress: 100,
       isCompleted: true
     });
@@ -507,7 +508,7 @@ export function computeGoalAggregateBreakdown(
       id: l.id,
       type: 'liability',
       typeLabel: 'Liability Item',
-      title: `${l.name} (₹${amt.toLocaleString()})`,
+      title: `${l.name} (${getCurrencySymbol()} ${amt.toLocaleString()})`,
       progress: prog,
       isCompleted: amt <= 0
     });
@@ -519,7 +520,7 @@ export function computeGoalAggregateBreakdown(
       id: t.id,
       type: 'transaction',
       typeLabel: 'Ledger Entry',
-      title: `${t.category || t.type}: ₹${(Number(t.amount) || 0).toLocaleString()} (${t.date})`,
+      title: `${t.category || t.type}: ${getCurrencySymbol()} ${(Number(t.amount) || 0).toLocaleString()} (${t.date})`,
       progress: 0,
       isCompleted: false
     });

@@ -11,7 +11,6 @@ import {
 import { AppState } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { UniversalDataManagerCard } from '../components/UniversalDataManagerCard';
-import { SlideTabs } from '../components/SlideTabs';
 import { RecycleBinView } from './RecycleBinView';
 import { soundEngine } from '../lib/soundEngine';
 import { applyAccent, rememberAccentChoice, resolveSavedAccent } from '../lib/accentTheme';
@@ -19,7 +18,14 @@ import { AppearanceCustomizer } from '../components/AppearanceCustomizer';
 import { AppearancePreferences } from '../lib/appearance';
 import { formatBytes } from '../lib/thumbnailService';
 import { ThemeIcon } from '../components/ThemeIcon';
-import { FormToggleButton } from '../components/FormToggleButton';
+import { HeaderDropdown } from '../components/HeaderDropdown';
+import { CURRENCY_SYMBOLS, getCurrencySymbol, isCurrencySymbol } from '../lib/currencyDisplay';
+
+const settingsSections = [
+  { id: 'system', label: 'System & Appearance', icon: Palette },
+  { id: 'exports', label: 'Data & Backups', icon: Download },
+  { id: 'appearance', label: 'Appearance', icon: Palette }
+] as const;
 
 interface SettingsViewProps {
   settings?: AppState;
@@ -46,8 +52,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   wallpaperVideoMuted,
   onToggleWallpaperVideoSound
 }) => {
-  const [activeTab, setActiveTab] = useState<'system' | 'exports'>('system');
-  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'system' | 'exports' | 'appearance'>('system');
   const [storageStats, setStorageStats] = useState<{
     usage: number;
     quota: number;
@@ -61,11 +66,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isPurgeDefaultOpen, setIsPurgeDefaultOpen] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
+  const [integrityAuditResult, setIntegrityAuditResult] = useState<{
+    checked: number;
+    issues: number;
+    repaired: number;
+  } | null>(null);
   const [accentColor, setAccentColor] = useState<string>(resolveSavedAccent(settings?.accentColor || '#b88648'));
   const [isAccentDropdownOpen, setIsAccentDropdownOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => soundEngine.isSoundEnabled());
   const [hapticEnabled, setHapticEnabled] = useState(() => soundEngine.isHapticEnabled());
   const [soundVolume, setSoundVolume] = useState(() => Math.round(soundEngine.getVolume() * 100));
+  const [customCurrencySymbol, setCustomCurrencySymbol] = useState(() =>
+    settings?.currencySymbol && !CURRENCY_SYMBOLS.includes(settings.currencySymbol as typeof CURRENCY_SYMBOLS[number])
+      ? settings.currencySymbol
+      : ''
+  );
+  const [isCustomCurrencySelected, setIsCustomCurrencySelected] = useState(() =>
+    Boolean(settings?.currencySymbol && !CURRENCY_SYMBOLS.includes(settings.currencySymbol as typeof CURRENCY_SYMBOLS[number]))
+  );
+  const selectedSettingsSection = settingsSections.find(section => section.id === activeTab) ?? settingsSections[0];
+  const SelectedSettingsSectionIcon = selectedSettingsSection.icon;
 
   useEffect(() => {
     if (settings?.accentColor) {
@@ -73,7 +93,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   }, [settings?.accentColor]);
 
+  useEffect(() => {
+    const isCustom = Boolean(settings?.currencySymbol
+      && !CURRENCY_SYMBOLS.includes(settings.currencySymbol as typeof CURRENCY_SYMBOLS[number]));
+    setCustomCurrencySymbol(isCustom ? settings?.currencySymbol || '' : '');
+    setIsCustomCurrencySelected(isCustom);
+  }, [settings?.currencySymbol]);
+
   const profileId = settings?.profileId || storage.getActiveProfileId();
+  const saveCustomCurrencySymbol = async () => {
+    const currencySymbol = customCurrencySymbol.trim();
+    if (!isCurrencySymbol(currencySymbol)) {
+      onError('Enter a currency symbol of 1–12 characters without control characters.');
+      return;
+    }
+    try {
+      const appSettings = await storage.getSingleton<AppState>('appSettings') || settings;
+      if (!appSettings) throw new Error('App settings are unavailable.');
+      await storage.setSingleton('appSettings', { ...appSettings, currencySymbol }, profileId);
+      onRefresh();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Could not save the currency display symbol.');
+    }
+  };
   const loadStorageStats = useCallback(async () => {
     setIsLoadingStorageStats(true);
     try {
@@ -101,37 +143,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     let repaired = 0;
 
     try {
-      const tasks = await storage.getAll<any>('tasks');
-      const goals = await storage.getAll<any>('goals');
-      const accounts = await storage.getAll<any>('financeAccounts');
-      const finance = await storage.getAll<any>('finance');
-
-      totalChecked += tasks.length + goals.length + accounts.length + finance.length;
-
-      const goalIds = new Set(goals.map(g => g.id));
-      for (const t of tasks) {
-        if (t.goalId && !goalIds.has(t.goalId)) {
-          issues++;
-          t.goalId = null;
-          await storage.put('tasks', t);
-          repaired++;
-        }
-      }
-
-      const acctIds = new Set(accounts.map(a => a.id));
-      for (const f of finance) {
-        if (f.accountId && !acctIds.has(f.accountId)) {
-          issues++;
-          f.accountId = null;
-          f.updatedAt = Date.now();
-          await storage.put('finance', f);
-          repaired++;
-        }
-      }
+      const result = await storage.performIntegrityAudit(profileId);
+      totalChecked = result.checked;
+      issues = result.issues;
+      repaired = result.repaired;
+      setIntegrityAuditResult({ checked: totalChecked, issues, repaired });
 
       await loadStorageStats();
 
-      onSuccess(`Core link check: ${totalChecked} records checked, ${issues} broken links found, ${repaired} repaired`);
+      onSuccess(`Integrity audit: ${totalChecked} records checked across all stores, ${issues} broken links found, ${repaired} repaired`);
     } catch {
       onError('Integrity audit failed');
     } finally {
@@ -199,52 +219,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+    <div className="min-w-0 space-y-6">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <h1 className="min-w-0 text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
           Settings & Preferences
         </h1>
-      </div>
-
-      {/* Keep the appearance panel toggle beside the settings tabs, like other add-form actions. */}
-      <div className="flex min-w-0 flex-col gap-2 border-b border-slate-200 pb-2 dark:border-slate-800 md:flex-row md:items-center md:justify-between">
-        <SlideTabs
-          activeId={activeTab}
-          onChange={(id) => setActiveTab(id as any)}
-          containerClassName="md:w-auto md:flex-1"
-          tabs={[
-            {
-              id: 'system',
-              label: 'System & Appearance',
-              shortLabel: 'System',
-              icon: Palette,
-              badge: null
-            },
-            {
-              id: 'exports',
-              label: 'Data & Backups',
-              shortLabel: 'Backups',
-              icon: Download,
-              badge: null
-            }
-          ]}
-        />
-        {activeTab === 'system' && (
-          <div className="flex shrink-0 justify-end">
-            <FormToggleButton
-              label="Theme"
-              open={isAppearanceOpen}
-              onClick={() => setIsAppearanceOpen(open => !open)}
-            />
-          </div>
-        )}
+        <HeaderDropdown
+          label={selectedSettingsSection.label}
+          menuLabel="Settings submenu"
+          icon={<SelectedSettingsSectionIcon className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />}
+        >
+          {closeMenu => settingsSections.map(section => {
+            const Icon = section.icon;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                role="menuitem"
+                aria-current={activeTab === section.id ? 'page' : undefined}
+                data-settings-section={section.id}
+                onClick={() => {
+                  setActiveTab(section.id);
+                  closeMenu();
+                }}
+                className={`flex w-full min-w-0 items-center gap-2 border-b-2 px-2 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-200 ${
+                  activeTab === section.id ? 'border-amber-300' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{section.label}</span>
+              </button>
+            );
+          })}
+        </HeaderDropdown>
       </div>
 
       {/* Tab: System & Appearance */}
-      {activeTab === 'system' && (
-        <div className="grid items-start gap-4 md:grid-cols-2">
+      {activeTab !== 'exports' && (
+        <div className="settings-system-grid grid min-w-0 items-start gap-4 md:grid-cols-2">
           {/* Left Column: Appearance & Theme + Storage Health & Quota (6 cols) */}
-          {isAppearanceOpen && (
+          {activeTab === 'appearance' && (
             <div className="w-full md:col-span-2">
               <AppearanceCustomizer
                 value={appearance}
@@ -256,28 +270,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
             </div>
           )}
-          <section className="order-3 rounded-xl border-2 border-dashed border-amber-200/80 bg-card p-3 text-ink shadow-card dark:border-amber-900/50 sm:p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200/70 pb-3 dark:border-amber-900/40">
+          <div className={activeTab === 'system' ? 'space-y-4' : 'hidden'}>
+          <section className="settings-card rounded-2xl border border-slate-200/80 bg-white p-4 text-slate-900 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
-                  <h2 className="text-sm font-bold text-ink">Storage Usage</h2>
+                  <Database className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">Storage Usage</h2>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     disabled={isAuditing}
                     onClick={handleRunIntegrityAudit}
-                    className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer disabled:opacity-50"
                     title="Check task goals and finance account links"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
-                    <span>Check Links</span>
+                    <span>Run Integrity Audit</span>
                   </button>
                   <button
                     type="button"
                     disabled={isLoadingStorageStats}
                     onClick={() => void loadStorageStats()}
-                    className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer disabled:opacity-50"
                     title="Refresh storage statistics"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isLoadingStorageStats ? 'animate-spin' : ''}`} />
@@ -287,17 +303,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
               <div className="mt-2 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
                 <div className="min-w-0">
-                  <div className="text-ink-muted">Profile data</div>
-                  <div className="mt-0.5 text-base font-bold text-ink">
+                  <div className="text-slate-500 dark:text-slate-400">Profile data</div>
+                  <div className="mt-0.5 text-base font-bold text-slate-900 dark:text-white">
                     {isLoadingStorageStats ? 'Calculating…' : storageStatsError ? 'Unavailable' : formatBytes(storageStats.profileUsage)}
                   </div>
+                  {integrityAuditResult && (
+                    <div
+                      className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
+                        integrityAuditResult.issues > integrityAuditResult.repaired
+                          ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200'
+                          : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'
+                      }`}
+                      role="status"
+                    >
+                      Last audit: {integrityAuditResult.checked.toLocaleString()} records checked; {integrityAuditResult.issues.toLocaleString()} issues found; {integrityAuditResult.repaired.toLocaleString()} repaired.
+                    </div>
+                  )}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-ink-muted">Browser used</div>
-                  <div className="mt-0.5 text-base font-bold text-ink">
+                  <div className="text-slate-500 dark:text-slate-400">Browser used</div>
+                  <div className="mt-0.5 text-base font-bold text-slate-900 dark:text-white">
                     {storageStats.available ? `${formatBytes(storageStats.usage)} used` : 'Usage unavailable'}
                   </div>
-                  <div className="mt-1 text-[11px] text-ink-muted">
+                  <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                     {storageStats.quota > 0
                       ? `${formatBytes(storageStats.quota)} quota · ${storageStats.percent.toFixed(2)}% used`
                       : 'Browser quota unavailable'}
@@ -315,7 +343,72 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   Storage stats error: {storageStatsError}
                 </p>
               )}
+            </div>
+            <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                <Palette className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
+                Currency display symbol
+              </h2>
+              <select
+                aria-label="Currency display symbol"
+                value={isCustomCurrencySelected
+                  || !CURRENCY_SYMBOLS.includes((settings?.currencySymbol || getCurrencySymbol()) as typeof CURRENCY_SYMBOLS[number])
+                  ? 'custom'
+                  : settings?.currencySymbol || getCurrencySymbol()}
+                onChange={async event => {
+                  const currencySymbol = event.target.value;
+                  if (currencySymbol === 'custom') {
+                    setIsCustomCurrencySelected(true);
+                    return;
+                  }
+                  setIsCustomCurrencySelected(false);
+                  try {
+                    const appSettings = await storage.getSingleton<AppState>('appSettings') || settings;
+                    if (!appSettings) throw new Error('App settings are unavailable.');
+                    await storage.setSingleton('appSettings', { ...appSettings, currencySymbol }, profileId);
+                    onRefresh();
+                  } catch (error) {
+                    onError(error instanceof Error ? error.message : 'Could not save the currency display symbol.');
+                  }
+                }}
+                className="settings-flat-select h-9 rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-sm font-semibold text-slate-900 dark:border-slate-700 dark:text-white"
+              >
+                {CURRENCY_SYMBOLS.map(symbol => (
+                  <option key={symbol} value={symbol}>{symbol}</option>
+                ))}
+                <option value="custom">Custom</option>
+              </select>
+              </div>
+              {isCustomCurrencySelected && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    aria-label="Custom currency symbol"
+                    value={customCurrencySymbol}
+                    maxLength={12}
+                    onChange={event => setCustomCurrencySymbol(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void saveCustomCurrencySymbol();
+                      }
+                    }}
+                    placeholder="Type a symbol, e.g. Rs."
+                    className="min-h-9 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void saveCustomCurrencySymbol()}
+                    className="min-h-9 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700"
+                  >
+                    Apply
+                  </button>
+                </div>
+              )}
+            </div>
           </section>
+          </div>
             <div className="hidden flex-1 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-6 flex-col h-full">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
@@ -534,12 +627,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 );
               })()}
             </div>
-          </div>
-          </div>
-          </div>
+            </div>
+            </div>
+            </div>
 
       {/* Tactile Sound & Micro-Interactions Card (6 cols) */}
-      <div className="order-4 w-full min-w-0">
+      <div className={activeTab === 'system' ? 'w-full min-w-0' : 'hidden'}>
         <div className="flex flex-col space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
               <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <div className="flex items-center gap-2 min-w-0">
@@ -549,7 +642,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </h2>
                 </div>
               </div>
-
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {/* Sound Effects Toggle */}
@@ -675,7 +767,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {/* Recycle Bin & Deletion Guard (Positioned at the end of System & Appearance) */}
-          <div id="system-recycle-bin-section" className="order-2 md:col-span-2">
+          <div id="system-recycle-bin-section" className={activeTab === 'system' ? 'md:col-span-2' : 'hidden'}>
             <RecycleBinView
               profileId={settings?.profileId || settings?.profiles?.[0]?.id || 'om-master-profile'}
               onRefresh={onRefresh}
@@ -700,7 +792,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           />
 
           {/* Section 2: Danger Zone & System Maintenance (Compact) */}
-          <div className="rounded-2xl border border-rose-200/90 bg-rose-50/30 p-4 sm:p-4.5 dark:border-rose-950/70 dark:bg-rose-950/15 shadow-xs min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="rounded-2xl border border-rose-200/90 bg-rose-50/30 p-4 sm:p-4.5 dark:border-rose-950/70 dark:bg-rose-950/15 shadow-card min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="text-xs sm:text-sm font-bold text-rose-700 dark:text-rose-400">Danger Zone</h2>

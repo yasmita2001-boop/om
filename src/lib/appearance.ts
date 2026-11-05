@@ -1,8 +1,4 @@
 import sanctuaryEnvironmentUrl from '../assets/sanctuary-environment.svg';
-import forestWallpaperUrl from '../assets/theme-forest-4k.webp';
-import midnightWallpaperUrl from '../assets/theme-midnight-4k.webp';
-import oceanWallpaperUrl from '../assets/theme-ocean-4k.webp';
-import sunsetWallpaperUrl from '../assets/theme-sunset-4k.webp';
 import { applyAccent } from './accentTheme';
 
 export type AppearanceColorMode = 'light' | 'dark' | 'system';
@@ -42,46 +38,6 @@ export const APPEARANCE_PRESETS = [
     backgroundColor: '#eee5d9',
     backgroundImage: `url("${sanctuaryEnvironmentUrl}")`,
     preview: 'linear-gradient(135deg, #f3eadc, #c8a77a)'
-  },
-  {
-    id: 'ocean',
-    name: 'Ocean',
-    description: 'Clear and calm',
-    accentColor: '#0e7490',
-    colorMode: 'light' as const,
-    backgroundColor: '#dceef2',
-    backgroundImage: `url("${oceanWallpaperUrl}")`,
-    preview: 'linear-gradient(135deg, #c5e7ee, #397f97)'
-  },
-  {
-    id: 'forest',
-    name: 'Forest',
-    description: 'Natural and balanced',
-    accentColor: '#15803d',
-    colorMode: 'light' as const,
-    backgroundColor: '#cfe0c3',
-    backgroundImage: `url("${forestWallpaperUrl}")`,
-    preview: 'linear-gradient(135deg, #c3dfa5 0%, #6f9b62 48%, #28583d 100%)'
-  },
-  {
-    id: 'sunset',
-    name: 'Sunset',
-    description: 'Soft and expressive',
-    accentColor: '#e11d48',
-    colorMode: 'light' as const,
-    backgroundColor: '#f1cbbd',
-    backgroundImage: `url("${sunsetWallpaperUrl}")`,
-    preview: 'linear-gradient(135deg, #ffd18a 0%, #ed8069 50%, #853f65 100%)'
-  },
-  {
-    id: 'midnight',
-    name: 'Midnight',
-    description: 'Focused and low-light',
-    accentColor: '#818cf8',
-    colorMode: 'dark' as const,
-    backgroundColor: '#111827',
-    backgroundImage: `url("${midnightWallpaperUrl}")`,
-    preview: 'linear-gradient(135deg, #263a63, #111827)'
   },
   {
     id: 'private-cosmos',
@@ -285,12 +241,9 @@ export function getEffectiveColorMode(mode: AppearanceColorMode): 'light' | 'dar
 export function applyAppearance(value: Partial<AppearancePreferences>): AppearancePreferences {
   const appearance = normalizeAppearance(value);
   const root = document.documentElement;
-  const isDynamicLandscape = ['ocean', 'forest', 'sunset', 'midnight'].includes(appearance.presetId);
   const wallpaperPresetId = appearance.backgroundId === 'custom'
     ? 'sanctuary'
-    : isDynamicLandscape
-      ? appearance.presetId
-      : appearance.backgroundId;
+    : appearance.backgroundId;
   const preset = APPEARANCE_PRESETS.find(item => item.id === wallpaperPresetId) || APPEARANCE_PRESETS[0];
   const coordinatedPreset = APPEARANCE_PRESETS.find(item => item.id === appearance.presetId) || APPEARANCE_PRESETS[0];
   const effectiveColorMode = getEffectiveColorMode(appearance.colorMode);
@@ -381,8 +334,8 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
   const opacity = (100 - appearance.foregroundTransparency) / 100;
   const isPrivateCosmos = appearance.presetId === 'private-cosmos';
   const isSanctuary = appearance.presetId === 'sanctuary';
-  const cardAlpha = isPrivateCosmos ? 40 : isSanctuary ? 100 : isDynamicLandscape ? 84 : 96;
-  const softCardAlpha = isPrivateCosmos ? 32 : isSanctuary ? 100 : isDynamicLandscape ? 76 : 90;
+  const cardAlpha = isPrivateCosmos ? 40 : isSanctuary ? 100 : 96;
+  const softCardAlpha = isPrivateCosmos ? 32 : isSanctuary ? 100 : 90;
   const borderAlpha = isPrivateCosmos
     ? 6 + 42 * opacity
     : isSanctuary ? 6 + 20 * opacity : 6 + 14 * opacity;

@@ -419,7 +419,7 @@ export class CalculatorEngine {
     const sum = ra + rb;
     const shareA = (t * ra) / sum;
     const shareB = (t * rb) / sum;
-    return `Part 1: ₹${shareA.toFixed(2)} | Part 2: ₹${shareB.toFixed(2)}`;
+    return `Part 1: NPR ${shareA.toFixed(2)} | Part 2: NPR ${shareB.toFixed(2)}`;
   }
 
   average(values: any[]): { avg: number; sum: number; count: number; min: number; max: number; median: number } {
@@ -443,13 +443,13 @@ export class CalculatorEngine {
     const np = pos(price);
     const disc = this.percentage(np, nonNeg(pct));
     const finalPrice = Math.max(0, np - disc);
-    return `Discount: ₹${disc.toFixed(2)} | Final Price: ₹${finalPrice.toFixed(2)} | You Save: ${pct}%`;
+    return `Discount: NPR ${disc.toFixed(2)} | Final Price: NPR ${finalPrice.toFixed(2)} | You Save: ${pct}%`;
   }
 
   tip(bill: any, pct: any): string {
     const nb = pos(bill);
     const tp = this.percentage(nb, nonNeg(pct));
-    return `Tip Amount: ₹${tp.toFixed(2)} | Total Bill: ₹${(nb + tp).toFixed(2)}`;
+    return `Tip Amount: NPR ${tp.toFixed(2)} | Total Bill: NPR ${(nb + tp).toFixed(2)}`;
   }
 
   billSplit(total: any, people: any, tipPct = 0, taxPct = 0): string {
@@ -459,7 +459,7 @@ export class CalculatorEngine {
     const taxVal = this.percentage(nt, nonNeg(taxPct));
     const grand = nt + tipVal + taxVal;
     const perPerson = grand / np;
-    return `Total Payable: ₹${grand.toFixed(2)} | Tip: ₹${tipVal.toFixed(2)} | Per Person (${np}): ₹${perPerson.toFixed(2)}`;
+    return `Total Payable: NPR ${grand.toFixed(2)} | Tip: NPR ${tipVal.toFixed(2)} | Per Person (${np}): NPR ${perPerson.toFixed(2)}`;
   }
 
   tax(amount: any, rate: any, isInclusive = false): string {
@@ -468,10 +468,10 @@ export class CalculatorEngine {
     if (isInclusive) {
       const base = a / (1 + r / 100);
       const taxAmt = a - base;
-      return `Net Pre-Tax: ₹${base.toFixed(2)} | Tax (${r}%): ₹${taxAmt.toFixed(2)} | Total: ₹${a.toFixed(2)}`;
+      return `Net Pre-Tax: NPR ${base.toFixed(2)} | Tax (${r}%): NPR ${taxAmt.toFixed(2)} | Total: NPR ${a.toFixed(2)}`;
     }
     const taxAmt = (a * r) / 100;
-    return `Tax (${r}%): ₹${taxAmt.toFixed(2)} | Total with Tax: ₹${(a + taxAmt).toFixed(2)}`;
+    return `Tax (${r}%): NPR ${taxAmt.toFixed(2)} | Total with Tax: NPR ${(a + taxAmt).toFixed(2)}`;
   }
 
   // ===================== MONEY & FINANCIAL =====================
@@ -481,25 +481,25 @@ export class CalculatorEngine {
     const m = pos(months);
     if (r === 0) {
       const perMonth = p / m;
-      return `Monthly EMI: ₹${perMonth.toFixed(2)} | Total Interest: ₹0.00 | Total Payment: ₹${p.toFixed(2)}`;
+      return `Monthly EMI: NPR ${perMonth.toFixed(2)} | Total Interest: NPR 0.00 | Total Payment: NPR ${p.toFixed(2)}`;
     }
     const emiVal = (p * r * Math.pow(1 + r, m)) / (Math.pow(1 + r, m) - 1);
     const totalPay = emiVal * m;
     const interest = totalPay - p;
-    return `Monthly EMI: ₹${emiVal.toFixed(2)} | Total Interest: ₹${interest.toFixed(2)} | Total Payment: ₹${totalPay.toFixed(2)}`;
+    return `Monthly EMI: NPR ${emiVal.toFixed(2)} | Total Interest: NPR ${interest.toFixed(2)} | Total Payment: NPR ${totalPay.toFixed(2)}`;
   }
 
   simpleInterest(p: any, r: any, t: any): string {
     const np = pos(p), nr = nonNeg(r), nt = pos(t);
     const si = (np * nr * nt) / 100;
-    return `Simple Interest: ₹${si.toFixed(2)} | Maturity Total: ₹${(np + si).toFixed(2)}`;
+    return `Simple Interest: NPR ${si.toFixed(2)} | Maturity Total: NPR ${(np + si).toFixed(2)}`;
   }
 
   compoundInterest(p: any, r: any, t: any, nper = 1): string {
     const np = pos(p), nr = nonNeg(r), nt = pos(t), comp = pos(nper);
     const total = np * Math.pow(1 + nr / (100 * comp), comp * nt);
     const interest = total - np;
-    return `Compound Interest: ₹${interest.toFixed(2)} | Maturity Total: ₹${total.toFixed(2)}`;
+    return `Compound Interest: NPR ${interest.toFixed(2)} | Maturity Total: NPR ${total.toFixed(2)}`;
   }
 
   sip(monthly: any, annualRate: any, months: any): string {
@@ -509,7 +509,7 @@ export class CalculatorEngine {
     const totalInvested = m * nMonths;
     const futureVal = r > 0 ? m * ((Math.pow(1 + r, nMonths) - 1) / r) * (1 + r) : totalInvested;
     const returns = futureVal - totalInvested;
-    return `Invested: ₹${totalInvested.toFixed(2)} | Wealth Gain: ₹${returns.toFixed(2)} | Maturity Value: ₹${futureVal.toFixed(2)}`;
+    return `Invested: NPR ${totalInvested.toFixed(2)} | Wealth Gain: NPR ${returns.toFixed(2)} | Maturity Value: NPR ${futureVal.toFixed(2)}`;
   }
 
   savings(target: any, current: any, months: any): string {
@@ -518,7 +518,7 @@ export class CalculatorEngine {
     const m = pos(months);
     const rem = Math.max(0, tgt - cur);
     const monthlyNeeded = rem / m;
-    return `Goal Gap: ₹${rem.toFixed(2)} | Monthly Savings Needed: ₹${monthlyNeeded.toFixed(2)} for ${m} months`;
+    return `Goal Gap: NPR ${rem.toFixed(2)} | Monthly Savings Needed: NPR ${monthlyNeeded.toFixed(2)} for ${m} months`;
   }
 
   roi(gain: any, cost: any): string {
@@ -526,7 +526,7 @@ export class CalculatorEngine {
     const g = n(gain);
     const netProfit = g - c;
     const pct = (netProfit / c) * 100;
-    return `Net Profit: ₹${netProfit.toFixed(2)} | ROI: ${pct.toFixed(2)}%`;
+    return `Net Profit: NPR ${netProfit.toFixed(2)} | ROI: ${pct.toFixed(2)}%`;
   }
 
   profitLoss(cost: any, sale: any): string {
@@ -534,29 +534,29 @@ export class CalculatorEngine {
     const diff = s - c;
     const pct = (diff / c) * 100;
     if (diff >= 0) {
-      return `Profit: +₹${diff.toFixed(2)} (+${pct.toFixed(2)}%)`;
+      return `Profit: +NPR ${diff.toFixed(2)} (+${pct.toFixed(2)}%)`;
     }
-    return `Loss: -₹${Math.abs(diff).toFixed(2)} (${pct.toFixed(2)}%)`;
+    return `Loss: -NPR ${Math.abs(diff).toFixed(2)} (${pct.toFixed(2)}%)`;
   }
 
   inflation(value: any, rate: any, years: any): string {
     const v = pos(value), r = n(rate), y = pos(years);
     const res = v * Math.pow(1 + r / 100, y);
     const loss = res - v;
-    return `Future Cost: ₹${res.toFixed(2)} | Additional Cost: ₹${loss.toFixed(2)} (${(res / v).toFixed(2)}x)`;
+    return `Future Cost: NPR ${res.toFixed(2)} | Additional Cost: NPR ${loss.toFixed(2)} (${(res / v).toFixed(2)}x)`;
   }
 
   salary(annual: any, months = 12, taxRate = 0): string {
     const grossMo = pos(annual) / pos(months);
     const taxMo = this.percentage(grossMo, nonNeg(taxRate));
     const netMo = grossMo - taxMo;
-    return `Gross/Mo: ₹${grossMo.toFixed(2)} | Tax/Mo: ₹${taxMo.toFixed(2)} | In-Hand Net/Mo: ₹${netMo.toFixed(2)}`;
+    return `Gross/Mo: NPR ${grossMo.toFixed(2)} | Tax/Mo: NPR ${taxMo.toFixed(2)} | In-Hand Net/Mo: NPR ${netMo.toFixed(2)}`;
   }
 
   markup(cost: any, pct: any): string {
     const c = pos(cost);
     const profit = this.percentage(c, nonNeg(pct));
-    return `Selling Price: ₹${(c + profit).toFixed(2)} | Profit per unit: ₹${profit.toFixed(2)}`;
+    return `Selling Price: NPR ${(c + profit).toFixed(2)} | Profit per unit: NPR ${profit.toFixed(2)}`;
   }
 
   margin(price: any, cost: any): string {
@@ -564,7 +564,7 @@ export class CalculatorEngine {
     const c = pos(cost);
     const profit = p - c;
     const marginPct = (profit / p) * 100;
-    return `Profit Margin: ${marginPct.toFixed(2)}% | Profit: ₹${profit.toFixed(2)}`;
+    return `Profit Margin: ${marginPct.toFixed(2)}% | Profit: NPR ${profit.toFixed(2)}`;
   }
 
   breakEven(fixedCost: any, price: any, variableCost: any): string {
@@ -575,7 +575,7 @@ export class CalculatorEngine {
     if (contribution <= 0) return 'Error: Price must be strictly greater than variable cost';
     const units = fc / contribution;
     const revenue = units * p;
-    return `Break-Even Quantity: ${Math.ceil(units)} units | Break-Even Sales: ₹${revenue.toFixed(2)}`;
+    return `Break-Even Quantity: ${Math.ceil(units)} units | Break-Even Sales: NPR ${revenue.toFixed(2)}`;
   }
 
   cagr(begin: any, end: any, years: any): string {
@@ -599,13 +599,13 @@ export class CalculatorEngine {
     const m = n(targetMarginPct);
     if (m >= 100) throw new Error('Target margin must be less than 100%');
     const price = c / (1 - m / 100);
-    return `Target Selling Price: ₹${price.toFixed(2)} | Unit Profit: ₹${(price - c).toFixed(2)}`;
+    return `Target Selling Price: NPR ${price.toFixed(2)} | Unit Profit: NPR ${(price - c).toFixed(2)}`;
   }
 
   revenue(units: any, pricePerUnit: any): string {
     const u = pos(units);
     const p = pos(pricePerUnit);
-    return `Total Revenue: ₹${(u * p).toFixed(2)} from ${u.toLocaleString()} units`;
+    return `Total Revenue: NPR ${(u * p).toFixed(2)} from ${u.toLocaleString()} units`;
   }
 
   businessRoi(investment: any, revenue: any, operatingCost = 0): string {
@@ -614,7 +614,7 @@ export class CalculatorEngine {
     const op = nonNeg(operatingCost);
     const netProfit = rev - (inv + op);
     const roiPct = (netProfit / inv) * 100;
-    return `Net Profit: ₹${netProfit.toFixed(2)} | Business ROI: ${roiPct.toFixed(2)}%`;
+    return `Net Profit: NPR ${netProfit.toFixed(2)} | Business ROI: ${roiPct.toFixed(2)}%`;
   }
 
   // ===================== GOLD & JEWELLERY =====================
@@ -622,7 +622,7 @@ export class CalculatorEngine {
     const w = pos(weight);
     const r = pos(ratePerUnit);
     const total = w * r;
-    return `Gold Value: ₹${total.toFixed(2)} (${w} ${unit} @ ₹${r}/${unit})`;
+    return `Gold Value: NPR ${total.toFixed(2)} (${w} ${unit} @ NPR ${r}/${unit})`;
   }
 
   goldWeightConverter(value: any, fromUnit: string, toUnit: string): string {
@@ -657,13 +657,13 @@ export class CalculatorEngine {
     const subtotal = withWastage + making;
     const gst = (subtotal * nonNeg(gstPct)) / 100;
     const finalTotal = subtotal + gst;
-    return `Subtotal: ₹${subtotal.toFixed(2)} | Making: ₹${making.toFixed(2)} | Wastage: ₹${wastage.toFixed(2)} | GST (${gstPct}%): ₹${gst.toFixed(2)} | Total: ₹${finalTotal.toFixed(2)}`;
+    return `Subtotal: NPR ${subtotal.toFixed(2)} | Making: NPR ${making.toFixed(2)} | Wastage: NPR ${wastage.toFixed(2)} | GST (${gstPct}%): NPR ${gst.toFixed(2)} | Total: NPR ${finalTotal.toFixed(2)}`;
   }
 
   makingCharge(goldValue: any, makingPct: any): string {
     const gv = pos(goldValue);
     const charge = (gv * nonNeg(makingPct)) / 100;
-    return `Making Charge (${makingPct}%): ₹${charge.toFixed(2)} | Total: ₹${(gv + charge).toFixed(2)}`;
+    return `Making Charge (${makingPct}%): NPR ${charge.toFixed(2)} | Total: NPR ${(gv + charge).toFixed(2)}`;
   }
 
   wastage(weight: any, wastagePct: any, ratePerUnit: any): string {
@@ -672,7 +672,7 @@ export class CalculatorEngine {
     const rate = pos(ratePerUnit);
     const wastageGrams = (w * pct) / 100;
     const wastageCost = wastageGrams * rate;
-    return `Wastage (${pct}%): ${wastageGrams.toFixed(3)} units | Wastage Cost: ₹${wastageCost.toFixed(2)}`;
+    return `Wastage (${pct}%): ${wastageGrams.toFixed(3)} units | Wastage Cost: NPR ${wastageCost.toFixed(2)}`;
   }
 
   buySellValue(grossWeight: any, buyRate: any, sellRate: any, purityPct = 91.6): string {
@@ -681,14 +681,14 @@ export class CalculatorEngine {
     const buyVal = pureWeight * pos(buyRate);
     const sellVal = pureWeight * pos(sellRate);
     const spread = Math.abs(buyVal - sellVal);
-    return `Buy Value: ₹${buyVal.toFixed(2)} | Sell Value: ₹${sellVal.toFixed(2)} | Spread: ₹${spread.toFixed(2)}`;
+    return `Buy Value: NPR ${buyVal.toFixed(2)} | Sell Value: NPR ${sellVal.toFixed(2)} | Spread: NPR ${spread.toFixed(2)}`;
   }
 
   silverValue(weight: any, ratePerKgOrTola: any, isPerKg = false): string {
     const w = pos(weight);
     const r = pos(ratePerKgOrTola);
     const total = isPerKg ? (w / 1000) * r : w * r;
-    return `Silver Value: ₹${total.toFixed(2)}`;
+    return `Silver Value: NPR ${total.toFixed(2)}`;
   }
 
   // ===================== HEALTH & FITNESS =====================
@@ -953,14 +953,14 @@ export class CalculatorEngine {
     const cementBags = Math.round(sqft * 0.4);
     const steelKg = Math.round(sqft * 3.5);
     const sandCuFt = Math.round(sqft * 1.8);
-    return `Estimated Construction Cost: ₹${totalCost.toLocaleString()} | Cement: ~${cementBags} bags | Steel: ~${steelKg} kg | Sand: ~${sandCuFt} cu.ft`;
+    return `Estimated Construction Cost: NPR ${totalCost.toLocaleString()} | Cement: ~${cementBags} bags | Steel: ~${steelKg} kg | Sand: ~${sandCuFt} cu.ft`;
   }
 
   electricityCost(watts: any, hoursPerDay: any, ratePerKwh: any, days = 30): string {
     const w = pos(watts), h = pos(hoursPerDay), r = pos(ratePerKwh), d = pos(days);
     const kwh = (w * h * d) / 1000;
     const cost = kwh * r;
-    return `Monthly Power: ${kwh.toFixed(1)} kWh (Units) | Estimated Bill: ₹${cost.toFixed(2)}`;
+    return `Monthly Power: ${kwh.toFixed(1)} kWh (Units) | Estimated Bill: NPR ${cost.toFixed(2)}`;
   }
 
   waterUsage(persons: any, litersPerPerson = 135, days = 30): string {
@@ -982,21 +982,21 @@ export class CalculatorEngine {
     const d = pos(distanceKm), m = pos(mileageKmPerL), p = pos(pricePerL);
     const litres = d / m;
     const cost = litres * p;
-    return `Fuel Required: ${litres.toFixed(1)} L | Total Fuel Cost: ₹${cost.toFixed(2)} (₹${(cost / d).toFixed(2)}/km)`;
+    return `Fuel Required: ${litres.toFixed(1)} L | Total Fuel Cost: NPR ${cost.toFixed(2)} (NPR ${(cost / d).toFixed(2)}/km)`;
   }
 
   tripFuel(distanceKm: any, mileageKmPerL: any, pricePerL: any, passengers = 1): string {
     const d = pos(distanceKm), m = pos(mileageKmPerL), p = pos(pricePerL), pass = pos(passengers);
     const litres = d / m;
     const cost = litres * p;
-    return `Fuel: ${litres.toFixed(1)} L | Total Cost: ₹${cost.toFixed(2)} | Cost per Person: ₹${(cost / pass).toFixed(2)}`;
+    return `Fuel: ${litres.toFixed(1)} L | Total Cost: NPR ${cost.toFixed(2)} | Cost per Person: NPR ${(cost / pass).toFixed(2)}`;
   }
 
   runningCost(monthlyKm: any, mileageKmPerL: any, fuelPrice: any, monthlyMaintenance = 1000): string {
     const km = pos(monthlyKm), m = pos(mileageKmPerL), fp = pos(fuelPrice), maint = nonNeg(monthlyMaintenance);
     const fuelCost = (km / m) * fp;
     const total = fuelCost + maint;
-    return `Monthly Running Cost: ₹${total.toFixed(2)} | Cost per km: ₹${(total / km).toFixed(2)}`;
+    return `Monthly Running Cost: NPR ${total.toFixed(2)} | Cost per km: NPR ${(total / km).toFixed(2)}`;
   }
 
   vehicleLoan(price: any, downPayment: any, ratePct: any, months = 60): string {
@@ -1004,8 +1004,8 @@ export class CalculatorEngine {
     const dp = nonNeg(downPayment);
     if (dp > p) throw new Error('Down payment cannot exceed vehicle price');
     const loan = p - dp;
-    if (loan === 0) return `No loan required | Loan Amount: ₹${loan.toFixed(2)}`;
-    return this.emi(loan, ratePct, months) + ` | Loan Amount: ₹${loan.toFixed(2)}`;
+    if (loan === 0) return `No loan required | Loan Amount: NPR ${loan.toFixed(2)}`;
+    return this.emi(loan, ratePct, months) + ` | Loan Amount: NPR ${loan.toFixed(2)}`;
   }
 
   fuelEconomy(val: any, fromUnit: string, toUnit: string): string {
@@ -1037,7 +1037,7 @@ export class CalculatorEngine {
     const food = nonNeg(foodPerDay) * d * trav;
     const trans = nonNeg(transport);
     const total = lodg + food + trans;
-    return `Total Trip Budget: ₹${total.toFixed(2)} | Per Traveler: ₹${(total / trav).toFixed(2)}`;
+    return `Total Trip Budget: NPR ${total.toFixed(2)} | Per Traveler: NPR ${(total / trav).toFixed(2)}`;
   }
 
   travelDistance(speedKmh: any, timeHours: any): string {

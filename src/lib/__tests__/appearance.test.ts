@@ -79,6 +79,24 @@ describe('appearance preferences', () => {
     expect(document.documentElement.dataset.appearancePreset).toBe('private-cosmos');
   });
 
+  it('removes retired themes and migrates saved selections to Private Cosmos', () => {
+    const retiredThemes = ['ocean', 'forest', 'sunset', 'midnight'];
+    expect(APPEARANCE_PRESETS.map(preset => preset.id)).not.toEqual(
+      expect.arrayContaining(retiredThemes)
+    );
+
+    for (const presetId of retiredThemes) {
+      expect(normalizeAppearance({
+        ...DEFAULT_APPEARANCE,
+        presetId,
+        backgroundId: presetId
+      })).toMatchObject({
+        presetId: 'private-cosmos',
+        backgroundId: 'private-cosmos'
+      });
+    }
+  });
+
   it('migrates the previous Sanctuary default but keeps saved theme choices', () => {
     localStorage.setItem('om_appearance', JSON.stringify({
       presetId: 'sanctuary',
@@ -250,71 +268,22 @@ describe('appearance preferences', () => {
   });
 
   it('uses the coordinated preset tint for surfaces even with a custom wallpaper', () => {
-    const ocean = APPEARANCE_PRESETS.find(preset => preset.id === 'ocean')!;
+    const sanctuary = APPEARANCE_PRESETS.find(preset => preset.id === 'sanctuary')!;
     applyAppearance({
       ...DEFAULT_APPEARANCE,
-      presetId: ocean.id,
+      presetId: sanctuary.id,
       backgroundId: 'custom',
       backgroundImage: 'data:image/jpeg;base64,ZmFrZQ==',
-      accentColor: ocean.accentColor
+      accentColor: sanctuary.accentColor
     });
 
-    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe(ocean.backgroundColor);
+    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe(sanctuary.backgroundColor);
   });
 
-  it('applies distinct Forest and Sunset wallpaper and accent palettes', () => {
-    const forest = APPEARANCE_PRESETS.find(preset => preset.id === 'forest')!;
-    const sunset = APPEARANCE_PRESETS.find(preset => preset.id === 'sunset')!;
-
+  it('uses the selected custom wallpaper with a supported appearance', () => {
     applyAppearance({
       ...DEFAULT_APPEARANCE,
-      presetId: forest.id,
-      backgroundId: forest.id,
-      accentColor: forest.accentColor
-    });
-    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toBe(forest.backgroundImage);
-    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe(forest.backgroundColor);
-    expect(document.documentElement.style.getPropertyValue('--color-brand')).toBe(forest.accentColor);
-
-    applyAppearance({
-      ...DEFAULT_APPEARANCE,
-      presetId: sunset.id,
-      backgroundId: sunset.id,
-      accentColor: sunset.accentColor
-    });
-    expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toBe(sunset.backgroundImage);
-    expect(document.documentElement.style.getPropertyValue('--om-preset-background')).toBe(sunset.backgroundColor);
-    expect(document.documentElement.style.getPropertyValue('--color-brand')).toBe(sunset.accentColor);
-    expect(forest.backgroundImage).not.toBe(sunset.backgroundImage);
-    expect(forest.backgroundColor).not.toBe(sunset.backgroundColor);
-    expect(forest.accentColor).not.toBe(sunset.accentColor);
-  });
-
-  it('uses each supplied wallpaper as the matching coordinated theme background', () => {
-    const wallpapers = [
-      ['ocean', 'theme-ocean-4k.webp'],
-      ['forest', 'theme-forest-4k.webp'],
-      ['sunset', 'theme-sunset-4k.webp'],
-      ['midnight', 'theme-midnight-4k.webp']
-    ] as const;
-
-    for (const [presetId, assetName] of wallpapers) {
-      const preset = APPEARANCE_PRESETS.find(item => item.id === presetId)!;
-      applyAppearance({
-        ...DEFAULT_APPEARANCE,
-        presetId,
-        backgroundId: presetId
-      });
-
-      expect(preset.backgroundImage).toContain(assetName);
-      expect(document.documentElement.style.getPropertyValue('--om-wallpaper-image')).toBe(preset.backgroundImage);
-    }
-  });
-
-  it('uses the selected custom wallpaper in a coordinated theme', () => {
-    applyAppearance({
-      ...DEFAULT_APPEARANCE,
-      presetId: 'ocean',
+      presetId: 'sanctuary',
       backgroundId: 'custom',
       backgroundImage: 'data:image/jpeg;base64,ZmFrZQ=='
     });
@@ -323,24 +292,11 @@ describe('appearance preferences', () => {
       .toBe('url("data:image/jpeg;base64,ZmFrZQ==")');
   });
 
-  it('lets the four dynamic landscape wallpapers remain visible around their surfaces', () => {
-    for (const presetId of ['ocean', 'forest', 'sunset', 'midnight']) {
-      applyAppearance({
-        ...DEFAULT_APPEARANCE,
-        presetId,
-        backgroundId: presetId
-      });
-
-      expect(document.documentElement.style.getPropertyValue('--om-card-alpha')).toBe('84%');
-      expect(document.documentElement.style.getPropertyValue('--om-card-soft-alpha')).toBe('76%');
-    }
-  });
-
   it('normalizes and applies a custom theme color to the wallpaper and surfaces', () => {
     const appearance = applyAppearance({
       ...DEFAULT_APPEARANCE,
       presetId: 'custom',
-      backgroundId: 'ocean',
+      backgroundId: 'sanctuary',
       accentColor: '#123',
       customThemeBackgroundColor: '#abc',
       customThemeSurfaceColor: '#345',
@@ -350,7 +306,7 @@ describe('appearance preferences', () => {
 
     expect(appearance).toMatchObject({
       presetId: 'custom',
-      backgroundId: 'ocean',
+      backgroundId: 'sanctuary',
       accentColor: '#112233',
       customThemeBackgroundColor: '#aabbcc',
       customThemeSurfaceColor: '#334455',
@@ -392,7 +348,7 @@ describe('appearance preferences', () => {
       customThemeBorderColor: '#456789'
     });
 
-    applyAppearance({ ...DEFAULT_APPEARANCE, presetId: 'ocean' });
+    applyAppearance({ ...DEFAULT_APPEARANCE, presetId: 'sanctuary' });
 
     expect(document.documentElement.dataset.customTheme).toBe('false');
     expect(document.documentElement.style.getPropertyValue('--om-custom-background')).toBe('');
@@ -531,8 +487,8 @@ describe('appearance preferences', () => {
   it('keeps foreground surfaces readable while showing the wallpaper at maximum transparency', () => {
     applyAppearance({
       ...DEFAULT_APPEARANCE,
-      presetId: 'ocean',
-      backgroundId: 'ocean',
+      presetId: 'sanctuary',
+      backgroundId: 'sanctuary',
       foregroundTransparency: 100
     });
 

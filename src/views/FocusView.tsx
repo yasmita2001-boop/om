@@ -2,7 +2,7 @@ import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Play, Pause, RotateCcw, Check, Sparkles, Volume2,
-  VolumeX, Clock, Bell, Plus, Trash2,
+  VolumeX, Clock, Bell, Trash2,
   Upload, Music, Sliders, Pencil,
   Link2
 } from 'lucide-react';
@@ -13,10 +13,9 @@ import { getLocalDateString } from '../lib/dateUtils';
 import { alarmAudio, BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { alarmService, FocusAlarm } from '../lib/alarmService';
 import { syncGoalProgressFromFocus } from '../lib/goalTaskSync';
-import { SlideTabs } from '../components/SlideTabs';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
-import { FormDisclosureToggle } from '../components/FormDisclosure';
+import { TaskRoutineFocusSwitcher, type WorkAreaSection } from '../components/TaskRoutineFocusSwitcher';
 
 interface FocusViewProps {
   sessions: FocusSession[];
@@ -24,6 +23,8 @@ interface FocusViewProps {
   goals: Goal[];
   routines?: Routine[];
   profileId: string;
+  activeWorkAreaSection: WorkAreaSection;
+  onSelectWorkAreaSection: (section: WorkAreaSection) => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
@@ -96,11 +97,27 @@ export const FocusView: React.FC<FocusViewProps> = ({
   goals,
   routines = [],
   profileId,
+  activeWorkAreaSection,
+  onSelectWorkAreaSection,
   onRefresh,
   onSuccess
 }) => {
   // Navigation Tabs in Focus Menu
-  const [activeMenuTab, setActiveMenuTab] = useState<FocusMenuTab>('timer');
+  const [activeMenuTab, setActiveMenuTab] = useState<FocusMenuTab>(() =>
+    activeWorkAreaSection === 'focus-alarms'
+      ? 'alarms'
+      : activeWorkAreaSection === 'focus-ringtones'
+        ? 'ringtones'
+        : 'timer'
+  );
+  useEffect(() => {
+    if (activeWorkAreaSection === 'focus-timer') setActiveMenuTab('timer');
+    else if (activeWorkAreaSection === 'focus-alarms') {
+      setActiveMenuTab('alarms');
+      setIsAddingAlarm(true);
+    }
+    else if (activeWorkAreaSection === 'focus-ringtones') setActiveMenuTab('ringtones');
+  }, [activeWorkAreaSection]);
 
   // Focus Timer States
   const initialTimerRef = useRef<FocusTimerState | null>(null);
@@ -454,19 +471,6 @@ export const FocusView: React.FC<FocusViewProps> = ({
     }
   };
 
-  const alarmFormAction = (
-    <FormDisclosureToggle
-      label={editingAlarm ? 'Edit Alarm' : 'New Alarm'}
-      openLabel="Close Form"
-      isOpen={isAddingAlarm}
-      onToggle={() => {
-        if (isAddingAlarm) handleCancelAlarmEdit();
-        else setIsAddingAlarm(true);
-      }}
-      icon={<Plus className="h-3.5 w-3.5" />}
-    />
-  );
-
   const totalFocusSeconds = sessions.reduce((sum, s) => sum + (Number(s.durationSeconds) || 0), 0);
   const totalFocusHours = (totalFocusSeconds / 3600).toFixed(1);
   const today = getLocalDateString();
@@ -477,65 +481,51 @@ export const FocusView: React.FC<FocusViewProps> = ({
   const strokeDashoffset = 565.48 - (565.48 * (100 - progressPercent)) / 100;
 
   return (
-    <div className="space-y-6">
+    <div className="task-area-card-view space-y-6" data-focus-view>
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl flex items-center gap-2">
-            <span>Focus & Alarm Center</span>
-            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-              Audio Chimes Active
-            </span>
-          </h1>
-        </div>
-
         <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+            Focus
+          </h1>
           <button
             type="button"
+            aria-label={`Alarm Sound: ${soundEnabled ? 'ON' : 'OFF'}`}
+            title={`Alarm Sound: ${soundEnabled ? 'ON' : 'OFF'}`}
             onClick={() => {
               const next = !soundEnabled;
               setSoundEnabled(next);
               if (next) handlePreview(selectedDefaultRingtone);
               onSuccess(next ? 'Chime enabled' : 'Muted');
             }}
-            className={`flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+            className={`flex items-center justify-center p-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
               soundEnabled
                 ? 'text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200'
                 : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
             }`}
           >
             {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-            <span>{soundEnabled ? 'Alarm Sound: ON' : 'Alarm Sound: OFF'}</span>
           </button>
         </div>
-      </div>
-
-      <div className="w-full border-b border-slate-200 pb-2 dark:border-slate-800">
-        <SlideTabs
-          activeId={activeMenuTab}
-          onChange={id => {
-            if (id === 'timer' || id === 'alarms' || id === 'ringtones') setActiveMenuTab(id);
-          }}
-          size="sm"
-          tabs={[
-            { id: 'timer', label: 'Deep Work Sprint', shortLabel: 'Timer', icon: Sparkles },
-            { id: 'alarms', label: 'Alarm Clock', shortLabel: 'Alarms', icon: Bell, badge: alarmsList.filter(a => a.enabled).length },
-            { id: 'ringtones', label: 'Ringtone Studio', shortLabel: 'Ringtones', icon: Music }
-          ]}
-          extraRight={activeMenuTab === 'alarms' ? <div className="hidden sm:block">{alarmFormAction}</div> : undefined}
-        />
-        {activeMenuTab === 'alarms' && (
-          <div className="flex justify-end pt-2 sm:hidden">{alarmFormAction}</div>
-        )}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <TaskRoutineFocusSwitcher
+            activeSection={activeWorkAreaSection}
+            taskCount={tasks.filter(task => !task.done).length}
+            onSelectSection={onSelectWorkAreaSection}
+            onOpenAlarmClock={() => {
+              setIsAddingAlarm(true);
+            }}
+          />
+        </div>
       </div>
 
       {/* ============================================================== */}
       {/* TAB 1: Deep Work Sprint Timer                                 */}
       {/* ============================================================== */}
       {activeMenuTab === 'timer' && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div data-focus-timer className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Focus Clock Main Card (7 cols) */}
-          <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-6 text-center shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-8 flex flex-col items-center justify-between">
+          <div className="focus-flat-card lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-6 text-center shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-8 flex flex-col items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
               <Sparkles className="h-4 w-4" />
               <span>Active Deep Work Cycle</span>
@@ -588,9 +578,10 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   type="button"
                   onClick={() => handleSetPreset(p.m)}
                   disabled={isRunning}
-                  className={`border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                  aria-pressed={totalSeconds === p.m * 60}
+                  className={`focus-preset-tab border-b-2 border-transparent px-2 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                     totalSeconds === p.m * 60
-                      ? 'text-amber-700 dark:text-amber-300'
+                      ? 'border-amber-600 text-amber-700 dark:border-amber-400 dark:text-amber-300'
                       : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
                   } ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
@@ -645,109 +636,104 @@ export const FocusView: React.FC<FocusViewProps> = ({
           </div>
 
           {/* Task Linkage & Focus Telemetry (5 cols) */}
-          <div className="lg:col-span-5 flex flex-col gap-5">
-            {/* Link Task Form */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-                Focus Session Target
-              </h2>
+          <div className="lg:col-span-5">
+            <div className="focus-flat-card rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
+              <div className="space-y-4">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
+                  Focus Session Target
+                </h2>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Session Objective / Topic
-                </label>
-                <input
-                  type="text"
-                  value={sessionLabel}
-                  onChange={e => setSessionLabel(e.target.value)}
-                  placeholder="e.g. Write architecture document"
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Link to Task
-                </label>
-                <select
-                  value={selectedTask}
-                  onChange={e => setSelectedTask(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                >
-                  <option value="">No task linked</option>
-                  {tasks.filter(t => !t.done).map(t => (
-                    <option key={t.id} value={t.id}>{t.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Link to Strategic Goal
-                </label>
-                <select
-                  value={selectedGoal}
-                  onChange={e => setSelectedGoal(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                >
-                  <option value="">No goal linked</option>
-                  {goals.map(g => (
-                    <option key={g.id} value={g.id}>{g.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Custom Minutes Input */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Custom Duration (Minutes)
-                </label>
-                <div className="mt-1 flex gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Session Objective / Topic
+                  </label>
                   <input
-                    type="number"
-                    min="1"
-                    max="180"
-                    value={customMin}
-                    onChange={e => setCustomMin(Math.max(1, Number(e.target.value)))}
-                    className="h-9 flex-1 rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    type="text"
+                    value={sessionLabel}
+                    onChange={e => setSessionLabel(e.target.value)}
+                    placeholder="e.g. Write architecture document"
+                    className="focus-flat-field mt-1 h-9 w-full px-3 text-xs text-slate-900 focus:outline-none dark:text-white"
                   />
-                  <button
-                    type="button"
-                    onClick={handleApplyCustom}
-                    disabled={isRunning}
-                    className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 cursor-pointer"
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Link to Task
+                  </label>
+                  <select
+                    value={selectedTask}
+                    onChange={e => setSelectedTask(e.target.value)}
+                    className="focus-flat-field mt-1 h-9 w-full px-2.5 text-xs text-slate-900 focus:outline-none dark:text-white"
                   >
-                    Set Time
-                  </button>
+                    <option value="">No task linked</option>
+                    {tasks.filter(t => !t.done).map(t => (
+                      <option key={t.id} value={t.id}>{t.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Link to Strategic Goal
+                  </label>
+                  <select
+                    value={selectedGoal}
+                    onChange={e => setSelectedGoal(e.target.value)}
+                    className="focus-flat-field mt-1 h-9 w-full px-2.5 text-xs text-slate-900 focus:outline-none dark:text-white"
+                  >
+                    <option value="">No goal linked</option>
+                    {goals.map(g => (
+                      <option key={g.id} value={g.id}>{g.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Custom Duration (Minutes)
+                  </label>
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      max="180"
+                      value={customMin}
+                      onChange={e => setCustomMin(Math.max(1, Number(e.target.value)))}
+                      className="focus-flat-field h-9 flex-1 px-3 font-mono text-xs dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCustom}
+                      disabled={isRunning}
+                      className="focus-flat-control px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
+                    >
+                      Set Time
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Telemetry Stats Card */}
-            <div className="flex-1 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-                Focus Telemetry
-              </h2>
+              <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="focus-telemetry-stat py-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                      Today's Deep Work
+                    </div>
+                    <div className="mt-1 font-mono text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums">
+                      {todayMinutes}m
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">{todaySessions.length} sprints today</div>
+                  </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                    Today's Deep Work
+                  <div className="focus-telemetry-stat py-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      All-Time Hours
+                    </div>
+                    <div className="mt-1 font-mono text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums">
+                      {totalFocusHours}h
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">{sessions.length} total blocks</div>
                   </div>
-                  <div className="mt-1 font-mono text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                    {todayMinutes}m
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{todaySessions.length} sprints today</div>
-                </div>
-
-                <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    All-Time Hours
-                  </div>
-                  <div className="mt-1 font-mono text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums">
-                    {totalFocusHours}h
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{sessions.length} total blocks</div>
                 </div>
               </div>
             </div>
@@ -760,31 +746,21 @@ export const FocusView: React.FC<FocusViewProps> = ({
       {/* ============================================================== */}
       {activeMenuTab === 'alarms' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          {/* Alarms Roster */}
-          <div className="focus-alarm-panel lg:col-span-12 space-y-4 rounded-2xl border p-5 sm:p-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="focus-alarm-icon flex h-9 w-9 items-center justify-center rounded-xl">
+          <div className="focus-alarm-panel rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 lg:col-span-5">
+            <div className="flex items-center gap-2">
+              <div className="focus-alarm-icon flex h-8 w-8 items-center justify-center rounded-lg">
                   <Clock className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                    Scheduled Alarms
-                  </h2>
-                  <p className="text-[11px] text-slate-400">
-                    Alarms play your selected ringtone and trigger full-screen alerts even in the background.
-                  </p>
-                </div>
               </div>
-
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  {editingAlarm ? 'Edit Alarm' : 'New alarm'}
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Set a time and schedule</p>
+              </div>
             </div>
 
-            {/* Create or edit alarm */}
             {isAddingAlarm && (
-              <form ref={alarmFormRef} onSubmit={handleCreateAlarm} className="focus-alarm-form space-y-3 rounded-2xl border p-4 animate-in fade-in duration-150">
-                <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  {editingAlarm ? `Edit alarm: ${editingAlarm.label}` : 'New alarm'}
-                </h3>
+              <form ref={alarmFormRef} onSubmit={handleCreateAlarm} className="mt-4 space-y-3 animate-in fade-in duration-150">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
@@ -934,8 +910,8 @@ export const FocusView: React.FC<FocusViewProps> = ({
                           onClick={() => toggleDaySelection(idx)}
                           className={`focus-alarm-day rounded-lg border px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer ${
                             isSelected
-                              ? 'text-amber-700 dark:text-amber-300'
-                              : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                              ? 'text-emerald-700 dark:text-emerald-300'
+                                : 'text-slate-600 hover:border-emerald-500 hover:text-emerald-800 dark:text-slate-300 dark:hover:text-emerald-200'
                           }`}
                         >
                           {dayName}
@@ -963,14 +939,38 @@ export const FocusView: React.FC<FocusViewProps> = ({
               </form>
             )}
 
-            {/* Alarms List */}
+            {!isAddingAlarm && (
+              <div className="mt-4 rounded-xl border border-slate-200/80 p-4 dark:border-slate-700/80">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Create an alarm to set a reminder that repeats on selected days.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingAlarm(true)}
+                  className="focus-alarm-save mt-3 rounded-xl border px-4 py-2 text-xs font-bold cursor-pointer"
+                >
+                  Add Alarm
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="focus-alarm-panel min-w-0 space-y-3 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 lg:col-span-7">
+            <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Scheduled Alarms
+              </h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Alarms play your selected ringtone and trigger full-screen alerts even in the background.
+              </p>
+            </div>
             <div className="grid gap-3 pt-1 [grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr))]">
               {alarmsList.length === 0 ? (
                 <EmptyState
                   icon={Bell}
                   compact
                   title="No alarms scheduled"
-                  hint={'Click "+ New Alarm" to create your first one.'}
+                  hint="Create an alarm to see it in your schedule."
                 />
               ) : (
                 [...alarmsList].sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(alarm => {
@@ -982,7 +982,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                       key={alarm.id}
                       className={`flex min-w-0 flex-wrap items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
                         alarm.enabled
-                          ? 'border-indigo-100 bg-indigo-50/30 dark:border-indigo-900/50 dark:bg-indigo-950/20'
+                          ? 'border-slate-200/80 bg-slate-50/40 dark:border-slate-700/70 dark:bg-slate-800/35'
                           : 'border-slate-200 bg-white opacity-60 dark:border-slate-800 dark:bg-slate-800/40'
                       }`}
                     >
@@ -1071,7 +1071,6 @@ export const FocusView: React.FC<FocusViewProps> = ({
               )}
             </div>
           </div>
-
         </div>
       )}
 
@@ -1081,7 +1080,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
       {activeMenuTab === 'ringtones' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Preset Ringtones Catalog (7 cols) */}
-          <div className="lg:col-span-7  border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
+          <div data-ringtone-catalog className="lg:col-span-7 border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
             <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Music className="h-4 w-4 text-indigo-600" />
@@ -1096,17 +1095,17 @@ export const FocusView: React.FC<FocusViewProps> = ({
                 return (
                   <div
                     key={r.id}
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
+                    className={`ringtone-flat-row flex items-center justify-between p-3.5 border-b transition-colors ${
                       isSelected
-                        ? 'border-amber-500 bg-amber-50/50 dark:border-amber-500 dark:bg-amber-950/20 ring-1 ring-amber-500/20'
-                        : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800/60'
+                        ? 'border-amber-500'
+                        : 'border-slate-200 dark:border-slate-800'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
                         onClick={() => handlePreview(r.id)}
-                        className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all cursor-pointer ${
+                        className={`ringtone-flat-preview flex h-10 w-10 items-center justify-center transition-colors cursor-pointer ${
                           isPlaying
                             ? 'bg-indigo-600 text-white shadow-md animate-pulse'
                             : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200 dark:bg-indigo-950 dark:text-indigo-400'
@@ -1119,7 +1118,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
                           <span>{r.name}</span>
                           {isSelected && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                            <span className="ringtone-flat-badge px-2 py-0.5 text-[9px] font-bold text-amber-800 dark:text-amber-300">
                               Active Default
                             </span>
                           )}
@@ -1137,7 +1136,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         onSuccess(`Default ringtone set to "${r.name}"`);
                         handlePreview(r.id);
                       }}
-                      className={`border-b-0 border-transparent px-2 py-1.5 text-xs font-semibold cursor-pointer transition-colors ${
+                      className={`ringtone-flat-select px-2 py-1.5 text-xs font-semibold cursor-pointer transition-colors ${
                         isSelected
                           ? 'text-amber-700 dark:text-amber-300'
                           : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
@@ -1152,9 +1151,9 @@ export const FocusView: React.FC<FocusViewProps> = ({
           </div>
 
           {/* Custom Ringtone Uploader & Audio Controls (5 cols) */}
-          <div className="lg:col-span-5 space-y-5">
+          <div className="lg:col-span-5" data-ringtone-controls>
             {/* Custom Ringtone Upload Card ("khud se ringtone rakhne ka feature") */}
-            <div className="rounded-3xl border border-indigo-200 bg-white p-6 shadow-sm dark:border-indigo-900/60 dark:bg-slate-900 space-y-4">
+            <div className="focus-flat-card rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
               <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-950 dark:text-purple-400">
                   <Upload className="h-4 w-4" />
@@ -1167,7 +1166,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
               </div>
 
               {customRingtone ? (
-                <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 dark:bg-indigo-950/40 dark:border-indigo-900/60 space-y-3">
+                <div className="ringtone-flat-content p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 truncate pr-2">
                       <Music className="h-4 w-4 text-indigo-600 shrink-0" />
@@ -1184,7 +1183,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handlePreview('custom')}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-500 cursor-pointer"
+                      className="ringtone-flat-action flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-white cursor-pointer"
                     >
                       <Volume2 className="h-3.5 w-3.5" />
                       <span>{previewingRingtone === 'custom' ? 'Playing...' : 'Play Custom Audio'}</span>
@@ -1198,7 +1197,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         setSelectedDefaultRingtone('zen_bell');
                         onSuccess('Custom ringtone removed');
                       }}
-                      className="p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl cursor-pointer"
+                      className="ringtone-flat-icon-action p-2 text-rose-600 cursor-pointer"
                       title="Remove custom audio"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -1222,7 +1221,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   </button>
                 </div>
               ) : (
-                <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-6 text-center dark:border-slate-700 dark:bg-slate-900">
+                <div className="ringtone-flat-content p-6 text-center">
                   <Music className="mx-auto h-8 w-8 text-slate-400" />
                   <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
                     No custom audio uploaded yet
@@ -1230,7 +1229,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     Supports MP3, WAV, OGG, AAC up to 8MB
                   </p>
-                  <label className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-500 cursor-pointer active:scale-95 transition-all">
+                  <label className="ringtone-upload-trigger mt-3 flex h-[3.75rem] w-full items-center justify-center gap-1.5 text-xs font-bold cursor-pointer transition-colors">
                     <Upload className="h-3.5 w-3.5" />
                     <span>Upload Ringtone File</span>
                     <input
@@ -1243,10 +1242,9 @@ export const FocusView: React.FC<FocusViewProps> = ({
                   </label>
                 </div>
               )}
-            </div>
 
-            {/* Volume Control Card */}
-            <div className=" border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
+            {/* Volume controls share the uploader's outer card. */}
+            <div className="border-t border-slate-100 pt-4 dark:border-slate-800 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Sliders className="h-4 w-4 text-indigo-600" />
@@ -1280,11 +1278,12 @@ export const FocusView: React.FC<FocusViewProps> = ({
               <button
                 type="button"
                 onClick={() => handlePreview(selectedDefaultRingtone)}
-                className="w-full flex items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 cursor-pointer"
+                className="ringtone-flat-control w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
               >
                 <Volume2 className="h-4 w-4" />
                 <span>Test Current Volume</span>
               </button>
+            </div>
             </div>
           </div>
         </div>

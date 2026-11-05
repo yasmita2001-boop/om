@@ -114,7 +114,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'quick',
     description: 'Calculate discount amount and final price after percentage off',
     fields: [
-      { label: 'Original Price (₹)', type: 'number', default: '1200' },
+      { label: 'Original Price (NPR)', type: 'number', default: '1200' },
       { label: 'Discount Percentage (%)', type: 'number', default: '20' }
     ],
     calculate: (f1, f2) => calculatorEngine.discount(f1, f2)
@@ -124,7 +124,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'quick',
     description: 'Calculate dining tip and final bill',
     fields: [
-      { label: 'Bill Amount (₹)', type: 'number', default: '1500' },
+      { label: 'Bill Amount (NPR)', type: 'number', default: '1500' },
       { label: 'Tip Percentage (%)', type: 'number', default: '10' }
     ],
     calculate: (f1, f2) => calculatorEngine.tip(f1, f2)
@@ -134,7 +134,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'quick',
     description: 'Split shared bills among people including tip and tax',
     fields: [
-      { label: 'Total Bill (₹)', type: 'number', default: '4800' },
+      { label: 'Total Bill (NPR)', type: 'number', default: '4800' },
       { label: 'Number of People', type: 'number', default: '4' },
       { label: 'Tip (%)', type: 'number', default: '5' },
       { label: 'Tax (%)', type: 'number', default: '5' }
@@ -146,7 +146,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'quick',
     description: 'Compute GST / VAT / Sales Tax (Exclusive or Inclusive)',
     fields: [
-      { label: 'Amount (₹)', type: 'number', default: '2500' },
+      { label: 'Amount (NPR)', type: 'number', default: '2500' },
       { label: 'Tax Rate (%)', type: 'number', default: '18' },
       {
         label: 'Calculation Type',
@@ -170,7 +170,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Equal Monthly Installment (EMI) for home, personal, or car loans',
     formula: 'E = P × r × (1+r)ⁿ / ((1+r)ⁿ - 1)',
     fields: [
-      { label: 'Loan Principal (₹)', type: 'number', default: '500000' },
+      { label: 'Loan Principal (NPR)', type: 'number', default: '500000' },
       { label: 'Annual Interest Rate (%)', type: 'number', default: '9.5', step: '0.1' },
       { label: 'Tenure (Months)', type: 'number', default: '60' }
     ],
@@ -182,7 +182,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Standard Simple Interest formula (P × R × T / 100)',
     formula: 'SI = (P × R × T) / 100',
     fields: [
-      { label: 'Principal (₹)', type: 'number', default: '100000' },
+      { label: 'Principal (NPR)', type: 'number', default: '100000' },
       { label: 'Annual Rate (%)', type: 'number', default: '8.5', step: '0.1' },
       { label: 'Time Period (Years)', type: 'number', default: '3' }
     ],
@@ -193,7 +193,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Calculate compounding growth on deposits with different compounding frequencies',
     fields: [
-      { label: 'Principal (₹)', type: 'number', default: '100000' },
+      { label: 'Principal (NPR)', type: 'number', default: '100000' },
       { label: 'Annual Rate (%)', type: 'number', default: '8.0', step: '0.1' },
       { label: 'Time (Years)', type: 'number', default: '5' },
       {
@@ -215,7 +215,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Systematic Investment Plan maturity with compound monthly returns',
     fields: [
-      { label: 'Monthly Investment (₹)', type: 'number', default: '5000' },
+      { label: 'Monthly Investment (NPR)', type: 'number', default: '5000' },
       { label: 'Expected Annual Return (%)', type: 'number', default: '12.0', step: '0.1' },
       { label: 'Duration (Months)', type: 'number', default: '120' }
     ],
@@ -226,8 +226,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Target savings goal planner and monthly gap calculator',
     fields: [
-      { label: 'Target Savings Goal (₹)', type: 'number', default: '1000000' },
-      { label: 'Current Savings (₹)', type: 'number', default: '250000' },
+      { label: 'Target Savings Goal (NPR)', type: 'number', default: '1000000' },
+      { label: 'Current Savings (NPR)', type: 'number', default: '250000' },
       { label: 'Months Left to Goal', type: 'number', default: '24' }
     ],
     calculate: (f1, f2, f3) => calculatorEngine.savings(f1, f2, f3)
@@ -237,8 +237,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Return on Investment percentage from gross gain and cost',
     fields: [
-      { label: 'Final Total Return / Gain (₹)', type: 'number', default: '175000' },
-      { label: 'Initial Cost / Investment (₹)', type: 'number', default: '100000' }
+      { label: 'Final Total Return / Gain (NPR)', type: 'number', default: '175000' },
+      { label: 'Initial Cost / Investment (NPR)', type: 'number', default: '100000' }
     ],
     calculate: (f1, f2) => calculatorEngine.roi(f1, f2)
   },
@@ -247,8 +247,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Determine commercial profit or loss and percentage',
     fields: [
-      { label: 'Cost Price (₹)', type: 'number', default: '800' },
-      { label: 'Selling Price (₹)', type: 'number', default: '1150' }
+      { label: 'Cost Price (NPR)', type: 'number', default: '800' },
+      { label: 'Selling Price (NPR)', type: 'number', default: '1150' }
     ],
     calculate: (f1, f2) => calculatorEngine.profitLoss(f1, f2)
   },
@@ -257,7 +257,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Project how inflation erodes purchasing power over time',
     fields: [
-      { label: 'Current Price / Value (₹)', type: 'number', default: '100000' },
+      { label: 'Current Price / Value (NPR)', type: 'number', default: '100000' },
       { label: 'Annual Inflation Rate (%)', type: 'number', default: '6.5', step: '0.1' },
       { label: 'Years Ahead', type: 'number', default: '10' }
     ],
@@ -268,7 +268,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Convert annual package to gross monthly and net in-hand salary',
     fields: [
-      { label: 'Annual CTC / Salary (₹)', type: 'number', default: '1200000' },
+      { label: 'Annual CTC / Salary (NPR)', type: 'number', default: '1200000' },
       { label: 'Months per Year', type: 'number', default: '12' },
       { label: 'Estimated Tax & PF Deduction (%)', type: 'number', default: '15' }
     ],
@@ -279,7 +279,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Calculate retail selling price given base cost and markup percentage',
     fields: [
-      { label: 'Cost Price (₹)', type: 'number', default: '500' },
+      { label: 'Cost Price (NPR)', type: 'number', default: '500' },
       { label: 'Markup Percentage (%)', type: 'number', default: '40' }
     ],
     calculate: (f1, f2) => calculatorEngine.markup(f1, f2)
@@ -289,8 +289,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Calculate gross profit margin percentage on selling price',
     fields: [
-      { label: 'Selling Price (₹)', type: 'number', default: '700' },
-      { label: 'Cost Price (₹)', type: 'number', default: '500' }
+      { label: 'Selling Price (NPR)', type: 'number', default: '700' },
+      { label: 'Cost Price (NPR)', type: 'number', default: '500' }
     ],
     calculate: (f1, f2) => calculatorEngine.margin(f1, f2)
   },
@@ -299,9 +299,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Calculate units required to cover fixed overheads',
     fields: [
-      { label: 'Fixed Costs (₹)', type: 'number', default: '200000' },
-      { label: 'Price per Unit (₹)', type: 'number', default: '150' },
-      { label: 'Variable Cost per Unit (₹)', type: 'number', default: '70' }
+      { label: 'Fixed Costs (NPR)', type: 'number', default: '200000' },
+      { label: 'Price per Unit (NPR)', type: 'number', default: '150' },
+      { label: 'Variable Cost per Unit (NPR)', type: 'number', default: '70' }
     ],
     calculate: (f1, f2, f3) => calculatorEngine.breakEven(f1, f2, f3)
   },
@@ -310,8 +310,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Compound Annual Growth Rate of investments',
     fields: [
-      { label: 'Initial Value (₹)', type: 'number', default: '100000' },
-      { label: 'Final Value (₹)', type: 'number', default: '280000' },
+      { label: 'Initial Value (NPR)', type: 'number', default: '100000' },
+      { label: 'Final Value (NPR)', type: 'number', default: '280000' },
       { label: 'Number of Years', type: 'number', default: '7' }
     ],
     calculate: (f1, f2, f3) => calculatorEngine.cagr(f1, f2, f3)
@@ -331,7 +331,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'money',
     description: 'Determine required selling price to achieve target profit margin',
     fields: [
-      { label: 'Unit Cost (₹)', type: 'number', default: '450' },
+      { label: 'Unit Cost (NPR)', type: 'number', default: '450' },
       { label: 'Target Margin (%)', type: 'number', default: '35' }
     ],
     calculate: (f1, f2) => calculatorEngine.pricing(f1, f2)
@@ -346,7 +346,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Calculate gold value from weight and rate per unit',
     fields: [
       { label: 'Weight', type: 'number', default: '1' },
-      { label: 'Rate per Unit (₹)', type: 'number', default: '125000' },
+      { label: 'Rate per Unit (NPR)', type: 'number', default: '125000' },
       {
         label: 'Unit',
         type: 'select',
@@ -367,7 +367,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Compute precise gold cost across various weights',
     fields: [
       { label: 'Weight', type: 'number', default: '2.5' },
-      { label: 'Current Rate (₹)', type: 'number', default: '125000' },
+      { label: 'Current Rate (NPR)', type: 'number', default: '125000' },
       {
         label: 'Unit',
         type: 'select',
@@ -427,7 +427,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'gold',
     description: 'Complete jewellery billing with Making Charges, Wastage, and GST',
     fields: [
-      { label: 'Gold Value (₹)', type: 'number', default: '85000' },
+      { label: 'Gold Value (NPR)', type: 'number', default: '85000' },
       { label: 'Making Charge (%)', type: 'number', default: '8' },
       { label: 'Wastage (Jaddi) (%)', type: 'number', default: '2' },
       { label: 'GST / Tax (%)', type: 'number', default: '3' }
@@ -439,7 +439,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'gold',
     description: 'Calculate craftsmanship making fee on gold jewellery',
     fields: [
-      { label: 'Gold Value (₹)', type: 'number', default: '75000' },
+      { label: 'Gold Value (NPR)', type: 'number', default: '75000' },
       { label: 'Making Charge (%)', type: 'number', default: '10' }
     ],
     calculate: (f1, f2) => calculatorEngine.makingCharge(f1, f2)
@@ -451,7 +451,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     fields: [
       { label: 'Jewellery Weight (g)', type: 'number', default: '25' },
       { label: 'Wastage Percentage (%)', type: 'number', default: '3' },
-      { label: 'Gold Rate per Gram (₹)', type: 'number', default: '10500' }
+      { label: 'Gold Rate per Gram (NPR)', type: 'number', default: '10500' }
     ],
     calculate: (f1, f2, f3) => calculatorEngine.wastage(f1, f2, f3)
   },
@@ -460,7 +460,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'gold',
     description: 'Standard 3% precious metals Goods & Services Tax calculation',
     fields: [
-      { label: 'Precious Metal Subtotal (₹)', type: 'number', default: '120000' },
+      { label: 'Precious Metal Subtotal (NPR)', type: 'number', default: '120000' },
       { label: 'GST Rate (%)', type: 'number', default: '3' }
     ],
     calculate: (f1, f2) => calculatorEngine.tax(f1, f2, false)
@@ -471,8 +471,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Compare buy and sell rates with purity deduction to evaluate dealer spread',
     fields: [
       { label: 'Gross Weight (g)', type: 'number', default: '20' },
-      { label: 'Dealer Buying Rate /g (₹)', type: 'number', default: '9800' },
-      { label: 'Dealer Selling Rate /g (₹)', type: 'number', default: '10500' },
+      { label: 'Dealer Buying Rate /g (NPR)', type: 'number', default: '9800' },
+      { label: 'Dealer Selling Rate /g (NPR)', type: 'number', default: '10500' },
       { label: 'Purity Percentage (%)', type: 'number', default: '91.6' }
     ],
     calculate: (f1, f2, f3, f4) => calculatorEngine.buySellValue(f1, f2, f3, Number(f4) || 91.6)
@@ -483,7 +483,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Calculate silver metal value by weight in grams or kilograms',
     fields: [
       { label: 'Weight', type: 'number', default: '500' },
-      { label: 'Rate per Kilogram (₹)', type: 'number', default: '95000' },
+      { label: 'Rate per Kilogram (NPR)', type: 'number', default: '95000' },
       {
         label: 'Weight Unit',
         type: 'select',
@@ -1004,7 +1004,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Estimator for building cost, cement, steel, and sand quantities',
     fields: [
       { label: 'Built-up Area (sq ft)', type: 'number', default: '1200' },
-      { label: 'Estimated Rate / sq ft (₹)', type: 'number', default: '2500' }
+      { label: 'Estimated Rate / sq ft (NPR)', type: 'number', default: '2500' }
     ],
     calculate: (f1, f2) => calculatorEngine.construction(f1, Number(f2) || 2500)
   },
@@ -1015,7 +1015,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     fields: [
       { label: 'Appliance Power (Watts)', type: 'number', default: '1500' },
       { label: 'Hours Used per Day', type: 'number', default: '8' },
-      { label: 'Cost per Unit / kWh (₹)', type: 'number', default: '9.5', step: '0.1' }
+      { label: 'Cost per Unit / kWh (NPR)', type: 'number', default: '9.5', step: '0.1' }
     ],
     calculate: (f1, f2, f3) => calculatorEngine.electricityCost(f1, f2, f3, 30)
   },
@@ -1050,7 +1050,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     fields: [
       { label: 'Distance (km)', type: 'number', default: '320' },
       { label: 'Vehicle Mileage (km/L)', type: 'number', default: '16.5', step: '0.1' },
-      { label: 'Fuel Price per Litre (₹)', type: 'number', default: '102' }
+      { label: 'Fuel Price per Litre (NPR)', type: 'number', default: '102' }
     ],
     calculate: (f1, f2, f3) => calculatorEngine.fuelCost(f1, f2, f3)
   },
@@ -1061,7 +1061,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     fields: [
       { label: 'Round-Trip Distance (km)', type: 'number', default: '600' },
       { label: 'Mileage (km/L)', type: 'number', default: '15' },
-      { label: 'Fuel Price (₹/L)', type: 'number', default: '105' },
+      { label: 'Fuel Price (NPR/L)', type: 'number', default: '105' },
       { label: 'Number of Passengers', type: 'number', default: '4' }
     ],
     calculate: (f1, f2, f3, f4) => calculatorEngine.tripFuel(f1, f2, f3, Number(f4) || 1)
@@ -1073,8 +1073,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     fields: [
       { label: 'Monthly Driving (km)', type: 'number', default: '1200' },
       { label: 'Mileage (km/L)', type: 'number', default: '16' },
-      { label: 'Fuel Price (₹/L)', type: 'number', default: '102' },
-      { label: 'Monthly Maintenance & Insurance (₹)', type: 'number', default: '2000' }
+      { label: 'Fuel Price (NPR/L)', type: 'number', default: '102' },
+      { label: 'Monthly Maintenance & Insurance (NPR)', type: 'number', default: '2000' }
     ],
     calculate: (f1, f2, f3, f4) => calculatorEngine.runningCost(f1, f2, f3, Number(f4) || 0)
   },
@@ -1083,8 +1083,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'vehicle',
     description: 'Calculate auto loan EMI and interest after down payment',
     fields: [
-      { label: 'On-Road Vehicle Price (₹)', type: 'number', default: '800000' },
-      { label: 'Down Payment (₹)', type: 'number', default: '150000' },
+      { label: 'On-Road Vehicle Price (NPR)', type: 'number', default: '800000' },
+      { label: 'Down Payment (NPR)', type: 'number', default: '150000' },
       { label: 'Interest Rate (%)', type: 'number', default: '9.0', step: '0.1' },
       { label: 'Tenure (Months)', type: 'number', default: '60' }
     ],
@@ -1114,8 +1114,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     fields: [
       { label: 'Travelers', type: 'number', default: '2' },
       { label: 'Trip Days', type: 'number', default: '7' },
-      { label: 'Hotel / Lodging per Night (₹)', type: 'number', default: '3500' },
-      { label: 'Food per Person / Day (₹)', type: 'number', default: '1200' }
+      { label: 'Hotel / Lodging per Night (NPR)', type: 'number', default: '3500' },
+      { label: 'Food per Person / Day (NPR)', type: 'number', default: '1200' }
     ],
     calculate: (f1, f2, f3, f4) => calculatorEngine.tripBudget(f1, f2, f3, f4, 5000)
   },
@@ -1146,7 +1146,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     fields: [
       { label: 'Total Trip Distance (km)', type: 'number', default: '850' },
       { label: 'Vehicle Mileage (km/L)', type: 'number', default: '17' },
-      { label: 'Fuel Price (₹/L)', type: 'number', default: '102' }
+      { label: 'Fuel Price (NPR/L)', type: 'number', default: '102' }
     ],
     calculate: (f1, f2, f3) => calculatorEngine.fuelCost(f1, f2, f3)
   },
@@ -1160,8 +1160,8 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
         label: 'From Currency',
         type: 'select',
         options: [
-          { value: 'INR', label: 'INR (₹)' },
-          { value: 'NPR', label: 'NPR (Rs)' },
+          { value: 'INR', label: 'INR (Indian rupee)' },
+          { value: 'NPR', label: 'NPR (Nepali rupee)' },
           { value: 'USD', label: 'USD ($)' },
           { value: 'EUR', label: 'EUR (€)' }
         ],
@@ -1209,7 +1209,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Calculate total gross turnover from volume and unit price',
     fields: [
       { label: 'Quantity / Units Sold', type: 'number', default: '2500' },
-      { label: 'Selling Price per Unit (₹)', type: 'number', default: '350' }
+      { label: 'Selling Price per Unit (NPR)', type: 'number', default: '350' }
     ],
     calculate: (f1, f2) => calculatorEngine.revenue(f1, f2)
   },
@@ -1218,9 +1218,9 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'business',
     description: 'Calculate net profit margin and commercial return on project capital',
     fields: [
-      { label: 'Initial Project Capital (₹)', type: 'number', default: '500000' },
-      { label: 'Gross Revenue Generated (₹)', type: 'number', default: '920000' },
-      { label: 'Operating Costs (₹)', type: 'number', default: '150000' }
+      { label: 'Initial Project Capital (NPR)', type: 'number', default: '500000' },
+      { label: 'Gross Revenue Generated (NPR)', type: 'number', default: '920000' },
+      { label: 'Operating Costs (NPR)', type: 'number', default: '150000' }
     ],
     calculate: (f1, f2, f3) => calculatorEngine.businessRoi(f1, f2, Number(f3) || 0)
   },

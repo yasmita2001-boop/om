@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Search, Trash2, Edit3,
   Copy, Check, Download, X,
-  Folder, BookOpen, Volume2, Plus,
+  BookOpen, Volume2, Plus,
   ChevronDown, Hash, CheckCircle2,
   Target
 } from 'lucide-react';
@@ -17,14 +17,18 @@ import { globalTextReader } from '../lib/voiceService';
 import { htmlToPlainText, plainTextToHtml, sanitizeHtml } from '../lib/sanitizeHtml';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
-import { FormDisclosureToggle } from '../components/FormDisclosure';
 import { GoalPicker } from '../components/GoalPicker';
 import { ThemeIcon } from '../components/ThemeIcon';
+import { NotesJournalSwitcher } from '../components/NotesJournalSwitcher';
 
 interface NotesViewProps {
   notes: Note[];
   categories: string[];
   goals?: Goal[];
+  journalCount: number;
+  pendingAction: 'note' | 'reflection' | 'note-filters' | 'journal-timeline' | null;
+  onActionConsumed: () => void;
+  onRequestAction: (target: 'note' | 'reflection' | 'note-filters' | 'journal-timeline' | 'calculator') => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
@@ -33,6 +37,10 @@ export const NotesView: React.FC<NotesViewProps> = ({
   notes,
   categories = ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
   goals = [],
+  journalCount,
+  pendingAction,
+  onActionConsumed,
+  onRequestAction,
   onRefresh,
   onSuccess
 }) => {
@@ -41,11 +49,16 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [colorFilter] = useState<string>('all');
   const [noteFiltersOpen, setNoteFiltersOpen] = useState(false);
   const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(false);
+
+  useEffect(() => {
+    if (pendingAction === 'note') setIsNoteEditorOpen(true);
+    else if (pendingAction === 'note-filters') setNoteFiltersOpen(true);
+    else return;
+    onActionConsumed();
+  }, [pendingAction, onActionConsumed]);
   
   // Custom notebooks list (merged from default categories, appSettings, and note categories)
   const [allCategories, setAllCategories] = useState<string[]>(categories);
-  const [isAddingCategory, setIsAddingCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
 
   // Left-panel Inline Editor state
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -129,7 +142,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
   };
 
   const formRef = useRef<HTMLDivElement>(null);
-  const noteFiltersRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Keep all categories synced with unique ones across existing notes
@@ -234,27 +246,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     titleInputRef.current?.focus();
   }, [isNoteEditorOpen, editingNoteId]);
-
-  const handleAddNewNotebook = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = newCategoryName.trim();
-    if (!trimmed) return;
-
-    if (!allCategories.includes(trimmed)) {
-      const updated = [...allCategories, trimmed];
-      setAllCategories(updated);
-
-      // Persist to appSettings
-      const settings = (await storage.getSingleton<any>('appSettings')) || {};
-      settings.noteCategories = updated;
-      await storage.setSingleton('appSettings', settings);
-      onSuccess(`Notebook "${trimmed}" created`);
-    }
-
-    setCategory(trimmed);
-    setNewCategoryName('');
-    setIsAddingCategory(false);
-  };
 
   const selectedThemeOptions = ['slate', 'red', 'amber', 'emerald', 'indigo', 'violet'];
 
@@ -462,41 +453,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
   });
 
   const linkedNotesCount = notes.filter(n => Boolean(n.goalId)).length;
-  const [rightColumnNoteCount, setRightColumnNoteCount] = useState(0);
-
-  useEffect(() => {
-    const form = formRef.current;
-    const filters = noteFiltersRef.current;
-    if (!isNoteEditorOpen || !form || !filters) {
-      setRightColumnNoteCount(0);
-      return;
-    }
-
-    const updateRightColumnNoteCount = () => {
-      if (window.innerWidth < 1024) {
-        setRightColumnNoteCount(0);
-        return;
-      }
-
-      const availableHeight = form.getBoundingClientRect().height
-        - filters.getBoundingClientRect().height
-        - 16;
-      const rowHeightWithGap = 190;
-      const rowCount = Math.max(0, Math.floor((availableHeight + 14) / rowHeightWithGap));
-      setRightColumnNoteCount(Math.min(filteredNotes.length, rowCount * 2));
-    };
-
-    const resizeObserver = new ResizeObserver(updateRightColumnNoteCount);
-    resizeObserver.observe(form);
-    resizeObserver.observe(filters);
-    window.addEventListener('resize', updateRightColumnNoteCount);
-    updateRightColumnNoteCount();
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateRightColumnNoteCount);
-    };
-  }, [filteredNotes.length, noteFiltersOpen, isNoteEditorOpen, editingNoteId]);
-
   const noteCards = filteredNotes.map(n => {
     const theme = getTheme(n.color);
     const linkedGoal = n.goalId ? goals.find(g => g.id === n.goalId) : null;
@@ -504,36 +460,47 @@ export const NotesView: React.FC<NotesViewProps> = ({
       <div
         key={n.id}
         onClick={() => setViewingNote(n)}
-        className={`note-card group progressive-row relative flex h-44 flex-col justify-between rounded-2xl border p-4 shadow-xs transition-all card-hover cursor-pointer overflow-hidden ${theme.cardClass}`}
+        className="dashboard-item-row progressive-row flex min-w-0 cursor-pointer flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
       >
-        <div className={`absolute top-0 left-0 right-0 h-1 ${theme.spineClass}`} />
-
-        <div className="min-h-0 overflow-hidden">
-          <div className="flex items-start justify-between gap-2 pt-0.5">
-            <div className="min-w-0 flex-[1_1_9rem]">
-              <div className="flex items-center gap-1.5">
-                <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                  {n.title}
-                </h3>
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
-                <span className="font-semibold text-indigo-600 dark:text-indigo-400 truncate max-w-[110px]">{n.category}</span>
-                <span aria-hidden="true">·</span>
-                <span>{n.date}</span>
-                {linkedGoal && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 truncate max-w-[160px]">
-                      <Target className="h-2.5 w-2.5 shrink-0" />
-                      <span className="truncate">{linkedGoal.title}</span>
-                      <span>({linkedGoal.progress}%)</span>
-                    </span>
-                  </>
-                )}
-              </div>
+        <div className="grid min-w-0 flex-1 grid-cols-1 gap-1 sm:grid-cols-2 sm:items-center sm:gap-4">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: theme.swatch }} />
+              <h3 className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                {n.title}
+              </h3>
             </div>
+            <div className="mt-0.5 flex min-w-0 items-center gap-x-2 overflow-hidden text-xs text-slate-400">
+              <span className="shrink-0 font-medium text-slate-500 dark:text-slate-400">{n.category}</span>
+              <span className="shrink-0">{n.date}</span>
+              {linkedGoal && (
+                <span className="inline-flex min-w-0 items-center gap-1 truncate text-indigo-600 dark:text-indigo-400">
+                  <Target className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{linkedGoal.title}</span>
+                  <span className="shrink-0">({linkedGoal.progress}%)</span>
+                </span>
+              )}
+              {n.tags && (
+                <span className="min-w-0 truncate text-slate-400">
+                  #{n.tags.split(',').map(tag => tag.trim()).filter(Boolean).join(' #')}
+                </span>
+              )}
+            </div>
+          </div>
+          {(n.body || n.html) && (
+            <div
+              className="line-clamp-1 min-w-0 text-xs text-slate-500 dark:text-slate-400 om-rich-rendered"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.html || plainTextToHtml(n.body || '')) }}
+            />
+          )}
+          {n.attachments && n.attachments.length > 0 && (
+            <div className="mt-1" onClick={e => e.stopPropagation()}>
+              <AttachmentViewer attachments={n.attachments} compact={true} />
+            </div>
+          )}
+        </div>
 
-            <ProgressiveActions label={`More actions for ${n.title}`} className="min-w-0 max-w-full">
+        <ProgressiveActions label={`More actions for ${n.title}`} className="shrink-0">
               <button
                 type="button"
                 onClick={e => handleCopyNote(n, e)}
@@ -584,32 +551,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               >
                 <Trash2 className="h-3.5 w-3.5 text-rose-500" />
               </button>
-            </ProgressiveActions>
-          </div>
-
-          <div
-            className="mt-2.5 text-xs text-slate-600 dark:text-slate-300 max-h-36 overflow-hidden line-clamp-4 leading-relaxed om-rich-rendered"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.html || plainTextToHtml(n.body || '')) }}
-          />
-          {n.attachments && n.attachments.length > 0 && (
-            <div className="mt-2.5 pt-1.5 border-t border-black/5 dark:border-white/5">
-              <AttachmentViewer attachments={n.attachments} compact={true} />
-            </div>
-          )}
-        </div>
-
-        {n.tags && (
-          <div className="mt-2 flex shrink-0 flex-wrap gap-1 overflow-hidden border-t border-black/5 pt-2 dark:border-white/5">
-            {n.tags.split(',').map(tag => (
-              <span
-                key={tag}
-                className="inline-flex items-center rounded-md bg-white/70 dark:bg-slate-800/70 px-1.5 py-0.5 text-[9px] font-medium text-slate-600 dark:text-slate-300"
-              >
-                #{tag.trim()}
-              </span>
-            ))}
-          </div>
-        )}
+        </ProgressiveActions>
       </div>
     );
   });
@@ -626,11 +568,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
               <BookOpen className="h-4 w-4" />
             </span>
             <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
-              Notebooks & Knowledge Vault
+              Memo
             </h1>
           </div>
           <div className="mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span>{notes.length} total {notes.length === 1 ? 'note' : 'notes'}</span>
+            <span>{notes.length} total {notes.length === 1 ? 'memo' : 'memos'}</span>
             <span aria-hidden="true">·</span>
             <span>{allCategories.length} notebooks</span>
           </div>
@@ -638,72 +580,14 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
         {/* Action Controls */}
         <div className="flex w-full max-w-full flex-wrap items-center gap-1 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:gap-2">
-          <button
-            type="button"
-            aria-expanded={noteFiltersOpen}
-            aria-controls="note-archive-filters"
-            onClick={() => setNoteFiltersOpen(open => !open)}
-            className={`inline-flex items-center gap-2 border-b-0 border-transparent px-2 py-2 text-xs font-semibold transition-colors cursor-pointer ${
-              noteFiltersOpen
-                ? 'text-amber-700 dark:text-amber-300'
-                : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
-            }`}
-          >
-            <span>Search & Filters</span>
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${noteFiltersOpen ? 'rotate-180' : ''}`} />
-          </button>
-          <FormDisclosureToggle
-            label="New Note"
-            openLabel="Close New Note"
-            isOpen={isNoteEditorOpen}
-            onToggle={() => setIsNoteEditorOpen(open => !open)}
-            icon={<Plus className="h-3.5 w-3.5" />}
+          <NotesJournalSwitcher
+            activeModule="notes"
+            noteCount={notes.length}
+            journalCount={journalCount}
+            onSelectAction={onRequestAction}
           />
-          <button
-            type="button"
-            onClick={() => setIsAddingCategory(true)}
-            className="flex items-center gap-1.5 border-b-0 border-transparent px-2 py-2 text-xs font-semibold text-amber-800 transition-colors hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
-          >
-            <Folder className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
-            <span>New Notebook</span>
-          </button>
         </div>
       </div>
-
-      {/* New Notebook Modal/Bar */}
-      {isAddingCategory && (
-        <form
-          onSubmit={handleAddNewNotebook}
-          className="flex items-center gap-2 p-3 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl dark:bg-indigo-950/30 dark:border-indigo-800/60 shadow-xs animate-in fade-in duration-150"
-        >
-          <BookOpen className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0 ml-1" />
-          <input
-            type="text"
-            required
-            autoFocus
-            placeholder="Notebook title (e.g. Research, System Design, Ideas)..."
-            value={newCategoryName}
-            onChange={e => setNewCategoryName(e.target.value)}
-            className="flex-1 h-8.5 rounded-xl border border-indigo-200 bg-white px-3 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
-          />
-          <button
-            type="submit"
-            className="h-8.5 rounded-xl bg-indigo-600 px-3.5 text-xs font-semibold text-white hover:bg-indigo-500 shadow-xs cursor-pointer transition-colors"
-          >
-            Create Notebook
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsAddingCategory(false);
-              setNewCategoryName('');
-            }}
-            className="h-8.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-          >
-            Cancel
-          </button>
-        </form>
-      )}
 
       <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
         {/* ========================================================================= */}
@@ -711,20 +595,20 @@ export const NotesView: React.FC<NotesViewProps> = ({
         {/* ========================================================================= */}
         {(isNoteEditorOpen || Boolean(editingNoteId)) && <div
           ref={formRef}
-          className={`lg:col-span-5 rounded-3xl border transition-all ${
+          className={`min-w-0 lg:col-span-5 rounded-2xl border transition-all ${
             editingNoteId
-              ? 'border-indigo-400/90 bg-indigo-50/20 dark:border-indigo-500/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20 shadow-md'
-              : 'border-slate-200/90 bg-white dark:border-slate-800 dark:bg-slate-900 shadow-sm'
-          } p-5 sm:p-6 space-y-4`}
+              ? 'border-indigo-400 bg-indigo-50/20 dark:border-indigo-500/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+              : 'border-slate-200/80 bg-white dark:border-slate-800/80 dark:bg-slate-900'
+          } p-4 shadow-card sm:p-5`}
         >
           {/* Editor Header */}
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-sm">
-                ✍️
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <BookOpen className="h-4 w-4" />
               </span>
               <div>
-                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                   {editingNoteId ? 'Edit Note' : 'New Note'}
                 </h2>
               </div>
@@ -750,11 +634,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
             )}
           </div>
 
-          <form onSubmit={handleSaveNote} className="space-y-4">
+          <form onSubmit={handleSaveNote} className="mt-4 space-y-3.5">
             {/* Note Title Input with Integrated Link Goal / Manual Toggle (As in image.png) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Note Title / Purpose
                 </label>
                 {/* Mode Selector: Link Goal vs Manual */}
@@ -808,21 +692,21 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder="Give your note an inspiring title..."
-                className="h-10 w-full rounded-xl border border-slate-200/90 dark:border-slate-700/90 bg-slate-50/60 dark:bg-slate-800/50 px-3.5 text-xs sm:text-sm font-semibold text-slate-900 placeholder:font-normal placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 focus:outline-none dark:text-white transition-all shadow-2xs"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
             {/* Notebook & Tags Row */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Notebook
                 </label>
                 <div className="relative">
                   <select
                     value={category}
                     onChange={e => setCategory(e.target.value)}
-                    className="h-9 w-full rounded-xl border border-slate-200/90 dark:border-slate-700/90 bg-slate-50/60 dark:bg-slate-800/50 pl-3 pr-7 text-xs font-medium text-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 focus:outline-none dark:text-slate-200 transition-all appearance-none cursor-pointer shadow-2xs"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-3 pr-7 text-sm font-medium text-slate-800 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                   >
                     {allCategories.map(c => (
                       <option key={c} value={c}>{c}</option>
@@ -838,13 +722,13 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     placeholder="Enter notebook name"
                     value={customCategoryInput}
                     onChange={e => setCustomCategoryInput(e.target.value)}
-                    className="mt-1.5 h-8.5 w-full rounded-xl border border-indigo-200 px-3 text-xs dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 )}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Tags
                 </label>
                 <div className="relative">
@@ -853,9 +737,9 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     value={tags}
                     onChange={e => setTags(e.target.value)}
                     placeholder="ideas, architecture"
-                    className="h-9 w-full rounded-xl border border-slate-200/90 dark:border-slate-700/90 bg-slate-50/60 dark:bg-slate-800/50 pl-7 pr-3 text-xs font-medium text-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 focus:outline-none dark:text-slate-200 transition-all shadow-2xs"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-7 pr-3 text-sm font-medium text-slate-800 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                   />
-                  <Hash className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <Hash className="pointer-events-none absolute left-2.5 top-3 h-3.5 w-3.5 text-slate-400" />
                 </div>
               </div>
 
@@ -947,7 +831,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
             {/* Primary Action Button */}
             <button
               type="submit"
-              className="w-full rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:scale-[0.99] py-2.5 text-xs font-semibold text-white shadow-sm hover:shadow-md hover:shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="life-form-submit flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 cursor-pointer"
             >
               {editingNoteId ? (
                 <>
@@ -967,11 +851,16 @@ export const NotesView: React.FC<NotesViewProps> = ({
         {/* ========================================================================= */}
         {/* RIGHT PANEL: NOTEBOOKS DIRECTORY & CARDS (7 cols)                         */}
         {/* ========================================================================= */}
-        <div className={`space-y-4 ${isNoteEditorOpen || editingNoteId ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
+        <section className={`min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${isNoteEditorOpen || editingNoteId ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
+          <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+              Memo archive
+              <span className="ml-2 text-xs font-medium text-slate-400">{filteredNotes.length}</span>
+            </h2>
+          </div>
           <div
-            ref={noteFiltersRef}
             id="note-archive-filters"
-            className={noteFiltersOpen ? ' border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-3.5' : 'hidden'}
+            className={noteFiltersOpen ? 'mb-4 space-y-3.5 rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5 dark:border-slate-800/80 dark:bg-slate-950/30' : 'hidden'}
           >
             {/* Search Input */}
             <div className="relative">
@@ -1040,15 +929,9 @@ export const NotesView: React.FC<NotesViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 items-start gap-3.5 sm:grid-cols-2">
-            {noteCards.slice(0, rightColumnNoteCount)}
-          </div>
-        </div>
-
-        {/* Notes Cards Grid */}
-        <div className="grid grid-cols-1 items-start gap-3.5 sm:grid-cols-2 xl:grid-cols-3 lg:col-span-12">
+          <div className="grid grid-cols-1 items-start gap-3.5">
           {filteredNotes.length === 0 && (
-            <div className="col-span-full py-16 text-center rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-2">
+            <div className="py-12 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-6 space-y-2">
               <BookOpen className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto" />
               <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                 No notes found matching your criteria
@@ -1058,8 +941,9 @@ export const NotesView: React.FC<NotesViewProps> = ({
               </div>
             </div>
           )}
-          {noteCards.slice(rightColumnNoteCount)}
-        </div>
+            {noteCards}
+          </div>
+        </section>
       </div>
 
       {/* ========================================================================= */}

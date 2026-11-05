@@ -57,8 +57,17 @@ function removeRoutineAlarmCacheEntries(profileId: string, routineIds: Set<strin
   for (const key of getProfileStorageKeys(profileId)) {
     const raw = localStorage.getItem(key);
     if (!raw) continue;
-    const alarms = JSON.parse(raw);
-    if (!Array.isArray(alarms)) throw new Error(`Invalid focus alarm cache format in ${key}.`);
+    let alarms: unknown;
+    try {
+      alarms = JSON.parse(raw);
+    } catch {
+      localStorage.removeItem(key);
+      continue;
+    }
+    if (!Array.isArray(alarms)) {
+      localStorage.removeItem(key);
+      continue;
+    }
     const cleaned = alarms.filter(alarm => !routineIds.has(alarm?.linkedRoutineId));
     if (cleaned.length !== alarms.length) localStorage.setItem(key, JSON.stringify(cleaned));
   }
@@ -69,8 +78,17 @@ function pruneOrphanedRoutineAlarmCache(profileId: string, activeRoutineIds: Set
   for (const key of getProfileStorageKeys(profileId)) {
     const raw = localStorage.getItem(key);
     if (!raw) continue;
-    const alarms = JSON.parse(raw);
-    if (!Array.isArray(alarms)) throw new Error(`Invalid focus alarm cache format in ${key}.`);
+    let alarms: unknown;
+    try {
+      alarms = JSON.parse(raw);
+    } catch {
+      localStorage.removeItem(key);
+      continue;
+    }
+    if (!Array.isArray(alarms)) {
+      localStorage.removeItem(key);
+      continue;
+    }
     const cleaned = alarms.filter(alarm => !alarm?.linkedRoutineId || activeRoutineIds.has(alarm.linkedRoutineId));
     if (cleaned.length !== alarms.length) localStorage.setItem(key, JSON.stringify(cleaned));
   }
@@ -1750,44 +1768,88 @@ class StorageEngine {
     return { usage: 0, quota: 0, percent: 0, level: 'healthy', available: false };
   }
 
-  public async performIntegrityAudit(): Promise<{ checked: number; issues: number; repaired: number }> {
+  public async performIntegrityAudit(profileId?: string): Promise<{ checked: number; issues: number; repaired: number }> {
     let checked = 0;
     let issues = 0;
     let repaired = 0;
 
-    const [tasks, goals, routines] = await Promise.all([
-      this.getAll<any>('tasks'),
-      this.getAll<any>('goals'),
-      this.getAll<any>('routines')
-    ]);
+    const targetProfile = profileId || this.activeProfileId || 'om-master-profile';
+    const storeRecords = await Promise.all(ENTITY_STORES.map(async (storeName) => [
+      storeName,
+      await this.getAll<any>(storeName, targetProfile),
+    ] as const));
+    const recordsByStore = new Map<string, any[]>(storeRecords.map(([storeName, records]) => [storeName, records]));
 
-    const goalIds = new Set(goals.map(g => g.id));
-    const routineIds = new Set(routines.map(r => r.id));
+    const references: Record<string, Record<string, string>> = {
+      tasks: { goalId: 'goals', routineId: 'routines', parentTaskId: 'tasks' },
+      habits: { routineId: 'routines' },
+      milestones: { goalId: 'goals' },
+      strategies: { goalId: 'goals' },
+      kpis: { goalId: 'goals' },
+      missions: { goalId: 'goals' },
+      capitalStrategy: { goalId: 'goals' },
+      focus: { taskId: 'tasks', goalId: 'goals' },
+      notes: { goalId: 'goals' },
+      journal: { goalId: 'goals' },
+      finance: { accountId: 'financeAccounts', fromAccountId: 'financeAccounts', toAccountId: 'financeAccounts', goalId: 'goals' },
+      cashFlowSchedules: { accountId: 'financeAccounts', goalId: 'financialGoals' },
+      savingsPlans: { accountId: 'financeAccounts', goalId: 'goals' },
+      loans: { accountId: 'financeAccounts' },
+      loanPayments: { loanId: 'loans', accountId: 'financeAccounts' },
+      investments: { accountId: 'financeAccounts', goalId: 'goals' },
+      investmentActivities: { investmentId: 'investments', accountId: 'financeAccounts' },
+      assets: { accountId: 'financeAccounts' },
+      liabilities: { accountId: 'financeAccounts' },
+      financialGoals: { goalId: 'goals' },
+      healthMeasurements: { goalId: 'goals' },
+      healthAppointments: { goalId: 'goals' },
+      healthNotes: { goalId: 'goals' },
+      workProjects: { goalId: 'goals' },
+      workResponsibilities: { projectId: 'workProjects', goalId: 'goals' },
+      learningItems: { goalId: 'goals' },
+      learningProgress: { learningItemId: 'learningItems' },
+      skills: { goalId: 'goals' },
+      courses: { skillId: 'skills', goalId: 'goals' },
+      meetings: { projectId: 'workProjects', goalId: 'goals' },
+      interactions: { personId: 'people' },
+      importantDates: { personId: 'people' },
+      relationshipReminders: { personId: 'people' },
+      spiritualPractices: { goalId: 'goals' },
+      commitments: { goalId: 'goals' },
+      documents: { collectionId: 'documentCollections' },
+      warranties: { thingId: 'things', documentId: 'documents', receiptId: 'receipts' },
+      receipts: { thingId: 'things', accountId: 'financeAccounts', documentId: 'documents' },
+      certificates: { documentId: 'documents', personId: 'people' },
+      reminders: { taskId: 'tasks', goalId: 'goals' },
+    };
 
-    for (const t of tasks) {
-      checked++;
-      let modified = false;
-      if (t.goalId && !goalIds.has(t.goalId)) {
-        issues++;
-        t.goalId = null;
-        modified = true;
-      }
-      if (t.routineId && !routineIds.has(t.routineId)) {
-        issues++;
-        t.routineId = null;
-        modified = true;
-      }
-      if (modified) {
-        await this.put('tasks', t);
-        repaired++;
+    for (const [storeName, records] of storeRecords) {
+      checked += records.length;
+      for (const record of records) {
+        let modified = false;
+        for (const [field, targetStore] of Object.entries(references[storeName] || {})) {
+          const value = record[field];
+          if (!value) continue;
+          const targetIds = new Set((recordsByStore.get(targetStore) || []).map(item => item?.id));
+          if (!targetIds.has(value)) {
+            record[field] = null;
+            issues++;
+            modified = true;
+          }
+        }
+        if (modified) {
+          record.updatedAt = Date.now();
+          await this.put(storeName, record);
+          repaired++;
+        }
       }
     }
 
     return { checked, issues, repaired };
   }
 
-  public async auditIntegrity(): Promise<{ checked: number; issues: number; repaired: number }> {
-    return this.performIntegrityAudit();
+  public async auditIntegrity(profileId?: string): Promise<{ checked: number; issues: number; repaired: number }> {
+    return this.performIntegrityAudit(profileId);
   }
 
   public async deleteProfileAndSettings(profileId: string, settings: AppState): Promise<void> {
@@ -1869,7 +1931,7 @@ export async function purgeAllDefaultDataPermanently(): Promise<{ success: boole
     'deep work block 1 (high priority focus)',
     'morning meditation (15 min)',
     'drink 3 liters water',
-    'build ₹50 lakh sovereign wealth reserve',
+    'build NPR 50 lakh sovereign wealth reserve',
     'first principles of life architecture',
     'morning awakening & routine',
     'evening reflection & shutdown'

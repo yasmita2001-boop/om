@@ -340,12 +340,12 @@ export function prepareNativePhonetics(rawText: string, lang: 'hi-IN' | 'en-IN' 
       .replace(/\bsec\.?\b/gi, 'seconds ')
       .replace(/\bhr\.?\b|\bhrs\.?\b/gi, 'hours ')
       .replace(/\bno\.\s*(\d+)/gi, 'number $1')
-      .replace(/₹\s*(\d+)/g, '$1 rupees')
+      .replace(/NPR\s*(\d+)/g, '$1 Nepali rupees')
       .replace(/\$\s*(\d+)/g, '$1 dollars')
       .replace(/%/g, ' percent ');
   } else {
     text = text
-      .replace(/₹\s*(\d+)/g, '$1 रुपये')
+      .replace(/NPR\s*(\d+)/g, '$1 नेपाली रुपैयाँ')
       .replace(/%/g, ' प्रतिशत ')
       .replace(/no\.\s*(\d+)/gi, 'नंबर $1');
   }

@@ -1,23 +1,26 @@
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState } from 'react';
 import {
-  Heart, Activity, Moon, Droplet, Calendar, Trash2,
-  Stethoscope, FileText, Edit3, X, CheckCircle2, Circle, Plus
+  Heart, Activity, Droplet, Calendar, Trash2, Compass, Briefcase,
+  Stethoscope, FileText, Edit3, X, CheckCircle2, Circle
 } from 'lucide-react';
-import { EmptyState } from '../components/EmptyState';
 import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
 import {
   HealthProfile, HealthMeasurement, SleepRecord, WaterRecord,
-  NutritionRecord, HealthAppointment, HealthNote, Goal
+  NutritionRecord, HealthAppointment, HealthNote, Goal, Person,
+  Interaction, ReminderItem, ValueItem, SpiritualPractice, Commitment, NavModule,
+  WorkProject, LearningItem, Meeting, Skill, Course, WorkResponsibility, Task
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { SlideTabs } from '../components/SlideTabs';
 import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
 import { syncGoalProgressFromHealth, syncGoalProgressFromAppointments } from '../lib/goalTaskSync';
 import { ProgressiveActions } from '../components/ProgressiveActions';
-import { FormDisclosureToggle } from '../components/FormDisclosure';
+import { PeopleView } from './PeopleView';
+import { SpiritualView } from './SpiritualView';
+import { WorkView } from './WorkView';
+import { HeaderDropdown } from '../components/HeaderDropdown';
 
 interface HealthViewProps {
   profile?: HealthProfile;
@@ -28,11 +31,38 @@ interface HealthViewProps {
   appointments: HealthAppointment[];
   healthNotes?: HealthNote[];
   goals?: Goal[];
+  people: Person[];
+  interactions: Interaction[];
+  reminders: ReminderItem[];
+  values: ValueItem[];
+  practices: SpiritualPractice[];
+  commitments: Commitment[];
+  workProjects: WorkProject[];
+  learningItems: LearningItem[];
+  meetings: Meeting[];
+  skills: Skill[];
+  courses: Course[];
+  workResponsibilities: WorkResponsibility[];
+  tasks: Task[];
+  onNavigate: (module: NavModule) => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
 
-type HealthTab = 'movement' | 'wellness' | 'appointments' | 'profile';
+type HealthTab =
+  | 'movement'
+  | 'wellness'
+  | 'appointments'
+  | 'profile'
+  | 'people-person'
+  | 'people-interaction'
+  | 'foundation-values'
+  | 'foundation-practices'
+  | 'foundation-commitments'
+  | 'work-projects'
+  | 'work-learning'
+  | 'work-skills'
+  | 'work-meetings';
 
 interface DeleteTarget {
   store: 'healthMeasurements' | 'sleepRecords' | 'waterRecords' | 'nutritionRecords' | 'healthAppointments' | 'healthNotes';
@@ -54,14 +84,28 @@ export const HealthView: React.FC<HealthViewProps> = ({
   appointments,
   healthNotes = [],
   goals = [],
+  people,
+  interactions,
+  reminders,
+  values,
+  practices,
+  commitments,
+  workProjects,
+  learningItems,
+  meetings,
+  skills,
+  courses,
+  workResponsibilities,
+  tasks,
+  onNavigate,
   onRefresh,
   onSuccess
 }) => {
   const today = getLocalDateString();
   const [activeTab, setActiveTab] = useState<HealthTab>('movement');
-  const [movementFormOpen, setMovementFormOpen] = useState(false);
+  const [movementFormOpen, setMovementFormOpen] = useState(true);
   const [wellnessFormOpen, setWellnessFormOpen] = useState(false);
-  const [appointmentFormOpen, setAppointmentFormOpen] = useState<'appointment' | 'observation' | null>(null);
+  const [appointmentFormOpen, setAppointmentFormOpen] = useState<'appointment' | 'observation' | 'both' | null>(null);
   const [profileFormOpen, setProfileFormOpen] = useState(false);
 
   // Goal linking state for appointments
@@ -76,9 +120,9 @@ export const HealthView: React.FC<HealthViewProps> = ({
   // Profile form
   const [name, setName] = useState(profile?.name || '');
   const [dob, setDob] = useState(profile?.dob || '');
-  const [height, setHeight] = useState(profile?.height || 175);
-  const [weight, setWeight] = useState(profile?.weight || 70);
-  const [targetWeight, setTargetWeight] = useState(profile?.targetWeight || 68);
+  const [height, setHeight] = useState<number | ''>(profile?.height && profile.height > 0 ? profile.height : '');
+  const [weight, setWeight] = useState<number | ''>(profile?.weight && profile.weight > 0 ? profile.weight : '');
+  const [targetWeight, setTargetWeight] = useState<number | ''>(profile?.targetWeight && profile.targetWeight > 0 ? profile.targetWeight : '');
 
   // Daily log forms
   const [weightLog, setWeightLog] = useState('');
@@ -112,6 +156,9 @@ export const HealthView: React.FC<HealthViewProps> = ({
   const hasSavedHeight = typeof profile?.height === 'number' && profile.height > 0;
   const hasSavedWeight = typeof profile?.weight === 'number' && profile.weight > 0;
   const hasSavedTargetWeight = typeof profile?.targetWeight === 'number' && profile.targetWeight > 0;
+  const hasBiometricProfile = Boolean(
+    profile?.name?.trim() || profile?.dob || hasSavedHeight || hasSavedWeight || hasSavedTargetWeight
+  );
   const birthDate = profile?.dob ? new Date(`${profile.dob}T00:00:00`) : null;
   const todayDate = new Date();
   const age = birthDate && !Number.isNaN(birthDate.getTime())
@@ -119,10 +166,12 @@ export const HealthView: React.FC<HealthViewProps> = ({
       (todayDate.getMonth() < birthDate.getMonth() ||
       (todayDate.getMonth() === birthDate.getMonth() && todayDate.getDate() < birthDate.getDate()) ? 1 : 0)
     : null;
+  const heightValue = typeof height === 'number' ? height : 0;
+  const weightValue = typeof weight === 'number' ? weight : 0;
   const hasSavedBmi = hasSavedHeight && hasSavedWeight;
-  const bmi = hasSavedBmi ? (weight / ((height / 100) ** 2)).toFixed(1) : 'Not set';
+  const bmi = hasSavedBmi ? (weightValue / ((heightValue / 100) ** 2)).toFixed(1) : 'Not set';
   const bmr = hasSavedBmi && age !== null && age >= 0
-    ? Math.round(10 * weight + 6.25 * height - 5 * age + 5)
+    ? Math.round(10 * weightValue + 6.25 * heightValue - 5 * age + 5)
     : null;
 
   const handleOpenEdit = (store: EditTarget['store'], item: any) => {
@@ -256,12 +305,20 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (
+      !hasBiometricProfile &&
+      !name.trim() &&
+      !dob &&
+      height === '' &&
+      weight === '' &&
+      targetWeight === ''
+    ) return;
     const updated: HealthProfile = {
       name,
       dob,
-      height: Number(height),
-      weight: Number(weight),
-      targetWeight: Number(targetWeight),
+      height: height === '' ? undefined : height,
+      weight: weight === '' ? undefined : weight,
+      targetWeight: targetWeight === '' ? undefined : targetWeight,
       goalId: profile?.goalId || null,
       updatedAt: Date.now()
     };
@@ -272,6 +329,18 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
   const handleAddMeasurement = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!weightLog && !stepsLog && !exerciseLog.trim() && !durationLog) return;
+    const measurements = [
+      { value: weightLog, label: 'Weight', max: 500 },
+      { value: stepsLog, label: 'Steps', max: 100000 },
+      { value: durationLog, label: 'Duration', max: 1440 }
+    ];
+    const invalidMeasurement = measurements.find(({ value, max }) => value !== ''
+      && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > max));
+    if (invalidMeasurement) {
+      onSuccess(`${invalidMeasurement.label} must be between 0 and ${invalidMeasurement.max}.`);
+      return;
+    }
     const now = Date.now();
     const m: HealthMeasurement = {
       id: generateUUID(),
@@ -300,6 +369,17 @@ export const HealthView: React.FC<HealthViewProps> = ({
   const handleAddWellness = async (e: React.FormEvent) => {
     e.preventDefault();
     const now = Date.now();
+    const wellnessValues = [
+      { value: sleepHours, label: 'Sleep hours', max: 24 },
+      { value: waterMl, label: 'Water', max: 10000 },
+      { value: calories, label: 'Calories', max: 50000 }
+    ];
+    const invalidWellness = wellnessValues.find(({ value, max }) => value !== ''
+      && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > max));
+    if (invalidWellness) {
+      onSuccess(`${invalidWellness.label} must be between 0 and ${invalidWellness.max}.`);
+      return;
+    }
 
     if (sleepHours) {
       const s: SleepRecord = {
@@ -337,7 +417,6 @@ export const HealthView: React.FC<HealthViewProps> = ({
     setWaterMl('');
     setCalories('');
     setNutritionNote('');
-    setWellnessFormOpen(false);
     onRefresh();
   };
 
@@ -364,7 +443,6 @@ export const HealthView: React.FC<HealthViewProps> = ({
     setApptDoctor('');
     setApptGoalId('');
     setApptInputMode('manual');
-    setAppointmentFormOpen(null);
     onRefresh();
   };
 
@@ -405,93 +483,114 @@ export const HealthView: React.FC<HealthViewProps> = ({
     setHNoteText('');
     setHNoteGoalId('');
     setHNoteInputMode('manual');
-    setAppointmentFormOpen(null);
     onRefresh();
   };
 
-  const movementAction = (
-    <FormDisclosureToggle
-      label="Log Workout / Steps"
-      openLabel="Close Form"
-      isOpen={movementFormOpen}
-      onToggle={() => setMovementFormOpen(open => !open)}
-      icon={<Plus className="h-3.5 w-3.5" />}
-    />
-  );
+  const wellnessEntries = [
+    ...sleepRecords.map(s => ({ type: 'Sleep', text: `${s.hours} hours`, date: s.date, id: s.id, store: 'sleepRecords' as const, raw: s })),
+    ...waterRecords.map(w => ({ type: 'Water', text: `${w.amount} ml`, date: w.date, id: w.id, store: 'waterRecords' as const, raw: w })),
+    ...nutritionRecords.map(n => ({ type: 'Nutrition', text: `${n.calories ? `${n.calories} kcal` : ''} ${n.note || ''}`, date: n.date, id: n.id, store: 'nutritionRecords' as const, raw: n }))
+  ]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || ((b.raw as any)?.createdAt || 0) - ((a.raw as any)?.createdAt || 0))
+    .slice(0, 40);
 
-  const wellnessAction = (
-    <FormDisclosureToggle
-      label="Log Sleep & Fuel"
-      openLabel="Close Form"
-      isOpen={wellnessFormOpen}
-      onToggle={() => setWellnessFormOpen(open => !open)}
-      icon={<Plus className="h-3.5 w-3.5" />}
-    />
-  );
+  const biometricFieldCount = profile
+    ? [
+        profile.name,
+        profile.dob,
+        profile.height,
+        profile.weight,
+        profile.targetWeight,
+        profile.bloodGroup,
+      ].filter((value) => value !== undefined && value !== null && String(value).trim() !== '').length
+    : 0;
 
-  const appointmentAction = (
-    <FormDisclosureToggle
-      label="Appointment"
-      openLabel="Close Form"
-      isOpen={appointmentFormOpen === 'appointment'}
-      onToggle={() => setAppointmentFormOpen(open => open === 'appointment' ? null : 'appointment')}
-      icon={<Plus className="h-3.5 w-3.5" />}
-    />
-  );
-
-  const observationAction = (
-    <FormDisclosureToggle
-      label="Health Observation"
-      openLabel="Close Form"
-      isOpen={appointmentFormOpen === 'observation'}
-      onToggle={() => setAppointmentFormOpen(open => open === 'observation' ? null : 'observation')}
-      icon={<Plus className="h-3.5 w-3.5" />}
-    />
-  );
-
-  const profileAction = (
-    <FormDisclosureToggle
-      label="Edit Biometrics"
-      openLabel="Close Form"
-      isOpen={profileFormOpen}
-      onToggle={() => setProfileFormOpen(open => !open)}
-      icon={<Plus className="h-3.5 w-3.5" />}
-    />
-  );
-
-  const renderHealthTabActions = () => {
-    if (activeTab === 'movement') return movementAction;
-    if (activeTab === 'wellness') return wellnessAction;
-    if (activeTab === 'appointments') {
-      return <div className="flex items-center gap-2">{appointmentAction}{observationAction}</div>;
-    }
-    return profileAction;
-  };
+  const healthTabOptions: { id: HealthTab; label: string; count: number; icon: typeof Heart }[] = [
+    { id: 'movement', label: 'Workouts', count: measurements.length, icon: Activity },
+    { id: 'wellness', label: 'Sleep & Fuel', count: sleepRecords.length + waterRecords.length + nutritionRecords.length, icon: Droplet },
+    { id: 'appointments', label: 'Appointments', count: appointments.length + healthNotes.length, icon: Stethoscope },
+    { id: 'profile', label: 'Biometrics', count: biometricFieldCount, icon: Heart },
+    { id: 'people-person', label: 'Add Person', count: people.length, icon: Heart },
+    { id: 'people-interaction', label: 'Log Touchpoint', count: interactions.length, icon: Heart },
+    { id: 'foundation-values', label: 'Values & Principles', count: values.length, icon: Compass },
+    { id: 'foundation-practices', label: 'Daily Practices', count: practices.length, icon: Compass },
+    { id: 'foundation-commitments', label: 'Commitments & Vows', count: commitments.length, icon: Compass },
+    { id: 'work-projects', label: 'Projects', count: workProjects.length, icon: Briefcase },
+    { id: 'work-learning', label: 'Learning Tracks', count: learningItems.length, icon: Briefcase },
+    { id: 'work-skills', label: 'Skill Trees', count: skills.length, icon: Briefcase },
+    { id: 'work-meetings', label: 'Meetings', count: meetings.length, icon: Briefcase }
+  ];
+  const selectedTab = healthTabOptions.find(tab => tab.id === activeTab);
+  const selectedTabLabel = selectedTab?.label || 'Life';
+  const isHealthTab = ['movement', 'wellness', 'appointments', 'profile'].includes(activeTab);
+  const SelectedTabIcon = activeTab === 'movement'
+    ? Activity
+    : activeTab === 'wellness'
+      ? Droplet
+      : activeTab === 'appointments'
+        ? Stethoscope
+        : activeTab === 'people-person' || activeTab === 'people-interaction'
+          ? Heart
+          : activeTab === 'foundation-values' || activeTab === 'foundation-practices' || activeTab === 'foundation-commitments'
+            ? Compass
+          : activeTab === 'work-projects' || activeTab === 'work-learning' || activeTab === 'work-skills' || activeTab === 'work-meetings'
+            ? Briefcase
+            : Heart;
 
   return (
-    <div className="space-y-6">
+    <div className="life-view space-y-4">
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl flex items-center gap-2">
-          <span>Health & Vitality Command</span>
-        </h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl flex items-center gap-2">
+            <span>Life</span>
+          </h1>
+          <HeaderDropdown
+            label={selectedTabLabel}
+            menuLabel="Life submenu"
+            icon={<SelectedTabIcon className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />}
+          >
+            {closeMenu => healthTabOptions.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                role="menuitem"
+                aria-current={activeTab === tab.id ? 'page' : undefined}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id === 'movement') setMovementFormOpen(true);
+                  if (tab.id === 'wellness') setWellnessFormOpen(true);
+                  if (tab.id === 'appointments') setAppointmentFormOpen('both');
+                  if (tab.id === 'profile') setProfileFormOpen(true);
+                  closeMenu();
+                }}
+                className={`flex w-full min-w-0 items-center gap-2 border-b-2 px-2 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-200 ${
+                  activeTab === tab.id ? 'border-amber-300' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <tab.icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{tab.label}{tab.count > 0 ? ` (${tab.count})` : ''}</span>
+              </button>
+            ))}
+          </HeaderDropdown>
+        </div>
       </div>
 
-      {/* Snapshot cards */}
+      {isHealthTab && (hasSavedWeight || hasSavedBmi) && (
       <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
+        {hasSavedWeight && <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
           <div className="flex items-center justify-between gap-1 text-slate-500 dark:text-slate-400">
             <span className="text-[11px] font-bold uppercase tracking-wider truncate">Current Weight</span>
             <Heart className="h-4 w-4 shrink-0 text-rose-500" />
           </div>
           <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums truncate">
-            {hasSavedWeight ? `${weight} kg` : 'Not set'}
+            {hasSavedWeight ? `${weightValue} kg` : 'Not set'}
           </div>
           <div className="mt-1 text-xs text-slate-400 font-medium truncate">
             {hasSavedTargetWeight ? `Goal: ${targetWeight} kg` : 'Set a target in Biometrics'}
           </div>
-        </div>
+        </div>}
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
+        {hasSavedBmi && <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
           <div className="flex items-center justify-between gap-1 text-slate-500 dark:text-slate-400">
             <span className="text-[11px] font-bold uppercase tracking-wider truncate">Body Mass Index</span>
             <Activity className="h-4 w-4 shrink-0 text-indigo-500" />
@@ -500,162 +599,112 @@ export const HealthView: React.FC<HealthViewProps> = ({
             {bmi}
           </div>
           <div className="mt-1 text-xs text-slate-400 font-medium truncate">
-            {hasSavedBmi
-              ? `Ht ${height} cm${bmr !== null ? ` · BMR est. ${bmr}` : ''}`
-              : 'Set height and weight in Biometrics'}
+            {`Ht ${heightValue} cm${bmr !== null ? ` · BMR est. ${bmr}` : ''}`}
           </div>
-        </div>
+        </div>}
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
-          <div className="flex items-center justify-between gap-1 text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider truncate">Hydration Logs</span>
-            <Droplet className="h-4 w-4 shrink-0 text-blue-500" />
-          </div>
-          <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-blue-600 dark:text-blue-400 tabular-nums truncate">
-            {waterRecords.length}
-          </div>
-          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Daily log entries</div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
-          <div className="flex items-center justify-between gap-1 text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider truncate">Sleep Logs</span>
-            <Moon className="h-4 w-4 shrink-0 text-purple-500" />
-          </div>
-          <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-purple-600 dark:text-purple-400 tabular-nums truncate">
-            {sleepRecords.length}
-          </div>
-          <div className="mt-1 text-xs text-slate-400 font-medium truncate">Nights</div>
-        </div>
       </div>
-
-      {/* Navigation Tabs (Full Width Responsive Slide Tab) */}
-      <div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
-        <SlideTabs
-          activeId={activeTab}
-          onChange={(id) => setActiveTab(id as any)}
-          tabs={[
-            { id: 'movement', label: `Workouts (${measurements.length})`, shortLabel: `Workouts (${measurements.length})`, icon: Activity },
-            { id: 'wellness', label: `Sleep & Fuel (${sleepRecords.length + waterRecords.length + nutritionRecords.length})`, shortLabel: 'Sleep & Fuel', icon: Droplet },
-            { id: 'appointments', label: `Appointments (${appointments.length + healthNotes.length})`, shortLabel: `Appts (${appointments.length + healthNotes.length})`, icon: Stethoscope },
-            { id: 'profile', label: 'Biometrics', shortLabel: 'Biometrics', icon: Heart }
-          ]}
-          extraRight={<div className="hidden sm:block">{renderHealthTabActions()}</div>}
-        />
-        {activeTab === 'movement' && (
-          <div className="flex justify-end pt-2 sm:hidden">{movementAction}</div>
-        )}
-        {activeTab === 'wellness' && (
-          <div className="flex justify-end pt-2 sm:hidden">{wellnessAction}</div>
-        )}
-        {activeTab === 'appointments' && (
-          <div className="flex flex-wrap justify-end gap-2 pt-2 sm:hidden">
-            {appointmentAction}
-            {observationAction}
-          </div>
-        )}
-        {activeTab === 'profile' && (
-          <div className="flex justify-end pt-2 sm:hidden">{profileAction}</div>
-        )}
-      </div>
+      )}
 
       {/* Tab: Physical Movement */}
       {activeTab === 'movement' && (
-        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
-          {movementFormOpen && <div className="lg:col-span-5  border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-            <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
-              <Activity className="h-4 w-4 text-emerald-500" />
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          {movementFormOpen && <div className={`${
+            measurements.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'
+          } rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <Activity className="h-4 w-4" />
+              </span>
               <span>Log Workout / Steps</span>
-              <button
-                type="button"
-                onClick={() => setMovementFormOpen(false)}
-                aria-label="Close workout form"
-                className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </h2>
-            <form onSubmit={handleAddMeasurement} className="mt-4 space-y-3">
+            <form onSubmit={handleAddMeasurement} className="mt-4 space-y-3.5">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Weight (kg)</label>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Weight (kg)</label>
                   <input
                     type="number"
                     step="0.1"
+                    min="0"
+                    max="500"
                     value={weightLog}
                     onChange={e => setWeightLog(e.target.value)}
                     placeholder="e.g. 71.5"
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Daily Steps</label>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Daily Steps</label>
                   <input
                     type="number"
+                    min="0"
+                    max="100000"
                     value={stepsLog}
                     onChange={e => setStepsLog(e.target.value)}
                     placeholder="e.g. 10000"
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Exercise</label>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Exercise</label>
                   <input
                     type="text"
                     value={exerciseLog}
                     onChange={e => setExerciseLog(e.target.value)}
                     placeholder="Running, Gym, Yoga"
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Duration (Min)</label>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Duration (Min)</label>
                   <input
                     type="number"
+                    min="0"
+                    max="1440"
                     value={durationLog}
                     onChange={e => setDurationLog(e.target.value)}
                     placeholder="45"
-                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
-              <button type="submit" className="w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-500 cursor-pointer">
+              <button type="submit" disabled={!weightLog && !stepsLog && !exerciseLog.trim() && !durationLog} className="w-full rounded-lg bg-emerald-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50">
                 Log Physical Activity
               </button>
             </form>
           </div>}
 
-          <div className={`${movementFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'}  border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                Movement History ({measurements.length})
-              </h2>
-            </div>
-            <div className="mt-4 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {measurements.length === 0 ? (
-                <div className="col-span-full"><EmptyState icon={Activity} compact title="No workouts logged" hint="Log your sessions to build the training history." /></div>
-              ) : (
-                [...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
-                  <div key={m.id} className="min-w-0 rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex flex-wrap justify-between items-center gap-2">
+          {(measurements.length > 0 || !movementFormOpen) && <div className={`${movementFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'} ${
+            measurements.length > 0
+              ? 'rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900'
+              : 'flex min-h-20 items-center justify-start py-3'
+          }`}>
+            {measurements.length > 0 ? (
+              <>
+                <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Movement history
+                  </h2>
+                </div>
+                <div className="space-y-2">
+                  {[...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
+                  <div key={m.id} className="dashboard-item-row flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-slate-900 dark:text-white truncate">{m.exercise || 'Daily Activity'}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{m.date}</div>
+                      <div className="truncate font-semibold text-slate-900 dark:text-white">{m.exercise || 'Daily Activity'}</div>
+                      <div className="mt-0.5 text-xs text-slate-400">{m.date}</div>
                     </div>
-                    <div className="ml-auto min-w-0 text-right font-mono font-bold text-slate-700 dark:text-slate-300 shrink-0">
-                      {m.steps && <div>{m.steps.toLocaleString()} steps</div>}
-                      {m.weight && <div>{m.weight} kg</div>}
-                      {m.duration && <div className="text-indigo-600 dark:text-indigo-400">{m.duration} min</div>}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      {m.steps && <span>{m.steps.toLocaleString()} steps</span>}
+                      {m.weight && <span>{m.weight} kg</span>}
+                      {m.duration && <span className="text-indigo-600 dark:text-indigo-400">{m.duration} min</span>}
                     </div>
-                    {/* EDIT & DELETE BUTTONS */}
-                    <ProgressiveActions label={`More actions for ${m.exercise || 'Activity record'}`} className="shrink-0 ml-2">
+                    <ProgressiveActions label={`More actions for ${m.exercise || 'Activity record'}`} className="shrink-0">
                       <button
                         type="button"
                         onClick={() => handleOpenEdit('healthMeasurements', m)}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-800"
                         title="Edit Measurement"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
@@ -663,67 +712,80 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setDeleteTarget({ store: 'healthMeasurements', id: m.id, name: m.exercise || 'Activity record' })}
-                        className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-950/50"
                         title="Delete Record"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </ProgressiveActions>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-3 text-left">
+                <span className="om-empty-state-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+                  <Activity className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-ink">No activity yet</p>
+                  <p className="mt-0.5 text-xs text-ink-muted">Log a workout or steps to start your history.</p>
+                </div>
+              </div>
+            )}
+          </div>}
         </div>
       )}
 
       {/* Tab: Wellness */}
       {activeTab === 'wellness' && (
-        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
-          {wellnessFormOpen && <div className="lg:col-span-5  border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-            <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
-              <Droplet className="h-4 w-4 text-blue-500" />
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          {wellnessFormOpen && <div className={`${
+            wellnessEntries.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'
+          } rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300">
+                <Droplet className="h-4 w-4" />
+              </span>
               <span>Log Sleep, Water & Nutrition</span>
-              <button
-                type="button"
-                onClick={() => setWellnessFormOpen(false)}
-                aria-label="Close wellness form"
-                className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </h2>
-            <form onSubmit={handleAddWellness} className="mt-4 space-y-3">
+            <form onSubmit={handleAddWellness} className="mt-4 space-y-3.5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Sleep (Hrs)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Sleep (hrs)</label>
                   <input
                     type="number"
                     step="0.1"
+                    min="0"
+                    max="24"
                     value={sleepHours}
                     onChange={e => setSleepHours(e.target.value)}
-                    placeholder="7.5"
-                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    placeholder="e.g. 7.5"
+                    className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Water (ml)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Water (ml)</label>
                   <input
                     type="number"
+                    min="0"
+                    max="10000"
                     value={waterMl}
                     onChange={e => setWaterMl(e.target.value)}
-                    placeholder="2500"
-                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    placeholder="e.g. 2500"
+                    className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Calories (kcal)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Calories (kcal)</label>
                   <input
                     type="number"
+                    min="0"
+                    max="50000"
                     value={calories}
                     onChange={e => setCalories(e.target.value)}
-                    placeholder="2200"
-                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    placeholder="e.g. 2200"
+                    className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
@@ -733,13 +795,13 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   type="text"
                   value={nutritionNote}
                   onChange={e => setNutritionNote(e.target.value)}
-                  placeholder="Organic greens, high protein diet"
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  placeholder="e.g. meals or nutrition notes"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
               {/* Quick Water Tap Buttons */}
-              <div className="flex gap-2 pt-1">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={async () => {
@@ -753,7 +815,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     onSuccess('+250ml Water logged');
                     onRefresh();
                   }}
-                  className="flex-1 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 py-2 text-xs font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition-colors cursor-pointer"
+                  className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-sky-200/70 bg-sky-50/70 px-3 py-2 text-xs font-semibold text-sky-800 transition-colors hover:bg-sky-100 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-200 dark:hover:bg-sky-950/60"
                 >
                   <><ThemeIcon name="water" className="h-4 w-4" /> +250ml Glass</>
                 </button>
@@ -770,41 +832,36 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     onSuccess('+500ml Bottle logged');
                     onRefresh();
                   }}
-                  className="flex-1 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 py-2 text-xs font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition-colors cursor-pointer"
+                  className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-sky-200/70 bg-sky-50/70 px-3 py-2 text-xs font-semibold text-sky-800 transition-colors hover:bg-sky-100 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-200 dark:hover:bg-sky-950/60"
                 >
                   <><ThemeIcon name="bottle" className="h-4 w-4" /> +500ml Bottle</>
                 </button>
               </div>
 
-              <button type="submit" className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 cursor-pointer">
+              <button
+                type="submit"
+                disabled={!sleepHours && !waterMl && !calories && !nutritionNote.trim()}
+                className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 Save Wellness Record
               </button>
             </form>
           </div>}
 
-          <div className={`${wellnessFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'}  border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                Wellness Stream ({sleepRecords.length + waterRecords.length + nutritionRecords.length} records)
-              </h2>
-            </div>
-            <div className="mt-4 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {[
-                ...sleepRecords.map(s => ({ type: 'Sleep', text: `${s.hours} hours`, date: s.date, id: s.id, store: 'sleepRecords' as const, raw: s })),
-                ...waterRecords.map(w => ({ type: 'Water', text: `${w.amount} ml`, date: w.date, id: w.id, store: 'waterRecords' as const, raw: w })),
-                ...nutritionRecords.map(n => ({ type: 'Nutrition', text: `${n.calories ? `${n.calories} kcal` : ''} ${n.note || ''}`, date: n.date, id: n.id, store: 'nutritionRecords' as const, raw: n }))
-              ].length === 0 ? (
-                <div className="col-span-full"><EmptyState icon={Heart} compact title="No wellness records" hint="Vitals, mood and recovery logs appear here." /></div>
-              ) : (
-                [
-                  ...sleepRecords.map(s => ({ type: 'Sleep', text: `${s.hours} hours`, date: s.date, id: s.id, store: 'sleepRecords' as const, raw: s })),
-                  ...waterRecords.map(w => ({ type: 'Water', text: `${w.amount} ml`, date: w.date, id: w.id, store: 'waterRecords' as const, raw: w })),
-                  ...nutritionRecords.map(n => ({ type: 'Nutrition', text: `${n.calories ? `${n.calories} kcal` : ''} ${n.note || ''}`, date: n.date, id: n.id, store: 'nutritionRecords' as const, raw: n }))
-                ]
-                  .sort((a, b) => (b.date || '').localeCompare(a.date || '') || ((b.raw as any)?.createdAt || 0) - ((a.raw as any)?.createdAt || 0))
-                  .slice(0, 40)
-                  .map(item => (
-                  <div key={item.id} className="min-w-0 rounded-2xl border border-slate-100 p-3 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-center gap-2">
+          {(wellnessEntries.length > 0 || !wellnessFormOpen) && (
+            <div className={`${wellnessFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'} ${
+              wellnessEntries.length > 0
+                ? 'rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900'
+                : 'flex min-h-20 items-center justify-start py-3'
+            }`}>
+              {wellnessEntries.length > 0 ? (
+                <>
+                  <h2 className="mb-4 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
+                    Wellness history
+                  </h2>
+                  <div className="mt-4 space-y-2">
+                    {wellnessEntries.map(item => (
+                  <div key={item.id} className="dashboard-item-row flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
                     <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
                       <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
                         item.type === 'Sleep' ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400' :
@@ -814,7 +871,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                         {item.type}
                       </span>
                       <span className="font-semibold text-slate-800 dark:text-slate-200">{item.text}</span>
-                      <span className="font-mono text-[10px] text-slate-400">· {item.date}</span>
+                      <span className="font-mono text-xs text-slate-400">{item.date}</span>
                     </div>
 
                     {/* EDIT & DELETE BUTTONS */}
@@ -837,35 +894,41 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       </button>
                     </ProgressiveActions>
                   </div>
-                ))
+                  ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 text-left">
+                  <span className="om-empty-state-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+                    <Heart className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-ink">No wellness records yet</p>
+                    <p className="mt-0.5 text-xs text-ink-muted">Log sleep, water or nutrition to build your history.</p>
+                  </div>
+                </div>
               )}
             </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* Tab: Appointments & Health Notes */}
       {activeTab === 'appointments' && (
-        <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
-          {appointmentFormOpen && <section className="lg:col-span-5  border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
-            <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-              {appointmentFormOpen === 'appointment'
-                ? <Stethoscope className="h-4 w-4 text-indigo-500" />
-                : <FileText className="h-4 w-4 text-emerald-500" />}
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                {appointmentFormOpen === 'appointment' ? 'Log Medical Appointment' : 'Quick Health Observation'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setAppointmentFormOpen(null)}
-                aria-label="Close health form"
-                className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            {appointmentFormOpen === 'appointment' ? (
-              <form onSubmit={handleAddAppointment} className="mt-4 space-y-3">
+        <div className="space-y-6">
+          {appointmentFormOpen && <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+            {(appointmentFormOpen === 'appointment' || appointmentFormOpen === 'both') && (
+              <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300">
+                    <Stethoscope className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">Medical appointment</h2>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Schedule a consultation or checkup.</p>
+                  </div>
+                </div>
+                <form onSubmit={handleAddAppointment} className="mt-4 space-y-3">
                 <GoalLinkSelector
                   goals={goals}
                   mode={apptInputMode}
@@ -879,7 +942,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   value={apptTitle}
                   onChange={e => setApptTitle(e.target.value)}
                   placeholder="Reason / Consultation (e.g. Annual Checkup)"
-                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <input
@@ -887,57 +950,78 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     value={apptDoctor}
                     onChange={e => setApptDoctor(e.target.value)}
                     placeholder="Doctor / Clinic"
-                    className="h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                   <ThemedDateTimeInput
                     type="date"
                     value={apptDate}
                     onChange={e => setApptDate(e.target.value)}
-                    className="h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm font-mono text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
-                <button type="submit" className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 cursor-pointer">
+                <button type="submit" className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500">
                   + Add Appointment
                 </button>
               </form>
-            ) : (
-              <form onSubmit={handleAddHealthNote} className="mt-4 space-y-3">
-                <GoalLinkSelector
-                  goals={goals}
-                  mode={hNoteInputMode}
-                  goalId={hNoteGoalId}
-                  onModeChange={setHNoteInputMode}
-                  onGoalChange={setHNoteGoalId}
-                />
-                <textarea
-                  rows={2}
-                  required
-                  value={hNoteText}
-                  onChange={e => setHNoteText(e.target.value)}
-                  placeholder="Blood test results, recovery notes, symptoms..."
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-                <button type="submit" className="w-full rounded-xl bg-slate-900 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-slate-700 cursor-pointer">
-                  Save Health Note
-                </button>
-              </form>
+              </section>
             )}
-          </section>}
+            {(appointmentFormOpen === 'observation' || appointmentFormOpen === 'both') && (
+              <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                    <FileText className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">Health observation</h2>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Keep symptoms and recovery notes.</p>
+                  </div>
+                </div>
+                <form onSubmit={handleAddHealthNote} className="mt-4 space-y-3">
+                  <GoalLinkSelector
+                    goals={goals}
+                    mode={hNoteInputMode}
+                    goalId={hNoteGoalId}
+                    onModeChange={setHNoteInputMode}
+                    onGoalChange={setHNoteGoalId}
+                  />
+                  <textarea
+                    rows={3}
+                    required
+                    value={hNoteText}
+                    onChange={e => setHNoteText(e.target.value)}
+                    placeholder="Blood test results, recovery notes, symptoms..."
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                  <button type="submit" className="w-full rounded-lg bg-slate-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-700">
+                    Save Health Note
+                  </button>
+                </form>
+              </section>
+            )}
+          </div>}
 
-          <div className={`space-y-6 ${appointmentFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
+          <div className="space-y-4">
             {/* Appointments List */}
-            <div className=" border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div className={appointments.length > 0 ? 'rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900' : 'py-1'}>
+              {appointments.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Scheduled Consultations ({appointments.length})
+                  Scheduled Consultations
                 </h2>
-              </div>
-              <div className="mt-4 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              </div>}
+              <div className={appointments.length > 0 ? 'mt-4 space-y-2' : 'flex items-center gap-3 py-2 text-left'}>
                 {appointments.length === 0 ? (
-                  <div className="col-span-full"><EmptyState icon={Stethoscope} compact title="No appointments" hint="Upcoming visits show with countdowns here." /></div>
+                  appointmentFormOpen === 'appointment' || appointmentFormOpen === 'both' ? null : (
+                    <>
+                      <span className="om-empty-state-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"><Stethoscope className="h-4 w-4" /></span>
+                      <div>
+                        <p className="text-sm font-semibold text-ink">No appointments scheduled</p>
+                        <p className="mt-0.5 text-xs text-ink-muted">Add a visit to keep its date and details here.</p>
+                      </div>
+                    </>
+                  )
                 ) : (
                   [...appointments].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(a => (
-                    <div key={a.id} className="min-w-0 rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex flex-wrap justify-between items-center gap-2">
+                    <div key={a.id} className="dashboard-item-row flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
                       <button
                         type="button"
                         onClick={() => handleToggleAppointmentComplete(a)}
@@ -997,18 +1081,26 @@ export const HealthView: React.FC<HealthViewProps> = ({
             </div>
 
             {/* Health Notes List */}
-            <div className=" border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div className={healthNotes.length > 0 ? 'rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900' : 'py-1'}>
+              {healthNotes.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Health Observations & Records ({healthNotes.length})
+                  Health Observations & Records
                 </h2>
-              </div>
-              <div className="mt-4 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              </div>}
+              <div className={healthNotes.length > 0 ? 'mt-4 space-y-2' : 'flex items-center gap-3 py-2 text-left'}>
                 {healthNotes.length === 0 ? (
-                  <div className="col-span-full"><EmptyState icon={FileText} compact title="No observation notes" hint="Symptoms and observations get a history here." /></div>
+                  appointmentFormOpen === 'observation' || appointmentFormOpen === 'both' ? null : (
+                    <>
+                      <span className="om-empty-state-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"><FileText className="h-4 w-4" /></span>
+                      <div>
+                        <p className="text-sm font-semibold text-ink">No health observations</p>
+                        <p className="mt-0.5 text-xs text-ink-muted">Save symptoms or recovery notes to build a history.</p>
+                      </div>
+                    </>
+                  )
                 ) : (
                   [...healthNotes].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(n => (
-                    <div key={n.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex justify-between items-start gap-2">
+                    <div key={n.id} className="dashboard-item-row flex justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
                       <div className="min-w-0 flex-1">
                         <div className="text-slate-800 dark:text-slate-200 leading-relaxed">{n.text}</div>
                         <div className="mt-1 flex items-center gap-2 flex-wrap">
@@ -1045,70 +1137,209 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
       {/* Tab: Biometric Profile */}
       {activeTab === 'profile' && (
-        profileFormOpen && <div className="max-w-xl  border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
-            Biometric Profile Configuration
-          </h2>
-          <form onSubmit={handleSaveProfile} className="mt-4 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Full Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Your Name"
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
+        profileFormOpen ? (
+          <div className="max-w-3xl rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+              Biometric Profile
+            </h2>
+            <form onSubmit={handleSaveProfile} className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Full Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Your Name"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Date of Birth</label>
+                  <ThemedDateTimeInput
+                    type="date"
+                    value={dob}
+                    onChange={e => setDob(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Date of Birth</label>
-                <ThemedDateTimeInput
-                  type="date"
-                  value={dob}
-                  onChange={e => setDob(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Height (cm)</label>
-                <input
-                  type="number"
-                  value={height}
-                  onChange={e => setHeight(Number(e.target.value))}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Height (cm)</label>
+                  <input
+                    type="number"
+                    value={height}
+                    onChange={e => setHeight(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 175"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Weight (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={weight}
+                    onChange={e => setWeight(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 70"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Target (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={targetWeight}
+                    onChange={e => setTargetWeight(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 68"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Weight (kg)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={weight}
-                  onChange={e => setWeight(Number(e.target.value))}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target (kg)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={targetWeight}
-                  onChange={e => setTargetWeight(Number(e.target.value))}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-            </div>
 
-            <button type="submit" className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 cursor-pointer">
-              Update Biometric Profile
-            </button>
-          </form>
-        </div>
+              <button
+                type="submit"
+                disabled={!hasBiometricProfile && !name.trim() && !dob && height === '' && weight === '' && targetWeight === ''}
+                className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save Biometric Profile
+              </button>
+            </form>
+          </div>
+        ) : hasBiometricProfile ? (
+          <section className="max-w-3xl rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Biometric Profile</h2>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {profile?.name?.trim() && <div>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Name</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{profile.name}</p>
+              </div>}
+              {profile?.dob && <div>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Date of birth</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{profile.dob}</p>
+              </div>}
+              {hasSavedHeight && <div>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Height</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{profile.height} cm</p>
+              </div>}
+              {hasSavedWeight && <div>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Current weight</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{profile.weight} kg</p>
+              </div>}
+              {hasSavedTargetWeight && <div>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Target weight</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{profile.targetWeight} kg</p>
+              </div>}
+            </div>
+          </section>
+        ) : (
+          <div className="flex max-w-3xl items-center gap-3 py-3 text-left">
+            <span className="om-empty-state-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+              <Heart className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-ink">Set up your biometric profile</p>
+              <p className="mt-0.5 text-xs text-ink-muted">Add measurements to see weight and BMI summaries here.</p>
+            </div>
+          </div>
+        )
+      )}
+
+      {activeTab === 'people-person' && (
+        <PeopleView
+          key={activeTab}
+          people={people}
+          interactions={interactions}
+          reminders={reminders}
+          embedded
+          initialForm="person"
+          onRefresh={onRefresh}
+          onSuccess={onSuccess}
+        />
+      )}
+
+      {activeTab === 'people-interaction' && (
+        <PeopleView
+          key={activeTab}
+          people={people}
+          interactions={interactions}
+          reminders={reminders}
+          embedded
+          initialForm="interaction"
+          onRefresh={onRefresh}
+          onSuccess={onSuccess}
+        />
+      )}
+
+      {activeTab === 'foundation-values' && (
+        <SpiritualView
+          key={activeTab}
+          values={values}
+          practices={practices}
+          commitments={commitments}
+          goals={goals}
+          embedded
+          initialForm="values"
+          onNavigate={onNavigate}
+          onRefresh={onRefresh}
+          onSuccess={onSuccess}
+        />
+      )}
+
+      {activeTab === 'foundation-practices' && (
+        <SpiritualView
+          key={activeTab}
+          values={values}
+          practices={practices}
+          commitments={commitments}
+          goals={goals}
+          embedded
+          initialForm="practices"
+          onNavigate={onNavigate}
+          onRefresh={onRefresh}
+          onSuccess={onSuccess}
+        />
+      )}
+
+      {activeTab === 'foundation-commitments' && (
+        <SpiritualView
+          key={activeTab}
+          values={values}
+          practices={practices}
+          commitments={commitments}
+          goals={goals}
+          embedded
+          initialForm="commitments"
+          onNavigate={onNavigate}
+          onRefresh={onRefresh}
+          onSuccess={onSuccess}
+        />
+      )}
+
+      {(['work-projects', 'work-learning', 'work-skills', 'work-meetings'] as HealthTab[]).includes(activeTab) && (
+        <WorkView
+          key={activeTab}
+          projects={workProjects}
+          learningItems={learningItems}
+          meetings={meetings}
+          responsibilities={workResponsibilities}
+          skills={skills}
+          courses={courses}
+          goals={goals}
+          tasks={tasks}
+          embedded
+          initialTab={
+            activeTab === 'work-learning' ? 'learning'
+              : activeTab === 'work-skills' ? 'skills'
+                : activeTab === 'work-meetings' ? 'meetings'
+                  : 'projects'
+          }
+          onRefresh={onRefresh}
+          onSuccess={onSuccess}
+        />
       )}
 
       {/* DEDICATED EDIT MODAL */}

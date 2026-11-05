@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from './currencyDisplay';
 /**
  * universalDataManager.ts
  *
@@ -15,9 +16,8 @@
 
 import { SYSTEM_METADATA_STORES, ENTITY_STORES, DB_VERSION } from './db';
 import { isRecordActive } from './recycleBin';
-import { generateCompleteStandaloneHtml } from './exportHtml';
 import { createLightweightEntities } from './thumbnailService';
-import { storage } from './storage';
+import { generateUUID as createUUID, storage } from './storage';
 import { getLocalDateString, getLocalMonthString } from './dateUtils';
 import { omitDeviceAppearanceSettings } from './appearance';
 import {
@@ -674,13 +674,13 @@ export class UniversalDataManager {
 
     // 6. Finance & Accounts
     (cleanData.finance || []).filter(f => matchesDate(f.date || f.createdAt)).forEach(f => {
-      rows.push(['Transaction', f.id || '', f.category + (f.note ? ` (${f.note})` : ''), f.type || '', `₹${f.amount ?? 0}`, f.date || '', f.paymentMethod || '']);
+      rows.push(['Transaction', f.id || '', f.category + (f.note ? ` (${f.note})` : ''), f.type || '', `${getCurrencySymbol()} ${f.amount ?? 0}`, f.date || '', f.paymentMethod || '']);
     });
     (cleanData.financeAccounts || []).forEach(a => {
-      rows.push(['Account', a.id || '', a.name || '', a.type || '', `₹${a.balance ?? 0}`, '', a.accountNumber || '']);
+      rows.push(['Account', a.id || '', a.name || '', a.type || '', `${getCurrencySymbol()} ${a.balance ?? 0}`, '', a.accountNumber || '']);
     });
     (cleanData.loans || []).filter(l => matchesDate(l.dueDate || l.date || l.createdAt)).forEach(l => {
-      rows.push(['Loan', l.id || '', l.personName || l.title || '', l.type || '', `₹${l.amount ?? 0}`, l.dueDate || '', l.note || '']);
+      rows.push(['Loan', l.id || '', l.personName || l.title || '', l.type || '', `${getCurrencySymbol()} ${l.amount ?? 0}`, l.dueDate || '', l.note || '']);
     });
 
     // 7. People & Network
@@ -848,6 +848,7 @@ export class UniversalDataManager {
           }
         }
         recordCount = Object.values(filteredCleanData).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 1), 0);
+        const { generateCompleteStandaloneHtml } = await import('./exportHtml');
         const htmlString = await generateCompleteStandaloneHtml(filteredCleanData);
         blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });
         filename = `${safeTitle}-standalone-app${suffix}-${dateStr}.html`;
@@ -1087,7 +1088,7 @@ export class UniversalDataManager {
     return {
       valid: true,
       formatDetected,
-      isRestorable: true,
+      isRestorable: checksumStatus !== 'mismatch',
       isIncrementalBundle,
       app: parsed.app || 'Om-LifeOS',
       version: parsed.version || '5.0.0',
@@ -1126,6 +1127,9 @@ export class UniversalDataManager {
   ): Promise<UniversalRestoreResult> {
     if (!validation.valid || !validation.cleanData) {
       throw new Error(validation.error || 'Cannot restore invalid data.');
+    }
+    if (validation.checksumStatus === 'mismatch') {
+      throw new Error('Cannot restore this backup because its checksum does not match the file contents.');
     }
 
     const db = await this.getDB();
@@ -1261,9 +1265,23 @@ export class UniversalDataManager {
             delete item.deletedAt;
 
             if (mode === 'merge_workspace' && conflictStrategy === 'keep_both') {
-              // In keep_both mode, if key conflicts, generate new ID
-              // (will be put or added safely)
-              store.put(item);
+              const existing = store.get(recordId);
+              existing.onsuccess = () => {
+                if (existing.result) {
+                  const renamedId = `copy-${createUUID()}`;
+                  store.put({ ...item, id: renamedId });
+                } else {
+                  store.put(item);
+                }
+              };
+              existing.onerror = () => {
+                store.put(item);
+              };
+            } else if (mode === 'merge_workspace' && conflictStrategy === 'keep_local') {
+              const existing = store.get(recordId);
+              existing.onsuccess = () => {
+                if (!existing.result) store.put(item);
+              };
             } else {
               store.put(item);
             }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Cloud,
   CloudUpload,
@@ -658,7 +659,8 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
 
       {/* RESTORE CONFIRMATION MODAL */}
       {showRestoreConfirm && (
-        <div className="sanctuary-drive-confirm-overlay drive-confirm-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-xs sm:p-4">
+        createPortal(
+        <div className="sanctuary-drive-confirm-overlay drive-confirm-overlay fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-xs sm:p-4">
           <div
             className="sanctuary-glass-dialog drive-confirm-card my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:max-h-[calc(100dvh-2rem)] sm:p-6 animate-in fade-in zoom-in-95 duration-150"
             role="dialog"
@@ -699,7 +701,9 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+        )
       )}
     </div>
   );

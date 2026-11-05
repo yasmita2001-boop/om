@@ -48,7 +48,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [colorFilter] = useState<string>('all');
   const [noteFiltersOpen, setNoteFiltersOpen] = useState(false);
-  const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(false);
+  const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(() => notes.length === 0);
 
   useEffect(() => {
     if (pendingAction === 'note') setIsNoteEditorOpen(true);
@@ -315,7 +315,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       setAllCategories(prev => [...prev, finalCategory]);
     }
 
-    resetForm();
+    resetForm(!editingNoteId);
     onRefresh();
   };
 
@@ -414,9 +414,9 @@ export const NotesView: React.FC<NotesViewProps> = ({
     }
   };
 
-  const resetForm = () => {
+  const resetForm = (keepEditorOpen = false) => {
     setEditingNoteId(null);
-    setIsNoteEditorOpen(false);
+    setIsNoteEditorOpen(keepEditorOpen);
     setTitle('');
     setNoteGoalId('');
     setNoteInputMode('manual');
@@ -589,13 +589,13 @@ export const NotesView: React.FC<NotesViewProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* ========================================================================= */}
         {/* LEFT PANEL: LUXURY NOTEBOOK EDITOR (5 cols)                                */}
         {/* ========================================================================= */}
         {(isNoteEditorOpen || Boolean(editingNoteId)) && <div
           ref={formRef}
-          className={`min-w-0 lg:col-span-5 rounded-2xl border transition-all ${
+          className={`memo-editor-panel min-w-0 ${notes.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border transition-all ${
             editingNoteId
               ? 'border-indigo-400 bg-indigo-50/20 dark:border-indigo-500/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
               : 'border-slate-200/80 bg-white dark:border-slate-800/80 dark:bg-slate-900'
@@ -622,7 +622,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 Cancel Edit
               </button>
             )}
-            {!editingNoteId && (
+            {!editingNoteId && notes.length > 0 && (
               <button
                 type="button"
                 onClick={() => setIsNoteEditorOpen(false)}
@@ -851,12 +851,24 @@ export const NotesView: React.FC<NotesViewProps> = ({
         {/* ========================================================================= */}
         {/* RIGHT PANEL: NOTEBOOKS DIRECTORY & CARDS (7 cols)                         */}
         {/* ========================================================================= */}
-        <section className={`min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${isNoteEditorOpen || editingNoteId ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
+        {(notes.length > 0 || (!isNoteEditorOpen && !editingNoteId)) && <section className={`memo-archive-panel min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${isNoteEditorOpen || editingNoteId ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
           <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-              Memo archive
-              <span className="ml-2 text-xs font-medium text-slate-400">{filteredNotes.length}</span>
-            </h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Memo archive
+                <span className="ml-2 text-xs font-medium text-slate-400">{filteredNotes.length}</span>
+              </h2>
+              {!isNoteEditorOpen && !editingNoteId && (
+                <button
+                  type="button"
+                  onClick={() => setIsNoteEditorOpen(true)}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-500/15 dark:text-emerald-300"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Memo
+                </button>
+              )}
+            </div>
           </div>
           <div
             id="note-archive-filters"
@@ -934,16 +946,18 @@ export const NotesView: React.FC<NotesViewProps> = ({
             <div className="py-12 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-6 space-y-2">
               <BookOpen className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto" />
               <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                No notes found matching your criteria
+                {notes.length === 0 ? 'No memos saved yet' : 'No notes found matching your criteria'}
               </div>
               <div className="text-[11px] text-slate-400">
-                Write your first note using the notebook canvas on the left.
+                {notes.length === 0
+                  ? 'Create your first memo to start your archive.'
+                  : 'Try another notebook or adjust your search and filters.'}
               </div>
             </div>
           )}
             {noteCards}
           </div>
-        </section>
+        </section>}
       </div>
 
       {/* ========================================================================= */}

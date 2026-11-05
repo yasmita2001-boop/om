@@ -3527,6 +3527,7 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   backdrop-filter: blur(22px) saturate(130%);
 }
 
+
 .sanctuary-mobile-module-sheet-header {
   width: 100%;
   min-width: 0;
@@ -3536,15 +3537,6 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   box-shadow: none !important;
 }
 
-@media (max-width: 767px) {
-  .sanctuary-mobile-module-sheet,
-  .sanctuary-shell .sanctuary-mobile-module-sheet {
-    background: var(--om-card-base) !important;
-    background-image: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-}
 
 .sanctuary-mobile-module-sheet > div:first-child {
   border-color: var(--om-line);
@@ -4321,6 +4313,17 @@ html[data-custom-theme="true"] textarea::placeholder {
 html[data-custom-theme="true"] .sanctuary-shell :is(.command-bar, .sanctuary-sidebar, .sanctuary-mobile-bottom-nav, .sanctuary-mobile-module-sheet) {
   background-color: color-mix(in srgb, var(--om-custom-surface) var(--om-card-alpha, 96%), transparent) !important;
   backdrop-filter: blur(var(--om-card-blur, 16px)) saturate(120%);
+}
+
+@media (max-width: 767px) {
+  html[data-custom-theme="true"] .sanctuary-shell .sanctuary-mobile-module-sheet,
+  .sanctuary-shell .sanctuary-mobile-module-sheet {
+    isolation: auto !important;
+    background-color: rgb(21 26 46) !important;
+    background-image: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
 }
 
 /* Keep expandable controls, selected submenu items and menus tied to the active accent. */
@@ -5160,7 +5163,7 @@ html.dark[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-
 }
 
 html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="border"][class*="bg-white"]:not(.journal-reflection-editor):not(.journal-reflection-toolbar *),
-html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="border"][class*="bg-card"]:not(.journal-reflection-editor):not(.journal-reflection-toolbar *) {
+html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main :is(div, section, article, details)[class*="border"][class*="bg-card"]:not(.journal-reflection-editor):not(.journal-reflection-toolbar *):not(.timeline-workstream-heading) {
   border: 1px solid color-mix(in srgb, var(--om-ink-muted) 24%, var(--om-line)) !important;
   border-radius: 1rem !important;
   background-color: var(--om-card-base, var(--om-card)) !important;
@@ -6354,4 +6357,33 @@ html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main 
   color: var(--om-ink);
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .timeline-day-column--today {
+  background-color: color-mix(in srgb, var(--color-brand) 12%, var(--om-card-base, var(--om-card-soft)));
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .timeline-table-preceding {
+  border-bottom: 0 !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .timeline-column-headings > div {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .timeline-column-headings > div + div {
+  border-left: 1px solid var(--om-line) !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .timeline-workstream-heading[class*="border"][class*="bg-card"] {
+  border: 0 !important;
+  border-right: 1px solid var(--om-line) !important;
+  border-radius: 16px 0 0 16px !important;
+  box-shadow: none !important;
+}
+
+:root[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main .timeline-column-headings > div:last-child {
+  border-radius: 0 16px 16px 0 !important;
 }

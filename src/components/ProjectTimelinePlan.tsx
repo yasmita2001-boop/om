@@ -1895,7 +1895,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             </div>
           )}
 
-          <div className="overflow-hidden rounded-2xl border border-[var(--om-line)] bg-card shadow-sm">
+          <div className="overflow-hidden">
             {/* Header Bar */}
             <div className="flex flex-col justify-between gap-2 border-b border-[var(--om-line)] bg-card-soft px-4 py-2.5 text-xs text-ink-soft sm:flex-row sm:items-center">
               <div className="flex items-center gap-2 min-w-0">
@@ -1922,7 +1922,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             </div>
 
             {/* Granularity Switcher & Period Controls */}
-            <div className="flex flex-col justify-between gap-2 border-b border-[var(--om-line)] bg-card-soft px-4 py-2 sm:flex-row sm:items-center">
+            <div className={`flex flex-col justify-between gap-2 border-b border-[var(--om-line)] bg-card-soft px-4 py-2 sm:flex-row sm:items-center ${activeStream === 'finance' ? '' : 'timeline-table-preceding'}`}>
               <div className="timeline-granularity-tabs flex w-full max-w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:flex-1">
                 {([
                   ['single_day', 'Day'],
@@ -1985,7 +1985,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
 
             {/* Quick Financial KPIs bar when in Finance stream */}
             {activeStream === 'finance' && (
-              <div className="grid grid-cols-2 gap-2 border-b border-[var(--om-line)] p-2.5 sm:grid-cols-4">
+              <div className="timeline-table-preceding grid grid-cols-2 gap-2 border-b border-[var(--om-line)] p-2.5 sm:grid-cols-4">
                 <div className="rounded-xl border border-[var(--om-line)] bg-card-soft p-2">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-ink-muted">Tracked Goals</span>
                   <div className="font-mono text-base font-extrabold text-ink">
@@ -2017,11 +2017,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <div className="overflow-x-auto no-scrollbar">
               <div className="min-w-[720px] sm:min-w-[850px]">
                 <div className="flex border-b border-[var(--om-line)] bg-card-soft text-center text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                  <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} sticky left-0 z-30 shrink-0 border-r border-[var(--om-line)] bg-card-soft p-2 pl-3 text-left font-semibold text-slate-700 transition-all dark:text-slate-300 sm:pl-4`}>
+                  <div className={`timeline-workstream-heading ${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} sticky left-0 z-30 shrink-0 border-r border-[var(--om-line)] bg-card-soft p-2 pl-3 text-left font-semibold text-slate-700 transition-all dark:text-slate-300 sm:pl-4`}>
                     {isMobileCompactView ? 'WORKSTREAM' : 'PROJECT WORKSTREAM'}
                   </div>
                   <div
-                    className="grid flex-1"
+                    className="timeline-column-headings grid flex-1"
                     style={{ gridTemplateColumns: `repeat(${timelineData.cols.length}, minmax(0, 1fr))` }}
                   >
                     {timelineData.cols.map(c => (
@@ -2033,13 +2033,16 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                             setTimelineOffset((c as any).offsetFromToday);
                           }
                         }}
-                        className={`border-l border-[var(--om-line)] p-1.5 transition-colors ${
+                        className={`p-1.5 transition-colors ${
                           timelineGranularity === 'daily' ? 'cursor-pointer hover:bg-amber-100/70 dark:hover:bg-amber-950/40' : ''
                         } ${
                           c.isToday
-                            ? 'bg-[#b88648] font-black text-white dark:bg-[#9b713b]'
+                            ? 'timeline-day-column--today font-black'
                             : 'bg-card-soft text-slate-500 dark:text-slate-400'
                         }`}
+                        style={c.isToday ? {
+                          color: 'var(--color-brand)'
+                        } : undefined}
                         title={timelineGranularity === 'daily' ? `Click to open Single Day focus for ${c.dateStr}` : undefined}
                       >
                         <div className="truncate">{c.label}</div>
@@ -2556,7 +2559,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                     <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} shrink-0 pl-6 pr-2 flex items-center justify-between sticky left-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border-r border-slate-200/80 dark:border-slate-800/80`}>
                                       <div className="flex items-center gap-1.5 truncate">
                                         <Repeat className="h-3 w-3 text-amber-500 shrink-0" />
-                                        <span className={`truncate ${isDelayed ? 'font-bold text-rose-700 dark:text-rose-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                                        <span className={`truncate ${isDelayed ? 'font-bold text-indigo-700 dark:text-indigo-300' : 'text-slate-700 dark:text-slate-300'}`}>
                                           {rt.name}
                                         </span>
                                       </div>

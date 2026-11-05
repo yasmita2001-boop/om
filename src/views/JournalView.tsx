@@ -2,7 +2,7 @@ import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Calendar, Trash2, Edit3,
-  Copy, Check, Search, Volume2, Target, X
+  Copy, Check, Search, Volume2, Target, X, Plus
 } from 'lucide-react';
 import { JournalEntry, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -51,7 +51,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMoodFilter, setSelectedMoodFilter] = useState<string>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(() => journal.length === 0);
 
   useEffect(() => {
     if (pendingAction === 'reflection') setIsEditorOpen(true);
@@ -224,7 +224,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
       onSuccess(effectiveGoalId ? '✓ Journal reflection recorded & linked to Goal' : '✓ Journal reflection recorded');
     }
 
-    resetForm();
+    resetForm(!editingId);
     onRefresh();
   };
 
@@ -292,9 +292,9 @@ export const JournalView: React.FC<JournalViewProps> = ({
     }
   };
 
-  const resetForm = () => {
+  const resetForm = (keepEditorOpen = false) => {
     setEditingId(null);
-    setIsEditorOpen(false);
+    setIsEditorOpen(keepEditorOpen);
     setTitle('');
     setJournalGoalId('');
     setJournalInputMode('manual');
@@ -460,11 +460,11 @@ export const JournalView: React.FC<JournalViewProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start items-start gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* Journal Editor (5 cols) */}
         {(isEditorOpen || Boolean(editingId)) && <div
           ref={formRef}
-          className={`min-w-0 lg:col-span-5 rounded-2xl border transition-all ${
+          className={`journal-editor-panel min-w-0 ${journal.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border transition-all ${
             editingId
               ? 'border-indigo-400 bg-indigo-50/20 dark:border-indigo-500/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
               : 'border-slate-200/80 bg-white dark:border-slate-800/80 dark:bg-slate-900'
@@ -488,7 +488,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 Cancel Edit
               </button>
             )}
-            {!editingId && (
+            {!editingId && journal.length > 0 && (
               <button
                 type="button"
                 onClick={() => setIsEditorOpen(false)}
@@ -679,12 +679,24 @@ export const JournalView: React.FC<JournalViewProps> = ({
         </div>}
 
         {/* Journal Timeline Archive (7 cols) */}
-        <section className={`min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${isEditorOpen || editingId ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
+        {(journal.length > 0 || (!isEditorOpen && !editingId)) && <section className={`journal-archive-panel min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${isEditorOpen || editingId ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
           <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-              Reflection history
-              <span className="ml-2 text-xs font-medium text-slate-400">{filteredEntries.length}</span>
-            </h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Reflection history
+                <span className="ml-2 text-xs font-medium text-slate-400">{filteredEntries.length}</span>
+              </h2>
+              {!isEditorOpen && !editingId && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditorOpen(true)}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-500/15 dark:text-emerald-300"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Reflection
+                </button>
+              )}
+            </div>
           </div>
           <div
             id="journal-archive-controls"
@@ -751,14 +763,16 @@ export const JournalView: React.FC<JournalViewProps> = ({
 
           {filteredEntries.length === 0 ? (
             <div className="py-12 text-center text-xs text-slate-400 rounded-2xl border border-dashed border-slate-200 p-6 dark:border-slate-800">
-              No journal reflections found. Record an entry using the New Reflection button.
+              {journal.length === 0
+                ? 'No reflections recorded yet. Write your first entry to begin your journal.'
+                : 'No journal reflections match your search or filters.'}
             </div>
           ) : (
             <div className="grid grid-cols-1 items-start gap-3.5">
               {filteredEntries.map(renderEntryCard)}
             </div>
           )}
-        </section>
+        </section>}
       </div>
 
       {viewingEntry && (

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Play, Pause, RotateCcw, Check, Sparkles, Volume2,
   VolumeX, Clock, Bell, Trash2,
-  Upload, Music, Sliders, Pencil,
+  Upload, Music, Sliders, Pencil, Plus,
   Link2
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
@@ -425,7 +425,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
     setNewAlarmLabel('');
     setSelectedRoutineId('');
     setAlarmTitleMode('manual');
-    setIsAddingAlarm(false);
+    setIsAddingAlarm(!editingAlarm);
     setEditingAlarm(null);
     refreshAlarms();
   };
@@ -746,7 +746,10 @@ export const FocusView: React.FC<FocusViewProps> = ({
       {/* ============================================================== */}
       {activeMenuTab === 'alarms' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div className="focus-alarm-panel rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 lg:col-span-5">
+          {(isAddingAlarm || alarmsList.length === 0) && (
+          <div className={`focus-alarm-panel rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${
+            alarmsList.length > 0 && isAddingAlarm ? 'lg:col-span-5' : 'lg:col-span-12'
+          }`}>
             <div className="flex items-center gap-2">
               <div className="focus-alarm-icon flex h-8 w-8 items-center justify-center rounded-lg">
                   <Clock className="h-5 w-5" />
@@ -940,40 +943,51 @@ export const FocusView: React.FC<FocusViewProps> = ({
             )}
 
             {!isAddingAlarm && (
-              <div className="mt-4 rounded-xl border border-slate-200/80 p-4 dark:border-slate-700/80">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200/80 p-4 dark:border-slate-700/80">
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                   Create an alarm to set a reminder that repeats on selected days.
                 </p>
                 <button
                   type="button"
                   onClick={() => setIsAddingAlarm(true)}
-                  className="focus-alarm-save mt-3 rounded-xl border px-4 py-2 text-xs font-bold cursor-pointer"
+                  className="focus-alarm-save inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold cursor-pointer"
                 >
+                  <Plus className="h-4 w-4" />
                   Add Alarm
                 </button>
               </div>
             )}
           </div>
+          )}
 
-          <div className="focus-alarm-panel min-w-0 space-y-3 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 lg:col-span-7">
+          {alarmsList.length > 0 && (
+          <div className={`focus-alarm-panel min-w-0 space-y-3 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 ${
+            isAddingAlarm ? 'lg:col-span-7' : 'lg:col-span-12'
+          }`}>
             <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                Scheduled Alarms
-              </h2>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Alarms play your selected ringtone and trigger full-screen alerts even in the background.
-              </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Scheduled Alarms
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Alarms play your selected ringtone and trigger full-screen alerts even in the background.
+                  </p>
+                </div>
+                {!isAddingAlarm && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingAlarm(true)}
+                    className="focus-alarm-save inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Alarm
+                  </button>
+                )}
+              </div>
             </div>
             <div className="grid gap-3 pt-1 [grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr))]">
-              {alarmsList.length === 0 ? (
-                <EmptyState
-                  icon={Bell}
-                  compact
-                  title="No alarms scheduled"
-                  hint="Create an alarm to see it in your schedule."
-                />
-              ) : (
-                [...alarmsList].sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(alarm => {
+              {[...alarmsList].sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(alarm => {
                   const ringtoneMeta = BUILTIN_RINGTONES.find(r => r.id === alarm.ringtone) || {
                     name: alarm.ringtone === 'custom' ? 'Custom Ringtone' : 'Zen Bell'
                   };
@@ -1067,10 +1081,10 @@ export const FocusView: React.FC<FocusViewProps> = ({
                       </div>
                     </div>
                   );
-                })
-              )}
+                })}
             </div>
           </div>
+          )}
         </div>
       )}
 

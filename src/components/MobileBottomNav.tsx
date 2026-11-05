@@ -82,7 +82,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     <>
       {/* Mobile Drawer / Quick Launcher Sheet */}
       {isMoreOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/70 backdrop-blur-sm md:hidden animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex flex-col justify-end bg-slate-950/70 backdrop-blur-sm md:hidden animate-in fade-in duration-200">
           <div
             className="flex-1"
             onClick={() => setIsMoreOpen(false)}
@@ -92,9 +92,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             role="dialog"
             aria-modal="true"
             aria-label="All modules and tools"
-            className="sanctuary-mobile-module-sheet rounded-t-3xl border-t border-slate-200 bg-white p-5 pb-8 shadow-2xl dark:border-white/10 dark:bg-[#111827] animate-in slide-in-from-bottom duration-250 max-h-[80vh] overflow-y-auto"
+            className="sanctuary-mobile-module-sheet relative isolate w-full overflow-hidden rounded-t-3xl border-t border-slate-200 bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl dark:border-white/10 dark:bg-[#111827] animate-in slide-in-from-bottom duration-250 max-h-[80dvh] overflow-y-auto"
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/[0.08]">
+            <div className="sanctuary-mobile-module-sheet-header flex w-full items-center justify-between border-b border-slate-100 pb-3 dark:border-white/[0.08]">
               <div className="flex items-center gap-2">
                 <OmLogoMark className="h-8 w-7" />
                 <div>

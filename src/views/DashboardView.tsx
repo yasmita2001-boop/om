@@ -387,7 +387,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </section>}
         </div>
 
-        {habits.length > 0 && <div className="space-y-4 lg:col-span-5">
+        {(habits.length > 0 || finance.length > 0) && <div className={`space-y-4 ${habits.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
+        {habits.length > 0 &&
         <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
@@ -443,7 +444,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 );
               })}
           </div>
-        </section>
+        </section>}
         {finance.length > 0 && <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
             <div className="flex items-center gap-2.5">

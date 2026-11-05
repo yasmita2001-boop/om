@@ -171,7 +171,7 @@ export const Header: React.FC<HeaderProps> = ({
           icon={<OmLogoMark className="h-8 w-7 shrink-0 transition-transform group-hover:scale-105 sm:h-9 sm:w-8" />}
           wrapperClassName="relative min-w-0 max-w-full shrink-0 select-none"
           triggerClassName="header-dropdown-trigger group flex h-9 max-w-full items-center gap-1.5 rounded-lg border border-transparent bg-transparent px-1 text-left transition-colors hover:bg-slate-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-slate-800/70 sm:gap-2"
-          menuClassName="absolute left-0 right-auto z-50 mt-2 max-h-[70vh] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-slate-300 bg-white p-2 shadow-card dark:border-slate-600 dark:bg-slate-900"
+          menuClassName="absolute left-0 right-auto z-50 mt-2 max-h-[calc(100dvh-8.5rem)] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-slate-300 bg-white p-2 shadow-card dark:border-slate-600 dark:bg-slate-900 md:max-h-[70vh]"
         >
           {closeMenu => navItems.map(item => {
             const isActive = selectedNavModule === item.id;

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import {
   FinanceAccount, FinanceTransaction, Loan, LoanPayment,
-  Investment, SavingsPlan, SavingsProductType, Asset, Liability, FinancialGoal,
+  Investment, SavingsPlan, SavingsProductType, Asset, Liability,
   ReceiptItem, NavModule, Goal, InvestmentActivity, InvestmentActivityKind, CashFlowSchedule,
   CashFlowScheduleFrequency
 } from '../types';
@@ -55,7 +55,6 @@ interface FinanceViewProps {
   savingsPlans: SavingsPlan[];
   assets?: Asset[];
   liabilities?: Liability[];
-  financialGoals?: FinancialGoal[];
   receipts?: ReceiptItem[];
   goals?: Goal[];
   onRefresh: () => void;
@@ -65,7 +64,7 @@ interface FinanceViewProps {
 }
 
 type OverviewPanel = 'transaction' | 'accounts' | 'scheduled';
-type FinanceTab = 'overview' | 'transactions' | 'loans' | 'investments' | 'savings' | 'balanceSheet' | 'capitalPlanning';
+type FinanceTab = 'overview' | 'transactions' | 'loans' | 'investments' | 'savings' | 'balanceSheet';
 type SectionActionPanel = 'loanActions' | 'investmentActions' | 'savings' | 'asset';
 type FinanceMenuAction =
   | 'loanPayment'
@@ -88,7 +87,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   savingsPlans,
   assets = [],
   liabilities = [],
-  financialGoals = [],
   receipts = [],
   goals = [],
   onRefresh,
@@ -3749,7 +3747,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     { id: 'savings', label: 'Savings & Deposits', optionLabel: `Savings & Deposits (${savingsPlans.length})`, icon: ShieldCheck },
     { id: 'registerSavings', label: 'Register Savings / Deposit', optionLabel: '　↳ Register Savings / Deposit', icon: Plus },
     { id: 'balanceSheet', label: 'Balance Sheet', optionLabel: `Balance Sheet (${assets.length})`, icon: FileText },
-    { id: 'capitalPlanning', label: 'Capital & Financial Planning', optionLabel: `Capital & Financial Planning (${financialGoals.length})`, icon: TrendingUp },
     { id: 'addAsset', label: 'Add Asset', optionLabel: '　↳ Add Asset', icon: Plus }
   ];
   const selectedFinanceMenuId: FinanceMenuId = activeTab === 'overview' && overviewPanel
@@ -5343,38 +5340,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </div>
             )}
           </div>}
-          {!hasLoanRecords && sectionActionPanel !== 'loanActions' && (
-            <div className="finance-loans-empty-state lg:col-span-12 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-6">
-              <EmptyState
-                icon={Landmark}
-                compact
-                title="No loans or liabilities yet"
-                hint="Create a loan or add an existing liability to start tracking your debt."
-              />
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSectionActionPanel('loanActions');
-                    setActiveLoanAction('newLoan');
-                  }}
-                  className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
-                >
-                  + New Loan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSectionActionPanel('loanActions');
-                    setActiveLoanAction('liability');
-                  }}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  + Add Liability
-                </button>
-              </div>
-            </div>
-          )}
         </div>
         </div>
       )}
@@ -5529,7 +5494,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </div>
           </div>
 
-          {(sectionActionPanel !== 'investmentActions' || hasInvestmentRecords) && <div className={`finance-unified-list-column ${sectionActionPanel === 'investmentActions' ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+          {investments.length > 0 && <div className={`finance-unified-list-column ${sectionActionPanel === 'investmentActions' ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
             {investments.length > 0 && (
               <section className="finance-summary-card border-b border-slate-100 pb-4 dark:border-slate-800">
                 <h2 className="border-b border-slate-100 pb-3 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-white">
@@ -5559,10 +5524,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </div>
 
             <div className="mt-3">
-              {investments.length === 0 ? (
-                <EmptyState icon={TrendingUp} compact title="No investment assets yet" hint="Record holdings to track value, gains and allocation." />
-              ) : (
-                investments.map(i => {
+              {investments.map(i => {
                   const metrics = investmentMetricsById.get(i.id) || getInvestmentMetrics(i, []);
                   const invested = metrics.costBasis;
                   const current = metrics.currentValue;
@@ -5688,8 +5650,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       )}
                     </div>
                   );
-                })
-              )}
+                })}
             </div>
           </div>}
         </div>
@@ -6381,43 +6342,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         </div>
       )}
 
-      {activeTab === 'capitalPlanning' && (
-        <div className="finance-unified-pane rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Capital & Financial Planning</h2>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Dedicated view for saved financial targets previously hidden from the Finance menu.</p>
-            </div>
-            <TrendingUp className="h-5 w-5 text-indigo-500" />
-          </div>
-          {financialGoals.length === 0 ? (
-            <div className="py-10 text-center">
-              <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">No financial goals yet</div>
-              <div className="mt-1 text-xs text-slate-400">Create one from the Goals workspace; its contribution will appear here.</div>
-            </div>
-          ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {financialGoals.map(goal => {
-                const target = Number(goal.target) || 0;
-                const current = Number(goal.current) || 0;
-                const progress = target > 0 ? Math.min(100, Math.max(0, (current / target) * 100)) : 0;
-                return (
-                  <div key={goal.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                    <div className="font-semibold text-slate-900 dark:text-white">{goal.name}</div>
-                    <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                      {getCurrencySymbol()} {current.toLocaleString('en-IN')} / {getCurrencySymbol()} {target.toLocaleString('en-IN')}
-                    </div>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                      <div className="h-full rounded-full bg-indigo-500" style={{ width: `${progress}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Tab: Assets & Balance Sheet */}
       {activeTab === 'balanceSheet' && (
         <div className="finance-unified-pane">
@@ -7030,14 +6954,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </div>
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[600px] overflow-y-auto">
-            {filteredTransactions.length === 0 ? (
-              <EmptyState
-                icon={TrendingUp}
-                compact
-                title="No transactions found"
-                hint="Adjust the search or filters, or capture a new transaction above."
-              />
-            ) : (
+            {filteredTransactions.length > 0 && (
               filteredTransactions.slice(0, visibleLedgerCount).map(tx => {
                 const linkedRec = tx.linkedReceiptId ? receipts.find(r => r.id === tx.linkedReceiptId) : undefined;
                 const attachName = tx.fileName;

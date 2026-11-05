@@ -20,7 +20,6 @@ const createProps = (overrides: Partial<FinanceProps> = {}): FinanceProps => ({
   savingsPlans: [],
   assets: [],
   liabilities: [],
-  financialGoals: [],
   receipts: [],
   goals: [],
   onRefresh: vi.fn(),
@@ -54,6 +53,11 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -63,6 +67,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
   if (originalScrollIntoViewDescriptor) {
     Object.defineProperty(Element.prototype, 'scrollIntoView', originalScrollIntoViewDescriptor);
   } else {
@@ -86,6 +91,16 @@ const selectMenu = async (menu: string) => {
 };
 
 describe('Finance entry and history card layouts', () => {
+  it('hides the empty-state block when the ledger has no transactions', async () => {
+    await renderFinance(createProps());
+    await selectMenu('transactions');
+
+    expect(container.textContent).toContain('Ledger Transactions (0)');
+    expect(container.querySelector('input[placeholder="Search ledger..."]')).not.toBeNull();
+    expect(container.textContent).not.toContain('No transactions found');
+    expect(container.textContent).not.toContain('Adjust the search or filters');
+  });
+
   it('uses the shared header dropdown treatment for the Finance submenu', async () => {
     await renderFinance(createProps());
 
@@ -96,15 +111,39 @@ describe('Finance entry and history card layouts', () => {
     expect(container.querySelector('[role="menu"][aria-label="Finance submenu options"]')).not.toBeNull();
   });
 
-  it('shows useful loan actions when the empty Loans menu is opened', async () => {
+  it('permanently omits Capital & Financial Planning from Finance', async () => {
+    await renderFinance(createProps());
+
+    expect(container.textContent).not.toContain('Capital & Financial Planning');
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Finance submenu"]')?.click();
+    });
+    expect(container.querySelector('[data-finance-menu-id="capitalPlanning"]')).toBeNull();
+  });
+
+  it('omits the empty Loans card while keeping loan actions available in the Finance menu', async () => {
     await renderFinance(createProps());
     await selectMenu('loans');
 
-    expect(container.querySelector('.finance-loans-empty-state')).not.toBeNull();
-    const newLoanButton = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('New Loan'))!;
-    await act(async () => newLoanButton.click());
+    expect(container.querySelector('.finance-loans-empty-state')).toBeNull();
+    expect(container.textContent).not.toContain('No loans or liabilities yet');
+    expect(container.textContent).not.toContain('Create a loan or add an existing liability');
 
+    await selectMenu('newLoan');
     expect(container.querySelector('.finance-unified-split')?.firstElementChild?.className).toContain('lg:col-span-12');
+  });
+
+  it('hides the entire Portfolio section when there are no investment assets', async () => {
+    await renderFinance(createProps());
+    await selectMenu('investments');
+
+    expect(container.querySelector('.finance-unified-list-column')).toBeNull();
+    expect(container.textContent).not.toContain('Portfolio (0)');
+
+    await renderFinance(createProps({ investments: populatedProps.investments }));
+
+    expect(container.textContent).toContain('Portfolio (1)');
+    expect(container.querySelector('.finance-unified-list-column')).not.toBeNull();
   });
 
   it.each([

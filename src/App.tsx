@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react
 import {
   NavModule, AppState, Task, Goal, Milestone, Strategy, KPI, Mission,
   Routine, Habit, HabitLog, FinanceAccount, FinanceTransaction, Loan,
-  LoanPayment, Investment, SavingsPlan, Asset, Liability, FinancialGoal,
+  LoanPayment, Investment, SavingsPlan, Asset, Liability,
   InvestmentActivity, CashFlowSchedule,
   Note, JournalEntry, FocusSession, SleepRecord, WaterRecord, NutritionRecord,
   HealthMeasurement, HealthAppointment, HealthNote, HealthProfile, WorkProject, LearningItem,
@@ -208,7 +208,6 @@ function LifeOSApp() {
   const [savingsPlans, setSavingsPlans] = useState<SavingsPlan[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [liabilities, setLiabilities] = useState<Liability[]>([]);
-  const [financialGoals, setFinancialGoals] = useState<FinancialGoal[]>([]);
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [journal, setJournal] = useState<JournalEntry[]>([]);
@@ -333,7 +332,6 @@ function LifeOSApp() {
         savingsData,
         assetsData,
         liabilitiesData,
-        fgData,
         notesData,
         journalData,
         focusData,
@@ -382,7 +380,6 @@ function LifeOSApp() {
         getAllForProfile<SavingsPlan>('savingsPlans'),
         getAllForProfile<Asset>('assets'),
         getAllForProfile<Liability>('liabilities'),
-        getAllForProfile<FinancialGoal>('financialGoals'),
         getAllForProfile<Note>('notes'),
         getAllForProfile<JournalEntry>('journal'),
         getAllForProfile<FocusSession>('focus'),
@@ -461,7 +458,6 @@ function LifeOSApp() {
       setSavingsPlans([...savingsData]);
       setAssets([...assetsData]);
       setLiabilities([...liabilitiesData]);
-      setFinancialGoals([...fgData]);
       setNotes([...notesData]);
       setJournal([...journalData]);
       setFocusSessions([...focusData]);
@@ -1096,7 +1092,6 @@ function LifeOSApp() {
                 savingsPlans={savingsPlans}
                 assets={assets}
                 liabilities={liabilities}
-                financialGoals={financialGoals}
                 receipts={receipts}
                 goals={goals}
                 onNavigate={changeModule}

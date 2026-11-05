@@ -10,10 +10,12 @@ interface WaitableEvent {
 
 type ServiceWorkerScope = typeof globalThis & {
   __WB_MANIFEST: Array<string | { url: string; revision?: string | null }>;
+  skipWaiting(): Promise<void>;
   clients: {
     claim(): Promise<void>;
   };
   addEventListener(type: 'activate', listener: (event: WaitableEvent) => void): void;
+  addEventListener(type: 'install', listener: (event: WaitableEvent) => void): void;
 };
 
 const serviceWorker = globalThis as unknown as ServiceWorkerScope;
@@ -49,4 +51,8 @@ serviceWorker.addEventListener('activate', event => {
     serviceWorker.clients.claim(),
     caches.delete('om-theme-wallpapers')
   ]));
+});
+
+serviceWorker.addEventListener('install', event => {
+  event.waitUntil(serviceWorker.skipWaiting());
 });

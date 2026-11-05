@@ -5,14 +5,26 @@ Offline-first personal operating system (tasks, goals, routines, finance, health
 ## Run
 ```bash
 npm install
-npm run dev            # http://localhost:3000
+npm run dev            # http://localhost:3000 (local machine only)
+npm run dev -- --host 0.0.0.0 # optional LAN access; use only on a trusted network
 npm run build          # production build -> dist/ (PWA + code-splitting)
 npm run build:single   # also writes dist/om-lifeos-complete.html (one file, opens offline anywhere)
 npm run build:local-test # writes dist-local-test/om-lifeos-local-test.html, opening a local guest workspace without Google sign-in
 npm run typecheck      # TypeScript check
 ```
 
-Private Cosmos is the default appearance for new workspaces. Sanctuary remains available as a coordinated theme. Its original, locally bundled environment illustration remains available if WebGL is unavailable; the Three.js scene is lazy-loaded and can be disabled from **Actions**. Reduced-motion preferences disable scene animation.
+## Mobile Wi-Fi Keyboard (Windows)
+
+Use your phone as a keyboard for the active Windows app over your local Wi-Fi:
+
+1. Connect the PC and phone to the same trusted Wi-Fi network.
+2. Double-click `start-wifi-keyboard.bat` (or run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\wifi_keyboard.ps1` from the project folder). Running the batch file again safely stops the previous companion before restarting it with a fresh PIN.
+3. On your phone, open the `http://...` address printed by the companion and enter the six-digit PIN shown in the PC terminal.
+4. Focus the text field in the PC app where you want to type. On your phone, tap **Start typing**; text and the special keys go to the PC. The phone page shows a confirmation when Windows accepts input. Press `Ctrl+C` in the PC terminal to stop the companion.
+
+The companion uses the Windows PowerShell and .NET runtime already included with Windows; no Python or extra package is needed. If Windows Firewall blocks access, allow PowerShell on private networks only. It does not use a cloud relay, but local traffic is unencrypted: use only a trusted private network and do not type sensitive passwords.
+
+Private Cosmos is the default appearance for new workspaces. Sanctuary and the eye-comfort themes remain available. Previously saved Ocean, Forest, Sunset, or Midnight selections automatically fall back to Private Cosmos. Custom backgrounds remain local to each device.
 
 Optional Google Drive backup uses Firebase Auth; edit `firebase-applet-config.json` for your own project and add your domain under Firebase -> Authentication -> Authorized domains.
 

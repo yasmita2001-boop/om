@@ -9,7 +9,7 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 // Single-file builds disable code-splitting and the service worker because the
 // inlined entry cannot import chunks that do not exist next to the HTML file.
-const isSingleFile = ['build:single', 'build:local-test'].includes(process.env.npm_lifecycle_event || '');
+const isSingleFile = ['build:single', 'build:local-test', 'build:review-copy'].includes(process.env.npm_lifecycle_event || '');
 
 export default defineConfig(() => {
   return {
@@ -118,9 +118,6 @@ export default defineConfig(() => {
                 return 'vendor-firebase';
               }
             }
-            if (id.includes('calculatorConfig') || id.includes('CalculatorView')) {
-              return 'feature-calculator';
-            }
             if (id.includes('nepaliDate')) {
               return 'feature-date';
             }
@@ -135,8 +132,6 @@ export default defineConfig(() => {
     server: {
       port: 3000,
       strictPort: true,
-      host: '0.0.0.0',
-      allowedHosts: true as const,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

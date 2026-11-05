@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" fill="none">
+  <defs>
+    <radialGradient id="orb" cx="36%" cy="24%" r="76%">
+      <stop offset="0" stop-color="#FFF1BB"/>
+      <stop offset=".18" stop-color="#E9B84F"/>
+      <stop offset=".52" stop-color="#A85B1D"/>
+      <stop offset=".8" stop-color="#6A3518"/>
+      <stop offset="1" stop-color="#321C13"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="25" y1="8" x2="78" y2="83" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF7D6" stop-opacity=".85"/>
+      <stop offset=".25" stop-color="#FFF0C4" stop-opacity=".08"/>
+      <stop offset=".72" stop-color="#D27A24" stop-opacity=".04"/>
+      <stop offset="1" stop-color="#FFE9A0" stop-opacity=".56"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="18" y1="84" x2="83" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6B3C16"/>
+      <stop offset=".18" stop-color="#E7B84F"/>
+      <stop offset=".42" stop-color="#FFF0A8"/>
+      <stop offset=".68" stop-color="#B87523"/>
+      <stop offset=".86" stop-color="#F6D878"/>
+      <stop offset="1" stop-color="#603411"/>
+    </linearGradient>
+    <linearGradient id="glyph" x1="35" y1="31" x2="65" y2="69" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF4C7"/>
+      <stop offset=".45" stop-color="#F7D77B"/>
+      <stop offset="1" stop-color="#C47D2A"/>
+    </linearGradient>
+    <filter id="shadow" x="2" y="2" width="96" height="118" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+    <clipPath id="orb-clip">
+      <circle cx="50" cy="43" r="37"/>
+    </clipPath>
+  </defs>
+
+  <ellipse cx="50" cy="112" rx="39" ry="4" fill="#351B0C" opacity=".28" filter="url(#shadow)"/>
+  <circle cx="50" cy="43" r="39" fill="#49250F"/>
+  <circle cx="50" cy="43" r="37" fill="url(#orb)" stroke="url(#gold)" stroke-width="2.2"/>
+  <g clip-path="url(#orb-clip)">
+    <path d="M22 18C35 7 58 5 75 17c13 10 18 27 13 43-5-21-19-38-39-43-10-3-19-2-27 1Z" fill="url(#glass)"/>
+    <ellipse cx="31" cy="19" rx="10" ry="4" transform="rotate(-33 31 19)" fill="#FFF9E5" opacity=".66"/>
+    <path d="M18 45c3 19 17 33 35 35-20 5-40-8-44-28-2-9 0-19 4-26-1 6 1 13 5 19Z" fill="#32190E" opacity=".38"/>
+    <circle cx="50" cy="43" r="32" stroke="#FFE8A2" stroke-opacity=".42" stroke-width=".8"/>
+    <text x="50" y="57" text-anchor="middle" fill="#4B2813" font-family="Nirmala UI, Noto Serif Devanagari, Georgia, serif" font-size="35" font-weight="700">ॐ</text>
+    <text x="49.2" y="55.8" text-anchor="middle" fill="url(#glyph)" font-family="Nirmala UI, Noto Serif Devanagari, Georgia, serif" font-size="35" font-weight="700">ॐ</text>
+    <path d="M68 26c5 7 7 15 6 23" stroke="#FFF5D0" stroke-opacity=".55" stroke-width="1.4" stroke-linecap="round"/>
+  </g>
+  <path d="M19 80h62l-4 5H23l-4-5Z" fill="url(#gold)" stroke="#754417" stroke-width=".8"/>
+  <path d="M23 85h54l-3 5H26l-3-5Z" fill="url(#gold)" stroke="#754417" stroke-width=".8"/>
+  <path d="M26 90h48l5 13H21l5-13Z" fill="url(#gold)" stroke="#754417" stroke-width=".9"/>
+  <path d="M22 102h56l4 4H18l4-4Z" fill="url(#gold)" stroke="#754417" stroke-width=".8"/>
+  <path d="M14 106h72v4H14v-4Z" fill="url(#gold)" stroke="#603411" stroke-width="1"/>
+  <path d="M24 83h52M27 88h46M25 104h50M17 108h66" stroke="#FFF0A8" stroke-opacity=".75" stroke-width=".7"/>
+  <path d="m31 93 3 3-3 3-3-3 3-3Zm9 0 3 3-3 3-3-3 3-3Zm10 0 3 3-3 3-3-3 3-3Zm10 0 3 3-3 3-3-3 3-3Zm9 0 3 3-3 3-3-3 3-3Z" fill="#FFF0A8" fill-opacity=".72"/>
+</svg>

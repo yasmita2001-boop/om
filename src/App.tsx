@@ -43,7 +43,6 @@ import { OmLogoMark } from './components/OmLogoMark';
 import { BsDateModal } from './components/BsDateModal';
 import { AlarmTriggerModal } from './components/AlarmTriggerModal';
 import { VoiceStudioWidget } from './components/VoiceStudioWidget';
-import { OfflineIndicator } from './components/OfflineIndicator';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress, resolveHabitGoalId } from './lib/goalTaskSync';
@@ -1228,9 +1227,6 @@ function LifeOSApp() {
         onRefreshJournal={loadAllData}
         onRefreshTasks={loadAllData}
       />
-
-      {/* Offline Connectivity Indicator */}
-      <OfflineIndicator />
 
       {/* Toast Notification */}
       {toastMessage && (

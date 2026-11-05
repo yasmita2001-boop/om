@@ -7,7 +7,8 @@ const __dirname = path.dirname(__filename);
 
 const rootDir = path.resolve(__dirname, '..');
 const isLocalTest = process.argv.includes('--local-test');
-const distDir = path.join(rootDir, isLocalTest ? 'dist-local-test' : 'dist');
+const isReviewCopy = process.argv.includes('--review-copy');
+const distDir = path.join(rootDir, isReviewCopy ? 'dist-review-copy' : isLocalTest ? 'dist-local-test' : 'dist');
 
 if (!fs.existsSync(distDir)) {
   console.error('Error: dist directory does not exist. Run "npm run build" first.');
@@ -29,9 +30,14 @@ const mimeTypes = {
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
 };
+
+function assetDataUri(filePath, mimeType) {
+  return `data:${mimeType};base64,${fs.readFileSync(filePath).toString('base64')}`;
+}
 
 if (fs.existsSync(assetsDir)) {
   const assetFiles = fs.readdirSync(assetsDir);
@@ -39,7 +45,21 @@ if (fs.existsSync(assetsDir)) {
   // 1. Inline CSS files
   for (const file of assetFiles) {
     if (file.endsWith('.css')) {
-      const cssContent = fs.readFileSync(path.join(assetsDir, file), 'utf8');
+      let cssContent = fs.readFileSync(path.join(assetsDir, file), 'utf8');
+      for (const assetFile of assetFiles) {
+        if (assetFile.endsWith('.js') || assetFile.endsWith('.css')) continue;
+        if (!mimeTypes[path.extname(assetFile).toLowerCase()]) continue;
+        const escapedFile = assetFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const dataUri = assetDataUri(
+          path.join(assetsDir, assetFile),
+          mimeTypes[path.extname(assetFile).toLowerCase()]
+        );
+        const assetUrlRegex = new RegExp(
+          `url\\((["']?)(?:\\.\\/|\\/)?${escapedFile}["']?\\)`,
+          'g'
+        );
+        cssContent = cssContent.replace(assetUrlRegex, `url("${dataUri}")`);
+      }
       const cssRegex = new RegExp(`<link[^>]+href=["'](?:\\./|/)?assets/${file}["'][^>]*>`, 'g');
       html = html.replace(cssRegex, () => `<style>/* ${file} */\n${cssContent}</style>`);
     }
@@ -54,14 +74,13 @@ if (fs.existsSync(assetsDir)) {
         const mimeType = mimeTypes[path.extname(assetFile).toLowerCase()];
         if (!mimeType) continue;
 
-        const assetContent = fs.readFileSync(path.join(assetsDir, assetFile));
-        const dataUrl = `data:${mimeType};base64,${assetContent.toString('base64')}`;
+        const assetUrl = assetDataUri(path.join(assetsDir, assetFile), mimeType);
         const escapedFile = assetFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const assetUrlRegex = new RegExp(
           `new URL\\((["'])${escapedFile}\\1,\\s*import\\.meta\\.url\\)\\.href`,
           'g'
         );
-        jsContent = jsContent.replace(assetUrlRegex, JSON.stringify(dataUrl));
+        jsContent = jsContent.replace(assetUrlRegex, JSON.stringify(assetUrl));
       }
       // Escape </script> inside script tags
       const safeJs = jsContent.replace(/<\/script>/gi, '<\\/script>');
@@ -71,15 +90,54 @@ if (fs.existsSync(assetsDir)) {
   }
 }
 
+// Root-level icons are copied beside the production HTML by Vite. Inline them
+// as well so the exported document has no local file dependencies.
+for (const file of fs.readdirSync(distDir)) {
+  const filePath = path.join(distDir, file);
+  if (!fs.statSync(filePath).isFile()) continue;
+  const mimeType = mimeTypes[path.extname(file).toLowerCase()];
+  if (!mimeType) continue;
+
+  const escapedFile = file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const assetUrlRegex = new RegExp(`(["'])(?:\\.\\/|/)${escapedFile}\\1`, 'g');
+  const dataUri = assetDataUri(filePath, mimeType);
+  html = html.replace(assetUrlRegex, (_match, quote) => `${quote}${dataUri}${quote}`);
+}
+
 // Remove leftovers that point to files which do not exist in a standalone file
 html = html.replace(/<link[^>]+rel=["']modulepreload["'][^>]*>\s*/g, '');
 html = html.replace(/<link[^>]+rel=["']manifest["'][^>]*>\s*/g, '');
 html = html.replace(/<script[^>]+id=["']vite-plugin-pwa:register-sw["'][^>]*><\/script>\s*/g, '');
 
 // Write the complete standalone HTML to dist/
-const outputDistPath = path.join(distDir, isLocalTest ? 'om-lifeos-local-test.html' : 'om-lifeos-complete.html');
+const outputName = isReviewCopy
+  ? 'om-lifeos-review-copy.html'
+  : isLocalTest
+    ? 'om-lifeos-local-test.html'
+    : 'om-lifeos-complete.html';
+const outputDistPath = path.join(distDir, outputName);
 
 fs.writeFileSync(outputDistPath, html, 'utf8');
+
+if (isLocalTest || isReviewCopy) {
+  for (const intermediate of [
+    assetsDir,
+    'index.html',
+    'apple-touch-icon.png',
+    'favicon.ico',
+    'icon.svg',
+    'manifest.webmanifest',
+    'pwa-192x192.png',
+    'pwa-512x512.png',
+    'pwa-maskable-512x512.png',
+    'sw.js'
+  ]) {
+    fs.rmSync(path.isAbsolute(intermediate) ? intermediate : path.join(distDir, intermediate), {
+      recursive: true,
+      force: true
+    });
+  }
+}
 
 const sizeMb = (fs.statSync(outputDistPath).size / 1024 / 1024).toFixed(2);
 console.log(`✓ Successfully generated complete standalone HTML: ${outputDistPath} (${sizeMb} MB)`);

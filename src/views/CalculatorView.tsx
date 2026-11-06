@@ -389,6 +389,8 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                           ) : (
                             <input
                               type={field.type || 'text'}
+                              min={field.min}
+                              max={field.max}
                               step={field.step || 'any'}
                               value={val}
                               placeholder={field.placeholder}

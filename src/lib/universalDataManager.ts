@@ -688,12 +688,7 @@ export class UniversalDataManager {
       rows.push(['Person', p.id || '', p.name || '', p.relationship || '', '', p.importantDate || '', p.contact || '']);
     });
 
-    // 8. Projects & Responsibilities
-    (cleanData.workProjects || []).filter(w => matchesDate(w.deadline || w.startDate || w.createdAt)).forEach(w => {
-      rows.push(['Project', w.id || '', w.title || '', w.status || '', `${w.progress || 0}%`, w.deadline || '', '']);
-    });
-
-    // 9. Attachments Metadata
+    // 8. Attachments Metadata
     (cleanData.attachments || []).filter(att => matchesDate(att.createdAt)).forEach(att => {
       rows.push(['Attachment', att.id || '', att.name || '', att.type || '', `${Math.round((att.size || 0) / 1024)} KB`, '', '']);
     });

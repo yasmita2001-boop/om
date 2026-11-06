@@ -2,7 +2,7 @@ import { getCurrencySymbol } from '../lib/currencyDisplay';
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Target, Plus, TrendingUp, ShieldCheck, Flame, Trash2,
+  Target, Plus, Flame, Trash2,
   Zap, Check, Layers, ChevronDown,
   Edit2, ListTree,
   ArrowRight, FolderTree, X,
@@ -10,15 +10,15 @@ import {
 } from 'lucide-react';
 import {
   Goal, Milestone, Strategy, KPI, Mission, MentorProfile, FinanceAccount,
-  Task, Habit, HabitLog, Routine, WorkProject, LearningItem, Skill,
+  Task, Habit, HabitLog, Routine, LearningItem, Skill,
   ReminderItem, Note, JournalEntry,
   FinanceTransaction, Loan, Investment, SavingsPlan, Liability, Asset,
-  HealthAppointment, HealthNote, Meeting, Person,
-  ValueItem, SpiritualPractice, Commitment, FocusSession
+  HealthAppointment, HealthNote, HealthProfile, Meeting, Person,
+  SpiritualPractice, FocusSession, NavModule, ThingItem, DocumentItem, WarrantyItem, ReceiptItem, CertificateItem, ImportantRecordItem
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { ProjectTimelinePlan, computeItemDelay } from '../components/ProjectTimelinePlan';
+import { TimelinePlan, computeItemDelay } from '../components/TimelinePlan';
 import { GoalsSectionSwitcher, type GoalsSection } from '../components/GoalsSectionSwitcher';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { FormDisclosure, FormDisclosureToggle } from '../components/FormDisclosure';
@@ -36,6 +36,7 @@ import {
   recalculateGoalAggregateProgress
 } from '../lib/goalTaskSync';
 import { ThemeIcon, type ThemeIconName } from '../components/ThemeIcon';
+import { getLocalDateString } from '../lib/dateUtils';
 
 const goalItemIcons: Record<GoalItemType, ThemeIconName> = {
   goal: 'mainGoal',
@@ -43,7 +44,6 @@ const goalItemIcons: Record<GoalItemType, ThemeIconName> = {
   milestone: 'target',
   habit: 'repeat',
   routine: 'calendar',
-  project: 'branch',
   learning: 'book',
   skill: 'star',
   note: 'note',
@@ -57,9 +57,7 @@ const goalItemIcons: Record<GoalItemType, ThemeIconName> = {
   appointment: 'calendar',
   healthNote: 'bottle',
   meeting: 'user',
-  value: 'star',
   practice: 'prayer',
-  commitment: 'target',
   focusSession: 'focus',
   reminder: 'bell'
 };
@@ -220,11 +218,6 @@ function GoalLinkedBreakdownWidget({
                 Routines: {breakdown.categories.routines.completedCount}/{breakdown.categories.routines.count}
               </span>
             )}
-            {breakdown.categories.projects?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Projects: {breakdown.categories.projects.completedCount}/{breakdown.categories.projects.count}
-              </span>
-            )}
             {breakdown.categories.learning?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                 Learning: {breakdown.categories.learning.completedCount}/{breakdown.categories.learning.count}
@@ -295,19 +288,9 @@ function GoalLinkedBreakdownWidget({
                 Meetings: {breakdown.categories.meetings.completedCount}/{breakdown.categories.meetings.count}
               </span>
             )}
-            {breakdown.categories.values?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-600 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
-                Values: {breakdown.categories.values.completedCount}/{breakdown.categories.values.count}
-              </span>
-            )}
             {breakdown.categories.practices?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-emerald-600 shadow-2xs border border-emerald-200/70 dark:bg-slate-800 dark:text-emerald-400 dark:border-emerald-800/60">
                 Practices: {breakdown.categories.practices.completedCount}/{breakdown.categories.practices.count}
-              </span>
-            )}
-            {breakdown.categories.commitments?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-indigo-600 shadow-2xs border border-indigo-200/70 dark:bg-slate-800 dark:text-indigo-400 dark:border-indigo-800/60">
-                Commitments: {breakdown.categories.commitments.completedCount}/{breakdown.categories.commitments.count}
               </span>
             )}
             {breakdown.categories.focusSessions?.count > 0 && (
@@ -572,7 +555,6 @@ interface GoalsViewProps {
   habits?: Habit[];
   habitLogs?: HabitLog[];
   routines?: Routine[];
-  workProjects?: WorkProject[];
   learningItems?: LearningItem[];
   skills?: Skill[];
   notes?: Note[];
@@ -582,12 +564,18 @@ interface GoalsViewProps {
   healthNotes?: HealthNote[];
   meetings?: Meeting[];
   people?: Person[];
-  values?: ValueItem[];
   practices?: SpiritualPractice[];
-  commitments?: Commitment[];
   focusSessions?: FocusSession[];
+  healthProfile?: HealthProfile;
+  things?: ThingItem[];
+  documents?: DocumentItem[];
+  warranties?: WarrantyItem[];
+  receipts?: ReceiptItem[];
+  certificates?: CertificateItem[];
+  importantRecords?: ImportantRecordItem[];
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
+  onNavigate?: (module: NavModule) => void;
 }
 
 export const GoalsView: React.FC<GoalsViewProps> = ({
@@ -608,7 +596,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   habits = [],
   habitLogs = [],
   routines = [],
-  workProjects = [],
   learningItems = [],
   skills = [],
   notes = [],
@@ -618,12 +605,18 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   healthNotes = [],
   meetings = [],
   people = [],
-  values = [],
   practices = [],
-  commitments = [],
   focusSessions = [],
+  healthProfile,
+  things = [],
+  documents = [],
+  warranties = [],
+  receipts = [],
+  certificates = [],
+  importantRecords = [],
   onRefresh,
-  onSuccess
+  onSuccess,
+  onNavigate
 }) => {
   const goalData = useMemo(() => ({
     goals,
@@ -632,7 +625,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     habits,
     habitLogs,
     routines,
-    workProjects,
     learningItems,
     skills,
     notes,
@@ -646,15 +638,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     appointments,
     healthNotes,
     meetings,
-    values,
     practices,
-    commitments,
     focusSessions,
     reminders
   }), [
-    goals, tasks, milestones, habits, habitLogs, routines, workProjects, learningItems,
+    goals, tasks, milestones, habits, habitLogs, routines, learningItems,
     skills, notes, journal, savingsPlans, loans, investments, assets, liabilities,
-    transactions, appointments, healthNotes, meetings, values, practices, commitments,
+    transactions, appointments, healthNotes, meetings, practices,
     focusSessions, reminders
   ]);
 
@@ -736,7 +726,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       updatedAt: Date.now()
     };
     await storage.put('tasks', updated);
-    const linkedGoalId = resolveTaskGoalId(updated, { workProjects, routines, skills, learningItems });
+    const linkedGoalId = resolveTaskGoalId(updated, { routines, skills, learningItems });
     if (linkedGoalId) {
       const res = await syncGoalProgressFromTasks(linkedGoalId, updated.id, nextDone);
       if (res.targetGoal) {
@@ -874,11 +864,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const delayCounts = useMemo(() => ({
     tasks: tasks.filter(t => !t.done && computeItemDelay(t).isDelayed).length,
     milestones: milestones.filter(m => m.status !== 'completed' && (m.progress || 0) < 100 && computeItemDelay({ dueDate: m.dueDate, status: m.status, progress: m.progress }).isDelayed).length,
-    projects: workProjects.filter(p => p.status !== 'Completed' && computeItemDelay({ ...p, dueAt: p.due }).isDelayed).length,
     routines: routines.filter(r => computeItemDelay(r).isDelayed).length
-  }), [tasks, milestones, workProjects, routines]);
+  }), [tasks, milestones, routines]);
 
-  const totalDelays = delayCounts.tasks + delayCounts.milestones + delayCounts.projects + delayCounts.routines;  const selectGoalLevel = (level: 1 | 2 | 3 | 4 | 5) => {
+  const totalDelays = delayCounts.tasks + delayCounts.milestones + delayCounts.routines;
+  const selectGoalLevel = (level: 1 | 2 | 3 | 4 | 5) => {
     setGoalLevel(level);
     if (level === 1) {
       setGoalParentId('');
@@ -1040,13 +1030,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const [missionPeriod, setMissionPeriod] = useState('Q4 Focus');
   const [missionTarget, setMissionTarget] = useState('');
   const [missionAction, setMissionAction] = useState('Daily core routine execution');
-
-  // Mentor Strategy state (strings so the inputs can be cleared while typing)
-  const [mentorMission, setMentorMission] = useState(mentor?.mission || '');
-  const [survivalReserve, setSurvivalReserve] = useState(String(mentor?.survivalReserve ?? 100000));
-  const [emergencyReserve, setEmergencyReserve] = useState(String(mentor?.emergencyReserve ?? 50000));
-  const [dailyBurn, setDailyBurn] = useState(String(mentor?.dailyBurn ?? 800));
-  const [savingGoal, setSavingGoal] = useState(String(mentor?.savingGoalAmount ?? 500000));
+  const [missionGoalId, setMissionGoalId] = useState('');
+  const [missionStartDate, setMissionStartDate] = useState('');
+  const [missionEndDate, setMissionEndDate] = useState('');
+  const [missionStatus, setMissionStatus] = useState<Mission['status']>('active');
+  const [strategyTaskDrafts, setStrategyTaskDrafts] = useState<Record<string, string>>({});
 
   const [editingRecord, setEditingRecord] = useState<EditableGoalRecord | null>(null);
 
@@ -1068,25 +1056,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     }
   }, [goals, stratGoalId, msGoalId, kpiGoalId]);
 
-  // App re-creates the `mentor` object on every data refresh, so hydrate the form only when the
-  // saved profile stamp actually changes. Otherwise unsaved edits were being wiped.
-  const appliedMentorRef = useRef<{ loaded: boolean; stamp?: number }>({
-    loaded: Boolean(mentor),
-    stamp: mentor?.updatedAt
-  });
-
-  useEffect(() => {
-    if (!mentor) return;
-    const applied = appliedMentorRef.current;
-    if (applied.loaded && applied.stamp === mentor.updatedAt) return;
-    appliedMentorRef.current = { loaded: true, stamp: mentor.updatedAt };
-    if (mentor.mission !== undefined) setMentorMission(mentor.mission);
-    if (mentor.survivalReserve !== undefined) setSurvivalReserve(String(mentor.survivalReserve));
-    if (mentor.emergencyReserve !== undefined) setEmergencyReserve(String(mentor.emergencyReserve));
-    if (mentor.dailyBurn !== undefined) setDailyBurn(String(mentor.dailyBurn));
-    if (mentor.savingGoalAmount !== undefined) setSavingGoal(String(mentor.savingGoalAmount));
-  }, [mentor]);
-
   const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   // Dashboard reflects the *saved* mentor profile, not unsaved form edits.
   const savedSurvivalReserve = Number(mentor?.survivalReserve ?? 0) || 0;
@@ -1096,12 +1065,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const hasReserveTargets = mentor?.survivalReserve !== undefined && mentor?.emergencyReserve !== undefined;
   const hasSavedDailyBurn = mentor?.dailyBurn !== undefined;
   const hasRunwayEstimate = hasSavedDailyBurn && savedDailyBurn > 0;
-  const flexibleSavings = savingsPlans
-    .filter(plan => plan.productType !== 'fixed_deposit')
-    .reduce((sum, plan) => sum + (Number(plan.currentAmount) || 0), 0);
-  const accessibleReserveCapital = liquidCash + flexibleSavings;
-  const runwayDays = savedDailyBurn > 0 ? Math.max(0, Math.floor(accessibleReserveCapital / savedDailyBurn)) : 0;
-  const runwayMonths = (runwayDays / 30).toFixed(1);
+  const runwayDays = savedDailyBurn > 0 ? Math.max(0, Math.floor(liquidCash / savedDailyBurn)) : 0;
+  const currentYear = new Date().getFullYear();
+  const yearStart = `${currentYear}-01-01`;
+  const todayDate = getLocalDateString();
+  const netSavingsThisYear = transactions
+    .filter(transaction => transaction.date >= yearStart && transaction.date <= todayDate && !transaction.ledgerOnly && (transaction.type === 'savings' || transaction.type === 'savingsWithdrawal'))
+    .reduce((sum, transaction) => sum + (transaction.type === 'savings' ? Number(transaction.amount) || 0 : -(Number(transaction.amount) || 0)), 0);
+  const annualSavingsTarget = Math.max(0, Number(mentor?.savingGoalAmount) || 0);
+  const annualSavingsProgress = annualSavingsTarget > 0
+    ? Math.max(0, Math.min(100, Math.round((netSavingsThisYear / annualSavingsTarget) * 100)))
+    : 0;
 
   const handleAddGoal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1143,11 +1117,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       targetDate: targetDate || parentGoal?.targetDate || undefined,
       description: goalDescription.trim() || undefined,
       progress: goalProgress,
+      manualProgress: goalProgress,
       status: goalProgress >= 100 ? 'completed' : 'active',
       parentId: parentGoal?.id || null,
       level: effectiveLevel,
       order: parsedOrder,
-      autoRollupProgress: true,
       createdAt: now,
       updatedAt: now
     };
@@ -1207,6 +1181,29 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     onRefresh();
   };
 
+  const handleAddStrategyTask = async (strategy: Strategy) => {
+    const taskTitle = (strategyTaskDrafts[strategy.id] || '').trim();
+    if (!taskTitle) return;
+    const now = Date.now();
+    const task: Task = {
+      id: generateUUID(),
+      title: taskTitle,
+      domain: 'work',
+      priority: 'Medium',
+      goalId: strategy.goalId,
+      strategyId: strategy.id,
+      done: false,
+      status: 'open',
+      createdAt: now,
+      updatedAt: now
+    };
+    await storage.put('tasks', task);
+    setStrategyTaskDrafts(previous => ({ ...previous, [strategy.id]: '' }));
+    if (strategy.goalId) await syncGoalProgressFromTasks(strategy.goalId);
+    onSuccess('Execution task linked to strategy and Goal');
+    onRefresh();
+  };
+
   const handleAddMilestone = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!msTitle.trim()) return;
@@ -1252,6 +1249,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       current,
       unit: kpiUnit.trim() || 'units',
       status: 'tracking',
+      history: [{ value: current, recordedAt: Date.now() }],
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -1274,7 +1272,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       period: missionPeriod,
       target: missionTarget.trim(),
       action: missionAction.trim() || 'Execute daily core routine',
-      status: 'active',
+      status: missionStatus,
+      goalId: missionGoalId || undefined,
+      startDate: missionStartDate || undefined,
+      endDate: missionEndDate || undefined,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -1282,6 +1283,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     onSuccess('Mission declared');
     setMissionTitle('');
     setMissionTarget('');
+    setMissionGoalId('');
+    setMissionStartDate('');
+    setMissionEndDate('');
+    setMissionStatus('active');
+    onRefresh();
+  };
+
+  const handleUpdateMissionStatus = async (mission: Mission, status: Mission['status']) => {
+    await storage.put('missions', { ...mission, status, updatedAt: Date.now() });
     onRefresh();
   };
 
@@ -1410,10 +1420,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   };
 
   const handleAdjustKPI = async (k: KPI, delta: number) => {
+    const current = Math.max(0, Number(k.current || 0) + delta);
+    const recordedAt = Date.now();
     const updated: KPI = {
       ...k,
-      current: Math.max(0, Number(k.current || 0) + delta),
-      updatedAt: Date.now()
+      current,
+      history: [...(k.history || [{ value: Number(k.current) || 0, recordedAt: k.updatedAt || k.createdAt }]), { value: current, recordedAt }],
+      updatedAt: recordedAt
     };
     await storage.put('kpis', updated);
     onRefresh();
@@ -1442,6 +1455,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         action: item.action.trim(),
         updatedAt: Date.now()
       });
+      const linkedTasks = tasks.filter(task => task.strategyId === fresh.id && task.goalId !== item.goalId);
+      if (linkedTasks.length > 0) {
+        await storage.bulkPut('tasks', linkedTasks.map(task => ({ ...task, goalId: item.goalId || null, updatedAt: Date.now() })));
+        const affectedGoals = new Set(linkedTasks.map(task => task.goalId).filter((goalId): goalId is string => Boolean(goalId)));
+        if (item.goalId) affectedGoals.add(item.goalId);
+        for (const goalId of affectedGoals) await syncGoalProgressFromTasks(goalId);
+      }
     } else if (type === 'milestone') {
       const fresh = await storage.get<Milestone>('milestones', item.id);
       if (!fresh) {
@@ -1477,6 +1497,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         name: item.name.trim(),
         target,
         current,
+        history: current === fresh.current
+          ? fresh.history
+          : [...(fresh.history || [{ value: Number(fresh.current) || 0, recordedAt: fresh.updatedAt || fresh.createdAt }]), { value: current, recordedAt: Date.now() }],
         unit: item.unit.trim() || 'units',
         updatedAt: Date.now()
       });
@@ -1492,8 +1515,19 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         period: item.period.trim(),
         target: item.target.trim(),
         action: item.action.trim(),
+        goalId: item.goalId || undefined,
+        startDate: item.startDate || undefined,
+        endDate: item.endDate || undefined,
+        status: item.status,
         updatedAt: Date.now()
       });
+      const linkedTasks = tasks.filter(task => task.missionId === fresh.id && task.goalId !== (item.goalId || null));
+      if (linkedTasks.length > 0) {
+        await storage.bulkPut('tasks', linkedTasks.map(task => ({ ...task, goalId: item.goalId || null, updatedAt: Date.now() })));
+        const affectedGoals = new Set(linkedTasks.map(task => task.goalId).filter((goalId): goalId is string => Boolean(goalId)));
+        if (item.goalId) affectedGoals.add(item.goalId);
+        for (const goalId of affectedGoals) await syncGoalProgressFromTasks(goalId);
+      }
     }
 
     setEditingRecord(null);
@@ -1501,37 +1535,37 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     onRefresh();
   };
 
-  const handleSaveMentor = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const parseNumber = (value: string) => {
-      const trimmed = value.trim();
-      return trimmed === '' ? Number.NaN : Number(trimmed);
-    };
-    const parsedValues = [survivalReserve, emergencyReserve, dailyBurn, savingGoal].map(parseNumber);
-    if (parsedValues.some(value => !Number.isFinite(value) || value < 0)) {
-      reportError('Reserve targets, daily burn, and the annual savings goal must be numbers zero or greater.');
-      return;
+  const clearMissionFromSavedPlannerArchives = (missionId: string): boolean => {
+    const profileId = storage.getActiveProfileId();
+    const keys = [`om-saved-command-targets:${profileId}`, ...(profileId === 'om-master-profile' ? ['om-saved-command-targets'] : [])];
+    try {
+      const updates: Array<[string, string]> = [];
+      for (const key of keys) {
+        const stored = localStorage.getItem(key);
+        if (!stored) continue;
+        const records: unknown = JSON.parse(stored);
+        if (!Array.isArray(records)) throw new Error(`Invalid saved-target archive at ${key}`);
+        let changed = false;
+        const cleaned = records.map((record: unknown) => {
+          if (typeof record !== 'object' || record === null || !('raw' in record)) return record;
+          const raw = record.raw;
+          if (typeof raw !== 'object' || raw === null || !('missionId' in raw) || raw.missionId !== missionId) return record;
+          changed = true;
+          return { ...record, raw: { ...raw, missionId: undefined } };
+        });
+        if (changed) updates.push([key, JSON.stringify(cleaned)]);
+      }
+      for (const [key, value] of updates) localStorage.setItem(key, value);
+      return true;
+    } catch (error) {
+      console.error('Failed to clear deleted Mission from saved planner archives', error);
+      return false;
     }
-    const [survival, emergency, burn, annualGoal] = parsedValues;
-
-    const appSettings = (await storage.getSingleton<any>('appSettings')) || {};
-    const updatedMentor: MentorProfile = {
-      mission: mentorMission,
-      survivalReserve: survival,
-      emergencyReserve: emergency,
-      dailyBurn: burn,
-      monthlyBurn: burn * 30,
-      savingGoalAmount: annualGoal,
-      updatedAt: Date.now()
-    };
-    appSettings.mentor = updatedMentor;
-    await storage.setSingleton('appSettings', appSettings);
-    onSuccess('Mentor strategy & capital allocation saved');
-    onRefresh();
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+    let missionArchiveCleanupFailed = false;
 
     if (deleteTarget.store === 'milestones') {
       const ms = await storage.get<Milestone>('milestones', deleteTarget.id);
@@ -1558,15 +1592,38 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       // Unlink records that point at the deleted subtree instead of leaving dangling goalIds.
       const orphanMilestones = milestones.filter(m => toDeleteIds.has(m.goalId));
       const orphanStrategies = strategies.filter(s => toDeleteIds.has(s.goalId));
+      const orphanMissions = missions.filter(mission => mission.goalId ? toDeleteIds.has(mission.goalId) : false);
       const orphanKpis = kpis.filter(k => k.goalId ? toDeleteIds.has(k.goalId) : false);
       const orphanTasks = tasks.filter(t => t.goalId ? toDeleteIds.has(t.goalId) : false);
+      const goalReferenceStores = [
+        'routines', 'habits', 'learningItems', 'skills', 'notes', 'journal', 'reminders',
+        'healthAppointments', 'healthNotes', 'meetings', 'spiritualPractices', 'focus',
+        'finance', 'loans', 'investments', 'savingsPlans', 'assets', 'liabilities',
+        'things', 'documents', 'warranties', 'receipts', 'certificates', 'importantRecords'
+      ];
       const unlinkStamp = Date.now();
+      const orphanReferenceCounts = await Promise.all(goalReferenceStores.map(async store => {
+        const records = await storage.getAll<{ id: string; goalId?: string | null; updatedAt?: number }>(store);
+        const linkedRecords = records.filter(record => record.goalId && toDeleteIds.has(record.goalId));
+        if (linkedRecords.length > 0) {
+          await storage.bulkPut(store, linkedRecords.map(record => ({ ...record, goalId: undefined, updatedAt: unlinkStamp })));
+        }
+        return linkedRecords.length;
+      }));
+      const healthProfile = await storage.getSingleton<{ goalId?: string | null; updatedAt?: number }>('healthProfile');
+      if (healthProfile?.goalId && toDeleteIds.has(healthProfile.goalId)) {
+        await storage.setSingleton('healthProfile', { ...healthProfile, goalId: undefined, updatedAt: unlinkStamp });
+      }
+
       await Promise.all([
         orphanMilestones.length > 0
           ? storage.bulkPut('milestones', orphanMilestones.map(m => ({ ...m, goalId: '', updatedAt: unlinkStamp })))
           : Promise.resolve(),
         orphanStrategies.length > 0
           ? storage.bulkPut('strategies', orphanStrategies.map(s => ({ ...s, goalId: '', updatedAt: unlinkStamp })))
+          : Promise.resolve(),
+        orphanMissions.length > 0
+          ? storage.bulkPut('missions', orphanMissions.map(mission => ({ ...mission, goalId: undefined, updatedAt: unlinkStamp })))
           : Promise.resolve(),
         orphanKpis.length > 0
           ? storage.bulkPut('kpis', orphanKpis.map(k => ({ ...k, goalId: undefined, updatedAt: unlinkStamp })))
@@ -1586,7 +1643,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         await recalculateGoalAggregateProgress(deletedGoal.parentId);
       }
 
-      const unlinkedCount = orphanMilestones.length + orphanStrategies.length + orphanKpis.length + orphanTasks.length;
+      const unlinkedCount = orphanMilestones.length + orphanStrategies.length + orphanMissions.length + orphanKpis.length + orphanTasks.length + orphanReferenceCounts.reduce((sum, count) => sum + count, 0) + (healthProfile?.goalId && toDeleteIds.has(healthProfile.goalId) ? 1 : 0);
       const removedSubGoals = toDeleteIds.size - 1;
       const removedParts = [`"${deleteTarget.name}"`];
       if (removedSubGoals > 0) removedParts.push(`${removedSubGoals} sub-goal(s)`);
@@ -1597,8 +1654,25 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       return;
     }
 
+    if (deleteTarget.store === 'strategies' || deleteTarget.store === 'missions') {
+      const store = deleteTarget.store;
+      const linkedTasks = tasks.filter(task => store === 'strategies' ? task.strategyId === deleteTarget.id : task.missionId === deleteTarget.id);
+      if (linkedTasks.length > 0) {
+        await storage.bulkPut('tasks', linkedTasks.map(task => ({ ...task, ...(store === 'strategies' ? { strategyId: null } : { missionId: null }), updatedAt: Date.now() })));
+      }
+      if (store === 'missions') {
+        const appSettings = (await storage.getSingleton<Record<string, any>>('appSettings')) || {};
+        if (appSettings.dailyPlanner?.missionId === deleteTarget.id) {
+          appSettings.dailyPlanner = { ...appSettings.dailyPlanner, missionId: undefined };
+          await storage.setSingleton('appSettings', appSettings);
+        }
+        missionArchiveCleanupFailed = !clearMissionFromSavedPlannerArchives(deleteTarget.id);
+      }
+    }
     await storage.delete(deleteTarget.store, deleteTarget.id);
-    onSuccess(`✓ Removed "${deleteTarget.name}"`);
+    onSuccess(missionArchiveCleanupFailed
+      ? `Removed "${deleteTarget.name}", but some saved planner archive links could not be cleared.`
+      : `✓ Removed "${deleteTarget.name}"`);
     setDeleteTarget(null);
     onRefresh();
   };
@@ -1609,18 +1683,21 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     if (deleteTarget.store !== 'goals') return 'This action cannot be undone.';
     const ids = new Set<string>([deleteTarget.id, ...getDescendantIds(deleteTarget.id)]);
     const subGoalCount = ids.size - 1;
-    const linkedCount =
-      milestones.filter(m => ids.has(m.goalId)).length +
-      strategies.filter(s => ids.has(s.goalId)).length +
-      kpis.filter(k => Boolean(k.goalId) && ids.has(k.goalId!)).length +
-      tasks.filter(t => Boolean(t.goalId) && ids.has(t.goalId!)).length;
+    const hasDeletedGoalLink = (item: { goalId?: string | null }) => Boolean(item.goalId && ids.has(item.goalId));
+    const linkedCount = [
+      milestones, strategies, missions, kpis, tasks, habits, routines, learningItems, skills,
+      notes, journal, reminders, appointments, healthNotes, meetings, practices, focusSessions,
+      transactions, loans, investments, savingsPlans, liabilities, assets,
+      things, documents, warranties, receipts, certificates, importantRecords
+    ].reduce((total, items) => total + items.filter(item => 'goalId' in item && hasDeletedGoalLink(item)).length, 0) +
+      (healthProfile?.goalId && ids.has(healthProfile.goalId) ? 1 : 0);
     const parts: string[] = [];
     if (subGoalCount > 0) parts.push(`${subGoalCount} sub-goal(s) will also be removed`);
     if (linkedCount > 0) parts.push(`${linkedCount} linked item(s) will be unlinked (not deleted)`);
     return parts.length > 0
       ? `${parts.join(' and ')}. This action cannot be undone.`
       : 'This action cannot be undone.';
-  }, [deleteTarget, goals, milestones, strategies, kpis, tasks]);
+  }, [deleteTarget, goals, milestones, strategies, missions, kpis, tasks, habits, routines, learningItems, skills, notes, journal, reminders, appointments, healthNotes, meetings, practices, focusSessions, transactions, loans, investments, savingsPlans, liabilities, assets, healthProfile, things, documents, warranties, receipts, certificates, importantRecords]);
 
   const getGoalTitleById = (id?: string) => {
     if (!id) return 'Independent';
@@ -1666,69 +1743,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         </div>
       )}
 
-      {/* Capital Position Dashboard */}
-      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {/* Card 1: Liquid Capital */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider truncate">Liquid Capital</span>
-            <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
-          </div>
-          <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {getCurrencySymbol()} {liquidCash.toLocaleString('en-IN')}
-          </div>
-          <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            {accounts.length} accounts
-          </div>
-        </div>
-
-        {/* Card 2: Survival Runway */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider truncate">Survival Runway</span>
-            <Flame className="h-4 w-4 text-slate-400 shrink-0" />
-          </div>
-          <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {hasRunwayEstimate ? `${runwayDays} Days` : 'Not set'}
-          </div>
-          <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            {hasRunwayEstimate ? `${runwayMonths} mo · FDs excluded` : 'Set a daily burn rate in Mentor & Reserves'}
-          </div>
-        </div>
-
-        {/* Card 3: Reserves Goal */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider truncate">Reserves Goal</span>
-            <Target className="h-4 w-4 text-slate-400 shrink-0" />
-          </div>
-          <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {getCurrencySymbol()} {accessibleReserveCapital.toLocaleString('en-IN')}
-          </div>
-          <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            {hasReserveTargets
-              ? `Target · ${getCurrencySymbol()} ${totalReserves.toLocaleString('en-IN')}`
-              : 'Reserve targets not set'}
-          </div>
-        </div>
-
-        {/* Card 4: Daily Burn Rate */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider truncate">Daily Burn Rate</span>
-            <TrendingUp className="h-4 w-4 text-slate-400 shrink-0" />
-          </div>
-          <div className="mt-2 font-mono text-lg sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {hasSavedDailyBurn ? `${getCurrencySymbol()} ${savedDailyBurn.toLocaleString('en-IN')}/d` : 'Not set'}
-          </div>
-          <div className="mt-1 text-[10px] sm:text-[11px] text-slate-400 font-medium line-clamp-2">
-            {hasSavedDailyBurn
-              ? `${getCurrencySymbol()} ${(savedDailyBurn * 30).toLocaleString('en-IN')}/mo`
-              : 'Enter an estimate in Mentor & Reserves'}
-          </div>
-        </div>
-      </div>
-
       {/* Delayed Tasks Alert Banner in GoalsView */}
       {(() => {
         if (totalDelays > 0 && activeTab !== 'timeline') {
@@ -1746,7 +1760,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     {totalDelays} {totalDelays === 1 ? 'item is delayed' : 'items are delayed'} across Deliverables, Milestones, Routines, and Tasks!
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
-                    {delayCounts.tasks} tasks, {delayCounts.milestones} milestones, {delayCounts.projects} projects, {delayCounts.routines} routines behind schedule. Open timeline for Task Genesis & Alarms.
+                    {delayCounts.tasks} tasks, {delayCounts.milestones} milestones, and {delayCounts.routines} routines behind schedule. Open timeline for Task Genesis & Alarms.
                   </p>
                 </div>
               </div>
@@ -1756,7 +1770,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 onClick={() => setActiveTab('timeline')}
                 className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-rose-500 active:scale-95 transition-all cursor-pointer shrink-0"
               >
-                <span>Open Project Timeline & Alarms</span>
+                <span>Open Timeline & Alarms</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -1766,13 +1780,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       })()}
 
 
-      {/* Tab 0: Project Timeline & Delay Alarms */}
+      {/* Tab 0: Timeline & Delay Alarms */}
       {activeTab === 'timeline' && (
-        <ProjectTimelinePlan
+        <TimelinePlan
           goals={goals}
           milestones={milestones}
           tasks={tasks}
-          workProjects={workProjects}
           learningItems={learningItems}
           skills={skills}
           routines={routines}
@@ -1789,8 +1802,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           meetings={meetings}
           notes={notes}
           journal={journal}
-          practices={practices}
-          commitments={commitments}
           people={people}
           onRefresh={onRefresh}
           onSuccess={onSuccess}
@@ -3094,6 +3105,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         {s.action}
                       </div>
                     )}
+                    <div className="space-y-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Execution tasks: {tasks.filter(task => task.strategyId === s.id && task.done).length}/{tasks.filter(task => task.strategyId === s.id).length} complete</div>
+                      <form onSubmit={event => { event.preventDefault(); void handleAddStrategyTask(s); }} className="flex gap-2">
+                        <input value={strategyTaskDrafts[s.id] || ''} onChange={event => setStrategyTaskDrafts(previous => ({ ...previous, [s.id]: event.target.value }))} placeholder="Add a concrete execution task" aria-label={`Execution task for ${s.title}`} className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                        <button type="submit" className="rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500">Add task</button>
+                      </form>
+                    </div>
                   </div>
                 ))
               )}
@@ -3321,6 +3339,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Tracked Metrics ({kpis.length})
             </h2>
+            <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">KPIs show measured performance and history; their readings do not change weighted Goal completion.</p>
             <div className="mt-4 space-y-3">
               {kpis.length === 0 ? (
                 <EmptyState icon={Target} compact title="No KPIs yet" hint="Register measurable KPIs to track goal success." />
@@ -3381,6 +3400,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                           </button>
                         </div>
                       </div>
+
+                      <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">History: {(k.history?.length ? k.history : [{ value: Number(k.current) || 0, recordedAt: k.updatedAt || k.createdAt }]).slice(-5).map(reading => `${new Date(reading.recordedAt).toLocaleDateString()} - ${reading.value}`).join('  |  ') || 'No readings yet'}</div>
 
                       {/* Progress bar */}
                       <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -3455,6 +3476,27 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Associated Goal (optional)
+                  <select value={missionGoalId} onChange={event => setMissionGoalId(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                    <option value="">None</option>
+                    {goals.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+                  </select>
+                </label>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Status
+                  <select value={missionStatus} onChange={event => setMissionStatus(event.target.value as Mission['status'])} className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                    <option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option><option value="archived">Archived</option>
+                  </select>
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">Start date
+                  <ThemedDateTimeInput type="date" value={missionStartDate} onChange={event => setMissionStartDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                </label>
+                <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">End date
+                  <ThemedDateTimeInput type="date" value={missionEndDate} onChange={event => setMissionEndDate(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                </label>
+              </div>
               <button
                 type="submit"
                 className="life-form-submit w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
@@ -3479,8 +3521,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <div>
                         <div className="font-bold text-slate-900 dark:text-white">{m.title}</div>
                         <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">{m.period}</span>
+                        {m.goalId && <div className="text-[10px] text-slate-500 dark:text-slate-400">Goal: {getGoalTitleById(m.goalId)}</div>}
+                        {(m.startDate || m.endDate) && <div className="text-[10px] text-slate-400">{m.startDate || 'Start not set'} to {m.endDate || 'End not set'}</div>}
                       </div>
                       <div className="flex items-center gap-1">
+                        <select aria-label={`Mission status for ${m.title}`} value={m.status || 'active'} onChange={event => void handleUpdateMissionStatus(m, event.target.value as Mission['status'])} className="h-7 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-semibold dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                          <option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option><option value="archived">Archived</option>
+                        </select>
                         <button
                           type="button"
                           onClick={() => setEditingRecord({ type: 'mission', item: m })}
@@ -3519,103 +3566,21 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         </div>
       )}
 
-      {/* Tab 6: Mentor & Reserves */}
+      {/* Tab 6: Finance Summary */}
       {activeTab === 'mentor' && (
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 max-w-2xl">
-          <FormDisclosure
-            defaultOpen
-            label="Edit mentor strategy and reserves"
-            header={
-              <div>
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Mentor Strategy & Capital Preservation
-                </h2>
-              </div>
-            }
-          >
-          <form onSubmit={handleSaveMentor} className="mt-4 space-y-4">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                Core Life Mission / Principle
-              </label>
-              <textarea
-                rows={2}
-                value={mentorMission}
-                onChange={e => setMentorMission(e.target.value)}
-                placeholder="Uncompromising discipline, strategic focus, and financial independence."
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Survival Reserve ({getCurrencySymbol()})
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={survivalReserve}
-                  onChange={e => setSurvivalReserve(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Daily Burn Rate ({getCurrencySymbol()})
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={dailyBurn}
-                  onChange={e => setDailyBurn(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Emergency Fund ({getCurrencySymbol()})
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={emergencyReserve}
-                  onChange={e => setEmergencyReserve(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Annual Savings Goal ({getCurrencySymbol()})
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={savingGoal}
-                  onChange={e => setSavingGoal(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="life-form-submit w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
-            >
-              Save Strategy & Allocation
-            </button>
-          </form>
-          </FormDisclosure>
-        </div>
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900" aria-label="Finance reserve summary">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-sm font-bold text-slate-900 dark:text-white">Finance reserve summary</h2><p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Read-only overview. Manage targets, cash flow, savings, and runway in Finance. Runway uses liquid accounts only to avoid overlapping savings balances.</p></div>
+            <button type="button" onClick={() => onNavigate?.('finance')} className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500">Open Finance - Reserves & Runway</button>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div><div className="text-[10px] font-bold uppercase text-slate-500">Liquid accounts</div><div className="mt-1 font-mono text-sm font-bold">{getCurrencySymbol()} {liquidCash.toLocaleString('en-IN')}</div><div className="text-[10px] text-slate-400">{accounts.length} accounts</div></div>
+            <div><div className="text-[10px] font-bold uppercase text-slate-500">Liquid balance</div><div className="mt-1 font-mono text-sm font-bold">{getCurrencySymbol()} {liquidCash.toLocaleString('en-IN')}</div><div className="text-[10px] text-slate-400">Finance accounts only</div></div>
+            <div><div className="text-[10px] font-bold uppercase text-slate-500">Reserve target</div><div className="mt-1 font-mono text-sm font-bold">{hasReserveTargets ? getCurrencySymbol() + ' ' + totalReserves.toLocaleString('en-IN') : 'Not set'}</div><div className="text-[10px] text-slate-400">Survival + emergency</div></div>
+            <div><div className="text-[10px] font-bold uppercase text-slate-500">Runway</div><div className="mt-1 font-mono text-sm font-bold">{hasRunwayEstimate ? runwayDays + ' days' : 'Not set'}</div><div className="text-[10px] text-slate-400">Daily burn {hasSavedDailyBurn ? getCurrencySymbol() + ' ' + savedDailyBurn.toLocaleString('en-IN') : 'not set'}</div></div>
+            <div><div className="text-[10px] font-bold uppercase text-slate-500">Annual savings</div><div className="mt-1 font-mono text-sm font-bold">{annualSavingsTarget > 0 ? annualSavingsProgress + '%' : 'Not set'}</div><div className="text-[10px] text-slate-400">Net recorded {getCurrencySymbol()} {netSavingsThisYear.toLocaleString('en-IN')}</div></div>
+          </div>
+        </section>
       )}
 
       {/* EDIT GOAL MODAL */}
@@ -4038,6 +4003,25 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         })}
                         className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
+                    </label>
+                  </div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Linked Goal
+                    <select value={editingRecord.item.goalId || ''} onChange={event => setEditingRecord({ type: 'mission', item: { ...editingRecord.item, goalId: event.target.value || undefined } })} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                      <option value="">None</option>{goals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
+                    </select>
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Status
+                      <select value={editingRecord.item.status || 'active'} onChange={event => setEditingRecord({ type: 'mission', item: { ...editingRecord.item, status: event.target.value as Mission['status'] } })} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                        <option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option><option value="archived">Archived</option>
+                      </select>
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Start date
+                      <ThemedDateTimeInput type="date" value={editingRecord.item.startDate || ''} onChange={event => setEditingRecord({ type: 'mission', item: { ...editingRecord.item, startDate: event.target.value || undefined } })} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">End date
+                      <ThemedDateTimeInput type="date" value={editingRecord.item.endDate || ''} onChange={event => setEditingRecord({ type: 'mission', item: { ...editingRecord.item, endDate: event.target.value || undefined } })} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                     </label>
                   </div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">

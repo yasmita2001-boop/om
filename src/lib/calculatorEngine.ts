@@ -441,7 +441,9 @@ export class CalculatorEngine {
 
   discount(price: any, pct: any): string {
     const np = pos(price);
-    const disc = this.percentage(np, nonNeg(pct));
+    const discountPct = nonNeg(pct);
+    if (discountPct > 100) throw new Error('Discount percentage must be from 0 to 100');
+    const disc = this.percentage(np, discountPct);
     const finalPrice = Math.max(0, np - disc);
     return `Discount: NPR ${disc.toFixed(2)} | Final Price: NPR ${finalPrice.toFixed(2)} | You Save: ${pct}%`;
   }
@@ -735,25 +737,34 @@ export class CalculatorEngine {
 
   macros(calories: any, proteinPct = 30, carbPct = 40, fatPct = 30): string {
     const c = pos(calories);
-    const p = Math.round(((c * n(proteinPct)) / 100) / 4);
-    const cb = Math.round(((c * n(carbPct)) / 100) / 4);
-    const f = Math.round(((c * n(fatPct)) / 100) / 9);
+    const proteinRatio = n(proteinPct);
+    const carbRatio = n(carbPct);
+    const fatRatio = n(fatPct);
+    if ([proteinRatio, carbRatio, fatRatio].some(ratio => ratio < 0 || ratio > 100)) throw new Error('Macro ratios must each be from 0 to 100');
+    if (Math.abs(proteinRatio + carbRatio + fatRatio - 100) > 0.01) throw new Error('Macro ratios must add up to 100%');
+    const p = Math.round(((c * proteinRatio) / 100) / 4);
+    const cb = Math.round(((c * carbRatio) / 100) / 4);
+    const f = Math.round(((c * fatRatio) / 100) / 9);
     return `Protein: ${p}g (${proteinPct}%) | Carbs: ${cb}g (${carbPct}%) | Fats: ${f}g (${fatPct}%)`;
   }
 
   bodyFat(gender: string, waistCm: any, neckCm: any, heightCm: any, hipCm = 95): string {
+    const sex = gender.toLowerCase();
+    if (sex !== 'male' && sex !== 'female') throw new Error('Select male or female');
     const waist = pos(waistCm);
     const neck = pos(neckCm);
     const height = pos(heightCm);
     let fatPct = 0;
-    if (gender === 'female') {
+    if (sex === 'female') {
       const hip = pos(hipCm);
+      if (waist + hip <= neck) throw new Error('Waist plus hip must be greater than neck circumference');
       fatPct = 495 / (1.29579 - 0.35004 * Math.log10(waist + hip - neck) + 0.22100 * Math.log10(height)) - 450;
     } else {
+      if (waist <= neck) throw new Error('Waist circumference must be greater than neck circumference');
       fatPct = 495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(height)) - 450;
     }
     const clamped = Math.max(2, Math.min(60, fatPct));
-    return `Body Fat: ${clamped.toFixed(1)}% (${gender === 'female' ? (clamped < 21 ? 'Athletic' : clamped < 31 ? 'Fitness' : 'Overfat') : (clamped < 14 ? 'Athletic' : clamped < 24 ? 'Fitness' : 'Overfat')})`;
+    return `Body Fat: ${clamped.toFixed(1)}% (${sex === 'female' ? (clamped < 21 ? 'Athletic' : clamped < 31 ? 'Fitness' : 'Overfat') : (clamped < 14 ? 'Athletic' : clamped < 24 ? 'Fitness' : 'Overfat')})`;
   }
 
   waterIntake(weightKg: any, mlPerKg = 35): string {
@@ -795,7 +806,9 @@ export class CalculatorEngine {
       y--;
       m += 12;
     }
-    const totalDays = Math.floor((d.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
+    const birthDay = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+    const asOfDay = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+    const totalDays = Math.floor((asOfDay - birthDay) / 86400000);
     return `Age: ${y} years, ${m} months, ${day} days (Total: ${totalDays.toLocaleString()} days lived)`;
   }
 
@@ -810,15 +823,25 @@ export class CalculatorEngine {
   }
 
   countdown(targetDate: any): string {
-    const t = dateObj(targetDate).getTime();
-    const now = Date.now();
-    const diff = t - now;
+    const target = dateObj(targetDate);
+    if (typeof targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+      const nowDate = new Date();
+      const targetDay = Date.UTC(target.getFullYear(), target.getMonth(), target.getDate());
+      const currentDay = Date.UTC(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+      const daysRemaining = Math.round((targetDay - currentDay) / 86400000);
+      if (daysRemaining < 0) return 'The specified date has already passed';
+      if (daysRemaining === 0) return 'Today';
+      return daysRemaining + ' days remaining';
+    }
+    const diff = target.getTime() - Date.now();
     if (diff <= 0) return 'The specified date has already passed';
-    const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
-    const m = Math.floor((diff / (1000 * 60)) % 60);
-    return `${d} days, ${h} hours, ${m} minutes remaining`;
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff / 3600000) % 24);
+    const m = Math.floor((diff / 60000) % 60);
+    return d + ' days, ' + h + ' hours, ' + m + ' minutes remaining';
   }
+
+
 
   workingDays(a: any, b: any): string {
     let d = dateObj(a), e = dateObj(b), count = 0, weekends = 0;
@@ -862,7 +885,9 @@ export class CalculatorEngine {
     const now = new Date();
     const utc = now.getTime() + now.getTimezoneOffset() * 60000;
     const target = new Date(utc + 3600000 * offset);
-    return `Time at UTC ${offset >= 0 ? '+' : ''}${offset}: ${target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} (${target.toDateString()})`;
+    const time = target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC' });
+    const date = target.toLocaleDateString([], { timeZone: 'UTC' });
+    return `Time at UTC ${offset >= 0 ? '+' : ''}${offset}: ${time} (${date})`;
   }
 
   unixTimestamp(val: any, mode = 'toTimestamp'): string {

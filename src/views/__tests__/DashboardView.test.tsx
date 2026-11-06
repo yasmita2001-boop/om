@@ -33,7 +33,6 @@ describe('Dashboard finance activity', () => {
           amount: 40,
           category: 'Food & Dining',
           date: '2026-11-05',
-          paymentMethod: 'ATM',
           createdAt: 1
         }]}
         onNavigate={vi.fn()}
@@ -46,5 +45,57 @@ describe('Dashboard finance activity', () => {
     expect(container.textContent).toContain('Money this month');
     expect(container.textContent).toContain('Food & Dining');
     expect(container.textContent).toContain('40');
+  });
+
+  it('shows the same complete financial position as Finance and opens the Ledger', async () => {
+    const onNavigate = vi.fn();
+    await act(async () => root.render(
+      <DashboardView
+        tasks={[]}
+        goals={[]}
+        habits={[]}
+        habitLogs={[]}
+        finance={[]}
+        accounts={[{ id: 'cash', name: 'Cash', type: 'cash', balance: 100, openingBalance: 100 }]}
+        assets={[{ id: 'asset', name: 'Asset', value: 200 }]}
+        liabilities={[{ id: 'manual-debt', name: 'Manual debt', amount: 50 }]}
+        loans={[
+          { id: 'borrowed', name: 'Borrowed', principal: 400, rate: 0, tenure: 1, dueDay: 1, outstanding: 400, createdAt: 1 },
+          { id: 'lent', name: 'Lent', principal: 250, rate: 0, tenure: 1, dueDay: 1, outstanding: 250, direction: 'lent', createdAt: 1 }
+        ]}
+        investments={[{
+          id: 'investment',
+          name: 'Investment',
+          amount: 1000,
+          currentValue: 900,
+          date: '2026-01-01',
+          createdAt: 1,
+          updatedAt: 1
+        }]}
+        investmentActivities={[]}
+        savingsPlans={[{
+          id: 'savings',
+          name: 'Savings',
+          currentAmount: 300,
+          targetAmount: 0,
+          durationMonths: 12,
+          createdAt: 1
+        }]}
+        onNavigate={onNavigate}
+        onToggleTask={vi.fn()}
+        onLogHabit={vi.fn()}
+        onOpenQuickCapture={vi.fn()}
+      />
+    ));
+
+    const netWorthCard = container.querySelector<HTMLButtonElement>('.dashboard-view > button');
+    expect(netWorthCard?.textContent).toContain('1,300');
+    expect(netWorthCard?.textContent).toContain('Assets');
+    expect(netWorthCard?.textContent).toContain('1,750');
+    expect(netWorthCard?.textContent).toContain('Debt');
+    expect(netWorthCard?.textContent).toContain('450');
+
+    await act(async () => netWorthCard?.click());
+    expect(onNavigate).toHaveBeenCalledWith('finance');
   });
 });

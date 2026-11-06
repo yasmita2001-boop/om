@@ -196,7 +196,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
         };
         await storage.put('journal', updated);
         if (effectiveGoalId) {
-          await syncGoalProgressFromJournal(effectiveGoalId, updated.id);
+          await syncGoalProgressFromJournal(effectiveGoalId);
         }
         if (oldGoalId && oldGoalId !== effectiveGoalId) {
           await syncGoalProgressFromJournal(oldGoalId);
@@ -219,7 +219,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
       };
       await storage.put('journal', newEntry);
       if (effectiveGoalId) {
-        await syncGoalProgressFromJournal(effectiveGoalId, newEntry.id);
+        await syncGoalProgressFromJournal(effectiveGoalId);
       }
       onSuccess(effectiveGoalId ? '✓ Journal reflection recorded & linked to Goal' : '✓ Journal reflection recorded');
     }
@@ -482,7 +482,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
             {editingId && (
               <button
                 type="button"
-                onClick={resetForm}
+                onClick={() => resetForm()}
                 className="text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
                 Cancel Edit

@@ -9,7 +9,7 @@ import {
 import { EmptyState } from '../components/EmptyState';
 import {
   Task, TaskDomain, TaskPriority, DailyPlanner, Goal,
-  WorkProject, LearningItem, Skill, Routine, Habit, HabitLog, ReminderItem
+  LearningItem, Skill, Routine, Habit, HabitLog, ReminderItem, Strategy, Mission
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { resolveTaskGoalId, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
@@ -28,8 +28,9 @@ import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 interface TasksViewProps {
   tasks: Task[];
   goals: Goal[];
+  strategies?: Strategy[];
+  missions?: Mission[];
   dailyPlanner?: DailyPlanner;
-  workProjects?: WorkProject[];
   learningItems?: LearningItem[];
   skills?: Skill[];
   routines?: Routine[];
@@ -57,8 +58,9 @@ interface SavedTargetRecord {
 export const TasksView: React.FC<TasksViewProps> = ({
   tasks,
   goals,
+  strategies = [],
+  missions = [],
   dailyPlanner,
-  workProjects = [],
   learningItems = [],
   skills = [],
   routines = [],
@@ -156,6 +158,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [priority, setPriority] = useState<TaskPriority>('Medium');
   const [dueAt, setDueAt] = useState(today);
   const [goalId, setGoalId] = useState<string>('');
+  const [strategyId, setStrategyId] = useState('');
+  const [missionId, setMissionId] = useState('');
+  const [plannerMissionId, setPlannerMissionId] = useState(dailyPlanner?.missionId || '');
   const [taskInputMode, setTaskInputMode] = useState<'manual' | 'link'>('manual');
 
   const formRef = useRef<HTMLDivElement>(null);
@@ -164,6 +169,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const switchToManualMode = () => {
     setTaskInputMode('manual');
     setGoalId('');
+    setStrategyId('');
+    setMissionId('');
   };
 
   const switchToLinkMode = () => {
@@ -175,6 +182,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   const handleSelectGoalForTask = (gId: string) => {
     setGoalId(gId);
+    setStrategyId('');
+    setMissionId('');
     if (!gId) return;
     const matchedGoal = goals.find(g => g.id === gId);
     if (matchedGoal) {
@@ -192,6 +201,20 @@ export const TasksView: React.FC<TasksViewProps> = ({
       else if (cat.includes('career') || cat.includes('work')) setDomain('work');
       else setDomain('personal');
     }
+  };
+
+  const handleSelectStrategyForTask = (id: string) => {
+    setStrategyId(id);
+    setMissionId('');
+    const strategy = strategies.find(item => item.id === id);
+    setGoalId(strategy?.goalId || '');
+  };
+
+  const handleSelectMissionForTask = (id: string) => {
+    setMissionId(id);
+    setStrategyId('');
+    const mission = missions.find(item => item.id === id);
+    setGoalId(mission?.goalId || '');
   };
 
   // Audio Reading for Tasks
@@ -234,6 +257,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       if (dailyPlanner.progress !== undefined) setPlannerProgress(dailyPlanner.progress);
       if (dailyPlanner.wins) setDailyWins(dailyPlanner.wins.join('\n'));
       if (dailyPlanner.reflection) setEveningReview(dailyPlanner.reflection.join('\n'));
+      setPlannerMissionId(dailyPlanner.missionId || '');
     }
   }, [dailyPlanner]);
 
@@ -266,7 +290,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     if (editingTaskId) {
       const existing = tasks.find(t => t.id === editingTaskId);
       if (existing) {
-        const oldGoalId = resolveTaskGoalId(existing, { workProjects, routines, skills, learningItems });
+        const oldGoalId = resolveTaskGoalId(existing, { routines, skills, learningItems });
         const updated: Task = {
           ...existing,
           title: title.trim(),
@@ -276,6 +300,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
           dueAt,
           date: dueAt,
           goalId: goalId || null,
+          strategyId: strategyId || null,
+          missionId: missionId || null,
           checklist: checklist.length ? checklist : undefined,
           updatedAt: now
         };
@@ -300,6 +326,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
         dueAt,
         date: dueAt,
         goalId: goalId || null,
+        strategyId: strategyId || null,
+        missionId: missionId || null,
         checklist: checklist.length ? checklist : undefined,
         done: false,
         status: 'open',
@@ -341,6 +369,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setTitle('');
     setDescription('');
     setChecklistText('');
+    setGoalId('');
+    setStrategyId('');
+    setMissionId('');
     onRefresh();
   };
 
@@ -354,6 +385,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setPriority(task.priority || 'Medium');
     setDueAt(task.dueAt || today);
     setGoalId(task.goalId || '');
+    setStrategyId(task.strategyId || '');
+    setMissionId(task.missionId || '');
     setTaskInputMode(task.goalId ? 'link' : 'manual');
 
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -367,6 +400,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setTitle('');
     setDescription('');
     setChecklistText('');
+    setGoalId('');
+    setStrategyId('');
+    setMissionId('');
   };
 
   const handleToggleTask = async (task: Task) => {
@@ -385,7 +421,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     await storage.put('tasks', updated);
 
     // Reflect task completion in linked goal progress & rollup through 3-tier hierarchy!
-    const linkedGoalId = resolveTaskGoalId(task, { workProjects, routines, skills, learningItems });
+    const linkedGoalId = resolveTaskGoalId(task, { routines, skills, learningItems });
     if (linkedGoalId) {
       const res = await syncGoalProgressFromTasks(linkedGoalId, task.id, nextDone);
       if (res.targetGoal) {
@@ -415,7 +451,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const handleConfirmDelete = async () => {
     if (!taskToDelete) return;
     try {
-      const targetGoalId = resolveTaskGoalId(taskToDelete, { workProjects, routines, skills, learningItems });
+      const targetGoalId = resolveTaskGoalId(taskToDelete, { routines, skills, learningItems });
       await storage.delete('tasks', taskToDelete.id);
       onSuccess('✓ Task deleted');
       setTaskToDelete(null);
@@ -453,7 +489,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
               target: plannerTarget,
               progress: plannerProgress,
               wins: winsArray,
-              reflection: reflectionArray
+              reflection: reflectionArray,
+              missionId: plannerMissionId || undefined
             }
           }
         : record);
@@ -480,7 +517,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
       progress: plannerProgress,
       points: dailyPlanner?.points || [],
       wins: winsArray,
-      reflection: reflArray
+      reflection: reflArray,
+      missionId: plannerMissionId || undefined
     };
 
     appSettings.dailyPlanner = updatedPlanner;
@@ -569,6 +607,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setPlannerProgress(record.progress);
     if (record.raw?.wins) setDailyWins(record.raw.wins.join('\n'));
     if (record.raw?.reflection) setEveningReview(record.raw.reflection.join('\n'));
+    setPlannerMissionId(record.raw?.missionId || '');
     onSuccess(`Loaded saved target from ${record.date}`);
   };
 
@@ -578,6 +617,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setPlannerProgress(record.progress);
     setDailyWins(record.raw?.wins?.join('\n') || '');
     setEveningReview(record.raw?.reflection?.join('\n') || '');
+    setPlannerMissionId(record.raw?.missionId || '');
     onSuccess(`Editing saved target from ${record.date}`);
   };
 
@@ -588,6 +628,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       setPlannerProgress(dailyPlanner.progress ?? 0);
       setDailyWins(dailyPlanner.wins?.join('\n') || '');
       setEveningReview(dailyPlanner.reflection?.join('\n') || '');
+      setPlannerMissionId(dailyPlanner.missionId || '');
     }
   };
 
@@ -605,7 +646,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
       progress: plannerProgress,
       points: newPoints,
       wins: dailyPlanner?.wins || [],
-      reflection: dailyPlanner?.reflection || []
+      reflection: dailyPlanner?.reflection || [],
+      missionId: plannerMissionId || undefined
     };
 
     appSettings.dailyPlanner = updatedPlanner;
@@ -625,7 +667,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
       progress: plannerProgress,
       points: newPoints,
       wins: dailyPlanner?.wins || [],
-      reflection: dailyPlanner?.reflection || []
+      reflection: dailyPlanner?.reflection || [],
+      missionId: plannerMissionId || undefined
     };
 
     appSettings.dailyPlanner = updatedPlanner;
@@ -645,7 +688,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
       progress: plannerProgress,
       points: newPoints,
       wins: dailyPlanner?.wins || [],
-      reflection: dailyPlanner?.reflection || []
+      reflection: dailyPlanner?.reflection || [],
+      missionId: plannerMissionId || undefined
     };
 
     appSettings.dailyPlanner = updatedPlanner;
@@ -675,7 +719,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
         point.id === pointId ? { ...point, text: editingPointText.trim() } : point
       ),
       wins: currentPlanner?.wins || [],
-      reflection: currentPlanner?.reflection || []
+      reflection: currentPlanner?.reflection || [],
+      missionId: plannerMissionId || undefined
     };
     await storage.setSingleton('appSettings', appSettings);
     setEditingPointId(null);
@@ -840,6 +885,23 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   </div>
                 )}
 
+                <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Linked Strategy (optional)
+                    <select value={strategyId} onChange={event => handleSelectStrategyForTask(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                      <option value="">None</option>
+                      {strategies.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Linked Mission (optional)
+                    <select value={missionId} onChange={event => handleSelectMissionForTask(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                      <option value="">None</option>
+                      {missions.filter(item => item.status !== 'archived').map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+                    </select>
+                  </label>
+                </div>
+
                 <input
                   ref={titleInputRef}
                   type="text"
@@ -912,7 +974,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   <div className="relative mt-1">
                     <select
                       value={goalId}
-                      onChange={e => setGoalId(e.target.value)}
+                      onChange={e => handleSelectGoalForTask(e.target.value)}
                       className="task-genesis-field h-10 w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-slate-50/50 px-3 pr-9 text-left text-sm text-ellipsis text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     >
                       <option value="">None (Independent)</option>
@@ -1094,6 +1156,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         </span>
                         <span aria-hidden="true">·</span>
                         <span className="font-mono">{task.dueAt ? `Due ${task.dueAt}` : 'No due date'}</span>
+                        {task.strategyId && <span className="text-indigo-600 dark:text-indigo-300">Strategy: {strategies.find(item => item.id === task.strategyId)?.title || 'Strategy'}</span>}
+                        {task.missionId && <span className="text-amber-700 dark:text-amber-300">Mission: {missions.find(item => item.id === task.missionId)?.title || 'Mission'}</span>}
                       {task.goalId && (
                           <>
                             <span aria-hidden="true">·</span>
@@ -1233,6 +1297,21 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       />
                     </div>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Related Mission (optional)
+                  </label>
+                  <select
+                    value={plannerMissionId}
+                    onChange={event => setPlannerMissionId(event.target.value)}
+                    className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="">No linked mission</option>
+                    {missions.filter(item => item.status !== 'archived' || item.id === plannerMissionId).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+                  </select>
+                  <p className="mt-1 text-[10px] text-slate-400">This links today's target to a mission; it does not change Goal progress by itself.</p>
                 </div>
 
                 {/* Action Checkpoints */}

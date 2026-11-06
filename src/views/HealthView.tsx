@@ -8,8 +8,8 @@ import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
 import {
   HealthProfile, HealthMeasurement, SleepRecord, WaterRecord,
   NutritionRecord, HealthAppointment, HealthNote, Goal, Person,
-  Interaction, ReminderItem, ValueItem, SpiritualPractice, Commitment, NavModule,
-  WorkProject, LearningItem, Meeting, Skill, Course, WorkResponsibility, Task
+  Interaction, ReminderItem, SpiritualPractice, NavModule,
+  LearningItem, Skill, Task
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
@@ -34,15 +34,9 @@ interface HealthViewProps {
   people: Person[];
   interactions: Interaction[];
   reminders: ReminderItem[];
-  values: ValueItem[];
   practices: SpiritualPractice[];
-  commitments: Commitment[];
-  workProjects: WorkProject[];
   learningItems: LearningItem[];
-  meetings: Meeting[];
   skills: Skill[];
-  courses: Course[];
-  workResponsibilities: WorkResponsibility[];
   tasks: Task[];
   onNavigate: (module: NavModule) => void;
   onRefresh: () => void;
@@ -54,15 +48,10 @@ type HealthTab =
   | 'wellness'
   | 'appointments'
   | 'profile'
-  | 'people-person'
-  | 'people-interaction'
-  | 'foundation-values'
+  | 'people'
   | 'foundation-practices'
-  | 'foundation-commitments'
-  | 'work-projects'
   | 'work-learning'
-  | 'work-skills'
-  | 'work-meetings';
+  | 'work-skills';
 
 interface DeleteTarget {
   store: 'healthMeasurements' | 'sleepRecords' | 'waterRecords' | 'nutritionRecords' | 'healthAppointments' | 'healthNotes';
@@ -87,15 +76,9 @@ export const HealthView: React.FC<HealthViewProps> = ({
   people,
   interactions,
   reminders,
-  values,
   practices,
-  commitments,
-  workProjects,
   learningItems,
-  meetings,
   skills,
-  courses,
-  workResponsibilities,
   tasks,
   onNavigate,
   onRefresh,
@@ -510,15 +493,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
     { id: 'wellness', label: 'Sleep & Fuel', count: sleepRecords.length + waterRecords.length + nutritionRecords.length, icon: Droplet },
     { id: 'appointments', label: 'Appointments', count: appointments.length + healthNotes.length, icon: Stethoscope },
     { id: 'profile', label: 'Biometrics', count: biometricFieldCount, icon: Heart },
-    { id: 'people-person', label: 'Add Person', count: people.length, icon: Heart },
-    { id: 'people-interaction', label: 'Log Touchpoint', count: interactions.length, icon: Heart },
-    { id: 'foundation-values', label: 'Values & Principles', count: values.length, icon: Compass },
+    { id: 'people', label: 'Add Person', count: people.length, icon: Heart },
     { id: 'foundation-practices', label: 'Daily Practices', count: practices.length, icon: Compass },
-    { id: 'foundation-commitments', label: 'Commitments & Vows', count: commitments.length, icon: Compass },
-    { id: 'work-projects', label: 'Projects', count: workProjects.length, icon: Briefcase },
     { id: 'work-learning', label: 'Learning Tracks', count: learningItems.length, icon: Briefcase },
-    { id: 'work-skills', label: 'Skill Trees', count: skills.length, icon: Briefcase },
-    { id: 'work-meetings', label: 'Meetings', count: meetings.length, icon: Briefcase }
+    { id: 'work-skills', label: 'Skill Trees', count: skills.length, icon: Briefcase }
   ];
   const selectedTab = healthTabOptions.find(tab => tab.id === activeTab);
   const selectedTabLabel = selectedTab?.label || 'Life';
@@ -529,11 +507,11 @@ export const HealthView: React.FC<HealthViewProps> = ({
       ? Droplet
       : activeTab === 'appointments'
         ? Stethoscope
-        : activeTab === 'people-person' || activeTab === 'people-interaction'
+        : activeTab === 'people'
           ? Heart
-          : activeTab === 'foundation-values' || activeTab === 'foundation-practices' || activeTab === 'foundation-commitments'
+          : activeTab === 'foundation-practices'
             ? Compass
-          : activeTab === 'work-projects' || activeTab === 'work-learning' || activeTab === 'work-skills' || activeTab === 'work-meetings'
+          : activeTab === 'work-learning' || activeTab === 'work-skills'
             ? Briefcase
             : Heart;
 
@@ -1248,11 +1226,12 @@ export const HealthView: React.FC<HealthViewProps> = ({
         )
       )}
 
-      {activeTab === 'people-person' && (
+      {activeTab === 'people' && (
         <PeopleView
           key={activeTab}
           people={people}
           interactions={interactions}
+          goals={goals}
           reminders={reminders}
           embedded
           initialForm="person"
@@ -1261,40 +1240,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
         />
       )}
 
-      {activeTab === 'people-interaction' && (
-        <PeopleView
-          key={activeTab}
-          people={people}
-          interactions={interactions}
-          reminders={reminders}
-          embedded
-          initialForm="interaction"
-          onRefresh={onRefresh}
-          onSuccess={onSuccess}
-        />
-      )}
-
-      {activeTab === 'foundation-values' && (
-        <SpiritualView
-          key={activeTab}
-          values={values}
-          practices={practices}
-          commitments={commitments}
-          goals={goals}
-          embedded
-          initialForm="values"
-          onNavigate={onNavigate}
-          onRefresh={onRefresh}
-          onSuccess={onSuccess}
-        />
-      )}
-
       {activeTab === 'foundation-practices' && (
         <SpiritualView
           key={activeTab}
-          values={values}
           practices={practices}
-          commitments={commitments}
           goals={goals}
           embedded
           initialForm="practices"
@@ -1304,39 +1253,16 @@ export const HealthView: React.FC<HealthViewProps> = ({
         />
       )}
 
-      {activeTab === 'foundation-commitments' && (
-        <SpiritualView
-          key={activeTab}
-          values={values}
-          practices={practices}
-          commitments={commitments}
-          goals={goals}
-          embedded
-          initialForm="commitments"
-          onNavigate={onNavigate}
-          onRefresh={onRefresh}
-          onSuccess={onSuccess}
-        />
-      )}
-
-      {(['work-projects', 'work-learning', 'work-skills', 'work-meetings'] as HealthTab[]).includes(activeTab) && (
+      {(['work-learning', 'work-skills'] as HealthTab[]).includes(activeTab) && (
         <WorkView
           key={activeTab}
-          projects={workProjects}
           learningItems={learningItems}
-          meetings={meetings}
-          responsibilities={workResponsibilities}
           skills={skills}
-          courses={courses}
+
           goals={goals}
           tasks={tasks}
           embedded
-          initialTab={
-            activeTab === 'work-learning' ? 'learning'
-              : activeTab === 'work-skills' ? 'skills'
-                : activeTab === 'work-meetings' ? 'meetings'
-                  : 'projects'
-          }
+          initialTab={activeTab === 'work-learning' ? 'learning' : 'skills'}
           onRefresh={onRefresh}
           onSuccess={onSuccess}
         />

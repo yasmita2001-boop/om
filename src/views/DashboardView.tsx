@@ -7,11 +7,13 @@ import {
 } from 'lucide-react';
 import {
   Task, Goal, Habit, HabitLog, FinanceTransaction,
-  NavModule, ReminderItem, FinanceAccount, Asset, Liability
+  NavModule, ReminderItem, FinanceAccount, Asset, Liability,
+  Loan, Investment, InvestmentActivity, SavingsPlan
 } from '../types';
 import { getLocalDateString } from '../lib/dateUtils';
 import { ThemeIcon } from '../components/ThemeIcon';
 import { getDashboardTaskGroups } from '../lib/dashboardTaskGroups';
+import { getFinancialPosition } from '../lib/financeCalculations';
 
 interface DashboardViewProps {
   tasks: Task[];
@@ -22,6 +24,10 @@ interface DashboardViewProps {
   accounts?: FinanceAccount[];
   assets?: Asset[];
   liabilities?: Liability[];
+  loans?: Loan[];
+  investments?: Investment[];
+  investmentActivities?: InvestmentActivity[];
+  savingsPlans?: SavingsPlan[];
   reminders?: ReminderItem[];
   onNavigate: (module: NavModule) => void;
   onToggleTask: (id: string) => void;
@@ -128,6 +134,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   accounts = [],
   assets = [],
   liabilities = [],
+  loans = [],
+  investments = [],
+  investmentActivities = [],
+  savingsPlans = [],
   reminders = [],
   onNavigate,
   onToggleTask,
@@ -152,12 +162,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   const inboxTasks = inbox;
   const hasTaskContent = dashboardTasks.length > 0 || inboxTasks.length > 0 || upcomingTasks.length > 0;
   const activeGoals = goals.filter(goal => !goal.status || goal.status === 'active');
-  const liquidBalance = accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
-  const assetValue = assets
-    .filter(asset => !asset.status || asset.status === 'active')
-    .reduce((sum, asset) => sum + (Number(asset.value) || 0), 0);
-  const liabilityValue = liabilities.reduce((sum, liability) => sum + (Number(liability.amount) || 0), 0);
-  const netWorth = liquidBalance + assetValue - liabilityValue;
+  const financialPosition = getFinancialPosition({
+    accounts,
+    assets,
+    liabilities,
+    loans,
+    investments,
+    investmentActivities,
+    savingsPlans
+  });
 
   const monthFinance = useMemo(
     () => finance.filter(transaction => transaction.date?.startsWith(today.slice(0, 7))),
@@ -250,7 +263,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="dashboard-view space-y-4">
-      {(accounts.length > 0 || assets.length > 0 || liabilities.length > 0) && (
+      {(accounts.length > 0 || assets.length > 0 || liabilities.length > 0 ||
+        loans.length > 0 || investments.length > 0 || savingsPlans.length > 0) && (
         <button
           type="button"
           onClick={() => onNavigate('finance')}
@@ -259,12 +273,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Estimated net worth</div>
             <div className="mt-1 text-xl font-black tabular-nums text-slate-900 dark:text-white">
-              {getCurrencySymbol()} {netWorth.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              {getCurrencySymbol()} {financialPosition.netWorth.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </div>
           </div>
           <div className="text-right text-[11px] text-slate-400">
-            <div>Assets {getCurrencySymbol()} {(liquidBalance + assetValue).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
-            <div>Debt {getCurrencySymbol()} {liabilityValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+            <div>Assets {getCurrencySymbol()} {financialPosition.totalAssets.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+            <div>Debt {getCurrencySymbol()} {financialPosition.totalLiabilities.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
           </div>
         </button>
       )}

@@ -12,7 +12,7 @@ import {
   FinanceAccount, FinanceTransaction, Loan, LoanPayment,
   Investment, SavingsPlan, SavingsProductType, Asset, Liability,
   ReceiptItem, NavModule, Goal, InvestmentActivity, InvestmentActivityKind, CashFlowSchedule,
-  CashFlowScheduleFrequency
+  CashFlowScheduleFrequency, MentorProfile
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString, getLocalMonthString } from '../lib/dateUtils';
@@ -24,7 +24,7 @@ import { SlideTabs } from '../components/SlideTabs';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { FormDisclosure } from '../components/FormDisclosure';
 import { syncGoalProgressFromFinance } from '../lib/goalTaskSync';
-import { addSchedulePeriod, advanceSchedule, getInvestmentMetrics } from '../lib/financeCalculations';
+import { addSchedulePeriod, advanceSchedule, estimateRemainingInvestmentValue, getFinancialPosition, getInvestmentMetrics } from '../lib/financeCalculations';
 import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
 import {
   addLoanPaymentPeriod,
@@ -44,6 +44,10 @@ import {
   STANDARD_INCOME_CATEGORIES
 } from '../lib/financeViewHelpers';
 
+interface FinanceAppSettings extends Record<string, unknown> {
+  mentor?: MentorProfile;
+}
+
 interface FinanceViewProps {
   accounts: FinanceAccount[];
   transactions: FinanceTransaction[];
@@ -57,6 +61,7 @@ interface FinanceViewProps {
   liabilities?: Liability[];
   receipts?: ReceiptItem[];
   goals?: Goal[];
+  mentor?: MentorProfile;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
   onError?: (msg: string) => void;
@@ -64,7 +69,7 @@ interface FinanceViewProps {
 }
 
 type OverviewPanel = 'transaction' | 'accounts' | 'scheduled';
-type FinanceTab = 'overview' | 'transactions' | 'loans' | 'investments' | 'savings' | 'balanceSheet';
+type FinanceTab = 'overview' | 'transactions' | 'loans' | 'investments' | 'savings' | 'balanceSheet' | 'reserves';
 type SectionActionPanel = 'loanActions' | 'investmentActions' | 'savings' | 'asset';
 type FinanceMenuAction =
   | 'loanPayment'
@@ -89,6 +94,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   liabilities = [],
   receipts = [],
   goals = [],
+  mentor,
   onRefresh,
   onSuccess,
   onError,
@@ -97,6 +103,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const today = getLocalDateString();
   const reportError = onError || ((message: string) => onSuccess(`⚠️ ${message}`));
   const [activeTab, setActiveTab] = useState<FinanceTab>('overview');
+  const [reservePrinciple, setReservePrinciple] = useState<string>(mentor?.mission || '');
+  const [survivalReserve, setSurvivalReserve] = useState(String(mentor?.survivalReserve ?? 100000));
+  const [emergencyReserve, setEmergencyReserve] = useState(String(mentor?.emergencyReserve ?? 50000));
+  const [dailyBurn, setDailyBurn] = useState(String(mentor?.dailyBurn ?? 800));
+  const [annualSavingsTarget, setAnnualSavingsTarget] = useState(String(mentor?.savingGoalAmount ?? 500000));
+  const appliedReserveProfile = useRef<{ stamp?: number; loaded: boolean }>({ loaded: Boolean(mentor), stamp: mentor?.updatedAt });
+  useEffect(() => {
+    if (!mentor) return;
+    const applied = appliedReserveProfile.current;
+    if (applied.loaded && applied.stamp === mentor.updatedAt) return;
+    appliedReserveProfile.current = { loaded: true, stamp: mentor.updatedAt };
+    if (mentor.mission !== undefined) setReservePrinciple(mentor.mission);
+    if (mentor.survivalReserve !== undefined) setSurvivalReserve(String(mentor.survivalReserve));
+    if (mentor.emergencyReserve !== undefined) setEmergencyReserve(String(mentor.emergencyReserve));
+    if (mentor.dailyBurn !== undefined) setDailyBurn(String(mentor.dailyBurn));
+    if (mentor.savingGoalAmount !== undefined) setAnnualSavingsTarget(String(mentor.savingGoalAmount));
+  }, [mentor]);
   const [overviewPanel, setOverviewPanel] = useState<OverviewPanel | null>(null);
   const [sectionActionPanel, setSectionActionPanel] = useState<SectionActionPanel | null>(null);
   const transactionPanelRef = useRef<HTMLDivElement>(null);
@@ -547,24 +570,31 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
   }, [loans, payLoanId]);
 
-  const liquidCash = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
-  const investmentMetricsById = new Map(investments.map(investment => [
-    investment.id,
-    getInvestmentMetrics(investment, investmentActivities)
-  ]));
-  const investmentValue = investments.reduce((sum, investment) =>
-    sum + (investmentMetricsById.get(investment.id)?.currentValue || 0), 0);
+  const financialPosition = getFinancialPosition({
+    accounts,
+    assets,
+    liabilities,
+    loans,
+    investments,
+    investmentActivities,
+    savingsPlans
+  });
+  const {
+    investmentMetricsById,
+    liquidCash,
+    investmentValue,
+    totalSavings,
+    totalLoanReceivables,
+    totalLoanLiabilities,
+    totalAssets,
+    totalLiabilities,
+    netWorth
+  } = financialPosition;
   const investmentCostBasis = investments.reduce((sum, investment) =>
     sum + (investmentMetricsById.get(investment.id)?.costBasis || 0), 0);
   const investmentGain = investments.reduce((sum, investment) =>
     sum + (investmentMetricsById.get(investment.id)?.totalGain || 0), 0);
   const savingsTransactions = transactions.filter(transaction => !!transaction.linkedSavingsPlanId);
-  const totalSavings = savingsPlans.reduce((sum, plan) => {
-    const balance = plan.productType === 'fixed_deposit'
-      ? getFixedDepositValue(plan).currentValue
-      : Number(plan.currentAmount) || 0;
-    return sum + balance;
-  }, 0);
   const totalSavingsDeposited = savingsTransactions
     .filter(transaction => transaction.type === 'savings' && !transaction.ledgerOnly)
     .reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0);
@@ -633,7 +663,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     const annualDepreciation = (cost - salvage) / Number(asset.usefulLifeYears);
     return Math.min(cost - salvage, annualDepreciation * ((asOf - start) / (365.2425 * 86_400_000)));
   };
-  const manualAssetsVal = activePhysicalAssets.reduce((sum, asset) => sum + (Number(asset.value) || 0), 0);
+  const manualAssetsVal = financialPosition.manualAssetsValue;
   const physicalAssetCostBasis = activePhysicalAssets.reduce((sum, asset) => sum + getAssetCostBasis(asset), 0);
   const physicalAssetGainLoss = manualAssetsVal - physicalAssetCostBasis;
   const physicalAssetDepreciationEstimate = activePhysicalAssets.reduce((sum, asset) => sum + getAssetDepreciation(asset), 0);
@@ -648,12 +678,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const borrowedLoans = loans.filter(loan => loan.direction !== 'lent');
   const lentLoans = loans.filter(loan => loan.direction === 'lent');
+  const outstandingBorrowedLoans = borrowedLoans.filter(loan => Number(loan.outstanding) > 0);
   const activeBorrowedLoans = borrowedLoans.filter(loan => loan.status !== 'closed' && Number(loan.outstanding) > 0);
   const activeLentLoans = lentLoans.filter(loan => loan.status !== 'closed' && Number(loan.outstanding) > 0);
   const totalLoanAmount = borrowedLoans.reduce((sum, loan) => sum + (Number(loan.approvedAmount ?? loan.principal) || 0), 0);
-  const totalLoanLiabilities = borrowedLoans.reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0);
-  const totalLoanReceivables = lentLoans.reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0);
-  const totalAssets = liquidCash + investmentValue + totalSavings + totalLoanReceivables + manualAssetsVal;
   const borrowedLoanPayments = loanPayments.filter(payment =>
     borrowedLoans.some(loan => loan.id === payment.loanId)
   );
@@ -736,10 +764,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     return (loanStatusFilter === 'all' || (loanStatusFilter === 'closed' ? isClosed : !isClosed)) &&
       (loanDirectionFilter === 'all' || (metric.loan.direction || 'borrowed') === loanDirectionFilter);
   });
-  const manualLiabilitiesVal = liabilities.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
-  const totalLiabilities = totalLoanLiabilities + manualLiabilitiesVal;
-
-  const netWorth = totalAssets - totalLiabilities;
+  const manualLiabilitiesVal = financialPosition.manualLiabilitiesValue;
 
   // Account Ledger Balance Reconciliation
   const getAccountReconciliation = (acct: FinanceAccount) => {
@@ -2344,17 +2369,19 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       createdAt: now
     };
     activity.linkedTransactionId = transactionId;
-    const saleValuation = investmentActivityKind === 'sell' && (
-      (quantity > 0 && existingMetrics.units > 0) ||
-      costBasisRemoved >= existingMetrics.costBasis - 0.01
-    ) ? {
+    const saleValuation = investmentActivityKind === 'sell' && ((quantity > 0 && existingMetrics.units > 0) || costBasisRemoved > 0) ? {
       id: generateUUID(),
       investmentId: investment.id,
       kind: 'valuation' as const,
       date: investmentActivityDate,
-      amount: quantity > 0 && existingMetrics.units > 0
-        ? amount / quantity * Math.max(0, existingMetrics.units - quantity)
-        : 0,
+      amount: estimateRemainingInvestmentValue(
+        existingMetrics.currentValue,
+        existingMetrics.costBasis,
+        costBasisRemoved,
+        existingMetrics.units,
+        quantity,
+        amount
+      ),
       quantity: Math.max(0, existingMetrics.units - quantity),
       note: 'Remaining holding valued using the actual sale price per unit',
       createdAt: now
@@ -3693,6 +3720,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   let periodAdjustmentFlow = 0;
 
   dateFilteredTransactions.forEach(t => {
+    if (t.ledgerOnly) return;
     const amt = Number(t.amount) || 0;
     if (t.type === 'income') periodIncome += amt;
     else if (t.type === 'expense') periodExpense += amt;
@@ -3722,6 +3750,22 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const hasLoanRecords = loans.length > 0 || liabilities.length > 0 || loanPayments.length > 0;
   const hasInvestmentRecords = investments.length > 0;
   const hasSavingsRecords = savingsPlans.length > 0;
+  const currentYear = new Date().getFullYear();
+  const yearStart = `${currentYear}-01-01`;
+  const recordedSavingsThisYear = transactions
+    .filter(transaction => !transaction.ledgerOnly && transaction.date >= yearStart && transaction.date <= today && (transaction.type === 'savings' || transaction.type === 'savingsWithdrawal'))
+    .reduce((sum, transaction) => sum + (transaction.type === 'savings' ? Number(transaction.amount) || 0 : -(Number(transaction.amount) || 0)), 0);
+  const savedSurvivalReserve = Number(mentor?.survivalReserve ?? 0) || 0;
+  const savedEmergencyReserve = Number(mentor?.emergencyReserve ?? 0) || 0;
+  const savedDailyBurn = Number(mentor?.dailyBurn ?? 0) || 0;
+  const savedAnnualSavingsTarget = Math.max(0, Number(mentor?.savingGoalAmount) || 0);
+  const totalReserveTarget = savedSurvivalReserve + savedEmergencyReserve;
+  const liquidAccountBalance = accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
+  const runwayDays = savedDailyBurn > 0 ? Math.max(0, Math.floor(liquidAccountBalance / savedDailyBurn)) : 0;
+  const annualSavingsProgress = savedAnnualSavingsTarget > 0
+    ? Math.max(0, Math.min(100, Math.round(recordedSavingsThisYear / savedAnnualSavingsTarget * 100)))
+    : 0;
+
   const hasBalanceSheetRecords =
     accounts.length > 0 ||
     transactions.length > 0 ||
@@ -3731,6 +3775,22 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     investments.length > 0 ||
     savingsPlans.length > 0 ||
     assets.length > 0;
+  const handleSaveReserveStrategy = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const parseAmount = (value: string) => value.trim() === '' ? Number.NaN : Number(value);
+    const values = [survivalReserve, emergencyReserve, dailyBurn, annualSavingsTarget].map(parseAmount);
+    if (values.some(value => !Number.isFinite(value) || value < 0)) {
+      reportError('Reserve targets, daily burn, and annual savings goal must be numbers zero or greater.');
+      return;
+    }
+    const [survival, emergency, burn, annualGoal] = values;
+    const appSettings = (await storage.getSingleton<FinanceAppSettings>('appSettings')) || {};
+    appSettings.mentor = { ...appSettings.mentor, mission: reservePrinciple, survivalReserve: survival, emergencyReserve: emergency, dailyBurn: burn, monthlyBurn: burn * 30, savingGoalAmount: annualGoal, updatedAt: Date.now() };
+    await storage.setSingleton('appSettings', appSettings);
+    onSuccess('Reserve strategy saved');
+    onRefresh();
+  };
+
   const financeMenuOptions: { id: FinanceMenuId; label: string; optionLabel: string; icon: typeof Landmark }[] = [
     { id: 'overview', label: 'Cash Flow & Accounts', optionLabel: 'Cash Flow & Accounts', icon: Landmark },
     { id: 'transaction', label: 'Record Transaction', optionLabel: '　↳ Record Transaction', icon: Plus },
@@ -3745,6 +3805,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     { id: 'addInvestment', label: 'Add Investment', optionLabel: '　↳ Add Investment', icon: Plus },
     { id: 'recordInvestmentActivity', label: 'Record Investment Activity', optionLabel: '　↳ Record Activity', icon: Activity },
     { id: 'savings', label: 'Savings & Deposits', optionLabel: `Savings & Deposits (${savingsPlans.length})`, icon: ShieldCheck },
+    { id: 'reserves', label: 'Reserves & Runway', optionLabel: 'Reserves & Runway', icon: ShieldCheck },
     { id: 'registerSavings', label: 'Register Savings / Deposit', optionLabel: '　↳ Register Savings / Deposit', icon: Plus },
     { id: 'balanceSheet', label: 'Balance Sheet', optionLabel: `Balance Sheet (${assets.length})`, icon: FileText },
     { id: 'addAsset', label: 'Add Asset', optionLabel: '　↳ Add Asset', icon: Plus }
@@ -4267,7 +4328,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   {
                     label: 'Total debt',
                     value: `${getCurrencySymbol()} ${totalLiabilities.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
-                    note: `${loans.length} loans · ${liabilities.length} other debt`,
+                    note: `${outstandingBorrowedLoans.length} borrowed ${outstandingBorrowedLoans.length === 1 ? 'loan' : 'loans'} · ${liabilities.length} other debt`,
                     tone: 'text-rose-600 dark:text-rose-400'
                   }
                 ].map(metric => (
@@ -4602,6 +4663,33 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             )}
           </div>}
         </div>
+      )}
+
+
+      {activeTab === 'reserves' && (
+        <section className="space-y-4" aria-label="Reserve planning">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"><div className="text-[10px] font-bold uppercase text-slate-500">Liquid accounts</div><div className="mt-1 font-mono text-lg font-bold">{getCurrencySymbol()} {accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0).toLocaleString('en-IN')}</div><div className="text-[10px] text-slate-400">{accounts.length} accounts</div></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"><div className="text-[10px] font-bold uppercase text-slate-500">Liquid balance</div><div className="mt-1 font-mono text-lg font-bold">{getCurrencySymbol()} {liquidAccountBalance.toLocaleString('en-IN')}</div><div className="text-[10px] text-slate-400">Finance accounts only</div></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"><div className="text-[10px] font-bold uppercase text-slate-500">Reserve target</div><div className="mt-1 font-mono text-lg font-bold">{totalReserveTarget > 0 ? getCurrencySymbol() + ' ' + totalReserveTarget.toLocaleString('en-IN') : 'Not set'}</div><div className="text-[10px] text-slate-400">Survival + emergency</div></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"><div className="text-[10px] font-bold uppercase text-slate-500">Survival runway</div><div className="mt-1 font-mono text-lg font-bold">{savedDailyBurn > 0 ? runwayDays + ' days' : 'Not set'}</div><div className="text-[10px] text-slate-400">{savedDailyBurn > 0 ? (runwayDays / 30).toFixed(1) + ' months' : 'Set daily burn below'}</div></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"><div className="text-[10px] font-bold uppercase text-slate-500">Annual savings</div><div className="mt-1 font-mono text-lg font-bold">{savedAnnualSavingsTarget > 0 ? annualSavingsProgress + '%' : 'Not set'}</div><div className="text-[10px] text-slate-400">Net recorded deposits {getCurrencySymbol()} {recordedSavingsThisYear.toLocaleString('en-IN')}</div></div>
+          </div>
+          <div className="max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Reserve strategy & capital preservation</h2>
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Targets are set here. Runway uses account balances only; savings plans are excluded to avoid possible overlap with account balances.</p>
+            <form onSubmit={handleSaveReserveStrategy} className="mt-4 space-y-4">
+              <label className="block text-xs font-semibold">Capital preservation principle<textarea rows={2} value={reservePrinciple} onChange={event => setReservePrinciple(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-semibold">Survival reserve ({getCurrencySymbol()})<input type="number" min="0" step="0.01" value={survivalReserve} onChange={event => setSurvivalReserve(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></label>
+                <label className="block text-xs font-semibold">Emergency fund ({getCurrencySymbol()})<input type="number" min="0" step="0.01" value={emergencyReserve} onChange={event => setEmergencyReserve(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></label>
+                <label className="block text-xs font-semibold">Daily burn rate ({getCurrencySymbol()})<input type="number" min="0" step="0.01" value={dailyBurn} onChange={event => setDailyBurn(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></label>
+                <label className="block text-xs font-semibold">Annual savings goal ({getCurrencySymbol()})<input type="number" min="0" step="0.01" value={annualSavingsTarget} onChange={event => setAnnualSavingsTarget(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></label>
+              </div>
+              <button type="submit" className="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-indigo-500">Save Reserve Strategy</button>
+            </form>
+          </div>
+        </section>
       )}
 
       {/* Tab: Loans & Liabilities */}
@@ -6103,7 +6191,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </form>
           </div>
 
-          {(sectionActionPanel !== 'savings' || hasSavingsRecords) && <div className={`finance-unified-list-column ${sectionActionPanel === 'savings' ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+          {hasSavingsRecords && <div className={`finance-unified-list-column ${sectionActionPanel === 'savings' ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
             {savingsPlans.length > 0 && (
               <section className="finance-summary-card border-b border-slate-100 pb-4 dark:border-slate-800">
                 <h2 className="border-b border-slate-100 pb-3 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-white">

@@ -2,11 +2,10 @@ import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Play, Pause, RotateCcw, Check, Sparkles, Volume2,
-  VolumeX, Clock, Bell, Trash2,
+  VolumeX, Clock, Trash2,
   Upload, Music, Sliders, Pencil, Plus,
   Link2
 } from 'lucide-react';
-import { EmptyState } from '../components/EmptyState';
 import { FocusSession, Task, Goal, Routine } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';

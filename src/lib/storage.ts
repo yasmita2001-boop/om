@@ -1096,7 +1096,6 @@ class StorageEngine {
     const deletedAt = Date.now();
     const signature = computeRecordSignature(storeName, item);
     const sourceTaskField: Record<string, string> = {
-      workProjects: 'projectId',
       learningItems: 'learningId',
       skills: 'skillId',
       routines: 'routineId',
@@ -1114,7 +1113,6 @@ class StorageEngine {
       ? (await this.getAll<any>('interactions', profileId)).filter(interaction => interaction.personId === id)
       : [];
     const directReminderTypes: Record<string, string[]> = {
-      workProjects: ['project', 'workProject', 'workProjects'],
       learningItems: ['learning', 'learningItem', 'learningItems'],
       skills: ['skill', 'skills'],
       routines: ['routine', 'routines'],
@@ -1402,7 +1400,6 @@ class StorageEngine {
       reminders,
       tasks,
       people,
-      workProjects,
       learningItems,
       skills,
       routines,
@@ -1411,7 +1408,6 @@ class StorageEngine {
       this.getAll<any>('reminders', profileId),
       this.getAll<any>('tasks', profileId),
       this.getAll<any>('people', profileId),
-      this.getAll<any>('workProjects', profileId),
       this.getAll<any>('learningItems', profileId),
       this.getAll<any>('skills', profileId),
       this.getAll<any>('routines', profileId),
@@ -1420,9 +1416,6 @@ class StorageEngine {
     const taskIds = new Set(tasks.map(task => task.id));
     const peopleIds = new Set(people.map(person => person.id));
     const directLinkedSourceIds: Record<string, Set<string>> = {
-      project: new Set(workProjects.map(item => item.id)),
-      workProject: new Set(workProjects.map(item => item.id)),
-      workProjects: new Set(workProjects.map(item => item.id)),
       learning: new Set(learningItems.map(item => item.id)),
       learningItem: new Set(learningItems.map(item => item.id)),
       learningItems: new Set(learningItems.map(item => item.id)),
@@ -1787,12 +1780,11 @@ class StorageEngine {
       strategies: { goalId: 'goals' },
       kpis: { goalId: 'goals' },
       missions: { goalId: 'goals' },
-      capitalStrategy: { goalId: 'goals' },
       focus: { taskId: 'tasks', goalId: 'goals' },
       notes: { goalId: 'goals' },
       journal: { goalId: 'goals' },
       finance: { accountId: 'financeAccounts', fromAccountId: 'financeAccounts', toAccountId: 'financeAccounts', goalId: 'goals' },
-      cashFlowSchedules: { accountId: 'financeAccounts', goalId: 'financialGoals' },
+      cashFlowSchedules: { accountId: 'financeAccounts', goalId: 'goals' },
       savingsPlans: { accountId: 'financeAccounts', goalId: 'goals' },
       loans: { accountId: 'financeAccounts' },
       loanPayments: { loanId: 'loans', accountId: 'financeAccounts' },
@@ -1800,23 +1792,15 @@ class StorageEngine {
       investmentActivities: { investmentId: 'investments', accountId: 'financeAccounts' },
       assets: { accountId: 'financeAccounts' },
       liabilities: { accountId: 'financeAccounts' },
-      financialGoals: { goalId: 'goals' },
       healthMeasurements: { goalId: 'goals' },
       healthAppointments: { goalId: 'goals' },
       healthNotes: { goalId: 'goals' },
-      workProjects: { goalId: 'goals' },
-      workResponsibilities: { projectId: 'workProjects', goalId: 'goals' },
       learningItems: { goalId: 'goals' },
-      learningProgress: { learningItemId: 'learningItems' },
       skills: { goalId: 'goals' },
       courses: { skillId: 'skills', goalId: 'goals' },
-      meetings: { projectId: 'workProjects', goalId: 'goals' },
+      meetings: { goalId: 'goals' },
       interactions: { personId: 'people' },
-      importantDates: { personId: 'people' },
-      relationshipReminders: { personId: 'people' },
       spiritualPractices: { goalId: 'goals' },
-      commitments: { goalId: 'goals' },
-      documents: { collectionId: 'documentCollections' },
       warranties: { thingId: 'things', documentId: 'documents', receiptId: 'receipts' },
       receipts: { thingId: 'things', accountId: 'financeAccounts', documentId: 'documents' },
       certificates: { documentId: 'documents', personId: 'people' },
@@ -1907,7 +1891,7 @@ export async function ensureDefaultProfiles(): Promise<AppState> {
       themeMode: 'dark',
       accentColor: '#e5c777',
       notificationsEnabled: true,
-      noteCategories: ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
+      noteCategories: ['General', 'Strategy', 'Finance', 'Ideas'],
       calcFavorites: ['EMI / Loan', 'SIP / Investment', 'Date Difference']
     };
     await storage.setSingleton('appSettings', settings);

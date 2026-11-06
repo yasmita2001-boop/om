@@ -3,7 +3,7 @@ import { getCurrencySymbol } from './currencyDisplay';
  * db.ts
  *
  * Core IndexedDB initialization, store schemas, version upgrades, and migrations.
- * Preserves all 64 canonical entity stores, singletons, system stores, and legacy indices.
+ * Preserves canonical entity stores, singletons, system stores, and legacy indices.
  */
 
 export const DB_NAME = import.meta.env.MODE === 'review-copy'
@@ -18,11 +18,11 @@ export const ENTITY_STORES = [
   'loans', 'loanPayments', 'investments', 'investmentActivities', 'cashFlowSchedules',
   'savingsPlans', 'assets', 'liabilities',
   'financialGoals', 'healthMeasurements', 'healthActivities', 'sleepRecords', 'waterRecords',
-  'nutritionRecords', 'healthAppointments', 'healthNotes', 'workProjects',
-  'workResponsibilities', 'learningItems', 'skills', 'courses', 'learningProgress',
+  'nutritionRecords', 'healthAppointments', 'healthNotes',
+  'learningItems', 'skills', 'courses', 'learningProgress',
   'meetings', 'people', 'relationships', 'interactions', 'importantDates',
-  'relationshipReminders', 'values', 'principles', 'spiritualPractices',
-  'commitments', 'things', 'documents', 'documentCollections', 'warranties',
+  'relationshipReminders', 'spiritualPractices',
+  'things', 'documents', 'documentCollections', 'warranties',
   'receipts', 'certificates', 'importantRecords', 'reminders', 'notifications',
   'achievements', 'calcHistory', 'attachments', 'customFonts'
 ];
@@ -75,8 +75,6 @@ export const STORE_LABELS: Record<string, { label: string; module: string }> = {
   nutritionRecords: { label: 'Nutrition Log', module: 'Health & Wellness' },
   healthAppointments: { label: 'Medical Appointment', module: 'Health & Wellness' },
   healthNotes: { label: 'Health Note', module: 'Health & Wellness' },
-  workProjects: { label: 'Work Project', module: 'Work & Skill Trees' },
-  workResponsibilities: { label: 'Work Responsibility', module: 'Work & Skill Trees' },
   learningItems: { label: 'Learning Item', module: 'Work & Skill Trees' },
   skills: { label: 'Skill Tree', module: 'Work & Skill Trees' },
   courses: { label: 'Course', module: 'Work & Skill Trees' },
@@ -87,10 +85,7 @@ export const STORE_LABELS: Record<string, { label: string; module: string }> = {
   interactions: { label: 'Interaction Log', module: 'People & Relations' },
   importantDates: { label: 'Important Date', module: 'People & Relations' },
   relationshipReminders: { label: 'Relationship Reminder', module: 'People & Relations' },
-  values: { label: 'Core Value', module: 'Values & Spiritual' },
-  principles: { label: 'Principle', module: 'Values & Spiritual' },
-  spiritualPractices: { label: 'Spiritual Practice', module: 'Values & Spiritual' },
-  commitments: { label: 'Commitment', module: 'Values & Spiritual' },
+  spiritualPractices: { label: 'Spiritual Practice', module: 'Daily Practices' },
   things: { label: 'Inventory Item', module: 'Things & Documents' },
   documents: { label: 'Document', module: 'Things & Documents' },
   documentCollections: { label: 'Document Collection', module: 'Things & Documents' },

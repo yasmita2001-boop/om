@@ -5,6 +5,8 @@ export interface ToolField {
   type?: 'text' | 'number' | 'date' | 'time' | 'select';
   options?: { value: string; label: string }[];
   default: string;
+  min?: string;
+  max?: string;
   step?: string;
   placeholder?: string;
 }
@@ -115,7 +117,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Calculate discount amount and final price after percentage off',
     fields: [
       { label: 'Original Price (NPR)', type: 'number', default: '1200' },
-      { label: 'Discount Percentage (%)', type: 'number', default: '20' }
+      { label: 'Discount Percentage (%)', type: 'number', default: '20', min: '0', max: '100' }
     ],
     calculate: (f1, f2) => calculatorEngine.discount(f1, f2)
   },
@@ -580,11 +582,17 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     description: 'Macronutrient breakdown (Protein, Carbs, Fats) in grams',
     fields: [
       { label: 'Target Daily Calories (kcal)', type: 'number', default: '2200' },
-      { label: 'Protein Ratio (%)', type: 'number', default: '30' },
-      { label: 'Carbs Ratio (%)', type: 'number', default: '40' },
-      { label: 'Fats Ratio (%)', type: 'number', default: '30' }
+      { label: 'Protein Ratio (%)', type: 'number', default: '30', min: '0', max: '100' },
+      { label: 'Carbs Ratio (%)', type: 'number', default: '40', min: '0', max: '100' },
+      { label: 'Fats Ratio (%)', type: 'number', default: '30', min: '0', max: '100' }
     ],
-    calculate: (f1, f2, f3, f4) => calculatorEngine.macros(f1, Number(f2) || 30, Number(f3) || 40, Number(f4) || 30)
+    calculate: (f1, f2, f3, f4) => {
+      const ratios = [f2, f3, f4].map(value => {
+        if (value.trim() === '') throw new Error('Enter all macro ratios');
+        return Number(value);
+      });
+      return calculatorEngine.macros(f1, ratios[0], ratios[1], ratios[2]);
+    }
   },
   'Body Fat': {
     name: 'Body Fat',

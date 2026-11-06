@@ -1,4 +1,71 @@
-import { CashFlowSchedule, Investment, InvestmentActivity } from '../types';
+import {
+  Asset,
+  CashFlowSchedule,
+  FinanceAccount,
+  Investment,
+  InvestmentActivity,
+  Liability,
+  Loan,
+  SavingsPlan
+} from '../types';
+import { getFixedDepositValue } from './financeViewHelpers';
+
+interface FinancialPositionInput {
+  accounts: FinanceAccount[];
+  assets: Asset[];
+  liabilities: Liability[];
+  loans: Loan[];
+  investments: Investment[];
+  investmentActivities: InvestmentActivity[];
+  savingsPlans: SavingsPlan[];
+}
+
+export function getFinancialPosition({
+  accounts,
+  assets,
+  liabilities,
+  loans,
+  investments,
+  investmentActivities,
+  savingsPlans
+}: FinancialPositionInput) {
+  const investmentMetricsById = new Map(investments.map(investment => [
+    investment.id,
+    getInvestmentMetrics(investment, investmentActivities)
+  ]));
+  const liquidCash = accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
+  const investmentValue = investments.reduce((sum, investment) =>
+    sum + (investmentMetricsById.get(investment.id)?.currentValue || 0), 0);
+  const totalSavings = savingsPlans.reduce((sum, plan) => sum + (
+    plan.productType === 'fixed_deposit'
+      ? getFixedDepositValue(plan).currentValue
+      : Number(plan.currentAmount) || 0
+  ), 0);
+  const manualAssetsValue = assets
+    .filter(asset => !asset.status || asset.status === 'active')
+    .reduce((sum, asset) => sum + (Number(asset.value) || 0), 0);
+  const borrowedLoans = loans.filter(loan => loan.direction !== 'lent');
+  const lentLoans = loans.filter(loan => loan.direction === 'lent');
+  const totalLoanLiabilities = borrowedLoans.reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0);
+  const totalLoanReceivables = lentLoans.reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0);
+  const manualLiabilitiesValue = liabilities.reduce((sum, liability) => sum + (Number(liability.amount) || 0), 0);
+  const totalAssets = liquidCash + investmentValue + totalSavings + totalLoanReceivables + manualAssetsValue;
+  const totalLiabilities = totalLoanLiabilities + manualLiabilitiesValue;
+
+  return {
+    investmentMetricsById,
+    liquidCash,
+    investmentValue,
+    totalSavings,
+    manualAssetsValue,
+    totalLoanReceivables,
+    totalLoanLiabilities,
+    manualLiabilitiesValue,
+    totalAssets,
+    totalLiabilities,
+    netWorth: totalAssets - totalLiabilities
+  };
+}
 
 export function getInvestmentMetrics(
   investment: Investment,
@@ -50,6 +117,12 @@ export function getInvestmentMetrics(
     roi: contributedForRoi > 0 ? totalGain / contributedForRoi * 100 : 0,
     units
   };
+}
+
+export function estimateRemainingInvestmentValue(currentValue: number, costBasis: number, costBasisRemoved: number, units: number, quantitySold: number, saleAmount: number): number {
+  if (quantitySold > 0 && units > 0) return saleAmount / quantitySold * Math.max(0, units - quantitySold);
+  if (costBasis <= 0) return 0;
+  return Math.max(0, currentValue) * Math.max(0, costBasis - costBasisRemoved) / costBasis;
 }
 
 export function addSchedulePeriod(

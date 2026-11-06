@@ -35,7 +35,7 @@ interface NotesViewProps {
 
 export const NotesView: React.FC<NotesViewProps> = ({
   notes,
-  categories = ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
+  categories = ['General', 'Strategy', 'Finance', 'Ideas'],
   goals = [],
   journalCount,
   pendingAction,
@@ -281,7 +281,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         };
         await storage.put('notes', updated);
         if (effectiveGoalId) {
-          await syncGoalProgressFromNotes(effectiveGoalId, updated.id);
+          await syncGoalProgressFromNotes(effectiveGoalId);
         }
         if (oldGoalId && oldGoalId !== effectiveGoalId) {
           await syncGoalProgressFromNotes(oldGoalId);
@@ -305,7 +305,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       };
       await storage.put('notes', newNote);
       if (effectiveGoalId) {
-        await syncGoalProgressFromNotes(effectiveGoalId, newNote.id);
+        await syncGoalProgressFromNotes(effectiveGoalId);
       }
       onSuccess(effectiveGoalId ? '✓ Note saved & linked to Goal' : '✓ Note saved to vault');
     }
@@ -348,7 +348,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
     await storage.put('notes', updated);
     if (effectiveGoalId) {
-      await syncGoalProgressFromNotes(effectiveGoalId, updated.id);
+      await syncGoalProgressFromNotes(effectiveGoalId);
     }
     if (oldGoalId && oldGoalId !== effectiveGoalId) {
       await syncGoalProgressFromNotes(oldGoalId);
@@ -466,8 +466,10 @@ export const NotesView: React.FC<NotesViewProps> = ({
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: theme.swatch }} />
-              <h3 className="truncate text-sm font-semibold text-slate-900 dark:text-white">
-                {n.title}
+              <h3 className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-white">
+                <button type="button" onClick={() => setViewingNote(n)} className="max-w-full truncate text-left rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" aria-label={'Open note: ' + n.title}>
+                  {n.title}
+                </button>
               </h3>
             </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-x-2 overflow-hidden text-xs text-slate-400">
@@ -616,7 +618,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
             {editingNoteId && (
               <button
                 type="button"
-                onClick={resetForm}
+                onClick={() => resetForm()}
                 className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
               >
                 Cancel Edit

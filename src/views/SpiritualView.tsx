@@ -1,30 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Compass, Heart, Shield, Trash2, Pencil, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Heart, Trash2, Pencil, X } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
-import { ValueItem, SpiritualPractice, Commitment, Habit, NavModule, Goal } from '../types';
+import { SpiritualPractice, Habit, NavModule, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
-import { syncGoalProgressFromSpiritual } from '../lib/goalTaskSync';
+import { syncGoalProgressFromPractices } from '../lib/goalTaskSync';
 import { ProgressiveActions } from '../components/ProgressiveActions';
-import { FormToggleButton } from '../components/FormToggleButton';
 import { ThemeIcon } from '../components/ThemeIcon';
+import { FormToggleButton } from '../components/FormToggleButton';
 
 interface SpiritualViewProps {
-  values: ValueItem[];
   practices: SpiritualPractice[];
-  commitments: Commitment[];
   goals?: Goal[];
   embedded?: boolean;
-  initialForm?: 'values' | 'practices' | 'commitments';
+  initialForm?: 'practices';
   onNavigate: (module: NavModule) => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
 
 export const SpiritualView: React.FC<SpiritualViewProps> = ({
-  values,
   practices,
-  commitments,
   goals = [],
   embedded = false,
   initialForm,
@@ -32,22 +28,12 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   onRefresh,
   onSuccess
 }) => {
-  const legacyGoalLinksRemoved = useRef(false);
-  const [valTitle, setValTitle] = useState('');
-  const [valDesc, setValDesc] = useState('');
-  const [valType, setValType] = useState<'value' | 'principle'>('value');
-  const [activeAction, setActiveAction] = useState<'values' | 'practices' | 'commitments'>(initialForm || 'values');
-  const [openSpiritualForm, setOpenSpiritualForm] = useState<'values' | 'practices' | 'commitments' | null>(initialForm || null);
+  const [openSpiritualForm, setOpenSpiritualForm] = useState<'practices' | null>(initialForm || null);
 
   const [pracName, setPracName] = useState('');
   const [pracFreq, setPracFreq] = useState('Daily');
   const [pracInputMode, setPracInputMode] = useState<'manual' | 'link'>('manual');
   const [pracGoalId, setPracGoalId] = useState<string>('');
-
-  const [commText, setCommText] = useState('');
-  const [editingFoundation, setEditingFoundation] = useState<
-    { type: 'value'; item: ValueItem } | { type: 'commitment'; item: Commitment } | null
-  >(null);
 
   // Daily Practice Edit state
   const [editingPractice, setEditingPractice] = useState<SpiritualPractice | null>(null);
@@ -65,47 +51,6 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingPractice]);
-
-  useEffect(() => {
-    if (legacyGoalLinksRemoved.current) return;
-    legacyGoalLinksRemoved.current = true;
-
-    void (async () => {
-      const [savedValues, savedCommitments] = await Promise.all([
-        storage.getAll<ValueItem>('values'),
-        storage.getAll<Commitment>('commitments')
-      ]);
-      const linkedValues = savedValues.filter(value => value.goalId);
-      const linkedCommitments = savedCommitments.filter(commitment => commitment.goalId);
-      if (linkedValues.length === 0 && linkedCommitments.length === 0) return;
-
-      await Promise.all([
-        ...linkedValues.map(value => storage.put('values', { ...value, goalId: undefined })),
-        ...linkedCommitments.map(commitment => storage.put('commitments', { ...commitment, goalId: undefined }))
-      ]);
-      onRefresh();
-    })().catch(error => {
-      console.error('Failed to remove legacy goal links from values and commitments', error);
-    });
-  }, [onRefresh]);
-
-  const handleAddValue = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!valTitle.trim()) return;
-
-    const v: ValueItem = {
-      id: generateUUID(),
-      title: `${valType === 'principle' ? '[Principle] ' : ''}${valTitle.trim()}`,
-      description: valDesc.trim(),
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    await storage.put('values', v);
-    onSuccess(`${valType === 'principle' ? 'Principle' : 'Core Value'} defined`);
-    setValTitle('');
-    setValDesc('');
-    onRefresh();
-  };
 
   const handleAddPractice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,13 +77,14 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
       frequency: pracFreq,
       timesPerDay: 1,
       linkedPracticeId: practiceId,
+      goalId: p.goalId,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
     await storage.put('habits', h);
 
     if (p.goalId) {
-      await syncGoalProgressFromSpiritual(p.goalId);
+      await syncGoalProgressFromPractices(p.goalId);
     }
 
     onSuccess('Spiritual practice saved and automatically linked to Habit tracker');
@@ -184,6 +130,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
           ...linkedHabit,
           name: editPracName.trim(),
           frequency: editPracFreq.trim() || 'Daily',
+          goalId: newGoalId,
           updatedAt: Date.now()
         };
         await storage.put('habits', updatedHabit);
@@ -193,35 +140,14 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     }
 
     if (oldGoalId && oldGoalId !== newGoalId) {
-      await syncGoalProgressFromSpiritual(oldGoalId);
+      await syncGoalProgressFromPractices(oldGoalId);
     }
     if (newGoalId) {
-      await syncGoalProgressFromSpiritual(newGoalId);
+      await syncGoalProgressFromPractices(newGoalId);
     }
 
     onSuccess('✓ Daily practice updated');
     setEditingPractice(null);
-    onRefresh();
-  };
-
-  const handleAddCommitment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commText.trim()) return;
-
-    const c: Commitment = {
-      id: generateUUID(),
-      text: commText.trim(),
-      createdAt: Date.now()
-    };
-    await storage.put('commitments', c);
-    onSuccess('Solemn commitment recorded');
-    setCommText('');
-    onRefresh();
-  };
-
-  const handleDeleteValue = async (id: string) => {
-    await storage.delete('values', id);
-    onSuccess('✓ Value deleted');
     onRefresh();
   };
 
@@ -238,7 +164,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         await storage.delete('habits', h.id);
       }
       if (linkedGoalId) {
-        await syncGoalProgressFromSpiritual(linkedGoalId);
+        await syncGoalProgressFromPractices(linkedGoalId);
       }
       onSuccess('✓ Daily practice deleted');
       onRefresh();
@@ -248,128 +174,25 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     }
   };
 
-  const handleDeleteCommitment = async (id: string) => {
-    await storage.delete('commitments', id);
-    onSuccess('✓ Commitment deleted');
-    onRefresh();
-  };
-
-  const handleSaveFoundationEdit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!editingFoundation) return;
-
-    if (editingFoundation.type === 'value') {
-      const { item } = editingFoundation;
-      if (!item.title.trim()) return;
-      const fresh = await storage.get<ValueItem>('values', item.id);
-      if (!fresh) {
-        onSuccess('Could not update value because it no longer exists. Refresh and try again.');
-        return;
-      }
-      await storage.put('values', {
-        ...fresh,
-        title: item.title.trim(),
-        description: item.description.trim(),
-        updatedAt: Date.now()
-      });
-      onSuccess('✓ Value updated');
-    } else {
-      const { item } = editingFoundation;
-      if (!item.text.trim()) return;
-      const fresh = await storage.get<Commitment>('commitments', item.id);
-      if (!fresh) {
-        onSuccess('Could not update commitment because it no longer exists. Refresh and try again.');
-        return;
-      }
-      await storage.put('commitments', { ...fresh, text: item.text.trim() });
-      onSuccess('✓ Commitment updated');
-    }
-
-    setEditingFoundation(null);
-    onRefresh();
-  };
-
-  const activeFoundationCount = activeAction === 'values'
-    ? values.length
-    : activeAction === 'practices'
-      ? practices.length
-      : commitments.length;
-
   return (
     <div className={embedded ? 'space-y-4' : 'space-y-6'}>
       {!embedded && <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
-          Values, Principles & Spiritual Foundations
+          Daily Practices
         </h1>
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          <FormToggleButton label="Add Value" open={openSpiritualForm === 'values'} onClick={() => {
-            const next = openSpiritualForm === 'values' ? null : 'values';
-            setOpenSpiritualForm(next);
-            setActiveAction('values');
-          }} />
-          <FormToggleButton label="Add Practice" open={openSpiritualForm === 'practices'} onClick={() => {
-            const next = openSpiritualForm === 'practices' ? null : 'practices';
-            setOpenSpiritualForm(next);
-            setActiveAction('practices');
-          }} />
-          <FormToggleButton label="Add Vow" open={openSpiritualForm === 'commitments'} onClick={() => {
-            const next = openSpiritualForm === 'commitments' ? null : 'commitments';
-            setOpenSpiritualForm(next);
-            setActiveAction('commitments');
-          }} />
-        </div>
+        <FormToggleButton
+          label="Add Practice"
+          open={openSpiritualForm === 'practices'}
+          onClick={() => setOpenSpiritualForm(openSpiritualForm === 'practices' ? null : 'practices')}
+        />
       </div>}
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
         {openSpiritualForm && <section className={`rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${
-          embedded && activeFoundationCount === 0 ? 'lg:col-span-12' : 'lg:col-span-5'
+          embedded && practices.length === 0 ? 'lg:col-span-12' : 'lg:col-span-5'
         }`}>
 
-        {/* Core Values */}
-        <div className={activeAction === 'values' ? (embedded ? '' : 'mt-4') : 'hidden'}>
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-            <Compass className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Values & Principles ({values.length})</h2>
-          </div>
-
-          <form onSubmit={handleAddValue} className="mt-4 space-y-2.5">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                required
-                value={valTitle}
-                onChange={e => setValTitle(e.target.value)}
-                placeholder="Title (e.g. Sovereign Truth)"
-                className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
-              />
-              <select
-                value={valType}
-                onChange={e => setValType(e.target.value as any)}
-                className="h-10 w-24 shrink-0 rounded-lg border border-slate-200 bg-slate-50/50 px-2 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800 cursor-pointer sm:w-28"
-              >
-                <option value="value">Value</option>
-                <option value="principle">Principle</option>
-              </select>
-            </div>
-            <textarea
-              rows={2}
-              value={valDesc}
-              onChange={e => setValDesc(e.target.value)}
-              placeholder="What does living this standard look like?"
-              className="w-full min-w-0 resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
-            />
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 cursor-pointer"
-            >
-              + Define Value
-            </button>
-          </form>
-
-        </div>
-
-        {/* Spiritual Practices */}
-        <div className={activeAction === 'practices' ? (embedded ? '' : 'mt-4') : 'hidden'}>
+        <div className={embedded ? '' : 'mt-4'}>
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
             <Heart className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">Daily Practices ({practices.length})</h2>
@@ -408,77 +231,12 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
 
         </div>
 
-        {/* Personal Commitments */}
-        <div className={activeAction === 'commitments' ? (embedded ? '' : 'mt-4') : 'hidden'}>
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-            <Shield className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Commitments & Vows ({commitments.length})</h2>
-          </div>
-
-          <form onSubmit={handleAddCommitment} className="mt-4 space-y-2.5">
-            <textarea
-              rows={2}
-              required
-              value={commText}
-              onChange={e => setCommText(e.target.value)}
-              placeholder="A binding personal standard or moral commitment..."
-              className="w-full min-w-0 resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
-            />
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-amber-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-amber-600 cursor-pointer"
-            >
-              + Commit Vow
-            </button>
-          </form>
-
-        </div>
         </section>}
 
-        {(!embedded || activeFoundationCount > 0) && <section className={`${openSpiritualForm ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-          {!embedded && <h2 className="text-sm font-bold text-slate-900 dark:text-white">Saved foundations</h2>}
-          <div className="mt-4 space-y-5">
-            <div className={embedded && activeAction !== 'values' ? 'hidden' : undefined}>
-              <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
-                <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Values & Principles ({values.length})
-                </h3>
-              </div>
-              <div className="adaptive-card-grid mt-3 gap-2.5">
-                {values.length === 0 ? (
-                  <div className="col-span-full"><EmptyState icon={Shield} compact title="No values or principles yet" hint="Define what you stand for - they anchor goal choices." /></div>
-                ) : [...values].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(v => (
-                  <div key={v.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800">
-                    <div className="flex flex-wrap justify-between items-start gap-1">
-                      <span className="font-bold text-slate-900 dark:text-white">{v.title}</span>
-                      <ProgressiveActions label={`More actions for ${v.title}`}>
-                        <button
-                          type="button"
-                          onClick={() => setEditingFoundation({ type: 'value', item: v })}
-                          title="Edit value"
-                          aria-label={`Edit ${v.title}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400 transition-colors"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteValue(v.id)}
-                          title="Delete value"
-                          aria-label={`Delete ${v.title}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </ProgressiveActions>
-                    </div>
-                    {v.description && <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{v.description}</p>}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className={embedded && activeAction !== 'practices' ? 'hidden' : undefined}>
+        {(!embedded || practices.length > 0) && <section className={`${openSpiritualForm ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+          {!embedded && <h2 className="text-sm font-bold text-slate-900 dark:text-white">Saved practices</h2>}
+          <div className="mt-4">
+            <div>
               <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
                 <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Daily Practices ({practices.length})
@@ -541,46 +299,6 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               </div>
             </div>
 
-            <div className={embedded && activeAction !== 'commitments' ? 'hidden' : undefined}>
-              <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
-                <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Commitments & Vows ({commitments.length})
-                </h3>
-              </div>
-              <div className="adaptive-card-grid mt-3 gap-2">
-                {commitments.length === 0 ? (
-                  <div className="col-span-full"><EmptyState icon={Compass} compact title="No commitments yet" hint="Declare commitments you intend to keep visible." /></div>
-                ) : [...commitments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(c => (
-                  <div key={c.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800">
-                    <div className="flex flex-wrap justify-between items-start">
-                      <div className="min-w-0 flex-1 font-medium italic leading-relaxed text-slate-800 dark:text-slate-200">
-                        "{c.text}"
-                      </div>
-                      <ProgressiveActions label="More actions for commitment" className="ml-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setEditingFoundation({ type: 'commitment', item: c })}
-                          title="Edit commitment"
-                          aria-label="Edit commitment"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400 transition-colors cursor-pointer"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCommitment(c.id)}
-                          title="Delete commitment"
-                          aria-label="Delete commitment"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </ProgressiveActions>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </section>}
       </div>
@@ -608,96 +326,6 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
           </button>
         </div>
       </div>}
-
-      {editingFoundation && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-foundation-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
-          onMouseDown={event => {
-            if (event.target === event.currentTarget) setEditingFoundation(null);
-          }}
-        >
-          <form
-            onSubmit={handleSaveFoundationEdit}
-            className="w-full max-w-md space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <h2 id="edit-foundation-title" className="text-sm font-bold text-slate-900 dark:text-white">
-                Edit {editingFoundation.type === 'value' ? 'Value / Principle' : 'Commitment'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setEditingFoundation(null)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
-                aria-label="Close edit form"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            {editingFoundation.type === 'value' ? (
-              <>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Title
-                  <input
-                    autoFocus
-                    required
-                    value={editingFoundation.item.title}
-                    onChange={event => setEditingFoundation({
-                      type: 'value',
-                      item: { ...editingFoundation.item, title: event.target.value }
-                    })}
-                    className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                </label>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Description
-                  <textarea
-                    rows={4}
-                    value={editingFoundation.item.description}
-                    onChange={event => setEditingFoundation({
-                      type: 'value',
-                      item: { ...editingFoundation.item, description: event.target.value }
-                    })}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                </label>
-              </>
-            ) : (
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Commitment
-                <textarea
-                  autoFocus
-                  required
-                  rows={4}
-                  value={editingFoundation.item.text}
-                  onChange={event => setEditingFoundation({
-                    type: 'commitment',
-                    item: { ...editingFoundation.item, text: event.target.value }
-                  })}
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </label>
-            )}
-            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setEditingFoundation(null)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
-              >
-                Save changes
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {/* Edit Daily Practice Modal */}
       {editingPractice && (

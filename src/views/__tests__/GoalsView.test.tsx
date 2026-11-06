@@ -4,8 +4,8 @@ import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GoalsView } from '../GoalsView';
 
-vi.mock('../../components/ProjectTimelinePlan', () => ({
-  ProjectTimelinePlan: () => <div>Project timeline content</div>,
+vi.mock('../../components/TimelinePlan', () => ({
+  TimelinePlan: () => <div>Timeline content</div>,
   computeItemDelay: () => ({ isDelayed: true })
 }));
 
@@ -115,8 +115,7 @@ describe('Goals submenu', () => {
     ['strategies', 'Declare Tactical Strategy'],
     ['milestones', 'Add Milestone to Strategic Goal'],
     ['kpis', 'Register Quantitative KPI'],
-    ['missions', 'Declare Mission / Monthly Focus'],
-    ['mentor', 'Mentor Strategy & Capital Preservation']
+    ['missions', 'Declare Mission / Monthly Focus']
   ])('opens the %s form immediately after selection', async (section, heading) => {
     await renderGoals();
     await selectSection(section);
@@ -163,7 +162,7 @@ describe('Goals submenu', () => {
   it('opens the existing timeline without creating or saving records', async () => {
     await renderGoals();
     await selectSection('timeline');
-    expect(container.textContent).toContain('Project timeline content');
+    expect(container.textContent).toContain('Timeline content');
     expect(container.querySelector('.goal-form-container')).toBeNull();
   });
 
@@ -187,10 +186,48 @@ describe('Goals submenu', () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Goals submenu"]')!.click();
     });
     const timelineButton = [...container.querySelectorAll('button')]
-      .find(button => button.textContent?.includes('Open Project Timeline & Alarms'))!;
+      .find(button => button.textContent?.includes('Open Timeline & Alarms'))!;
     await act(async () => timelineButton.click());
     expect(container.querySelector<HTMLButtonElement>('[aria-label="Goals submenu"]')?.textContent).toContain('Timeline & Plan');
-    expect(container.textContent).toContain('Project timeline content');
+    expect(container.textContent).toContain('Timeline content');
     expect(container.textContent).not.toContain('Cross-System Delay Alert');
+  });
+});
+
+
+describe('Finance reserve summary in Goals', () => {
+  it('keeps reserve controls in Finance and provides a shortcut from a read-only summary', async () => {
+    const onNavigate = vi.fn();
+    await renderGoals({ onNavigate });
+    await selectSection('mentor');
+
+    expect(container.querySelector('[aria-label="Finance reserve summary"]')).not.toBeNull();
+    expect(container.textContent).toContain('Read-only overview');
+    expect(container.querySelector('form')).toBeNull();
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent?.includes('Open Finance - Reserves & Runway'))!.click();
+    });
+    expect(onNavigate).toHaveBeenCalledWith('finance');
+  });
+});
+
+
+describe('Goal deletion impact', () => {
+  it('counts Vault references and the health profile that will be unlinked', async () => {
+    await renderGoals({
+      things: [{
+        id: 'thing', name: 'Laptop', category: 'device', value: 0,
+        goalId: goal.id, createdAt: 1
+      }],
+      healthProfile: { goalId: goal.id }
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[title="Delete Main Goal and sub goals"]')!.click();
+    });
+
+    expect(container.querySelector('[role="dialog"]')?.textContent)
+      .toContain('2 linked item(s) will be unlinked (not deleted)');
   });
 });

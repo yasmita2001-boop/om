@@ -4,6 +4,16 @@ import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FinanceView } from '../FinanceView';
 
+const financeStorageMock = vi.hoisted(() => ({
+  getSingleton: vi.fn(async () => ({ theme: 'dark', mentor: { careerFund: 40 } })),
+  setSingleton: vi.fn(async (_key: string, _value: unknown) => undefined)
+}));
+
+vi.mock('../../lib/storage', () => ({
+  storage: financeStorageMock,
+  generateUUID: vi.fn(() => 'finance-test-id')
+}));
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 type FinanceProps = ComponentProps<typeof FinanceView>;
@@ -91,6 +101,68 @@ const selectMenu = async (menu: string) => {
 };
 
 describe('Finance entry and history card layouts', () => {
+  it('excludes ledger-only balance updates from the cash flow statement', async () => {
+    await renderFinance(createProps({
+      transactions: [
+        {
+          id: 'income',
+          type: 'income',
+          amount: 300,
+          category: 'Salary',
+          date: '2026-11-05',
+          createdAt: 1
+        },
+        {
+          id: 'ledger-only-income',
+          type: 'income',
+          amount: 900,
+          category: 'Balance correction',
+          date: '2026-11-05',
+          ledgerOnly: true,
+          createdAt: 2
+        },
+        {
+          id: 'expense',
+          type: 'expense',
+          amount: 100,
+          category: 'Food',
+          date: '2026-11-05',
+          createdAt: 3
+        },
+        {
+          id: 'ledger-only-expense',
+          type: 'expense',
+          amount: 50,
+          category: 'Balance correction',
+          date: '2026-11-05',
+          ledgerOnly: true,
+          createdAt: 4
+        }
+      ]
+    }));
+
+    const valueFor = (label: string) => {
+      const labelElement = Array.from(container.querySelectorAll('span'))
+        .find(element => element.textContent?.trim() === label);
+      return labelElement?.nextElementSibling?.textContent?.trim();
+    };
+
+    expect(valueFor('Gross Income Received:')).toBe('+NPR 300');
+    expect(valueFor('Operating Expenses Paid:')).toBe('-NPR 100');
+    expect(valueFor('Net Operating Flow:')).toBe('NPR 200');
+  });
+
+  it('counts borrowed debt without counting lent receivables as debt', async () => {
+    await renderFinance(createProps({
+      loans: [
+        { id: 'borrowed', name: 'Borrowed', principal: 100, rate: 0, tenure: 1, dueDay: 1, outstanding: 100, createdAt: 1 },
+        { id: 'lent', name: 'Lent', principal: 75, rate: 0, tenure: 1, dueDay: 1, outstanding: 75, direction: 'lent', createdAt: 2 }
+      ]
+    }));
+
+    expect(container.textContent).toContain('1 borrowed loan · 0 other debt');
+  });
+
   it('hides the empty-state block when the ledger has no transactions', async () => {
     await renderFinance(createProps());
     await selectMenu('transactions');
@@ -180,4 +252,50 @@ describe('Finance entry and history card layouts', () => {
     expect(panel.children[0].className).toContain('lg:col-span-5');
     expect(panel.children[1].className).toContain('lg:col-span-7');
   });
+});
+
+
+describe('Finance reserve planning', () => {
+  it('shows reserve targets, liquid-account runway, and savings progress in its Finance section', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    await renderFinance(createProps({
+      accounts: [{ id: 'cash', name: 'Cash', type: 'cash', balance: 1000, openingBalance: 1000 }],
+      transactions: [
+        { id: 'deposit', type: 'savings', amount: 200, category: 'Savings', date: today, createdAt: 1 },
+        { id: 'ledger-only-deposit', type: 'savings', amount: 5000, category: 'Balance correction', date: today, ledgerOnly: true, createdAt: 2 }
+      ],
+      mentor: { survivalReserve: 500, emergencyReserve: 300, dailyBurn: 100, savingGoalAmount: 5000 }
+    }));
+    await selectMenu('reserves');
+
+    expect(container.querySelector('[aria-label="Reserve planning"]')).not.toBeNull();
+    expect(container.textContent).toContain('10 days');
+    expect(container.textContent).toContain('4%');
+    expect(container.querySelector('input[type="number"]')).not.toBeNull();
+    expect(container.textContent).toContain('Runway uses account balances only');
+  });
+
+  it('saves reserve settings into the shared app profile without overwriting other settings', async () => {
+    financeStorageMock.setSingleton.mockClear();
+    const onSuccess = vi.fn();
+    await renderFinance(createProps({ onSuccess, mentor: { careerFund: 40 } }));
+    await selectMenu('reserves');
+
+    const saveButton = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find(button => button.textContent?.trim() === 'Save Reserve Strategy')!;
+    await act(async () => saveButton.click());
+
+    expect(financeStorageMock.setSingleton).toHaveBeenCalledWith('appSettings', expect.objectContaining({
+      theme: 'dark',
+      mentor: expect.objectContaining({
+        careerFund: 40,
+        survivalReserve: 100000,
+        emergencyReserve: 50000,
+        dailyBurn: 800,
+        savingGoalAmount: 500000
+      })
+    }));
+    expect(onSuccess).toHaveBeenCalledWith('Reserve strategy saved');
+  });
+
 });

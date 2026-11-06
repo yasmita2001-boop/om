@@ -10,7 +10,7 @@ import { storage, generateUUID } from '../lib/storage';
 import { resolveHabitGoalId, syncGoalProgressFromHabits, syncGoalProgressFromRoutines, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { alarmService } from '../lib/alarmService';
-import { computeItemDelay } from '../components/ProjectTimelinePlan';
+import { computeItemDelay } from '../components/TimelinePlan';
 import { BUILTIN_RINGTONES, getDefaultRingtoneId } from '../lib/alarmAudio';
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString } from '../lib/dateUtils';
@@ -563,7 +563,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       linkedRoutineId: newRoutineId || null,
       routineId: newRoutineId || null,
       linkedRoutineName: matchedRoutine?.name || null,
-      goalId: undefined,
+      goalId: habit.linkedPracticeId ? habit.goalId : undefined,
       updatedAt: Date.now()
     };
     await storage.put('habits', updated);
@@ -590,7 +590,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       name: editingHabit.name.trim(),
       linkedRoutineName: matchedRoutine?.name || null,
       routineId: editingHabit.linkedRoutineId || null,
-      goalId: undefined,
+      goalId: oldHabit?.linkedPracticeId ? oldHabit.goalId : undefined,
       updatedAt: Date.now()
     };
 

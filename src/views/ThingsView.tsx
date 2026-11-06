@@ -9,7 +9,7 @@ import {
 import { EmptyState } from '../components/EmptyState';
 import {
   ThingItem, DocumentItem, WarrantyItem, ReceiptItem, CertificateItem, ImportantRecordItem,
-  FinanceAccount, FinanceTransaction, NavModule
+  FinanceAccount, FinanceTransaction, NavModule, Goal
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
@@ -17,10 +17,12 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { ThemeIcon } from '../components/ThemeIcon';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { HeaderDropdown } from '../components/HeaderDropdown';
+import { GoalBadge } from '../components/GoalLinkSelector';
 
 interface ThingsViewProps {
   things: ThingItem[];
   documents: DocumentItem[];
+  goals?: Goal[];
   warranties: WarrantyItem[];
   receipts?: ReceiptItem[];
   certificates?: CertificateItem[];
@@ -62,6 +64,7 @@ const getExpiryStatus = (expiry?: string): { label: string; className: string } 
 export const ThingsView: React.FC<ThingsViewProps> = ({
   things,
   documents,
+  goals = [],
   warranties,
   receipts = [],
   certificates = [],
@@ -73,6 +76,8 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   onNavigate
 }) => {
   const [activeTab, setActiveTab] = useState<SubMenuTab>('things');
+  const [vaultGoalId, setVaultGoalId] = useState('');
+  const [editGoalId, setEditGoalId] = useState('');
   const [openThingsForm, setOpenThingsForm] = useState<SubMenuTab | null>('things');
   const [searchQuery, setSearchQuery] = useState('');
   const today = getLocalDateString();
@@ -170,6 +175,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           category: 'Hardware',
           value: 0,
           note: `Imported file: ${file.name}`,
+          goalId: vaultGoalId || undefined,
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type || 'application/octet-stream',
@@ -202,6 +208,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           title: cleanName,
           expiry: getLocalDateString(nextYear),
           note: `Imported warranty card: ${file.name}`,
+          goalId: vaultGoalId || undefined,
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type,
@@ -217,6 +224,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           date: today,
           amount: 0,
           note: `Imported receipt invoice: ${file.name}`,
+          goalId: vaultGoalId || undefined,
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type,
@@ -231,6 +239,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           title: cleanName,
           issuer: 'Imported Verified Issuer',
           note: `Certificate file: ${file.name}`,
+          goalId: vaultGoalId || undefined,
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type,
@@ -245,6 +254,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           title: cleanName,
           date: today,
           note: `Imported record scan: ${file.name}`,
+          goalId: vaultGoalId || undefined,
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type,
@@ -319,6 +329,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       category: thingCategory,
       value: numericValue || 0,
       note: thingNote.trim() || undefined,
+      goalId: vaultGoalId || undefined,
       fileName: attachedFile?.name,
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
@@ -330,6 +341,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     setThingName('');
     setThingValue('');
     setThingNote('');
+    setVaultGoalId('');
     setAttachedFile(null);
     onRefresh();
   };
@@ -345,6 +357,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       reference: docRef.trim() || undefined,
       date: docDate || today,
       note: docNote.trim() || undefined,
+      goalId: vaultGoalId || undefined,
       fileName: attachedFile?.name,
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
@@ -356,6 +369,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     setDocTitle('');
     setDocRef('');
     setDocNote('');
+    setVaultGoalId('');
     setAttachedFile(null);
     onRefresh();
   };
@@ -369,6 +383,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       title: warTitle.trim(),
       expiry: warExpiry || undefined,
       note: warNote.trim() || undefined,
+      goalId: vaultGoalId || undefined,
       fileName: attachedFile?.name,
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
@@ -380,6 +395,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     setWarTitle('');
     setWarExpiry('');
     setWarNote('');
+    setVaultGoalId('');
     setAttachedFile(null);
     onRefresh();
   };
@@ -450,6 +466,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       amount: amt,
       date: recDate || today,
       note: recNote.trim() || undefined,
+      goalId: vaultGoalId || undefined,
       fileName: attachedFile?.name,
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
@@ -465,6 +482,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       setRecTitle('');
       setRecAmount('');
       setRecNote('');
+      setVaultGoalId('');
       setAttachedFile(null);
       setRecLinkToFinance(false);
       setRecFinanceMode('link_existing');
@@ -485,6 +503,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       issuer: certIssuer.trim() || undefined,
       expiry: certExpiry || undefined,
       note: certNote.trim() || undefined,
+      goalId: vaultGoalId || undefined,
       fileName: attachedFile?.name,
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
@@ -497,6 +516,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     setCertIssuer('');
     setCertExpiry('');
     setCertNote('');
+    setVaultGoalId('');
     setAttachedFile(null);
     onRefresh();
   };
@@ -510,6 +530,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       title: recrdTitle.trim(),
       date: recrdDate || today,
       note: recrdNote.trim() || undefined,
+      goalId: vaultGoalId || undefined,
       fileName: attachedFile?.name,
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
@@ -520,6 +541,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     onSuccess('✓ Important record saved');
     setRecrdTitle('');
     setRecrdNote('');
+    setVaultGoalId('');
     setAttachedFile(null);
     onRefresh();
   };
@@ -532,6 +554,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     setEditValue(item.value !== undefined ? String(item.value) : item.amount !== undefined ? String(item.amount) : item.reference || '');
     setEditDate(item.date || item.expiry || '');
     setEditNote(item.note || '');
+    setEditGoalId(item.goalId || '');
     setEditRemoveAttachment(false);
     if (item.fileName && item.fileData) {
       setEditAttachedFile({
@@ -555,6 +578,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
     let updated: any = {
       ...item,
+      goalId: editGoalId || undefined,
       updatedAt: now,
       fileName: editRemoveAttachment ? undefined : (editAttachedFile?.name || item.fileName),
       fileSize: editRemoveAttachment ? undefined : (editAttachedFile?.size || item.fileSize),
@@ -698,6 +722,17 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       <span>Import File</span>
     </button>
   );
+  const goalReferenceSelector = (
+    <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-2 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Goal reference (optional)
+        <select value={vaultGoalId} onChange={event => setVaultGoalId(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+          <option value="">None</option>{goals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
+        </select>
+      </label>
+      <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Reference only; Vault records do not affect Goal progress.</p>
+    </div>
+  );
+
   const renderVaultTools = () => (
     <div className="flex flex-wrap items-center gap-2">
       <div className="relative w-full sm:w-44">
@@ -746,6 +781,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   data-vault-tab={tab.id}
                   onClick={() => {
                     setActiveTab(tab.id);
+                    setVaultGoalId('');
                     setOpenThingsForm(tab.id);
                     setSearchQuery('');
                     setAttachedFile(null);
@@ -863,6 +899,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 </div>
               </div>
 
+              {goalReferenceSelector}
               <button type="submit" className="sanctuary-flat-primary w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 cursor-pointer">
                 + Register Thing
               </button>
@@ -899,6 +936,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{t.name}</div>
+                          <GoalBadge goalId={t.goalId} goals={goals} />
                           <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
                             <span className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-medium">{t.category}</span>
                             {t.note && <span className="truncate max-w-[200px]">{t.note}</span>}
@@ -1055,6 +1093,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 />
               </div>
 
+              {goalReferenceSelector}
               <button type="submit" className="w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-500 cursor-pointer">
                 + Register Document
               </button>
@@ -1084,6 +1123,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{d.title}</div>
+                          <GoalBadge goalId={d.goalId} goals={goals} />
                           <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                             <span className="rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 font-medium">{d.type}</span>
                             {d.reference && <span>Ref: {d.reference}</span>}
@@ -1201,6 +1241,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 </div>
               </div>
 
+              {goalReferenceSelector}
               <button type="submit" className="w-full rounded-xl bg-amber-500 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-amber-400 cursor-pointer">
                 + Register Warranty
               </button>
@@ -1227,6 +1268,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{w.title}</div>
+                          <GoalBadge goalId={w.goalId} goals={goals} />
                           <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
                             {(() => {
                               const expiryStatus = getExpiryStatus(w.expiry);
@@ -1454,6 +1496,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </div>
 
               {/* Submit Button */}
+              {goalReferenceSelector}
               <button
                 type="submit"
                 className="flex h-11 sm:h-12 w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 active:scale-[0.99] transition-all cursor-pointer"
@@ -1506,6 +1549,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                             <span className="font-bold text-sm text-slate-900 dark:text-white truncate">
                               {r.title}
                             </span>
+                            <GoalBadge goalId={r.goalId} goals={goals} />
                             {/* Mobile Price Display */}
                             <span className="font-mono font-bold text-slate-900 dark:text-white tabular-nums sm:hidden">
                               {getCurrencySymbol()} {Number(r.amount).toLocaleString('en-IN')}
@@ -1666,6 +1710,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 />
               </div>
 
+              {goalReferenceSelector}
               <button type="submit" className="w-full rounded-xl bg-purple-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-purple-500 cursor-pointer">
                 + Register Certificate
               </button>
@@ -1693,6 +1738,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{c.title}</div>
+                          <GoalBadge goalId={c.goalId} goals={goals} />
                           <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
                             {c.issuer && <span className="rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 font-medium">{c.issuer}</span>}
                             {(() => {
@@ -1814,6 +1860,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 />
               </div>
 
+              {goalReferenceSelector}
               <button type="submit" className="w-full rounded-xl bg-slate-900 py-2.5 text-xs font-semibold text-white dark:bg-slate-700 hover:bg-slate-800 cursor-pointer">
                 Save Record
               </button>
@@ -1841,6 +1888,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                       <div className="flex flex-wrap justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{ir.title}</div>
+                          <GoalBadge goalId={ir.goalId} goals={goals} />
                           {ir.date && <div className="mt-0.5 text-xs text-slate-400">Recorded: {ir.date}</div>}
                           {ir.note && <div className="mt-1 text-slate-600 dark:text-slate-300 text-xs whitespace-pre-line">{ir.note}</div>}
 
@@ -1924,6 +1972,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
+
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Goal reference (optional)
+                <select value={editGoalId} onChange={event => setEditGoalId(event.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                  <option value="">None</option>{goals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
+                </select>
+                <span className="mt-1 block text-[10px] font-normal text-slate-500 dark:text-slate-400">Reference only; this record does not affect Goal progress.</span>
+              </label>
 
               {(editTarget.store === 'things' || editTarget.store === 'documents' || editTarget.store === 'certificates') && (
                 <div>

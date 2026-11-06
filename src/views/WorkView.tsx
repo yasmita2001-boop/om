@@ -1,42 +1,35 @@
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState } from 'react';
 import {
-  Briefcase, BookOpen, Users, Trash2, Award, Edit3, X, Calendar,
-  Target, CheckCircle2, Circle, BellRing, Bell, Zap
+  BookOpen, Trash2, Award, Edit3, X,
+  Target, BellRing, Bell, Zap
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import {
-  WorkProject, LearningItem, Meeting, WorkResponsibility, Skill, Course, Goal,
+  LearningItem, Skill, Goal,
   Task, TaskPriority, ReminderItem
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
 import {
-  syncGoalProgressFromProjects,
   syncGoalProgressFromLearning,
   syncGoalProgressFromSkills,
-  syncGoalProgressFromTasks,
-  syncGoalProgressFromMeetings
+  syncGoalProgressFromTasks
 } from '../lib/goalTaskSync';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { SlideTabs } from '../components/SlideTabs';
 import { FormToggleButton } from '../components/FormToggleButton';
-import { computeItemDelay } from '../components/ProjectTimelinePlan';
+import { computeItemDelay } from '../components/TimelinePlan';
 import { alarmService } from '../lib/alarmService';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
-import { GoalLinkSelector, GoalBadge } from '../components/GoalLinkSelector';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { GoalPicker } from '../components/GoalPicker';
 import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
 
 interface WorkViewProps {
-  projects: WorkProject[];
   learningItems: LearningItem[];
-  meetings: Meeting[];
-  responsibilities?: WorkResponsibility[];
   skills?: Skill[];
-  courses?: Course[];
   goals?: Goal[];
   tasks?: Task[];
   reminders?: ReminderItem[];
@@ -46,28 +39,26 @@ interface WorkViewProps {
   onSuccess: (msg: string) => void;
 }
 
-type WorkTab = 'projects' | 'learning' | 'skills' | 'meetings';
+type WorkTab = 'learning' | 'skills';
 
 interface DeleteTarget {
-  type: 'project' | 'learning' | 'skill' | 'meeting';
+  type: 'learning' | 'skill';
   id: string;
   name: string;
   store: string;
 }
 
 interface EditTarget {
-  type: 'project' | 'learning' | 'skill' | 'meeting';
+  type: 'learning' | 'skill';
   item: any;
 }
 
 export const WorkView: React.FC<WorkViewProps> = ({
-  projects,
   learningItems,
-  meetings,
   skills = [],
   goals = [],
   embedded = false,
-  initialTab = 'projects',
+  initialTab = 'learning',
   onRefresh,
   onSuccess
 }) => {
@@ -78,7 +69,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   // Task Genesis Modal State
   const [genesisModal, setGenesisModal] = useState<{
     isOpen: boolean;
-    sourceType: 'project' | 'learning' | 'skill';
+    sourceType: 'learning' | 'skill';
     sourceId?: string;
     title: string;
     priority: TaskPriority;
@@ -89,7 +80,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
     alarmTime: string;
   }>({
     isOpen: false,
-    sourceType: 'project',
+    sourceType: 'learning',
     title: '',
     priority: 'High',
     dueAt: today,
@@ -98,18 +89,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
     ringtone: 'digital_pulse',
     alarmTime: '09:00'
   });
-
-  // New Item Forms: Projects
-  const [projName, setProjName] = useState('');
-  const [projClient, setProjClient] = useState('');
-  const [projDue, setProjDue] = useState('');
-  const [projStatus, setProjStatus] = useState('Active');
-  const [projInputMode, setProjInputMode] = useState<'manual' | 'link'>('manual');
-  const [projGoalId, setProjGoalId] = useState<string>('');
-  const [projArmGenesis, setProjArmGenesis] = useState(false);
-  const [projTaskPriority, setProjTaskPriority] = useState<TaskPriority>('High');
-  const [projAlarmTime, setProjAlarmTime] = useState('09:00');
-  const projRingtone = 'digital_pulse';
 
   // New Item Forms: Learning Tracks
   const [learnTitle, setLearnTitle] = useState('');
@@ -139,34 +118,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [quickAlarmItem, setQuickAlarmItem] = useState<{
     id: string;
     title: string;
-    type: 'project' | 'learning' | 'skill';
+    type: 'learning' | 'skill';
     due?: string;
   } | null>(null);
   const [alarmPresetChoice, setAlarmPresetChoice] = useState<'5m' | '15m' | '30m' | '1h' | 'tonight' | 'tomorrow' | 'custom'>('15m');
   const quickCustomDate = today;
   const quickCustomTime = '18:00';
   const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('digital_pulse');
-
-  // New Item Forms: Meetings
-  const [meetTitle, setMeetTitle] = useState('');
-  const [meetPeople, setMeetPeople] = useState('');
-  const [meetDate, setMeetDate] = useState(today);
-  const [meetInputMode, setMeetInputMode] = useState<'manual' | 'link'>('manual');
-  const [meetGoalId, setMeetGoalId] = useState<string>('');
-
-  const handleSelectGoalForMeeting = (gId: string) => {
-    setMeetGoalId(gId);
-    if (!gId) return;
-    const matched = goals.find(g => g.id === gId);
-    if (matched) {
-      if (!meetTitle.trim() || goals.some(g => meetTitle.includes(g.title))) {
-        setMeetTitle(`Agenda: ${matched.title}`);
-      }
-      if (matched.targetDate) {
-        setMeetDate(matched.targetDate);
-      }
-    }
-  };
 
   // Edit & Delete modal states
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -175,28 +133,9 @@ export const WorkView: React.FC<WorkViewProps> = ({
   // Edit form internal fields
   const [editTitle, setEditTitle] = useState('');
   const [editSubtitle, setEditSubtitle] = useState('');
-  const [editDate, setEditDate] = useState('');
   const [editNumber, setEditNumber] = useState<number>(0);
   const [editExtra, setEditExtra] = useState('');
   const [editGoalId, setEditGoalId] = useState<string>('');
-
-  // Selection handlers when linking from Goal
-  const handleSelectGoalForProject = (gId: string) => {
-    setProjGoalId(gId);
-    if (!gId) return;
-    const matched = goals.find(g => g.id === gId);
-    if (matched) {
-      if (!projName.trim() || goals.some(g => projName.includes(g.title))) {
-        setProjName(`Deliverable: ${matched.title}`);
-      }
-      if (matched.targetDate) {
-        setProjDue(matched.targetDate);
-      }
-      if (!projClient.trim()) {
-        setProjClient(matched.category || 'Strategic Initiative');
-      }
-    }
-  };
 
   const handleSelectGoalForLearning = (gId: string) => {
     setLearnGoalId(gId);
@@ -223,12 +162,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const handleOpenEdit = (type: EditTarget['type'], item: any) => {
     setEditTarget({ type, item });
     setEditGoalId(item.goalId || '');
-    if (type === 'project') {
-      setEditTitle(item.name || '');
-      setEditSubtitle(item.client || '');
-      setEditDate(item.due || '');
-      setEditExtra(item.status || 'Active');
-    } else if (type === 'learning') {
+    if (type === 'learning') {
       setEditTitle(item.title || '');
       setEditSubtitle(item.type || 'Course');
       setEditNumber(item.progress || 0);
@@ -236,10 +170,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
       setEditTitle(item.name || '');
       setEditSubtitle(item.level || 'Intermediate');
       setEditExtra(item.targetLevel || 'Mastery');
-    } else if (type === 'meeting') {
-      setEditTitle(item.title || '');
-      setEditSubtitle(item.people || '');
-      setEditDate(item.date || today);
     }
   };
 
@@ -250,27 +180,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
     const { type, item } = editTarget;
     const now = Date.now();
 
-    if (type === 'project') {
-      const oldGoalId = item.goalId;
-      const updated: WorkProject = {
-        ...item,
-        name: editTitle.trim(),
-        client: editSubtitle.trim() || undefined,
-        due: editDate || undefined,
-        status: editExtra || 'Active',
-        goalId: editGoalId || null,
-        updatedAt: now
-      };
-      await storage.put('workProjects', updated);
-      onSuccess('✓ Project deliverable updated');
-
-      if (editGoalId) {
-        await syncGoalProgressFromProjects(editGoalId);
-      }
-      if (oldGoalId && oldGoalId !== editGoalId) {
-        await syncGoalProgressFromProjects(oldGoalId);
-      }
-    } else if (type === 'learning') {
+    if (type === 'learning') {
       const oldGoalId = item.goalId;
       const prog = Number(editNumber) || 0;
       const updated: LearningItem = {
@@ -310,23 +220,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
       if (oldGoalId && oldGoalId !== editGoalId) {
         await syncGoalProgressFromSkills(oldGoalId);
       }
-    } else if (type === 'meeting') {
-      const oldGoalId = item.goalId;
-      const updated: Meeting = {
-        ...item,
-        title: editTitle.trim(),
-        people: editSubtitle.trim() || undefined,
-        date: editDate || today,
-        goalId: editGoalId || null
-      };
-      await storage.put('meetings', updated);
-      if (updated.goalId) {
-        await syncGoalProgressFromMeetings(updated.goalId, updated.id, updated.completed, updated.status);
-      }
-      if (oldGoalId && oldGoalId !== updated.goalId) {
-        await syncGoalProgressFromMeetings(oldGoalId);
-      }
-      onSuccess('✓ Meeting agenda updated');
     }
 
     setEditTarget(null);
@@ -337,23 +230,17 @@ export const WorkView: React.FC<WorkViewProps> = ({
     if (!deleteTarget) return;
     try {
       let linkedGoalId: string | null = null;
-      if (deleteTarget.store === 'workProjects') {
-        linkedGoalId = projects.find(p => p.id === deleteTarget.id)?.goalId || null;
-      } else if (deleteTarget.store === 'learningItems') {
+      if (deleteTarget.store === 'learningItems') {
         linkedGoalId = learningItems.find(l => l.id === deleteTarget.id)?.goalId || null;
       } else if (deleteTarget.store === 'skills') {
         linkedGoalId = skills.find(s => s.id === deleteTarget.id)?.goalId || null;
-      } else if (deleteTarget.store === 'meetings') {
-        linkedGoalId = meetings.find(m => m.id === deleteTarget.id)?.goalId || null;
       }
 
       await storage.delete(deleteTarget.store, deleteTarget.id);
 
       if (linkedGoalId) {
-        if (deleteTarget.store === 'workProjects') await syncGoalProgressFromProjects(linkedGoalId);
-        else if (deleteTarget.store === 'learningItems') await syncGoalProgressFromLearning(linkedGoalId);
+        if (deleteTarget.store === 'learningItems') await syncGoalProgressFromLearning(linkedGoalId);
         else if (deleteTarget.store === 'skills') await syncGoalProgressFromSkills(linkedGoalId);
-        else if (deleteTarget.store === 'meetings') await syncGoalProgressFromMeetings(linkedGoalId);
       }
 
       onSuccess(`✓ ${deleteTarget.name} deleted`);
@@ -362,120 +249,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
     } catch (err) {
       console.error('Delete error', err);
     }
-  };
-
-  const handleAddProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!projName.trim()) return;
-
-    const projectId = generateUUID();
-    const p: WorkProject = {
-      id: projectId,
-      name: projName.trim(),
-      client: projClient.trim() || undefined,
-      due: projDue || undefined,
-      status: projStatus,
-      progress: projStatus === 'Completed' ? 100 : 35,
-      goalId: projGoalId || null,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    await storage.put('workProjects', p);
-
-    // If Task Genesis armed on creation
-    if (projArmGenesis) {
-      const taskId = generateUUID();
-      const taskDue = projDue || today;
-      const newTask: Task = {
-        id: taskId,
-        title: `Deliverable: ${p.name}`,
-        domain: 'work',
-        priority: projTaskPriority,
-        dueAt: taskDue,
-        date: taskDue,
-        goalId: projGoalId || null,
-        projectId: projectId,
-        done: false,
-        status: 'open',
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      };
-      await storage.put('tasks', newTask);
-
-      const alarmDueAt = `${taskDue}T${projAlarmTime}`;
-      await storage.put('reminders', {
-        id: generateUUID(),
-        title: `Project Genesis Alarm: ${newTask.title}`,
-        dueAt: alarmDueAt,
-        repeatRule: 'none',
-        status: 'open',
-        linkedId: taskId,
-        alarmEnabled: true,
-        ringtone: projRingtone,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      });
-
-      if (projGoalId) {
-        await syncGoalProgressFromTasks(projGoalId, taskId, false);
-      }
-    }
-
-    if (projGoalId) {
-      await syncGoalProgressFromProjects(projGoalId);
-    }
-
-    onSuccess(projArmGenesis ? '✓ Project & Task Genesis with Alarm deployed!' : (projGoalId ? '✓ Project added & linked to Goal' : '✓ Project added'));
-    setProjName('');
-    setProjClient('');
-    setProjDue('');
-    setProjGoalId('');
-    setProjArmGenesis(false);
-    onRefresh();
-  };
-
-  const handleToggleProjectComplete = async (proj: WorkProject) => {
-    const isCompleted = proj.status === 'Completed';
-    const nextStatus = isCompleted ? 'Active' : 'Completed';
-    const nextProg = isCompleted ? 40 : 100;
-    const updated: WorkProject = {
-      ...proj,
-      status: nextStatus,
-      progress: nextProg,
-      updatedAt: Date.now()
-    };
-    await storage.put('workProjects', updated);
-
-    if (proj.goalId) {
-      const res = await syncGoalProgressFromProjects(proj.goalId, proj.id, nextStatus, nextProg);
-      if (res.targetGoal) {
-        onSuccess(
-          !isCompleted
-            ? `✓ Project completed! Goal "${res.targetGoal.title}" progress updated to ${res.targetGoal.progress}%`
-            : `Project marked active. Goal "${res.targetGoal.title}" progress adjusted to ${res.targetGoal.progress}%`
-        );
-      } else {
-        onSuccess(!isCompleted ? '✓ Project completed' : 'Project set to active');
-      }
-    } else {
-      onSuccess(!isCompleted ? '✓ Project completed' : 'Project set to active');
-    }
-    onRefresh();
-  };
-
-  const handleOpenGenesisForProject = (proj: WorkProject) => {
-    setGenesisModal({
-      isOpen: true,
-      sourceType: 'project',
-      sourceId: proj.id,
-      title: `Deliverable: ${proj.name}`,
-      priority: 'High',
-      dueAt: proj.due || today,
-      goalId: proj.goalId || goals[0]?.id || '',
-      armAlarm: true,
-      ringtone: 'digital_pulse',
-      alarmTime: '09:00'
-    });
   };
 
   const handleOpenGenesisForLearning = (item: LearningItem) => {
@@ -521,7 +294,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
       dueAt: genesisModal.dueAt,
       date: genesisModal.dueAt,
       goalId: genesisModal.goalId || null,
-      projectId: genesisModal.sourceType === 'project' ? genesisModal.sourceId : null,
       learningId: genesisModal.sourceType === 'learning' ? genesisModal.sourceId : null,
       skillId: genesisModal.sourceType === 'skill' ? genesisModal.sourceId : null,
       done: false,
@@ -797,86 +569,26 @@ export const WorkView: React.FC<WorkViewProps> = ({
     onRefresh();
   };
 
-  const handleAddMeeting = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!meetTitle.trim()) return;
-
-    const m: Meeting = {
-      id: generateUUID(),
-      title: meetTitle.trim(),
-      people: meetPeople.trim() || undefined,
-      date: meetDate,
-      status: 'scheduled',
-      completed: false,
-      goalId: meetGoalId || undefined,
-      createdAt: Date.now()
-    };
-    await storage.put('meetings', m);
-    if (m.goalId) {
-      await syncGoalProgressFromMeetings(m.goalId, m.id, false, 'scheduled');
-    }
-    onSuccess('✓ Meeting scheduled');
-    setMeetTitle('');
-    setMeetPeople('');
-    setMeetGoalId('');
-    setMeetInputMode('manual');
-    onRefresh();
-  };
-
-  const handleToggleMeetingComplete = async (m: Meeting) => {
-    const isComp = Boolean(m.completed || m.status === 'completed');
-    const nextCompleted = !isComp;
-    const nextStatus: 'scheduled' | 'completed' = nextCompleted ? 'completed' : 'scheduled';
-    const updated: Meeting = {
-      ...m,
-      completed: nextCompleted,
-      status: nextStatus,
-      updatedAt: Date.now()
-    };
-    await storage.put('meetings', updated);
-    if (m.goalId) {
-      await syncGoalProgressFromMeetings(m.goalId, m.id, nextCompleted, nextStatus);
-    }
-    onSuccess(nextCompleted ? `✓ Attended meeting: "${m.title}"` : `Meeting marked scheduled: "${m.title}"`);
-    onRefresh();
-  };
-
   const renderWorkFormAction = () => {
-    if (activeTab === 'projects') {
-      return <FormToggleButton label="Add Project" open={openWorkForm === 'projects'} onClick={() => setOpenWorkForm(openWorkForm === 'projects' ? null : 'projects')} />;
-    }
     if (activeTab === 'learning') {
       return <FormToggleButton label="Add Learning Track" open={openWorkForm === 'learning'} onClick={() => setOpenWorkForm(openWorkForm === 'learning' ? null : 'learning')} />;
     }
     if (activeTab === 'skills') {
       return <FormToggleButton label="Add Skill" open={openWorkForm === 'skills'} onClick={() => setOpenWorkForm(openWorkForm === 'skills' ? null : 'skills')} />;
     }
-    return <FormToggleButton label="Schedule Meeting" open={openWorkForm === 'meetings'} onClick={() => setOpenWorkForm(openWorkForm === 'meetings' ? null : 'meetings')} />;
+    return null;
   };
 
   return (
     <div className={embedded ? 'space-y-4' : 'space-y-6'}>
       {!embedded && <div>
         <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl flex items-center gap-2">
-          <span>Work, Projects & Skill Trees</span>
+          <span>Learning & Skill Trees</span>
         </h1>
       </div>}
 
-      {/* 4 Essential Metric Cards (Matching Dashboard Style) */}
-      {!embedded && <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Active Projects</span>
-            <Briefcase className="h-4 w-4 text-indigo-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {projects.filter(p => p.status !== 'Completed').length}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
-            {projects.length} total
-          </div>
-        </div>
-
+      {/* Learning and skill overview */}
+      {!embedded && <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Learning Tracks</span>
@@ -904,13 +616,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
         </div>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Meetings</span>
-            <Users className="h-4 w-4 text-emerald-500 shrink-0" />
-          </div>
-          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {meetings.length}
-          </div>
+  
+  
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
             Agendas & syncs
           </div>
@@ -919,13 +626,12 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
       {/* Delay Alert Banner in WorkView */}
       {!embedded && (() => {
-        const delayedProjects = projects.filter(p => p.status !== 'Completed' && computeItemDelay({ ...p, dueAt: p.due }).isDelayed);
         const delayedLearning = learningItems.filter(l => l.progress < 100 && computeItemDelay({ ...l, targetDate: l.targetDate, dueAt: l.targetDate, progress: l.progress }).isDelayed);
         const delayedSkills = skills.filter(s => (s.progress || 0) < 100 && computeItemDelay({ ...s, targetDate: s.targetDate, dueAt: s.targetDate, progress: s.progress }).isDelayed);
-        const totalWorkDelays = delayedProjects.length + delayedLearning.length + delayedSkills.length;
+        const totalWorkDelays = delayedLearning.length + delayedSkills.length;
 
         if (totalWorkDelays > 0) {
-          const firstDelayedTitle = delayedProjects[0]?.name || delayedLearning[0]?.title || delayedSkills[0]?.name || 'Deliverable';
+          const firstDelayedTitle = delayedLearning[0]?.title || delayedSkills[0]?.name || 'Deliverable';
           return (
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border-2 border-rose-500/40 bg-gradient-to-r from-rose-500/15 via-rose-500/10 to-amber-500/15 p-4 dark:border-rose-900/60 dark:bg-rose-950/30">
               <div className="flex items-center gap-3">
@@ -937,7 +643,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     <span>Work Delays Detected (⚠️ {totalWorkDelays})</span>
                   </div>
                   <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
-                    {totalWorkDelays} items past target deadline: {delayedProjects.length > 0 ? `${delayedProjects.length} Projects ` : ''}{delayedLearning.length > 0 ? `· ${delayedLearning.length} Learning ` : ''}{delayedSkills.length > 0 ? `· ${delayedSkills.length} Skills` : ''}
+                    {totalWorkDelays} items past target deadline: {delayedLearning.length > 0 ? `${delayedLearning.length} Learning ` : ''}{delayedSkills.length > 0 ? `· ${delayedSkills.length} Skills` : ''}
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
                     Deploy Task Genesis with alarm reminders to ensure urgent execution.
@@ -957,8 +663,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    if (delayedProjects.length > 0) handleOpenGenesisForProject(delayedProjects[0]);
-                    else if (delayedLearning.length > 0) handleOpenGenesisForLearning(delayedLearning[0]);
+                    if (delayedLearning.length > 0) handleOpenGenesisForLearning(delayedLearning[0]);
                     else if (delayedSkills.length > 0) handleOpenGenesisForSkill(delayedSkills[0]);
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
@@ -979,15 +684,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as any)}
           tabs={(() => {
-            const delayedProjectsCount = projects.filter(p => p.status !== 'Completed' && computeItemDelay({ ...p, dueAt: p.due }).isDelayed).length;
             const delayedLearningCount = learningItems.filter(l => l.progress < 100 && computeItemDelay({ ...l, targetDate: l.targetDate, dueAt: l.targetDate, progress: l.progress }).isDelayed).length;
             const delayedSkillsCount = skills.filter(s => (s.progress || 0) < 100 && computeItemDelay({ ...s, targetDate: s.targetDate, dueAt: s.targetDate, progress: s.progress }).isDelayed).length;
 
             return [
-              { id: 'projects', label: `Projects (${projects.length})`, shortLabel: `Projects (${projects.length})`, icon: Briefcase, delayed: delayedProjectsCount },
               { id: 'learning', label: `Learning Tracks (${learningItems.length})`, shortLabel: `Tracks (${learningItems.length})`, icon: BookOpen, delayed: delayedLearningCount },
               { id: 'skills', label: `Skill Trees (${skills.length})`, shortLabel: `Skills (${skills.length})`, icon: Award, delayed: delayedSkillsCount },
-              { id: 'meetings', label: `Meetings & Agendas (${meetings.length})`, shortLabel: `Meetings (${meetings.length})`, icon: Users }
+              
             ];
           })()}
           extraRight={<div className="hidden sm:block">{renderWorkFormAction()}</div>}
@@ -997,314 +700,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
         {renderWorkFormAction()}
       </div>
       </>}
-
-      {/* Tab: Projects */}
-      {activeTab === 'projects' && (
-        <div className={`grid grid-cols-1 items-start lg:grid-cols-12 ${embedded ? 'gap-4' : 'gap-6'}`}>
-          {/* Project Genesis (Left Card: 5 cols) */}
-          {openWorkForm === 'projects' && <div className={`${embedded && projects.length === 0 ? 'lg:col-span-12' : 'lg:col-span-5'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Project Genesis</h2>
-            </div>
-            <form onSubmit={handleAddProject} className="mt-4 space-y-3.5">
-              {/* PROJECT TITLE WITH INTEGRATED LINK GOAL / MANUAL TOGGLE */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                    Project Title / Purpose
-                  </label>
-                  {/* Mode Selector: Link Goal vs Manual */}
-                  <LinkModeSelector
-                    value={projInputMode}
-                    ariaLabel="Project goal link mode"
-                    options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
-                    onChange={mode => {
-                      if (mode === 'link') {
-                        setProjInputMode('link');
-                        if (goals.length > 0 && !projGoalId) handleSelectGoalForProject(goals[0].id);
-                      } else {
-                        setProjInputMode('manual');
-                        setProjGoalId('');
-                      }
-                    }}
-                  />
-                </div>
-
-                {projInputMode === 'link' && (
-                  <div className="mb-2 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                        Select Target Goal to Link *
-                      </label>
-                      {projGoalId && (
-                        <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
-                          {goals.find(g => g.id === projGoalId)?.progress}% Done
-                        </span>
-                      )}
-                    </div>
-                    <GoalPicker
-                      goals={goals || []}
-                      value={projGoalId}
-                      onChange={handleSelectGoalForProject}
-                      placeholder="-- Choose Goal --"
-                      className="h-10 w-full rounded-lg border border-indigo-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
-                    />
-                  </div>
-                )}
-
-                <input
-                  type="text"
-                  required
-                  value={projName}
-                  onChange={e => setProjName(e.target.value)}
-                  placeholder="e.g. Distributed Search Indexer"
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Client / Org</label>
-                  <input
-                    type="text"
-                    value={projClient}
-                    onChange={e => setProjClient(e.target.value)}
-                    placeholder="Client or Team"
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Due Date</label>
-                  <ThemedDateTimeInput
-                    type="date"
-                    value={projDue}
-                    onChange={e => setProjDue(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Status</label>
-                <select
-                  value={projStatus}
-                  onChange={e => setProjStatus(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                >
-                  <option value="Active">Active</option>
-                  <option value="In Review">In Review</option>
-                  <option value="On Hold">On Hold</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-
-              {/* Task Genesis deployment with Alarm toggle on Creation */}
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/20 space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer text-[11px] font-bold text-indigo-900 dark:text-indigo-200">
-                  <input
-                    type="checkbox"
-                    checked={projArmGenesis}
-                    onChange={e => setProjArmGenesis(e.target.checked)}
-                    className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                  />
-                  <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3 w-3" /> Deploy Task Genesis with Alarm on Creation</span>
-                </label>
-                {projArmGenesis && (
-                  <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
-                    <div>
-                      <label className="text-slate-500 font-semibold">Priority</label>
-                      <select
-                        value={projTaskPriority}
-                        onChange={e => setProjTaskPriority(e.target.value as any)}
-                        className="mt-0.5 h-7 w-full rounded border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-800 text-[10px]"
-                      >
-                        <option value="High">High</option>
-                        <option value="Medium">Medium</option>
-                        <option value="Low">Low</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-slate-500 font-semibold">Alarm Time</label>
-                      <ThemedDateTimeInput
-                        type="time"
-                        value={projAlarmTime}
-                        onChange={e => setProjAlarmTime(e.target.value)}
-                        className="mt-0.5 h-7 w-full rounded border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-800 text-[10px] font-mono"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 cursor-pointer"
-              >
-                + Add Project Deliverable
-              </button>
-            </form>
-          </div>}
-
-          {/* Active Deliverables (Right Card: 7 cols) */}
-          <div className={`${embedded && projects.length === 0 ? 'hidden' : ''} ${openWorkForm === 'projects' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Briefcase className="h-4 w-4 text-indigo-500" />
-                <span>Active Deliverables ({projects.length})</span>
-              </span>
-            </h2>
-
-            <div className="adaptive-card-grid mt-4 gap-3">
-              {projects.length === 0 ? (
-                <div className="col-span-full">
-                  <EmptyState
-                    icon={Briefcase}
-                    compact
-                    title="No work projects yet"
-                    hint="Create a project to link tasks, notes and outcomes."
-                  />
-                </div>
-              ) : (
-                [...projects].sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)).map(p => {
-                  const isDone = p.status === 'Completed';
-                  const linkedGoal = goals.find(g => g.id === p.goalId);
-                  const delayInfo = computeItemDelay({ ...p, dueAt: p.due });
-
-                  return (
-                    <div
-                      key={p.id}
-                      className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors space-y-2.5"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-slate-900 dark:text-white text-sm">
-                              {p.name}
-                            </span>
-                            <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
-                              isDone
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                : p.status === 'In Review'
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400'
-                            }`}>
-                              {p.status || 'Active'}
-                            </span>
-                            {delayInfo.isDelayed && !isDone && (
-                              <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white animate-pulse">
-                                ⚠️ {delayInfo.label}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
-                            <span className="inline-flex items-center gap-1">
-                              <Briefcase className="h-3 w-3 text-slate-400" />
-                              <span>{p.client || 'Internal'}</span>
-                            </span>
-                            {p.due && (
-                              <span className="inline-flex items-center gap-1 font-mono">
-                                <Calendar className="h-3 w-3 text-slate-400" />
-                                <span>Due: {p.due}</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Action buttons */}
-                        <div className="flex w-full min-w-0 flex-wrap items-center gap-1">
-                          {/* QUICK COMPLETE TOGGLE */}
-                          <button
-                            type="button"
-                            onClick={() => handleToggleProjectComplete(p)}
-                            className={`h-7 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                              isDone
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-emerald-950'
-                            }`}
-                            title={isDone ? 'Mark as in progress' : 'Mark project completed (will update linked goal)'}
-                          >
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>{isDone ? 'Done' : 'Complete'}</span>
-                          </button>
-
-                          <ProgressiveActions label={`More actions for ${p.name}`}>
-                          {/* DELAY ALARM TRIGGER */}
-                          {delayInfo.isDelayed && !isDone && (
-                            <button
-                              type="button"
-                              onClick={() => handleTriggerUrgentAlarm(p.name, 'Project deliverable overdue!')}
-                              className="h-7 px-2 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-2xs"
-                              title="Ring Urgent Alarm"
-                            >
-                              <BellRing className="h-3 w-3 animate-bounce" />
-                              <span>Alarm</span>
-                            </button>
-                          )}
-
-                          {/* SET REMINDER ALARM BUTTON */}
-                          <button
-                            type="button"
-                            onClick={() => setQuickAlarmItem({ id: p.id, title: p.name, type: 'project', due: p.due })}
-                            className="h-7 px-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold"
-                            title="Schedule Reminder Alarm"
-                          >
-                            <Bell className="h-3 w-3" />
-                            <span>Set Alarm</span>
-                          </button>
-
-                          {/* TASK GENESIS BUTTON */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenGenesisForProject(p)}
-                            className="h-7 rounded-lg bg-indigo-50 px-2 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1"
-                            title="Task Genesis with Reminder Alarm"
-                          >
-                            <Zap className="h-3 w-3 text-amber-500" />
-                            <span>Genesis</span>
-                          </button>
-
-                          {/* EDIT BUTTON */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit('project', p)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                            title="Edit Project"
-                          >
-                            <Edit3 className="h-3.5 w-3.5" />
-                          </button>
-
-                          {/* DELETE BUTTON */}
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget({ type: 'project', id: p.id, name: p.name, store: 'workProjects' })}
-                            className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
-                            title="Delete Project"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                          </ProgressiveActions>
-                        </div>
-                      </div>
-
-                      {/* Full-Width LINKED GOAL BADGE */}
-                      {linkedGoal && (
-                        <div className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/80 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                          <Target className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
-                          <span className="w-full leading-snug truncate">
-                            <><GoalTierIcon level={linkedGoal.level} /> {linkedGoal.level === 5 ? 'Atomic' : linkedGoal.level === 4 ? 'Nano' : linkedGoal.level === 3 ? 'Micro' : linkedGoal.level === 2 ? 'Sub' : 'Main'}: {linkedGoal.title} ({linkedGoal.progress}%)</>
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Tab: Learning */}
       {activeTab === 'learning' && (
@@ -1896,136 +1291,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
         </div>
       )}
 
-      {/* Tab: Meetings */}
-      {activeTab === 'meetings' && (
-        <div className={`grid grid-cols-1 items-start lg:grid-cols-12 ${embedded ? 'gap-4' : 'gap-6'}`}>
-          {openWorkForm === 'meetings' && <div className={`${embedded && meetings.length === 0 ? 'lg:col-span-12' : 'lg:col-span-5'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center gap-2">
-              <Users className="h-4 w-4 text-indigo-500" />
-              <span>Schedule Meeting</span>
-            </h2>
-            <form onSubmit={handleAddMeeting} className="mt-4 space-y-3">
-              <GoalLinkSelector
-                goals={goals}
-                mode={meetInputMode}
-                goalId={meetGoalId}
-                onModeChange={setMeetInputMode}
-                onGoalChange={handleSelectGoalForMeeting}
-                label="Meeting Goal Alignment"
-              />
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Agenda / Topic</label>
-                <input
-                  type="text"
-                  required
-                  value={meetTitle}
-                  onChange={e => setMeetTitle(e.target.value)}
-                  placeholder="e.g. Q4 Strategy Review"
-                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Attendees</label>
-                  <input
-                    type="text"
-                    value={meetPeople}
-                    onChange={e => setMeetPeople(e.target.value)}
-                    placeholder="Team, Alex"
-                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Date</label>
-                  <ThemedDateTimeInput
-                    type="date"
-                    value={meetDate}
-                    onChange={e => setMeetDate(e.target.value)}
-                    className="mt-1 h-8 w-full min-w-0 rounded-lg border border-slate-200 px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
-                  />
-                </div>
-              </div>
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 cursor-pointer"
-              >
-                + Schedule Meeting
-              </button>
-            </form>
-          </div>}
-
-          <div className={`${embedded && meetings.length === 0 ? 'hidden' : ''} ${openWorkForm === 'meetings' ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-            <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
-              Meetings Timeline ({meetings.length})
-            </h2>
-            <div className="adaptive-card-grid mt-4 gap-3">
-              {meetings.length === 0 ? (
-                <div className="col-span-full"><EmptyState icon={Calendar} compact title="No meetings on the agenda" hint="Schedule meetings to track prep and outcomes." /></div>
-              ) : (
-                [...meetings].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
-                  <div key={m.id} className="dashboard-item-row flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 p-3 text-xs transition-colors hover:border-slate-200 dark:border-slate-800 dark:hover:border-slate-700">
-                    <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleMeetingComplete(m)}
-                        className="text-slate-400 hover:text-emerald-600 cursor-pointer shrink-0"
-                        title={m.completed || m.status === 'completed' ? 'Mark as Scheduled' : 'Mark as Attended / Done'}
-                      >
-                        {m.completed || m.status === 'completed' ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                        ) : (
-                          <Circle className="h-4 w-4" />
-                        )}
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`font-bold text-slate-900 dark:text-white text-sm truncate ${m.completed || m.status === 'completed' ? 'line-through text-slate-400' : ''}`}>
-                            {m.title}
-                          </span>
-                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                            m.completed || m.status === 'completed'
-                              ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
-                              : m.date > today
-                              ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400'
-                              : 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400'
-                          }`}>
-                            {m.completed || m.status === 'completed' ? '✓ Attended' : m.date > today ? 'Upcoming' : 'Scheduled'}
-                          </span>
-                          <GoalBadge goalId={m.goalId} goals={goals} />
-                        </div>
-                        <div className="break-words text-[11px] text-slate-400 mt-0.5">
-                          {m.date} · {m.people || 'Internal'}
-                        </div>
-                      </div>
-                    </div>
-                    <ProgressiveActions label={`More actions for ${m.title}`} className="min-w-0 max-w-full">
-                      {/* EDIT BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit('meeting', m)}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Edit Meeting"
-                      >
-                        <Edit3 className="h-3.5 w-3.5" />
-                      </button>
-                      {/* DELETE BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => setDeleteTarget({ type: 'meeting', id: m.id, name: m.title, store: 'meetings' })}
-                        className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
-                        title="Delete Meeting"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </ProgressiveActions>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* DEDICATED EDIT MODAL */}
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -2056,7 +1321,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
             <form onSubmit={handleSaveEdit} className="mt-4 space-y-3.5">
               {/* GOAL LINK SELECTOR IN EDIT MODAL */}
-              {(editTarget.type === 'project' || editTarget.type === 'learning' || editTarget.type === 'skill' || editTarget.type === 'meeting') && (
+              {(editTarget.type === 'learning' || editTarget.type === 'skill') && (
                 <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-800/80 dark:bg-indigo-950/30">
                   <label className="block text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1 mb-1">
                     <Target className="h-3.5 w-3.5" />
@@ -2082,7 +1347,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  {editTarget.type === 'project' ? 'Project Name' : editTarget.type === 'learning' ? 'Curriculum Title' : editTarget.type === 'skill' ? 'Skill Name' : 'Meeting Topic'}
+                  {editTarget.type === 'learning' ? 'Curriculum Title' : 'Skill Name'}
                 </label>
                 <input
                   type="text"
@@ -2092,44 +1357,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
-
-              {editTarget.type === 'project' && (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Client / Org</label>
-                      <input
-                        type="text"
-                        value={editSubtitle}
-                        onChange={e => setEditSubtitle(e.target.value)}
-                        className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Due Date</label>
-                      <ThemedDateTimeInput
-                        type="date"
-                        value={editDate}
-                        onChange={e => setEditDate(e.target.value)}
-                        className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Status</label>
-                    <select
-                      value={editExtra}
-                      onChange={e => setEditExtra(e.target.value)}
-                      className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="In Review">In Review</option>
-                      <option value="On Hold">On Hold</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </div>
-                </>
-              )}
 
               {editTarget.type === 'learning' && (
                 <div className="grid grid-cols-2 gap-2">
@@ -2182,29 +1409,6 @@ export const WorkView: React.FC<WorkViewProps> = ({
                       <option value="Advanced">Advanced</option>
                       <option value="Mastery">Mastery</option>
                     </select>
-                  </div>
-                </div>
-              )}
-
-              {editTarget.type === 'meeting' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Attendees</label>
-                    <input
-                      type="text"
-                      value={editSubtitle}
-                      onChange={e => setEditSubtitle(e.target.value)}
-                      className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Date</label>
-                    <ThemedDateTimeInput
-                      type="date"
-                      value={editDate}
-                      onChange={e => setEditDate(e.target.value)}
-                      className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
-                    />
                   </div>
                 </div>
               )}

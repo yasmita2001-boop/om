@@ -74,7 +74,6 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
   const people: any[] = fullData.people || [];
 
   // Timeline & Plan Datasets
-  const workProjects: any[] = fullData.workProjects || [];
   const milestones: any[] = fullData.milestones || [];
   const learningItems: any[] = fullData.learningItems || [];
   const savingsPlans: any[] = fullData.savingsPlans || [];
@@ -115,7 +114,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
 
   interface TimelineExportItem {
     id: string;
-    type: 'project' | 'milestone' | 'task' | 'learning' | 'savings' | 'loan' | 'investment';
+    type: 'milestone' | 'task' | 'learning' | 'savings' | 'loan' | 'investment';
     typeLabel: string;
     title: string;
     dueDate?: string;
@@ -136,19 +135,6 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
   });
 
   const timelineItems: TimelineExportItem[] = [
-    ...workProjects.map(p => ({
-      id: p.id || '',
-      type: 'project' as const,
-      typeLabel: 'Work Project',
-      title: p.title || p.name || 'Untitled Project',
-      dueDate: p.due || p.dueAt || p.deadline,
-      status: p.status || 'Active',
-      progress: Number(p.progress) || 0,
-      goalId: p.goalId,
-      goalTitle: p.goalId ? goalsMap.get(p.goalId) : undefined,
-      description: p.description || p.note,
-      ...checkDelay(p.due || p.dueAt || p.deadline, p.status, Number(p.progress) || 0)
-    })),
     ...milestones.map(m => ({
       id: m.id || '',
       type: 'milestone' as const,
@@ -875,13 +861,13 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
           <div class="metric-card" onclick="showTab('timeline')" style="cursor:pointer;" title="Click to view Timeline & Plan">
             <div class="title">Timeline & Plan</div>
             <div class="value" style="${delayedTimelineItems > 0 ? 'color:var(--danger);' : ''}">${totalTimelineItems}</div>
-            <div class="sub">${delayedTimelineItems > 0 ? `${icon('alert')} ${delayedTimelineItems} delayed items` : 'All on track'} · ${workProjects.length} projects</div>
+            <div class="sub">${delayedTimelineItems > 0 ? `${icon('alert')} ${delayedTimelineItems} delayed items` : 'All on track'}</div>
           </div>
         </div>
 
         <div class="card">
           <div class="card-header">
-            <h2 class="card-title">${icon('calendar')} Timeline Milestones & Project Deadlines</h2>
+            <h2 class="card-title">${icon('calendar')} Timeline Milestones & Deadlines</h2>
             <button type="button" class="btn" onclick="showTab('timeline')">Open Full Timeline →</button>
           </div>
           <table class="data-table">
@@ -897,7 +883,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
             <tbody>
               ${timelineItems.slice(0, 5).map(item => `
                 <tr>
-                  <td><span class="badge ${item.type === 'project' ? 'badge-low' : item.type === 'milestone' ? 'badge-medium' : 'badge-success'}">${escapeHtml(item.typeLabel)}</span></td>
+                  <td><span class="badge ${item.type === 'milestone' ? 'badge-medium' : 'badge-success'}">${escapeHtml(item.typeLabel)}</span></td>
                   <td><strong>${escapeHtml(item.title)}</strong></td>
                   <td style="font-family:ui-monospace, monospace; font-size:0.75rem;">${item.dueDate ? escapeHtml(item.dueDate) : '<span style="color:var(--text-muted)">Unscheduled</span>'}</td>
                   <td>
@@ -976,7 +962,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
           <div class="metric-card">
             <div class="title">Timeline Planned Items</div>
             <div class="value">${totalTimelineItems}</div>
-            <div class="sub">${workProjects.length} projects · ${milestones.length} milestones</div>
+            <div class="sub">${milestones.length} milestones</div>
           </div>
           <div class="metric-card">
             <div class="title">Delayed Alarms</div>
@@ -998,9 +984,9 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
         <div class="card">
           <div class="card-header">
             <div>
-              <h2 class="card-title">${icon('calendar')} Project Timeline & Execution Schedule (${totalTimelineItems})</h2>
+              <h2 class="card-title">${icon('calendar')} Timeline & Execution Schedule (${totalTimelineItems})</h2>
               <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">
-                Unified chronological timeline connecting Projects, Milestones, Deadlines, and Learning paths.
+                Unified chronological timeline connecting milestones, deadlines, and learning paths.
               </p>
             </div>
             <div style="font-size:0.75rem; color:var(--text-muted);">
@@ -1011,7 +997,6 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
           <!-- Timeline Filter Controls -->
           <div class="timeline-filter-bar">
             <button type="button" class="timeline-filter-btn active" onclick="filterTimeline('all', this)">All Items (${totalTimelineItems})</button>
-            <button type="button" class="timeline-filter-btn" onclick="filterTimeline('project', this)">Projects (${workProjects.length})</button>
             <button type="button" class="timeline-filter-btn" onclick="filterTimeline('milestone', this)">Milestones (${milestones.length})</button>
             <button type="button" class="timeline-filter-btn" onclick="filterTimeline('task', this)">Tasks with Deadlines (${tasks.filter(t => t.dueAt || t.date || t.dueDate).length})</button>
             <button type="button" class="timeline-filter-btn" onclick="filterTimeline('learning', this)">Learning & Skills (${learningItems.length})</button>
@@ -1036,7 +1021,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
               ${timelineItems.map(item => `
                 <tr class="timeline-row" data-type="${escapeHtml(item.type)}" data-delayed="${item.isDelayed ? 'true' : 'false'}">
                   <td>
-                    <span class="badge ${item.type === 'project' ? 'badge-low' : item.type === 'milestone' ? 'badge-medium' : item.type === 'savings' ? 'badge-success' : item.type === 'loan' ? 'badge-high' : item.type === 'investment' ? 'badge-low' : 'badge-success'}">
+                    <span class="badge ${item.type === 'milestone' ? 'badge-medium' : item.type === 'savings' ? 'badge-success' : item.type === 'loan' ? 'badge-high' : item.type === 'investment' ? 'badge-low' : 'badge-success'}">
                       ${escapeHtml(item.typeLabel)}
                     </span>
                   </td>

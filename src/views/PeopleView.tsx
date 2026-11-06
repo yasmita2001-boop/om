@@ -1,19 +1,21 @@
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState } from 'react';
-import { Plus, Phone, Calendar, Trash2, Edit2, Bell, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Plus, Phone, Calendar, Trash2, Edit2, Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
-import { Person, Interaction, ReminderItem } from '../types';
+import { Person, Interaction, ReminderItem, Meeting, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
 import { ProgressiveActions } from '../components/ProgressiveActions';
-import { FormToggleButton } from '../components/FormToggleButton';
+import { GoalLinkSelector } from '../components/GoalLinkSelector';
+import { syncGoalProgressFromMeetings } from '../lib/goalTaskSync';
 
 interface PeopleViewProps {
   people: Person[];
   interactions: Interaction[];
+  goals?: Goal[];
   reminders?: ReminderItem[];
   embedded?: boolean;
-  initialForm?: 'person' | 'interaction';
+  initialForm?: 'person' | 'interaction' | 'meeting';
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
@@ -21,6 +23,7 @@ interface PeopleViewProps {
 export const PeopleView: React.FC<PeopleViewProps> = ({
   people,
   interactions,
+  goals = [],
   reminders = [],
   embedded = false,
   initialForm,
@@ -32,97 +35,157 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   const [contact, setContact] = useState('');
   const [importantDate, setImportantDate] = useState('');
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
-  const [activeAction, setActiveAction] = useState<'person' | 'interaction'>(initialForm || 'person');
-  const [openPeopleForm, setOpenPeopleForm] = useState<'person' | 'interaction' | null>(initialForm || null);
+  const [openPeopleForm, setOpenPeopleForm] = useState<'person' | 'interaction' | 'meeting' | null>(initialForm || null);
   // Interaction logger & editor state
   const [selectedPersonId, setSelectedPersonId] = useState(people[0]?.id || '');
   const [interactionText, setInteractionText] = useState('');
   const [editingInteraction, setEditingInteraction] = useState<Interaction | null>(null);
   const [expandedPeopleInteractions, setExpandedPeopleInteractions] = useState<Record<string, boolean>>({});
+  const [meetingPeople, setMeetingPeople] = useState('');
+  const [meetingDate, setMeetingDate] = useState(getLocalDateString());
+  const [meetingGoalInputMode, setMeetingGoalInputMode] = useState<'manual' | 'link'>('manual');
+  const [meetingGoalId, setMeetingGoalId] = useState('');
 
-  const handleAddPerson = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    const p: Person = editingPerson ? {
-      ...editingPerson,
-      name: name.trim(),
-      relationship,
-      contact: contact.trim() || undefined,
-      importantDate: importantDate || undefined,
-      updatedAt: Date.now()
-    } : {
-      id: generateUUID(),
-      name: name.trim(),
-      relationship,
-      contact: contact.trim() || undefined,
-      importantDate: importantDate || undefined,
-      createdAt: Date.now()
-    };
-
-    await storage.put('people', p);
-    onSuccess(editingPerson ? `Contact "${name}" updated` : `Contact "${name}" added`);
+  const resetPeopleCard = () => {
     setEditingPerson(null);
+    setEditingInteraction(null);
     setName('');
     setRelationship('Friend');
     setContact('');
     setImportantDate('');
+    setInteractionText('');
+    setMeetingPeople('');
+    setMeetingDate(getLocalDateString());
+    setMeetingGoalInputMode('manual');
+    setMeetingGoalId('');
+  };
+
+  const handleSavePeopleCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = name.trim();
+    const trimmedMemo = interactionText.trim();
+    const shouldSavePerson = Boolean(editingPerson || !editingInteraction);
+    const shouldSaveInteraction = Boolean(trimmedMemo || editingInteraction);
+    const shouldSaveMeeting = Boolean(
+      meetingPeople.trim() || (meetingGoalInputMode === 'link' && meetingGoalId)
+    );
+
+    if (!shouldSavePerson && !shouldSaveInteraction && !shouldSaveMeeting) return;
+    if (shouldSavePerson && !trimmedName) return;
+
+    const personId = editingPerson?.id
+      || (shouldSavePerson && trimmedName ? generateUUID() : undefined)
+      || editingInteraction?.personId;
+    const interactionPersonId = personId || selectedPersonId || editingInteraction?.personId;
+    if (shouldSaveInteraction && !interactionPersonId) {
+      onSuccess('Add a person or select a contact for the touchpoint.');
+      return;
+    }
+    if (editingInteraction && !trimmedMemo) return;
+    if (shouldSavePerson && personId) {
+      const person: Person = editingPerson
+        ? {
+            ...editingPerson,
+            name: trimmedName,
+            relationship,
+            contact: contact.trim() || undefined,
+            importantDate: importantDate || undefined,
+            updatedAt: Date.now()
+          }
+        : {
+            id: personId,
+            name: trimmedName,
+            relationship,
+            contact: contact.trim() || undefined,
+            importantDate: importantDate || undefined,
+            createdAt: Date.now()
+          };
+      await storage.put('people', person);
+    }
+
+    if (shouldSaveInteraction && interactionPersonId) {
+      const interaction: Interaction = editingInteraction
+        ? {
+            ...editingInteraction,
+            personId: interactionPersonId,
+            text: trimmedMemo
+          }
+        : {
+            id: generateUUID(),
+            personId: interactionPersonId,
+            date: getLocalDateString(),
+            text: trimmedMemo,
+            createdAt: Date.now()
+          };
+      await storage.put('interactions', interaction);
+    }
+
+    if (shouldSaveMeeting) {
+      const meeting: Meeting = {
+        id: generateUUID(),
+        title: `${trimmedName || 'Contact'} meeting`,
+        people: meetingPeople.trim() || undefined,
+        personId: personId || undefined,
+        date: meetingDate,
+        goalId: meetingGoalInputMode === 'link' ? meetingGoalId || undefined : undefined,
+        status: 'scheduled',
+        completed: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      await storage.put('meetings', meeting);
+      if (meeting.goalId) {
+        await syncGoalProgressFromMeetings(meeting.goalId, meeting.id, meeting.completed, meeting.status);
+      }
+    }
+
+    const savedItems = [
+      shouldSavePerson && (editingPerson ? 'contact updated' : 'contact added'),
+      shouldSaveInteraction && (editingInteraction ? 'touchpoint updated' : 'touchpoint logged'),
+      shouldSaveMeeting && 'meeting scheduled'
+    ].filter(Boolean);
+    onSuccess(`✓ ${savedItems.join(', ')}`);
+    resetPeopleCard();
     onRefresh();
   };
 
   const handleStartEditPerson = (person: Person) => {
+    setEditingInteraction(null);
+    setInteractionText('');
+    setMeetingPeople('');
+    setMeetingGoalId('');
     setEditingPerson(person);
+    setOpenPeopleForm('person');
     setName(person.name);
     setRelationship(person.relationship || 'Friend');
     setContact(person.contact || '');
     setImportantDate(person.importantDate || '');
-    setActiveAction('person');
     setOpenPeopleForm('person');
   };
 
   const handleCancelEditPerson = () => {
-    setEditingPerson(null);
-    setName('');
-    setRelationship('Friend');
-    setContact('');
-    setImportantDate('');
-  };
-
-  const handleSaveInteraction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPersonId || !interactionText.trim()) return;
-
-    if (editingInteraction) {
-      const updated: Interaction = {
-        ...editingInteraction,
-        personId: selectedPersonId,
-        text: interactionText.trim()
-      };
-      await storage.put('interactions', updated);
-      onSuccess('✓ Touchpoint updated');
-      setEditingInteraction(null);
-    } else {
-      const inter: Interaction = {
-        id: generateUUID(),
-        personId: selectedPersonId,
-        date: getLocalDateString(),
-        text: interactionText.trim(),
-        createdAt: Date.now()
-      };
-      await storage.put('interactions', inter);
-      onSuccess('Touchpoint logged');
-    }
-
-    setInteractionText('');
-    onRefresh();
+    resetPeopleCard();
   };
 
   const handleStartEditInteraction = (inter: Interaction) => {
+    setEditingPerson(null);
+    setName('');
+    setContact('');
+    setImportantDate('');
+    setMeetingPeople('');
+    setMeetingGoalId('');
     setEditingInteraction(inter);
-    setActiveAction('interaction');
-    setOpenPeopleForm('interaction');
+    setOpenPeopleForm('person');
     setSelectedPersonId(inter.personId);
     setInteractionText(inter.text);
+    const person = people.find(item => item.id === inter.personId);
+    if (person) {
+      setName(person.name);
+      setRelationship(person.relationship || 'Friend');
+      setContact(person.contact || '');
+      setImportantDate(person.importantDate || '');
+    }
   };
 
   const handleCancelEditInteraction = () => {
@@ -211,46 +274,43 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
             People & Relationships
           </h1>
         </div>
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          <FormToggleButton label="Add Person" open={openPeopleForm === 'person'} onClick={() => {
-            const next = openPeopleForm === 'person' ? null : 'person';
-            setOpenPeopleForm(next);
-            setActiveAction('person');
-          }} />
-          <FormToggleButton label="Log Touchpoint" open={openPeopleForm === 'interaction'} onClick={() => {
-            const next = openPeopleForm === 'interaction' ? null : 'interaction';
-            setOpenPeopleForm(next);
-            setActiveAction('interaction');
-          }} />
-        </div>
       </div>}
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
         {openPeopleForm && <section className={`rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${
           embedded && !hasDirectoryRecords ? 'lg:col-span-12' : 'lg:col-span-5'
         }`}>
-          <div className={activeAction === 'person' ? (embedded ? '' : 'mt-4') : 'hidden'}>
+          <form onSubmit={handleSavePeopleCard} className="space-y-3">
+          <div>
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
               <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">{editingPerson ? 'Edit Important Person' : 'Add Important Person'}</h2>
             </div>
 
-            <form onSubmit={handleAddPerson} className="mt-4 space-y-3">
-              {editingPerson && (
+            <div className="mt-4 space-y-3">
+              {(editingPerson || editingInteraction) && (
                 <button type="button" onClick={handleCancelEditPerson} className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white">
                   Cancel editing
                 </button>
               )}
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="e.g. Elena Rostova"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
+                <GoalLinkSelector
+                  goals={goals}
+                  mode={meetingGoalInputMode}
+                  goalId={meetingGoalId}
+                  onModeChange={setMeetingGoalInputMode}
+                  onGoalChange={setMeetingGoalId}
+                  label="Full Name"
+                >
+                  <input
+                    type="text"
+                    required={!editingInteraction}
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="e.g. Elena Rostova"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </GoalLinkSelector>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -290,94 +350,45 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                 />
               </div>
 
-              <button
-                type="submit"
-                className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 cursor-pointer"
-              >
-                {editingPerson ? 'Update Contact' : 'Save Contact'}
-              </button>
-            </form>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Attendees</label>
+              <input
+                type="text"
+                value={meetingPeople}
+                onChange={event => setMeetingPeople(event.target.value)}
+                placeholder="Team, Alex"
+                className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
           </div>
 
           {/* Log / Edit Interaction */}
-          <div className={`${activeAction === 'interaction' ? (embedded ? '' : 'mt-4') : 'hidden'} ${editingInteraction ? 'rounded-xl border border-amber-400 bg-amber-50/20 p-4 dark:border-amber-700 dark:bg-amber-950/20' : ''} transition-colors`}>
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                {editingInteraction ? (
-                  <>
-                    <Edit2 className="h-4 w-4 text-amber-600" />
-                    <span>Edit Touchpoint</span>
-                    <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.5 rounded font-mono">
-                      Editing
-                    </span>
-                  </>
-                ) : (
-                  <span>Log Touchpoint / Interaction</span>
-                )}
-              </h2>
-
-              {editingInteraction && (
-                <button
-                  type="button"
-                  onClick={handleCancelEditInteraction}
-                  className="text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white flex items-center gap-1 cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  <span>Cancel</span>
-                </button>
-              )}
-            </div>
-
-            <form onSubmit={handleSaveInteraction} className="mt-4 space-y-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Person</label>
-                <select
-                  value={selectedPersonId}
-                  onChange={e => setSelectedPersonId(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
-                >
-                  <option value="">Select a contact</option>
-                  {people.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.relationship})</option>
-                  ))}
-                </select>
-              </div>
-
+          <div className={`${editingInteraction ? 'rounded-xl border border-amber-400 bg-amber-50/20 p-4 dark:border-amber-700 dark:bg-amber-950/20' : ''} transition-colors`}>
+            <div className="space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Interaction Memo</label>
                 <textarea
-                  rows={2}
-                  required
+                  rows={4}
+                  required={Boolean(editingInteraction)}
                   value={interactionText}
                   onChange={e => setInteractionText(e.target.value)}
-                  placeholder="Discussed architecture direction and mutual project goals..."
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  placeholder="Discussed architecture direction and shared priorities..."
+                  className="people-interaction-memo mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm leading-relaxed text-slate-900 outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-indigo-500"
                 />
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="submit"
-                  className={`w-full rounded-lg py-2 text-xs font-semibold text-white cursor-pointer transition-colors ${
-                    editingInteraction
-                      ? 'bg-amber-600 hover:bg-amber-500'
-                        : 'bg-indigo-600 hover:bg-indigo-500'
-                  }`}
-                >
-                  {editingInteraction ? 'Update Touchpoint Memo' : 'Log Interaction'}
-                </button>
-                {editingInteraction && (
-                  <button
-                    type="button"
-                    onClick={handleCancelEditInteraction}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
+            </div>
           </div>
+          <button
+            type="submit"
+            className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 cursor-pointer"
+          >
+            {editingPerson || editingInteraction ? 'Save Changes' : 'Save Contact'}
+          </button>
+          </form>
         </section>}
 
         {/* Contacts Directory */}
@@ -387,7 +398,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
               <span>Relationships Directory ({people.length})</span>
             </h2>
 
-            <div className="adaptive-card-grid mt-4 gap-3">
+            <div className="adaptive-card-grid mt-3 gap-3">
               {people.length === 0 ? (
                 <div className="col-span-full">
                   <EmptyState
@@ -404,16 +415,14 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   const displayedInteractions = isExpanded ? pInteractions : pInteractions.slice(0, 2);
 
                   return (
-                    <div key={p.id} className="dashboard-item-row flex flex-col justify-between rounded-xl border border-slate-100 p-3 text-xs transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
+                    <div key={p.id} className="dashboard-item-row flex flex-col justify-between rounded-xl border border-slate-100 p-2.5 text-xs transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
                       <div>
                         <div className="flex flex-wrap justify-between items-start gap-1">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-slate-900 dark:text-white truncate">{p.name}</span>
-                            </div>
-                            <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold mt-0.5">
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="min-w-0 truncate font-bold text-slate-900 dark:text-white">{p.name}</span>
+                            <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
                               {p.relationship}
-                            </div>
+                            </span>
                           </div>
                           <ProgressiveActions label={`More actions for ${p.name}`} className="shrink-0">
                             <button
@@ -436,7 +445,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         </div>
 
                         {p.contact && (
-                          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
+                          <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
                             <Phone className="h-3 w-3 shrink-0 text-slate-400" />
                             <span>{p.contact}</span>
                           </div>
@@ -447,7 +456,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                           const hasActiveReminder = (reminders || []).some(r => r.linkedId === p.id && r.status === 'open');
 
                           return (
-                            <div className="mt-1.5 flex items-center justify-between gap-1 text-[10px] bg-slate-50 dark:bg-slate-800/60 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                            <div className="mt-1 flex items-center justify-between gap-1 text-[10px] bg-slate-50 dark:bg-slate-800/60 p-1 rounded-lg border border-slate-100 dark:border-slate-800">
                               <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 min-w-0 flex-1">
                                 <Calendar className="h-3 w-3 text-indigo-500 shrink-0" />
                                 <span className="font-medium font-mono truncate">{p.importantDate}</span>
@@ -476,9 +485,14 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                       </div>
 
                       {/* Touchpoints Stream */}
-                      <div className="mt-3 border-t border-slate-50 pt-2.5 text-[10px] text-slate-400 dark:border-slate-800">
-                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                          <span>{pInteractions.length} recorded touchpoint{pInteractions.length === 1 ? '' : 's'}</span>
+                      <div className="mt-2 border-t border-slate-50 pt-1.5 text-[10px] text-slate-400 dark:border-slate-800">
+                        <div className="flex items-center justify-between gap-2 text-slate-500 dark:text-slate-400 font-semibold">
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-2">
+                            <span>{pInteractions.length} recorded touchpoint{pInteractions.length === 1 ? '' : 's'}</span>
+                            {pInteractions.length === 1 && (
+                              <span className="font-mono font-normal text-slate-400">{pInteractions[0].date}</span>
+                            )}
+                          </div>
                           {pInteractions.length > 2 && (
                             <button
                               type="button"
@@ -492,21 +506,25 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                         </div>
 
                         {displayedInteractions.length > 0 && (
-                          <div className="space-y-1.5 mt-1.5">
+                          <div className="space-y-1 mt-1">
                             {displayedInteractions.map(i => (
                               <div
                                 key={i.id}
-                                className={`dashboard-item-row group flex flex-wrap items-start justify-between gap-2 rounded-xl border p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40 ${
+                                className={`group flex flex-wrap items-start justify-between gap-2 text-sm ${
                                   editingInteraction?.id === i.id
-                                    ? 'bg-amber-100/70 border border-amber-300 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200'
-                                    : 'border-slate-100 bg-transparent hover:bg-slate-50/80 text-slate-600 dark:border-slate-800/60 dark:hover:bg-slate-800/40 dark:text-slate-300'
+                                    ? 'text-amber-900 dark:text-amber-200'
+                                    : 'text-slate-600 dark:text-slate-300'
                                 }`}
                               >
                                 <div className="min-w-0 flex-1">
-                                  <div className="mb-0.5 flex items-center gap-1 font-mono text-xs text-slate-400">
-                                    <span>{i.date}</span>
-                                  </div>
-                                  <p className="italic leading-relaxed break-words">"{i.text}"</p>
+                                  {pInteractions.length > 1 ? (
+                                    <p className="break-words leading-snug">
+                                      <span className="mr-2 font-mono text-xs text-slate-400">{i.date}</span>
+                                      <span className="italic leading-relaxed">"{i.text}"</span>
+                                    </p>
+                                  ) : (
+                                    <p className="italic leading-snug break-words">"{i.text}"</p>
+                                  )}
                                 </div>
                                 <ProgressiveActions label={`More actions for touchpoint on ${i.date}`} className="shrink-0">
                                   <button
@@ -537,6 +555,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
               )}
             </div>
           </div>
+
         </div>}
       </div>
     </div>

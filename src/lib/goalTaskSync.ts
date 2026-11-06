@@ -8,7 +8,6 @@ import {
   Habit,
   HabitLog,
   Routine,
-  WorkProject,
   LearningItem,
   Skill,
   Note,
@@ -22,9 +21,7 @@ import {
   HealthAppointment,
   HealthNote,
   Meeting,
-  ValueItem,
   SpiritualPractice,
-  Commitment,
   FocusSession,
   ReminderItem
 } from '../types';
@@ -35,7 +32,6 @@ export type GoalItemType =
   | 'milestone'
   | 'habit'
   | 'routine'
-  | 'project'
   | 'learning'
   | 'skill'
   | 'note'
@@ -49,9 +45,7 @@ export type GoalItemType =
   | 'appointment'
   | 'healthNote'
   | 'meeting'
-  | 'value'
   | 'practice'
-  | 'commitment'
   | 'focusSession'
   | 'reminder';
 
@@ -85,7 +79,6 @@ export interface GoalProgressBreakdown {
     milestones: GoalCategorySummary;
     habits: GoalCategorySummary;
     routines: GoalCategorySummary;
-    projects: GoalCategorySummary;
     learning: GoalCategorySummary;
     skills: GoalCategorySummary;
     notes: GoalCategorySummary;
@@ -99,9 +92,7 @@ export interface GoalProgressBreakdown {
     appointments: GoalCategorySummary;
     healthNotes: GoalCategorySummary;
     meetings: GoalCategorySummary;
-    values: GoalCategorySummary;
     practices: GoalCategorySummary;
-    commitments: GoalCategorySummary;
     focusSessions: GoalCategorySummary;
     reminders: GoalCategorySummary;
   };
@@ -115,20 +106,12 @@ export interface RecalcOverrides {
   updatedMilestoneId?: string;
   updatedMilestoneStatus?: string;
   updatedMilestoneProgress?: number;
-  updatedHabitId?: string;
   updatedRoutineId?: string;
   isRoutineDoneToday?: boolean;
-  updatedProjectId?: string;
-  updatedProjectStatus?: string;
-  updatedProjectProgress?: number;
   updatedLearningId?: string;
   updatedLearningProgress?: number;
   updatedSkillId?: string;
   updatedSkillLevelOrProgress?: string | number;
-  updatedNoteId?: string;
-  updatedJournalId?: string;
-  directChildGoalId?: string;
-  directChildGoalProgress?: number;
   updatedReminderId?: string;
   updatedReminderDone?: boolean;
   updatedAppointmentId?: string;
@@ -146,7 +129,6 @@ export interface GoalRelatedData {
   habits?: Habit[];
   habitLogs?: HabitLog[];
   routines?: Routine[];
-  workProjects?: WorkProject[];
   learningItems?: LearningItem[];
   skills?: Skill[];
   notes?: Note[];
@@ -160,23 +142,19 @@ export interface GoalRelatedData {
   appointments?: HealthAppointment[];
   healthNotes?: HealthNote[];
   meetings?: Meeting[];
-  values?: ValueItem[];
   practices?: SpiritualPractice[];
-  commitments?: Commitment[];
   focusSessions?: FocusSession[];
   reminders?: ReminderItem[];
 }
 
-export type GoalResolutionSources = Pick<GoalRelatedData, 'workProjects' | 'learningItems' | 'skills' | 'routines'>;
+export type GoalResolutionSources = Pick<GoalRelatedData, 'learningItems' | 'skills' | 'routines'>;
 
 export function createTaskGoalResolver(sources: GoalResolutionSources): (task: Task) => string | undefined {
-  const projects = new Map((sources.workProjects || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
   const routines = new Map((sources.routines || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
   const skills = new Map((sources.skills || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
   const learning = new Map((sources.learningItems || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
 
   return task => task.goalId ||
-      (task.projectId ? projects.get(task.projectId) : undefined) ||
       (task.routineId ? routines.get(task.routineId) : undefined) ||
       (task.skillId ? skills.get(task.skillId) : undefined) ||
       (task.learningId ? learning.get(task.learningId) : undefined);
@@ -189,6 +167,7 @@ export function resolveTaskGoalId(task: Task, sources: GoalResolutionSources): s
 export function createHabitGoalResolver(routines: Routine[]): (habit: Habit) => string | undefined {
   const routineGoals = new Map(routines.filter(routine => routine.goalId).map(routine => [routine.id, routine.goalId!]));
   return habit => {
+    if (habit.goalId) return habit.goalId;
     const linkedRoutineId = habit.routineId || habit.linkedRoutineId;
     return linkedRoutineId ? routineGoals.get(linkedRoutineId) : undefined;
   };
@@ -214,7 +193,6 @@ export function computeGoalAggregateBreakdown(
   const habits = data.habits || [];
   const habitLogs = data.habitLogs || [];
   const routines = data.routines || [];
-  const projects = data.workProjects || [];
   const learning = data.learningItems || [];
   const skills = data.skills || [];
   const notes = data.notes || [];
@@ -235,7 +213,7 @@ export function computeGoalAggregateBreakdown(
   const practices = data.practices || [];
   const focusSessions = data.focusSessions || [];
   const reminders = data.reminders || [];
-  const taskGoalId = createTaskGoalResolver({ workProjects: projects, routines, skills, learningItems: learning });
+  const taskGoalId = createTaskGoalResolver({ routines, skills, learningItems: learning });
   const habitGoalId = createHabitGoalResolver(routines);
 
   // Filter linked items
@@ -244,7 +222,6 @@ export function computeGoalAggregateBreakdown(
   const linkedMilestones = milestones.filter(m => m.goalId === goalId);
   const linkedHabits = habits.filter(h => habitGoalId(h) === goalId);
   const linkedRoutines = routines.filter(r => r.goalId === goalId);
-  const linkedProjects = projects.filter(p => p.goalId === goalId);
   const linkedLearning = learning.filter(l => l.goalId === goalId);
   const linkedSkills = skills.filter(s => s.goalId === goalId);
   const linkedNotes = notes.filter(n => n.goalId === goalId);
@@ -362,27 +339,7 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
-  // 6. Projects
-  linkedProjects.forEach(p => {
-    let prog = 0;
-    if (p.status === 'Completed') prog = 100;
-    else if (p.progress !== undefined && p.progress !== null) prog = Number(p.progress) || 0;
-    else if (p.status === 'In Review') prog = 80;
-    else if (p.status === 'Active') prog = 40;
-    else prog = 20;
-
-    prog = Math.max(0, Math.min(100, Math.round(prog)));
-    rawItems.push({
-      id: p.id,
-      type: 'project',
-      typeLabel: 'Deliverable',
-      title: p.name,
-      progress: prog,
-      isCompleted: prog >= 100 || p.status === 'Completed'
-    });
-  });
-
-  // 7. Learning Items
+  // 6. Learning Items
   linkedLearning.forEach(l => {
     const prog = Math.max(0, Math.min(100, Math.round(Number(l.progress) || 0)));
     rawItems.push({
@@ -610,7 +567,6 @@ export function computeGoalAggregateBreakdown(
     'milestone',
     'habit',
     'routine',
-    'project',
     'learning',
     'skill',
     'savingsPlan',
@@ -660,7 +616,6 @@ export function computeGoalAggregateBreakdown(
       milestones: calcCategory('milestone'),
       habits: calcCategory('habit'),
       routines: calcCategory('routine'),
-      projects: calcCategory('project'),
       learning: calcCategory('learning'),
       skills: calcCategory('skill'),
       notes: calcCategory('note'),
@@ -674,9 +629,7 @@ export function computeGoalAggregateBreakdown(
       appointments: calcCategory('appointment'),
       healthNotes: calcCategory('healthNote'),
       meetings: calcCategory('meeting'),
-      values: calcCategory('value'),
       practices: calcCategory('practice'),
-      commitments: calcCategory('commitment'),
       focusSessions: calcCategory('focusSession'),
       reminders: calcCategory('reminder')
     },
@@ -687,9 +640,9 @@ export function computeGoalAggregateBreakdown(
 /**
  * MASTER AGGREGATE RECALCULATION ENGINE
  * Calculates proportional, real-time aggregate progress across linked item categories
- * linked to a Goal (Tasks, Milestones, Habits, Routines, Projects, Learning Tracks, Skills, Notes, Journal,
+ * linked to a Goal (Tasks, Milestones, Habits, Routines, Learning Tracks, Skills, Notes, Journal,
  * Savings Plans, Loans, Investments, Assets, Liabilities, Transactions, Medical Appointments, Clinical Notes,
- * Meetings, Values, Practices, Commitments, Focus, Reminders).
+ * Meetings, Practices, Focus, Reminders).
  * Recursively rolls up progress through the 5-Tier Hierarchy (Atomic 5 -> Nano 4 -> Micro 3 -> Sub 2 -> Main 1).
  */
 export async function recalculateGoalAggregateProgress(
@@ -708,7 +661,6 @@ export async function recalculateGoalAggregateProgress(
     loadedHabits,
     loadedHabitLogs,
     loadedRoutines,
-    loadedProjects,
     loadedLearning,
     loadedSkills,
     loadedNotes,
@@ -722,9 +674,7 @@ export async function recalculateGoalAggregateProgress(
     loadedAppointments,
     loadedHealthNotes,
     loadedMeetings,
-    loadedValues,
     loadedPractices,
-    loadedCommitments,
     loadedFocus,
     loadedReminders
   ] = await Promise.all([
@@ -733,7 +683,6 @@ export async function recalculateGoalAggregateProgress(
     storage.getAll<Habit>('habits'),
     storage.getAll<HabitLog>('habitLogs'),
     storage.getAll<Routine>('routines'),
-    storage.getAll<WorkProject>('workProjects'),
     storage.getAll<LearningItem>('learningItems'),
     storage.getAll<Skill>('skills'),
     storage.getAll<Note>('notes'),
@@ -747,9 +696,7 @@ export async function recalculateGoalAggregateProgress(
     storage.getAll<HealthAppointment>('healthAppointments'),
     storage.getAll<HealthNote>('healthNotes'),
     storage.getAll<Meeting>('meetings'),
-    storage.getAll<ValueItem>('values'),
     storage.getAll<SpiritualPractice>('spiritualPractices'),
-    storage.getAll<Commitment>('commitments'),
     storage.getAll<FocusSession>('focus'),
     storage.getAll<ReminderItem>('reminders')
   ]);
@@ -759,7 +706,6 @@ export async function recalculateGoalAggregateProgress(
   let allHabits = loadedHabits;
   const allHabitLogs = loadedHabitLogs;
   let allRoutines = loadedRoutines;
-  let allProjects = loadedProjects;
   let allLearning = loadedLearning;
   let allSkills = loadedSkills;
   const allNotes = loadedNotes;
@@ -812,18 +758,6 @@ export async function recalculateGoalAggregateProgress(
           completedDates: nextDates
         };
       });
-    }
-
-    if (overrides.updatedProjectId) {
-      allProjects = allProjects.map(p =>
-        p.id === overrides.updatedProjectId
-          ? {
-              ...p,
-              status: overrides.updatedProjectStatus !== undefined ? overrides.updatedProjectStatus : p.status,
-              progress: overrides.updatedProjectProgress !== undefined ? overrides.updatedProjectProgress : p.progress
-            }
-          : p
-      );
     }
 
     if (overrides.updatedLearningId) {
@@ -908,7 +842,6 @@ export async function recalculateGoalAggregateProgress(
       habits: allHabits,
       habitLogs: allHabitLogs,
       routines: allRoutines,
-      workProjects: allProjects,
       learningItems: allLearning,
       skills: allSkills,
       notes: allNotes,
@@ -922,18 +855,18 @@ export async function recalculateGoalAggregateProgress(
       appointments: allAppointments,
       healthNotes: loadedHealthNotes,
       meetings: allMeetings,
-      values: loadedValues,
       practices: loadedPractices,
-      commitments: loadedCommitments,
       focusSessions: loadedFocus,
       reminders: allReminders
     });
 
-    const newProgress = breakdown.hasLinkedItems ? breakdown.totalPercent : (current.progress || 0);
+    const manualProgress = Math.max(0, Math.min(100, Math.round(Number(current.manualProgress ?? current.progress) || 0)));
+    const newProgress = breakdown.progressItemCount > 0 ? breakdown.totalPercent : manualProgress;
     const updated: Goal = {
       ...current,
+      manualProgress,
       progress: newProgress,
-      status: newProgress >= 100 ? 'completed' : 'active',
+      status: newProgress >= 100 ? 'completed' : current.status === 'paused' ? 'paused' : 'active',
       updatedAt: Date.now()
     };
 
@@ -1013,28 +946,9 @@ export async function syncGoalProgressFromMilestones(
  * Recalculate linked goal progress from habits
  */
 export async function syncGoalProgressFromHabits(
-  goalId: string,
-  updatedHabitId?: string
+  goalId: string
 ): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
-  return recalculateGoalAggregateProgress(goalId, {
-    updatedHabitId
-  });
-}
-
-/**
- * Recalculate linked goal progress from work projects
- */
-export async function syncGoalProgressFromProjects(
-  goalId: string,
-  updatedProjectId?: string,
-  updatedProjectStatus?: string,
-  updatedProjectProgress?: number
-): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
-  return recalculateGoalAggregateProgress(goalId, {
-    updatedProjectId,
-    updatedProjectStatus,
-    updatedProjectProgress
-  });
+  return recalculateGoalAggregateProgress(goalId);
 }
 
 /**
@@ -1083,24 +997,18 @@ export async function syncGoalProgressFromRoutines(
  * Recalculate linked goal progress from Notebooks & Knowledge Vault notes
  */
 export async function syncGoalProgressFromNotes(
-  goalId: string,
-  updatedNoteId?: string
+  goalId: string
 ): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
-  return recalculateGoalAggregateProgress(goalId, {
-    updatedNoteId
-  });
+  return recalculateGoalAggregateProgress(goalId);
 }
 
 /**
  * Recalculate linked goal progress from Daily Journal & Philosophical Reflections
  */
 export async function syncGoalProgressFromJournal(
-  goalId: string,
-  updatedJournalId?: string
+  goalId: string
 ): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
-  return recalculateGoalAggregateProgress(goalId, {
-    updatedJournalId
-  });
+  return recalculateGoalAggregateProgress(goalId);
 }
 
 /**
@@ -1154,9 +1062,9 @@ export async function syncGoalProgressFromMeetings(
 }
 
 /**
- * Recalculate linked goal progress from Spiritual & Philosophical Foundations (Values, Practices, Commitments)
+ * Recalculate linked goal progress from Daily Practices
  */
-export async function syncGoalProgressFromSpiritual(
+export async function syncGoalProgressFromPractices(
   goalId: string
 ): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
   return recalculateGoalAggregateProgress(goalId);
@@ -1206,8 +1114,9 @@ export async function syncGoalProgressDirect(
 
   const updatedTarget: Goal = {
     ...targetGoal,
+    manualProgress: clampedProgress,
     progress: clampedProgress,
-    status: clampedProgress >= 100 ? 'completed' : 'active',
+    status: clampedProgress >= 100 ? 'completed' : targetGoal.status === 'paused' ? 'paused' : 'active',
     updatedAt: Date.now()
   };
   goalMap.set(targetGoal.id, updatedTarget);

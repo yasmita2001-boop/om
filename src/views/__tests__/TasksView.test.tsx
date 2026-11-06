@@ -3,6 +3,17 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TasksView } from '../TasksView';
 
+const storageMock = vi.hoisted(() => ({
+  getActiveProfileId: vi.fn(() => 'test-profile'),
+  getSingleton: vi.fn(async () => ({})),
+  setSingleton: vi.fn(async () => undefined)
+}));
+
+vi.mock('../../lib/storage', () => ({
+  storage: storageMock,
+  generateUUID: vi.fn(() => 'generated-id')
+}));
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 let container: HTMLDivElement;
@@ -62,5 +73,35 @@ describe('Tasks view navigation', () => {
     await act(async () => dailyTarget.click());
 
     expect(onSelectWorkAreaSection).toHaveBeenCalledWith('tasks-daily');
+  });
+});
+
+describe('Daily planner Mission links', () => {
+  it('keeps the selected Mission when checkpoint progress is saved', async () => {
+    storageMock.setSingleton.mockClear();
+    await act(async () => {
+      root.render(
+        <TasksView
+          tasks={[]}
+          goals={[]}
+          missions={[{ id: 'mission-1', title: 'Mission', period: 'This month', target: '', action: '', status: 'active', createdAt: 1, updatedAt: 1 }]}
+          dailyPlanner={{ date: '2026-01-01', target: 'Priority', progress: 0, points: [{ id: 'point-1', text: 'Checkpoint', done: false }], wins: [], reflection: [], missionId: 'mission-1' }}
+          activeWorkAreaSection="tasks-daily"
+          onSelectWorkAreaSection={vi.fn()}
+          onRefresh={vi.fn()}
+          onSuccess={vi.fn()}
+        />
+      );
+    });
+
+    const checkpoint = [...container.querySelectorAll<HTMLDivElement>('div')]
+      .find(element => element.className.includes('group flex items-center justify-between') && element.textContent?.includes('Checkpoint'));
+    expect(checkpoint).toBeDefined();
+    await act(async () => checkpoint!.click());
+
+    expect(storageMock.setSingleton).toHaveBeenCalledWith(
+      'appSettings',
+      expect.objectContaining({ dailyPlanner: expect.objectContaining({ missionId: 'mission-1' }) })
+    );
   });
 });

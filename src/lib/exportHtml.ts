@@ -7,7 +7,6 @@ import { getCurrencySymbol } from './currencyDisplay';
  */
 
 import { getLocalDateString } from './dateUtils';
-import watermarkUrl from '../assets/om-lifeos-watermark.png';
 
 function escapeHtml(str: any): string {
   if (str === null || str === undefined) return '';
@@ -17,21 +16,6 @@ function escapeHtml(str: any): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-}
-
-async function loadWatermarkDataUrl(): Promise<string> {
-  const response = await fetch(watermarkUrl);
-  if (!response.ok) throw new Error(`Could not load the watermark image for HTML export (${response.status}).`);
-
-  const image = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === 'string'
-      ? resolve(reader.result)
-      : reject(new Error('Could not encode the watermark image for HTML export.'));
-    reader.onerror = () => reject(reader.error || new Error('Could not read the watermark image for HTML export.'));
-    reader.readAsDataURL(image);
-  });
 }
 
 export async function generateCompleteStandaloneHtml(fullData: Record<string, any>): Promise<string> {
@@ -58,7 +42,6 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
   } as const;
   const icon = (name: keyof typeof iconPaths) =>
     `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name]}</svg>`;
-  const watermarkDataUrl = await loadWatermarkDataUrl();
   const safeDataJson = JSON.stringify(fullData)
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e');
@@ -308,15 +291,6 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
       color: var(--text-main);
       line-height: 1.5;
       transition: background-color 0.2s, color 0.2s;
-    }
-    body::after {
-      content: "";
-      position: fixed;
-      z-index: 9999;
-      inset: 0;
-      background: url("${watermarkDataUrl}") center center / min(68vw, 620px) auto no-repeat;
-      opacity: 0.14;
-      pointer-events: none;
     }
     header {
       position: sticky;

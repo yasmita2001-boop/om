@@ -1,8 +1,8 @@
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { ExpirationPlugin } from 'workbox-expiration';
-import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
+import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
-import { CacheFirst } from 'workbox-strategies';
+import { CacheFirst, NetworkFirst } from 'workbox-strategies';
 
 interface WaitableEvent {
   waitUntil(promise: Promise<unknown>): void;
@@ -10,19 +10,19 @@ interface WaitableEvent {
 
 type ServiceWorkerScope = typeof globalThis & {
   __WB_MANIFEST: Array<string | { url: string; revision?: string | null }>;
-  skipWaiting(): Promise<void>;
-  clients: {
-    claim(): Promise<void>;
-  };
   addEventListener(type: 'activate', listener: (event: WaitableEvent) => void): void;
-  addEventListener(type: 'install', listener: (event: WaitableEvent) => void): void;
 };
 
 const serviceWorker = globalThis as unknown as ServiceWorkerScope;
 
 precacheAndRoute((self as unknown as ServiceWorkerScope).__WB_MANIFEST);
 cleanupOutdatedCaches();
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
+registerRoute(new NavigationRoute(
+  new NetworkFirst({
+    cacheName: 'om-navigation-cache',
+    networkTimeoutSeconds: 3
+  })
+));
 
 registerRoute(
   ({ url }) => url.origin === 'https://fonts.googleapis.com',
@@ -47,12 +47,5 @@ registerRoute(
 );
 
 serviceWorker.addEventListener('activate', event => {
-  event.waitUntil(Promise.all([
-    serviceWorker.clients.claim(),
-    caches.delete('om-theme-wallpapers')
-  ]));
-});
-
-serviceWorker.addEventListener('install', event => {
-  event.waitUntil(serviceWorker.skipWaiting());
+  event.waitUntil(caches.delete('om-theme-wallpapers'));
 });

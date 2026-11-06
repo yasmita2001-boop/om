@@ -73,6 +73,17 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4 text-indigo-500" /> },
   ];
 
+  const selectedNavModule: NavModule = activeModule === 'journal' || activeModule === 'calculator'
+    ? 'notes'
+    : activeModule === 'routine' || activeModule === 'focus'
+      ? 'tasks'
+      : activeModule === 'people' || activeModule === 'spiritual' || activeModule === 'work'
+        ? 'health'
+        : activeModule;
+  const isMoreActive = ['notes', 'finance', 'health', 'things', 'settings'].includes(selectedNavModule)
+    || activeModule === 'routine'
+    || activeModule === 'focus';
+
   const handleSelect = (id: NavModule) => {
     onNavigate(id);
     setIsMoreOpen(false);
@@ -114,7 +125,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
             <div className="grid grid-cols-2 gap-2.5 pt-4">
               {secondaryModules.map(mod => {
-                const isActive = activeModule === mod.id;
+                const isActive = selectedNavModule === mod.id;
                 return (
                   <button
                     key={mod.id}
@@ -144,7 +155,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       {/* Persistent Bottom Bar */}
       <nav className="sanctuary-mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-slate-200/80 bg-white px-1 dark:border-white/[0.08] dark:bg-[#0B0F19] md:hidden transition-colors">
         {primaryTabs.map(tab => {
-          const isActive = activeModule === tab.id;
+          const isActive = selectedNavModule === tab.id;
           return (
             <button
               key={tab.id}
@@ -171,11 +182,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           ref={moreButtonRef}
           onClick={() => setIsMoreOpen(true)}
           className={`flex h-14 flex-1 flex-col items-center justify-center gap-1 py-1.5 px-1 transition-colors cursor-pointer ${
-            secondaryModules.some(m => m.id === activeModule) || activeModule === 'routine' || activeModule === 'focus'
+            isMoreActive
             ? 'font-bold text-indigo-700 dark:text-indigo-300 [&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300'
             : 'text-indigo-800 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200 font-medium'
           }`}
           aria-label="More modules"
+          aria-current={isMoreActive ? 'page' : undefined}
         >
           <div>
             <MoreHorizontal className="h-4 w-4" />

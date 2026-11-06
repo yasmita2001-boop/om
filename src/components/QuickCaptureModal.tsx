@@ -295,7 +295,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder={
-                activeType === 'task' ? 'e.g. Finish quarterly project proposal' :
+                activeType === 'task' ? 'e.g. Finish quarterly proposal' :
                 activeType === 'note' ? 'e.g. System Architecture Notes' :
                 activeType === 'journal' ? 'e.g. Evening Reflection & Wins' :
                 activeType === 'expense' ? 'e.g. Team lunch or cloud hosting' :

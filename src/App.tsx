@@ -5,11 +5,11 @@ import {
   LoanPayment, Investment, SavingsPlan, Asset, Liability,
   InvestmentActivity, CashFlowSchedule,
   Note, JournalEntry, FocusSession, SleepRecord, WaterRecord, NutritionRecord,
-  HealthMeasurement, HealthAppointment, HealthNote, HealthProfile, WorkProject, LearningItem,
-  Meeting, Person, Interaction, ValueItem, SpiritualPractice, Commitment,
+  HealthMeasurement, HealthAppointment, HealthNote, HealthProfile, LearningItem,
+  Meeting, Person, Interaction, SpiritualPractice,
   ThingItem, DocumentItem, WarrantyItem, ReceiptItem, CertificateItem,
   ImportantRecordItem, ReminderItem,
-  CalcHistoryItem, Skill, Course, WorkResponsibility
+  CalcHistoryItem, Skill
 } from './types';
 import { ensureDefaultProfiles, generateUUID, storage } from './lib/storage';
 import type { GoogleUser } from './lib/googleDriveSync';
@@ -61,7 +61,6 @@ const CalculatorView = lazyWithRetry(() => import('./views/CalculatorView').then
 const FinanceView = lazyWithRetry(() => import('./views/FinanceView').then(m => ({ default: m.FinanceView })));
 const HealthView = lazyWithRetry(() => import('./views/HealthView').then(m => ({ default: m.HealthView })));
 const ThingsView = lazyWithRetry(() => import('./views/ThingsView').then(m => ({ default: m.ThingsView })));
-const RecycleBinView = lazyWithRetry(() => import('./views/RecycleBinView').then(m => ({ default: m.RecycleBinView })));
 const SettingsView = lazyWithRetry(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
 
 const ViewFallback: React.FC = () => <ViewSkeleton />;
@@ -221,19 +220,14 @@ function LifeOSApp() {
   const [appointments, setAppointments] = useState<HealthAppointment[]>([]);
   const [healthNotes, setHealthNotes] = useState<HealthNote[]>([]);
 
-  const [workProjects, setWorkProjects] = useState<WorkProject[]>([]);
-  const [workResponsibilities, setWorkResponsibilities] = useState<WorkResponsibility[]>([]);
   const [learningItems, setLearningItems] = useState<LearningItem[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
 
   const [people, setPeople] = useState<Person[]>([]);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
 
-  const [values, setValues] = useState<ValueItem[]>([]);
   const [practices, setPractices] = useState<SpiritualPractice[]>([]);
-  const [commitments, setCommitments] = useState<Commitment[]>([]);
 
   const [things, setThings] = useState<ThingItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -341,17 +335,12 @@ function LifeOSApp() {
         nutriData,
         apptsData,
         hNotesData,
-        projData,
-        respData,
         learnData,
         skillsData,
-        coursesData,
         meetData,
         peopleData,
         interData,
-        valData,
         pracData,
-        commData,
         thingData,
         docData,
         warData,
@@ -389,17 +378,12 @@ function LifeOSApp() {
         getAllForProfile<NutritionRecord>('nutritionRecords'),
         getAllForProfile<HealthAppointment>('healthAppointments'),
         getAllForProfile<HealthNote>('healthNotes'),
-        getAllForProfile<WorkProject>('workProjects'),
-        getAllForProfile<WorkResponsibility>('workResponsibilities'),
         getAllForProfile<LearningItem>('learningItems'),
         getAllForProfile<Skill>('skills'),
-        getAllForProfile<Course>('courses'),
         getAllForProfile<Meeting>('meetings'),
         getAllForProfile<Person>('people'),
         getAllForProfile<Interaction>('interactions'),
-        getAllForProfile<ValueItem>('values'),
         getAllForProfile<SpiritualPractice>('spiritualPractices'),
-        getAllForProfile<Commitment>('commitments'),
         getAllForProfile<ThingItem>('things'),
         getAllForProfile<DocumentItem>('documents'),
         getAllForProfile<WarrantyItem>('warranties'),
@@ -468,17 +452,12 @@ function LifeOSApp() {
       setNutritionRecords([...nutriData]);
       setAppointments([...apptsData]);
       setHealthNotes([...hNotesData]);
-      setWorkProjects([...projData]);
-      setWorkResponsibilities([...respData]);
       setLearningItems([...learnData]);
       setSkills([...skillsData]);
-      setCourses([...coursesData]);
       setMeetings([...meetData]);
       setPeople([...peopleData]);
       setInteractions([...interData]);
-      setValues([...valData]);
       setPractices([...pracData]);
-      setCommitments([...commData]);
       setThings([...thingData]);
       setDocuments([...docData]);
       setWarranties([...warData]);
@@ -583,7 +562,7 @@ function LifeOSApp() {
             themeMode: DEFAULT_APPEARANCE.colorMode,
             accentColor: DEFAULT_APPEARANCE.accentColor,
             notificationsEnabled: true,
-            noteCategories: ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'],
+            noteCategories: ['General', 'Strategy', 'Finance', 'Ideas'],
             calcFavorites: ['EMI / Loan', 'SIP / Investment', 'Date Difference']
           };
     if (currentSettings && !nextSettings.profiles.some(existing => existing.id === nextProfileId)) {
@@ -767,13 +746,14 @@ function LifeOSApp() {
     const targetHabit = habits.find(h => h.id === habitId);
     const goalId = targetHabit ? resolveHabitGoalId(targetHabit, routines) : undefined;
     if (targetHabit && goalId) {
-      await syncGoalProgressFromHabits(goalId, targetHabit.id);
+      await syncGoalProgressFromHabits(goalId);
     }
     loadAllData();
   };
 
   const openTasksCount = tasks.filter(t => !t.done).length;
-  const categoriesList = appSettings?.noteCategories || ['General', 'Strategy', 'Projects', 'Finance', 'Ideas'];
+  const categoriesList = (appSettings?.noteCategories || ['General', 'Strategy', 'Finance', 'Ideas'])
+    .filter(category => category !== 'Projects');
 
   if (isGoogleLocked) {
     return (
@@ -931,7 +911,7 @@ function LifeOSApp() {
       <MobileBottomNav activeModule={activeModule} onNavigate={changeModule} />
 
       <div className="flex flex-1">
-        <main className={`sanctuary-main relative isolate mx-auto w-full max-w-7xl flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-8 md:pb-12 ${activeModule === 'dashboard' ? 'dashboard-canvas' : ''}`}>
+        <main className={`sanctuary-main relative isolate mx-auto w-full max-w-7xl flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-12 ${activeModule === 'dashboard' ? 'dashboard-canvas' : ''}`}>
           <div className="w-full space-y-6">
             <Suspense fallback={<ViewFallback />}>
             {activeModule === 'dashboard' && (
@@ -944,6 +924,10 @@ function LifeOSApp() {
                 accounts={financeAccounts}
                 assets={assets}
                 liabilities={liabilities}
+                loans={loans}
+                investments={investments}
+                investmentActivities={investmentActivities}
+                savingsPlans={savingsPlans}
                 reminders={reminders}
                 onNavigate={changeModule}
                 onToggleTask={handleToggleTask}
@@ -959,8 +943,9 @@ function LifeOSApp() {
               <TasksView
                 tasks={tasks}
                 goals={goals}
+                strategies={strategies}
+                missions={missions}
                 dailyPlanner={appSettings?.dailyPlanner}
-                workProjects={workProjects}
                 learningItems={learningItems}
                 skills={skills}
                 routines={routines}
@@ -1008,7 +993,6 @@ function LifeOSApp() {
                 habits={habits}
                 habitLogs={habitLogs}
                 routines={routines}
-                workProjects={workProjects}
                 learningItems={learningItems}
                 skills={skills}
                 notes={notes}
@@ -1018,12 +1002,18 @@ function LifeOSApp() {
                 healthNotes={healthNotes}
                 meetings={meetings}
                 people={people}
-                values={values}
                 practices={practices}
-                commitments={commitments}
                 focusSessions={focusSessions}
+                healthProfile={healthProfile}
+                things={things}
+                documents={documents}
+                warranties={warranties}
+                receipts={receipts}
+                certificates={certificates}
+                importantRecords={importantRecords}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
+                onNavigate={changeModule}
               />
             )}
 
@@ -1094,6 +1084,7 @@ function LifeOSApp() {
                 liabilities={liabilities}
                 receipts={receipts}
                 goals={goals}
+                mentor={appSettings?.mentor}
                 onNavigate={changeModule}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
@@ -1114,15 +1105,9 @@ function LifeOSApp() {
                 people={people}
                 interactions={interactions}
                 reminders={reminders}
-                values={values}
                 practices={practices}
-                commitments={commitments}
-                workProjects={workProjects}
                 learningItems={learningItems}
-                meetings={meetings}
                 skills={skills}
-                courses={courses}
-                workResponsibilities={workResponsibilities}
                 tasks={tasks}
                 onNavigate={changeModule}
                 onRefresh={loadAllData}
@@ -1135,21 +1120,13 @@ function LifeOSApp() {
                 things={things}
                 documents={documents}
                 warranties={warranties}
+                goals={goals}
                 receipts={receipts}
                 financeAccounts={financeAccounts}
                 financeTransactions={financeTransactions}
                 onNavigate={changeModule}
                 certificates={certificates}
                 importantRecords={importantRecords}
-                onRefresh={loadAllData}
-                onSuccess={showToast}
-                onError={msg => showToast(`⚠️ ${msg}`)}
-              />
-            )}
-
-            {activeModule === 'recycle_bin' && (
-              <RecycleBinView
-                profileId={appSettings?.profileId || 'om-master-profile'}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
                 onError={msg => showToast(`⚠️ ${msg}`)}

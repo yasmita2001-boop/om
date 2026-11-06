@@ -13,7 +13,6 @@ export type NavModule =
   | 'people'
   | 'spiritual'
   | 'things'
-  | 'recycle_bin'
   | 'settings';
 
 export type TaskDomain = 'personal' | 'work' | 'health' | 'finance' | 'spiritual' | 'social' | 'learning';
@@ -48,12 +47,13 @@ export interface Task {
   dueAt?: string;
   date?: string;
   scheduledAt?: string;
-  projectId?: string | null;
   learningId?: string | null;
   skillId?: string | null;
   routineId?: string | null;
   habitId?: string | null;
   goalId?: string | null;
+  strategyId?: string | null;
+  missionId?: string | null;
   done: boolean;
   status: 'open' | 'done' | 'in-progress';
   linkedEntity?: { type: string; id: string } | null;
@@ -73,6 +73,7 @@ export interface DailyPlanner {
   points: { id: string; text: string; done: boolean }[];
   wins: string[];
   reflection: string[];
+  missionId?: string;
 }
 
 export interface Routine {
@@ -128,6 +129,7 @@ export interface Goal {
   date?: string;
   targetDate?: string;
   progress: number;
+  manualProgress?: number;
   category?: string;
   status?: 'active' | 'completed' | 'paused';
   parentId?: string | null;
@@ -135,7 +137,6 @@ export interface Goal {
   level?: 1 | 2 | 3 | 4 | 5;
   order?: number;
   description?: string;
-  autoRollupProgress?: boolean;
   createdAt: number;
   updatedAt: number;
   sync?: SyncMeta;
@@ -172,6 +173,7 @@ export interface KPI {
   current: number;
   unit: string;
   status: string;
+  history?: { value: number; recordedAt: number }[];
   createdAt: number;
   updatedAt: number;
 }
@@ -182,7 +184,10 @@ export interface Mission {
   period: string;
   target: string;
   action: string;
-  status: string;
+  status: 'active' | 'completed' | 'paused' | 'archived' | string;
+  goalId?: string;
+  startDate?: string;
+  endDate?: string;
   note?: string;
   createdAt: number;
   updatedAt: number;
@@ -605,15 +610,6 @@ export interface Liability {
   createdAt?: number;
 }
 
-export interface FinancialGoal {
-  id: string;
-  name: string;
-  target: number;
-  current: number;
-  date?: string;
-  createdAt: number;
-}
-
 export interface HealthProfile {
   name?: string;
   dob?: string;
@@ -678,18 +674,6 @@ export interface HealthNote {
   createdAt: number;
 }
 
-export interface WorkProject {
-  id: string;
-  name: string;
-  client?: string;
-  due?: string;
-  status: string;
-  progress?: number;
-  goalId?: string | null;
-  createdAt: number;
-  updatedAt?: number;
-}
-
 export interface LearningItem {
   id: string;
   title: string;
@@ -706,6 +690,7 @@ export interface Meeting {
   date: string;
   title: string;
   people?: string;
+  personId?: string;
   note?: string;
   status?: 'scheduled' | 'completed' | 'cancelled';
   completed?: boolean;
@@ -733,15 +718,6 @@ export interface Interaction {
   createdAt: number;
 }
 
-export interface ValueItem {
-  id: string;
-  title: string;
-  description: string;
-  goalId?: string | null;
-  createdAt: number;
-  updatedAt: number;
-}
-
 export interface SpiritualPractice {
   id: string;
   name: string;
@@ -752,19 +728,13 @@ export interface SpiritualPractice {
   updatedAt: number;
 }
 
-export interface Commitment {
-  id: string;
-  text: string;
-  goalId?: string | null;
-  createdAt: number;
-}
-
 export interface ThingItem {
   id: string;
   name: string;
   category: string;
   value: number;
   note?: string;
+  goalId?: string;
   fileName?: string;
   fileData?: string;
   fileSize?: string;
@@ -781,6 +751,7 @@ export interface DocumentItem {
   reference?: string;
   date?: string;
   note?: string;
+  goalId?: string;
   fileName?: string;
   fileData?: string;
   fileSize?: string;
@@ -795,6 +766,7 @@ export interface WarrantyItem {
   title: string;
   expiry?: string;
   note?: string;
+  goalId?: string;
   fileName?: string;
   fileData?: string;
   fileSize?: string;
@@ -810,6 +782,7 @@ export interface ReceiptItem {
   date?: string;
   amount?: number;
   note?: string;
+  goalId?: string;
   fileName?: string;
   fileData?: string;
   fileSize?: string;
@@ -825,6 +798,7 @@ export interface CertificateItem {
   title: string;
   expiry?: string;
   note?: string;
+  goalId?: string;
   issuer?: string;
   fileName?: string;
   fileData?: string;
@@ -850,22 +824,6 @@ export interface ReminderItem {
   updatedAt: number;
 }
 
-export interface NotificationItem {
-  id: string;
-  type: string;
-  title: string;
-  message?: string;
-  dueAt?: string;
-  createdAt: number;
-  read?: boolean;
-}
-
-export interface AchievementItem {
-  id: string;
-  title: string;
-  unlockedAt: number;
-}
-
 export interface CalcHistoryItem {
   id: string;
   tool: string;
@@ -881,62 +839,6 @@ export interface SyncMeta {
   deletedAt?: number | null;
 }
 
-export interface MentorRule {
-  id: string;
-  title: string;
-  text: string;
-  status?: string;
-  createdAt?: number;
-}
-
-export interface MentorQuote {
-  id: string;
-  quote: string;
-  author?: string;
-  note?: string;
-  createdAt?: number;
-}
-
-export interface CapitalStrategy {
-  id: string;
-  title: string;
-  target?: number;
-  action?: string;
-  status?: string;
-  note?: string;
-  createdAt?: number;
-}
-
-export interface CapitalPosition {
-  id: string;
-  type: string;
-  amount: number;
-  date?: string;
-  note?: string;
-  createdAt?: number;
-}
-
-export interface CapitalRecord {
-  id: string;
-  title: string;
-  amount: number;
-  date?: string;
-  status?: string;
-  note?: string;
-  createdAt?: number;
-}
-
-export interface WorkResponsibility {
-  id: string;
-  title: string;
-  projectId?: string | null;
-  status: string;
-  priority: string;
-  dueDate?: string;
-  note?: string;
-  createdAt?: number;
-}
-
 export interface Skill {
   id: string;
   name: string;
@@ -950,74 +852,12 @@ export interface Skill {
   updatedAt?: number;
 }
 
-export interface Course {
-  id: string;
-  title: string;
-  provider?: string;
-  progress: number;
-  startDate?: string;
-  endDate?: string;
-  note?: string;
-  createdAt?: number;
-}
-
-export interface LearningProgress {
-  id: string;
-  itemId?: string;
-  date: string;
-  progress: number;
-  note?: string;
-  createdAt?: number;
-}
-
-export interface Relationship {
-  id: string;
-  personId: string;
-  type: string;
-  status?: string;
-  note?: string;
-  createdAt?: number;
-}
-
-export interface ImportantDate {
-  id: string;
-  personId?: string;
-  title: string;
-  date: string;
-  note?: string;
-  createdAt?: number;
-}
-
-export interface RelationshipReminder {
-  id: string;
-  personId?: string;
-  title: string;
-  dueAt: string;
-  repeatRule?: string;
-  status: string;
-  createdAt?: number;
-}
-
-export interface PrincipleItem {
-  id: string;
-  title: string;
-  text?: string;
-  description?: string;
-  createdAt?: number;
-}
-
-export interface DocumentCollection {
-  id: string;
-  title: string;
-  description?: string;
-  createdAt?: number;
-}
-
 export interface ImportantRecordItem {
   id: string;
   title: string;
   date?: string;
   note?: string;
+  goalId?: string;
   fileName?: string;
   fileData?: string;
   fileSize?: string;

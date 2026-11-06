@@ -53,8 +53,11 @@ describe('HeaderDropdown', () => {
     const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Main navigation"]')!;
 
     await act(async () => trigger.click());
-    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    const menuItem = container.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+    menuItem.focus();
+    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
 
     await act(async () => trigger.click());
     await act(async () => document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));

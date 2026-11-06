@@ -20,7 +20,7 @@ const sections = [
   { id: 'milestones', label: 'Milestones', Icon: Layers },
   { id: 'kpis', label: 'KPIs', Icon: TrendingUp },
   { id: 'missions', label: 'Missions', Icon: Flame },
-  { id: 'mentor', label: 'Mentor & Reserves', Icon: ShieldCheck }
+  { id: 'mentor', label: 'Finance Summary', Icon: ShieldCheck }
 ] as const;
 
 export const GoalsSectionSwitcher: React.FC<GoalsSectionSwitcherProps> = ({

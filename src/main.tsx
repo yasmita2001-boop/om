@@ -7,7 +7,22 @@ import { registerSW } from 'virtual:pwa-register';
 
 // Register the PWA service worker after the first paint so it never competes
 // with startup work. Guarded: unsupported/blocked browsers must still open the app.
-const startSW = () => { try { registerSW({ immediate: true }); } catch (e) { console.warn('SW register skipped', e); } };
+const startSW = () => {
+  try {
+    let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
+    updateSW = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        const shouldUpdate = window.confirm(
+          'A new version is ready. Save any unsaved work before updating. Reload now?'
+        );
+        if (shouldUpdate) void updateSW?.(true);
+      },
+    });
+  } catch (e) {
+    console.warn('SW register skipped', e);
+  }
+};
 if (document.readyState === 'complete') startSW();
 else window.addEventListener('load', startSW, { once: true });
 

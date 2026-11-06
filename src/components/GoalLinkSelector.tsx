@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import { Target } from 'lucide-react';
 import { Goal } from '../types';
 import { LinkModeSelector } from './LinkModeSelector';
@@ -13,6 +13,7 @@ interface GoalLinkSelectorProps {
   onGoalChange: (goalId: string) => void;
   label?: string;
   className?: string;
+  children?: ReactNode;
 }
 
 export const GoalLinkSelector: React.FC<GoalLinkSelectorProps> = ({
@@ -22,7 +23,8 @@ export const GoalLinkSelector: React.FC<GoalLinkSelectorProps> = ({
   onModeChange,
   onGoalChange,
   label = 'Goal Link',
-  className = ''
+  className = '',
+  children
 }) => {
   const selectedGoal = goals.find(g => g.id === goalId);
 
@@ -49,6 +51,8 @@ export const GoalLinkSelector: React.FC<GoalLinkSelectorProps> = ({
           }}
         />
       </div>
+
+      {children}
 
       {/* Target Goal Dropdown when Link Goal is active (Matching TasksView) */}
       {mode === 'link' && (

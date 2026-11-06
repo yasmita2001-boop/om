@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { RecurrenceConfig, RecurrenceFrequency, RecurrenceEndType } from '../types';
 import { Repeat, Calendar, AlertCircle } from 'lucide-react';
 import { getRecurrenceDescription, getUpcomingOccurrences, isValidRecurrenceConfig, createDefaultRecurrenceConfig } from '../lib/recurrenceEngine';
+import { getLocalDateString } from '../lib/dateUtils';
 
 interface RecurrenceSelectorProps {
   value: RecurrenceConfig | undefined;
@@ -25,7 +26,7 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
     setConfig(prev => ({ ...prev, ...updates }));
   };
 
-  const dummyTask = { id: 'preview', recurringConfig: config, date: startDate || new Date().toISOString().split('T')[0] };
+  const dummyTask = { id: 'preview', recurringConfig: config, date: startDate || getLocalDateString() };
   const upcomingDates = isEnabled ? getUpcomingOccurrences(dummyTask as any, 3) : [];
   const isValid = isValidRecurrenceConfig(config);
 
@@ -129,7 +130,7 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
                 <p className="text-[10px] font-medium text-blue-600 dark:text-blue-400">Next occurrences:</p>
                 {upcomingDates.map((date, i) => (
                   <p key={i} className="text-[10px] text-blue-700 dark:text-blue-300">
-                    {new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    {new Date(date + 'T00:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
                   </p>
                 ))}
               </div>

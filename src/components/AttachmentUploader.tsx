@@ -14,6 +14,9 @@ export interface StoredAttachmentMeta {
   originDevice?: string; // name or id of originating device
 }
 
+export const isAttachmentSizeAllowed = (file: Pick<File, 'size'>, maxSizeMB: number): boolean =>
+  file.size <= maxSizeMB * 1024 * 1024;
+
 interface AttachmentUploaderProps {
   attachments: StoredAttachmentMeta[];
   onChange: (attachments: StoredAttachmentMeta[]) => void;
@@ -45,7 +48,7 @@ export const AttachmentUploader: React.FC<AttachmentUploaderProps> = ({
       if (newItems.length >= maxFiles) break;
       const file = files[i];
 
-      if (file.size > maxSizeMB * 1024 * 1024) {
+      if (!isAttachmentSizeAllowed(file, maxSizeMB)) {
         alert(`File "${file.name}" exceeds the ${maxSizeMB}MB per-file limit.`);
         continue;
       }
@@ -92,12 +95,28 @@ export const AttachmentUploader: React.FC<AttachmentUploaderProps> = ({
     if (!files || files.length === 0 || !replacingId) return;
 
     const file = files[0];
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
+    if (!isAttachmentSizeAllowed(file, maxSizeMB)) {
+      alert(`File "${file.name}" exceeds the ${maxSizeMB}MB per-file limit.`);
+      setReplacingId(null);
+      if (replaceInputRef.current) replaceInputRef.current.value = '';
+      return;
+    }
+
+    let dataUrl: string;
+    try {
+      dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    } catch (error) {
+      console.error('Could not read the replacement attachment.', error);
+      alert(`Could not read "${file.name}". Please try another file.`);
+      setReplacingId(null);
+      if (replaceInputRef.current) replaceInputRef.current.value = '';
+      return;
+    }
 
     let thumbnailUrl: string | undefined;
     if (file.type.startsWith('image/')) {

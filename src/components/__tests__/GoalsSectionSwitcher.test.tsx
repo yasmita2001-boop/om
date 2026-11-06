@@ -18,7 +18,7 @@ describe('GoalsSectionSwitcher', () => {
     const options = [...container.querySelectorAll<HTMLButtonElement>('[data-goals-section]')];
     expect(options.map(option => option.textContent?.trim())).toEqual([
       'Timeline & Plan (5 delayed)', 'Strategic Goals (3)', 'Strategies (2)',
-      'Milestones (4)', 'KPIs (1)', 'Missions (0)', 'Mentor & Reserves'
+      'Milestones (4)', 'KPIs (1)', 'Missions (0)', 'Finance Summary'
     ]);
     expect(container.textContent).toContain('5 delayed');
     await act(async () => root.unmount());
@@ -54,5 +54,5 @@ const sectionsLabel = (section: GoalsSection) => ({
   milestones: 'Milestones',
   kpis: 'KPIs',
   missions: 'Missions',
-  mentor: 'Mentor & Reserves'
+  mentor: 'Finance Summary'
 }[section]);

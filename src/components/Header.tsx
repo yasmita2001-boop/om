@@ -2,7 +2,6 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Search, Plus, Zap, Moon, Sun, Calendar, ChevronDown, Clock, Sparkles, Mic, LayoutDashboard, CheckSquare, Target, FileText, DollarSign, Heart, Folder, Settings } from 'lucide-react';
 import { NavModule } from '../types';
 import { adToBs, getTodayIso } from '../lib/nepaliDate';
-import { PWAInstallButton } from './PWAInstallButton';
 import { soundEngine } from '../lib/soundEngine';
 import { OmLogoMark } from './OmLogoMark';
 import type { GoogleDriveSyncDropdownProps } from './GoogleDriveSyncDropdown';
@@ -153,9 +152,7 @@ export const Header: React.FC<HeaderProps> = ({
         ? 'health'
         : activeModule === 'calculator'
           ? 'notes'
-          : activeModule === 'recycle_bin'
-            ? 'settings'
-            : activeModule;
+          : activeModule;
   return (
     <header className="command-bar sticky top-0 z-30 flex h-12 w-full items-center justify-between border-b border-slate-200/80 bg-white/95 px-2 sm:px-3 lg:px-6 shadow-[0_2px_12px_rgb(15_23_42/0.035)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0B0F19]/95 dark:shadow-black/10 gap-1 sm:gap-1.5 lg:gap-3">
       {/* Zone 1: Left - Brand Identity & Nepali BS / Gregorian AD Date (Date is placed where search was) */}
@@ -369,9 +366,6 @@ export const Header: React.FC<HeaderProps> = ({
             </>
           )}
         </div>
-
-        {/* PWA Install Button (Windows & Android instant install, iOS instructions) */}
-        <PWAInstallButton />
 
         {/* Theme Toggle Button with Tactile Sound */}
         <button

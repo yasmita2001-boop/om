@@ -1,13 +1,13 @@
 # Om LifeOS
 
-Offline-first personal operating system (tasks, goals, routines, finance, health, notes). Workspace content stays in this browser unless you connect Google Drive; Google Drive is the cloud backup destination. Appearance preferences, including custom backgrounds, stay on each device. Works on phones, tablets and desktops; installable as a PWA.
+Offline-first personal operating system (tasks, goals, routines, finance, health, notes). Workspace content stays in this browser unless you connect Google Drive; Google Drive is the cloud backup destination. Appearance preferences, including custom backgrounds, stay on each device. Works on phones, tablets and desktops.
 
 ## Run
 ```bash
 npm install
 npm run dev            # http://localhost:3000 (local machine only)
 npm run dev -- --host 0.0.0.0 # optional LAN access; use only on a trusted network
-npm run build          # production build -> dist/ (PWA + code-splitting)
+npm run build          # production build -> dist/ (offline service worker + code-splitting)
 npm run build:single   # also writes dist/om-lifeos-complete.html (one file, opens offline anywhere)
 npm run build:local-test # writes dist-local-test/om-lifeos-local-test.html, opening a local guest workspace without Google sign-in
 npm run typecheck      # TypeScript check
@@ -34,8 +34,8 @@ The app starts in a separate local guest workspace that remains usable offline. 
 
 Workspace records are stored in this browser's IndexedDB and Google Drive backups are JSON files. Account-scoped app views prevent accidental cross-account display, but this is not client-side encryption: anyone with access to this browser profile/developer tools or a shared Drive backup can access its contents. Use device security and Google account protections; do not treat this as an encrypted vault.
 
-Permanently deleting Recycle Bin data queues deletion of every matching Om-LifeOS backup file the app can access in the signed-in account's Drive (including trashed duplicates), which also removes those files' revisions, before creating a fresh clean backup. The current least-privilege `drive.file` authorization only covers files created or explicitly opened by this app. If Drive is offline or unavailable, the purge remains queued in that account workspace and is retried on its next successful sync; the app's database reset preserves that pending purge. Browser storage deletion is logical deletion, not a forensic secure erase; SSD wear-leveling and browser-managed storage prevent this PWA from guaranteeing physical erasure.
+Permanently deleting Recycle Bin data queues deletion of every matching Om-LifeOS backup file the app can access in the signed-in account's Drive (including trashed duplicates), which also removes those files' revisions, before creating a fresh clean backup. The current least-privilege `drive.file` authorization only covers files created or explicitly opened by this app. If Drive is offline or unavailable, the purge remains queued in that account workspace and is retried on its next successful sync; the app's database reset preserves that pending purge. Browser storage deletion is logical deletion, not a forensic secure erase; SSD wear-leveling and browser-managed storage prevent this app from guaranteeing physical erasure.
 
 ## Deploy
 - **Vercel:** Import the project with the Vite framework preset, build command `npm run build`, and output directory `dist`.
-- **GitHub Pages:** The workflow in `.github/workflows/deploy.yml` builds and deploys on pushes to `main`. In repository Settings -> Pages, select **GitHub Actions** as the build and deployment source. Relative asset and PWA paths support project-site subpaths.
+- **GitHub Pages:** The workflow in `.github/workflows/deploy.yml` builds and deploys on pushes to `main`. In repository Settings -> Pages, select **GitHub Actions** as the build and deployment source. Relative asset paths support project-site subpaths.

@@ -27,48 +27,30 @@ export default defineConfig(() => {
           return id === '\0om-pwa-register-stub' ? 'export const registerSW = () => () => {};' : null;
         },
       }] : [VitePWA({
-        registerType: 'autoUpdate',
+        // Never replace an active app session without the user choosing to reload.
+        registerType: 'prompt',
         strategies: 'injectManifest',
         srcDir: 'src',
         filename: 'sw.ts',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
-        manifest: {
-          id: './',
-          name: 'Om',
-          short_name: 'Om',
-          description: 'Executive Personal Operating System with unified project timelines, routines, habit architecture, finance, health, and sovereign Google Drive sync.',
-          theme_color: '#4F46E5',
-          background_color: '#0B0F19',
-          display: 'standalone',
-          orientation: 'any',
-          start_url: './',
-          scope: './',
-          icons: [
-            {
-              src: 'pwa-192x192.png',
-              sizes: '192x192',
-              type: 'image/png',
-              purpose: 'any',
-            },
-            {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any',
-            },
-            {
-              src: 'pwa-maskable-512x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'maskable',
-            },
-          ],
-        },
+        includeAssets: [],
+        manifest: false,
         injectManifest: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           globIgnores: ['**/om-lifeos-complete.html', '**/vendor-firebase-*.js'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           rollupFormat: 'es',
+        },
+        integration: {
+          configureCustomSWViteBuild(inlineConfig) {
+            const output = inlineConfig.build?.rollupOptions?.output;
+            if (!output || Array.isArray(output)) return;
+            const workerOutput = output as typeof output & {
+              inlineDynamicImports?: boolean;
+              codeSplitting?: boolean;
+            };
+            delete workerOutput.inlineDynamicImports;
+            workerOutput.codeSplitting = false;
+          },
         },
         devOptions: {
           enabled: false,

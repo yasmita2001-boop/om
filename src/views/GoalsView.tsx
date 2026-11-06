@@ -2349,7 +2349,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                             {/* LEVEL 2: SUB GOALS CONTAINER */}
                             {!isMainCollapsed && childSubGoals.length > 0 && (
-                              <div className="ml-0.5 sm:ml-3 pl-1 sm:pl-3.5 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-2 pt-1 min-w-0">
+                              <div className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-2 pt-1 min-w-0">
                                 {childSubGoals.map((subGoal, subIndex) => {
                                   const childMicroGoals = getMicroGoalsOf(subGoal.id);
                                   const isSubCollapsed = Boolean(collapsedGoalIds[subGoal.id]);
@@ -2358,7 +2358,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   return (
                                     <div
                                       key={subGoal.id}
-                                      className="goal-tree-card goal-tree-card--sub rounded-xl border border-slate-200/80 bg-slate-50/50 p-2 sm:p-3.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-2 sm:space-y-2.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
+                                      className="goal-tree-card goal-tree-card--sub rounded-xl border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2 dark:border-slate-800 dark:bg-slate-800/30 space-y-2 sm:space-y-2.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                     >
                                       {/* Sub Goal Header */}
                                       <div className="space-y-1 min-w-0">
@@ -2470,7 +2470,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                                       {/* LEVEL 3: MICRO GOALS CONTAINER */}
                                       {!isSubCollapsed && childMicroGoals.length > 0 && (
-                                        <div className="ml-0.5 sm:ml-2.5 pl-1 sm:pl-3 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1.5 sm:space-y-2 pt-1 min-w-0">
+                                        <div className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1.5 sm:space-y-2 pt-1 min-w-0">
 
                                           {childMicroGoals.map((microGoal, microIndex) => {
                                             const microSeqBadge = hierarchySequenceById.get(microGoal.id) || `${subSeqBadge}.${microIndex + 1}`;
@@ -2481,7 +2481,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                             return (
                                               <div
                                                 key={microGoal.id}
-                                                className="goal-tree-card goal-tree-card--micro rounded-lg border border-slate-200/80 bg-slate-50/50 p-2 sm:p-3 dark:border-slate-800 dark:bg-slate-800/30 space-y-1.5 sm:space-y-2 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
+                                                className="goal-tree-card goal-tree-card--micro rounded-lg border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2 dark:border-slate-800 dark:bg-slate-800/30 space-y-1.5 sm:space-y-2 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                               >
                                                 {/* Micro Goal Header */}
                                                 <div className="space-y-1 min-w-0">
@@ -2587,7 +2587,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                     </button>
 
                                                     {!isMicroCollapsed && (
-                                                      <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2.5 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 sm:space-y-1.5 pt-1 min-w-0">
+                                                      <div className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 sm:space-y-1.5 pt-1 min-w-0">
                                                         {childNanoGoals.map((nanoGoal, nanoIndex) => {
                                                           const nanoSeqBadge = hierarchySequenceById.get(nanoGoal.id) || `${microSeqBadge}.${nanoIndex + 1}`;
                                                           const childAtomicGoals = getAtomicGoalsOf(nanoGoal.id);
@@ -2597,7 +2597,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                           return (
                                                             <div
                                                               key={nanoGoal.id}
-                                                              className="goal-tree-card goal-tree-card--nano rounded-lg border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-1 sm:space-y-1.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
+                                                              className="goal-tree-card goal-tree-card--nano rounded-lg border border-slate-200/80 bg-slate-50/50 p-1 sm:p-1.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-1 sm:space-y-1.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                                             >
                                                               {/* Nano Goal Header */}
                                                               <div className="space-y-1 min-w-0">
@@ -2703,7 +2703,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                   </button>
 
                                                                   {!isNanoCollapsed && (
-                                                                    <div className="ml-0.5 sm:ml-2 pl-1 sm:pl-2 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 pt-1 min-w-0">
+                                                                    <div className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 pt-1 min-w-0">
                                                                       {childAtomicGoals.map((atomicGoal, atomicIndex) => {
                                                                         const atomicSeqBadge = hierarchySequenceById.get(atomicGoal.id) || `${nanoSeqBadge}.${atomicIndex + 1}`;
                                                                         const atomicBreakdown = getGoalBreakdown(atomicGoal.id);
@@ -2711,7 +2711,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                         return (
                                                                           <div
                                                                             key={atomicGoal.id}
-                                                                            className="goal-tree-card goal-tree-card--atomic group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 rounded-md border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/30 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all min-w-0"
+                                                                            className="goal-tree-card goal-tree-card--atomic group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 rounded-md border border-slate-200/80 bg-slate-50/50 p-1 sm:p-1.5 text-xs dark:border-slate-800 dark:bg-slate-800/30 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all min-w-0"
                                                                           >
                                                                             <div className="flex items-start sm:items-center gap-2 min-w-0 w-full sm:flex-1">
                                                                               {/* Manual completion only makes sense for atomic goals with no productive

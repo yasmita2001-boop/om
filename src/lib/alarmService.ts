@@ -7,7 +7,7 @@ export interface FocusAlarm {
   id: string;
   time: string; // "HH:mm" 24-hour format
   label: string;
-  ringtone: string; // 'zen_bell' | 'digital_pulse' | etc. | 'custom'
+  ringtone: string; // 'om_namah_shivay' | 'cosmic_arp' | etc. | 'custom'
   enabled: boolean;
   days: number[]; // 0=Sun, 1=Mon, ..., 6=Sat (empty array = one-time today/tomorrow)
   snoozedUntil?: number | null;

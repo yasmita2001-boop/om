@@ -1391,7 +1391,7 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
       title: `OVERDUE ALERT: ${title}`,
       subtitle: subtitle || 'Item is past its scheduled deadline. Immediate execution required.',
       timeStr: 'NOW',
-      ringtone: 'digital_pulse'
+      ringtone: 'om_namah_shivay'
     });
     onSuccess(`Urgent alarm sounding for "${title}"!`);
   };
@@ -1403,7 +1403,7 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
     }
 
     let armed = 0;
-    const armItem = async (title: string, linkedId: string, ringtone: string = 'digital_pulse') => {
+    const armItem = async (title: string, linkedId: string, ringtone: string = 'om_namah_shivay') => {
       if (reminderMap.has(linkedId)) return;
       const targetTimeStr = getLocalDateTimeStr(5 + armed * 2);
       await storage.put('reminders', {
@@ -1421,11 +1421,11 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
       armed++;
     };
 
-    for (const t of delayedTasks) await armItem(t.title, t.id, 'digital_pulse');
-    for (const m of delayedMilestones) await armItem(m.title, m.id, 'classic_clock');
-    for (const l of delayedLearning) await armItem(l.title, l.id, 'morning_chime');
-    for (const s of delayedSkills) await armItem(s.name, s.id, 'zen_bell');
-    for (const r of delayedRoutines) await armItem(r.name, r.id, 'zen_bell');
+    for (const t of delayedTasks) await armItem(t.title, t.id, 'om_namah_shivay');
+    for (const m of delayedMilestones) await armItem(m.title, m.id, 'om_namah_shivay');
+    for (const l of delayedLearning) await armItem(l.title, l.id, 'om_namah_shivay');
+    for (const s of delayedSkills) await armItem(s.name, s.id, 'om_namah_shivay');
+    for (const r of delayedRoutines) await armItem(r.name, r.id, 'om_namah_shivay');
 
     onSuccess(`Armed reminder alarms for ${armed} delayed items across all streams!`);
     onRefresh();

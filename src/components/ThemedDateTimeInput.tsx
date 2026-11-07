@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
 
 type DateTimeInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> & {
   type: 'date' | 'time';
@@ -42,9 +42,11 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
   const parsedDate = isDate ? parseDate(currentValue) : null;
   const [isOpen, setIsOpen] = useState(false);
   const [opensAbove, setOpensAbove] = useState(false);
-  const [isCompact, setIsCompact] = useState(false);
+  const [openMenu, setOpenMenu] = useState<'year' | 'month' | null>(null);
   const [popoverOffsetX, setPopoverOffsetX] = useState(0);
   const [popoverMaxHeight, setPopoverMaxHeight] = useState<number | undefined>();
+  const yearMenuRef = useRef<HTMLDivElement>(null);
+  const monthMenuRef = useRef<HTMLDivElement>(null);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const date = parsedDate || new Date();
     return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -55,10 +57,23 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const closeOnOutsideClick = (event: MouseEvent) => {
-      if (!(event.target instanceof Node) || !wrapperRef.current?.contains(event.target)) setIsOpen(false);
+      if (!(event.target instanceof Node)) return;
+      if (!wrapperRef.current?.contains(event.target)) {
+        setIsOpen(false);
+        setOpenMenu(null);
+        return;
+      }
+      if (!yearMenuRef.current?.contains(event.target) && !monthMenuRef.current?.contains(event.target)) {
+        setOpenMenu(null);
+      }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
+      if (event.key !== 'Escape') return;
+      if (openMenu) {
+        setOpenMenu(null);
+        return;
+      }
+      setIsOpen(false);
     };
     document.addEventListener('mousedown', closeOnOutsideClick);
     document.addEventListener('keydown', closeOnEscape);
@@ -66,7 +81,17 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
       document.removeEventListener('mousedown', closeOnOutsideClick);
       document.removeEventListener('keydown', closeOnEscape);
     };
+  }, [isOpen, openMenu]);
+
+  useEffect(() => {
+    if (!isOpen) setOpenMenu(null);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const wrap = openMenu === 'year' ? yearMenuRef.current : monthMenuRef.current;
+    wrap?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest' });
+  }, [openMenu]);
 
   useEffect(() => {
     if (!isDate || !parsedDate) return;
@@ -87,6 +112,29 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
       new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)
     );
   }, [isDate, visibleMonth]);
+
+  const yearOptions = useMemo(
+    () => Array.from({ length: 26 }, (_, index) => 2020 + index),
+    []
+  );
+
+  const monthOptions = useMemo(
+    () => Array.from({ length: 12 }, (_, index) => new Date(2000, index, 1).toLocaleDateString(undefined, { month: 'long' })),
+    []
+  );
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
+    if (items.length === 0) return;
+    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    const nextIndex = currentIndex === -1
+      ? (delta === 1 ? 0 : items.length - 1)
+      : Math.min(items.length - 1, Math.max(0, currentIndex + delta));
+    items[nextIndex]?.focus();
+  };
 
   const emitValue = (nextValue: string) => {
     const input = inputRef.current;
@@ -122,8 +170,10 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
 
   useLayoutEffect(() => {
     if (!isOpen) return;
+    let cancelled = false;
 
     const positionPopover = () => {
+      if (cancelled) return;
       const bounds = wrapperRef.current?.getBoundingClientRect();
       const popover = popoverRef.current;
       if (!bounds || !popover) return;
@@ -132,19 +182,32 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
       const safeTop = Math.max(8, headerBottom + 8);
       const spaceAbove = Math.max(0, bounds.top - safeTop - 8);
       const spaceBelow = Math.max(0, window.innerHeight - bounds.bottom - 8);
+      // The calendar always uses the compact row sizing, so this measurement is
+      // stable and does not depend on which trigger opened the popover.
       const requiredHeight = popover.scrollHeight;
       const openAbove = spaceBelow < requiredHeight && spaceAbove > spaceBelow;
       const availableHeight = openAbove ? spaceAbove : spaceBelow;
 
       setOpensAbove(openAbove);
       setPopoverMaxHeight(Math.max(120, availableHeight));
-      setIsCompact(isDate && requiredHeight > availableHeight);
     };
 
     positionPopover();
     window.addEventListener('resize', positionPopover);
     window.addEventListener('scroll', positionPopover, true);
+
+    // Re-measure once layout and fonts settle; web fonts can change row heights
+    // after the first pass. Repeating the measurement is safe because it is
+    // independent of the previously applied state.
+    const frame = typeof window.requestAnimationFrame === 'function'
+      ? window.requestAnimationFrame(positionPopover)
+      : null;
+    const fontSet = typeof document !== 'undefined' ? document.fonts : undefined;
+    fontSet?.ready?.then(() => positionPopover()).catch(() => undefined);
+
     return () => {
+      cancelled = true;
+      if (frame !== null) window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', positionPopover);
       window.removeEventListener('scroll', positionPopover, true);
     };
@@ -204,7 +267,7 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
       {isOpen && (
         <div
           ref={popoverRef}
-          className={`om-datetime-popover ${isDate ? 'om-datetime-calendar' : 'om-datetime-time'}${opensAbove ? ' is-above' : ''}${isCompact ? ' is-compact' : ''}`}
+          className={`om-datetime-popover ${isDate ? 'om-datetime-calendar' : 'om-datetime-time'}${opensAbove ? ' is-above' : ''}${openMenu ? ' is-menu-open' : ''}`}
           role="dialog"
           aria-label={isDate ? 'Choose a date' : 'Choose a time'}
           style={{ left: `${popoverOffsetX}px`, maxHeight: popoverMaxHeight }}
@@ -212,9 +275,70 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
           {isDate ? (
             <>
               <div className="om-datetime-header">
-                <strong>
-                  {visibleMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-                </strong>
+                <div className="om-datetime-year-month">
+                  <div className="om-datetime-select-wrap" ref={yearMenuRef}>
+                    <button
+                      type="button"
+                      className="om-datetime-select"
+                      aria-label="Select year"
+                      aria-haspopup="listbox"
+                      aria-expanded={openMenu === 'year'}
+                      onClick={() => setOpenMenu(menu => (menu === 'year' ? null : 'year'))}
+                    >
+                      <span>{visibleMonth.getFullYear()}</span>
+                      <ChevronDown size={14} aria-hidden="true" />
+                    </button>
+                    {openMenu === 'year' && (
+                      <div className="om-datetime-select-menu" role="listbox" aria-label="Years" onKeyDown={handleMenuKeyDown}>
+                        {yearOptions.map(year => (
+                          <button
+                            key={year}
+                            type="button"
+                            role="option"
+                            aria-selected={year === visibleMonth.getFullYear()}
+                            onClick={() => {
+                              setVisibleMonth(month => new Date(year, month.getMonth(), 1));
+                              setOpenMenu(null);
+                            }}
+                          >
+                            {year}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="om-datetime-select-wrap" ref={monthMenuRef}>
+                    <button
+                      type="button"
+                      className="om-datetime-select"
+                      aria-label="Select month"
+                      aria-haspopup="listbox"
+                      aria-expanded={openMenu === 'month'}
+                      onClick={() => setOpenMenu(menu => (menu === 'month' ? null : 'month'))}
+                    >
+                      <span>{monthOptions[visibleMonth.getMonth()]}</span>
+                      <ChevronDown size={14} aria-hidden="true" />
+                    </button>
+                    {openMenu === 'month' && (
+                      <div className="om-datetime-select-menu" role="listbox" aria-label="Months" onKeyDown={handleMenuKeyDown}>
+                        {monthOptions.map((monthLabel, index) => (
+                          <button
+                            key={monthLabel}
+                            type="button"
+                            role="option"
+                            aria-selected={index === visibleMonth.getMonth()}
+                            onClick={() => {
+                              setVisibleMonth(month => new Date(month.getFullYear(), index, 1));
+                              setOpenMenu(null);
+                            }}
+                          >
+                            {monthLabel}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <span className="om-datetime-nav">
                   <button
                     type="button"

@@ -2223,6 +2223,8 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   border: 1px solid var(--om-glass-border, var(--om-line));
   border-radius: 0.9rem;
   background: var(--om-glass-surface, var(--om-card));
@@ -2238,82 +2240,203 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   bottom: calc(100% + 0.35rem);
 }
 
+/* Keep the month navigation and the Clear/Today actions reachable even when
+   the calendar is taller than the available viewport space. */
+.om-datetime-popover .om-datetime-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--om-card);
+}
+
+.om-datetime-popover .om-datetime-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--om-card);
+}
+
 @keyframes om-datetime-enter {
   from { opacity: 0; transform: translateY(-3px) scale(0.99); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.om-datetime-header,
-.om-datetime-footer {
+.sanctuary-main .om-datetime-header,
+.sanctuary-main .om-datetime-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+  padding: 0.25rem 0.6rem !important;
+}
+
+.sanctuary-main .om-datetime-header {
+  border-bottom: 1px solid var(--om-line) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 7%, var(--om-card)) !important;
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+}
+
+.sanctuary-main .om-datetime-footer {
+  border-top: 1px solid var(--om-line) !important;
+}
+
+.sanctuary-main .om-datetime-popover .om-datetime-footer button,
+.sanctuary-main .om-datetime-popover .om-datetime-nav button {
+  display: inline-flex !important;
+  min-height: 2rem !important;
+  min-width: 2rem !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.5rem !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 8%, transparent) !important;
+  color: var(--color-brand, #b88648) !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+}
+
+.sanctuary-main .om-datetime-popover .om-datetime-footer button:hover,
+.sanctuary-main .om-datetime-popover .om-datetime-nav button:hover {
+  border-color: var(--om-line) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 15%, transparent) !important;
+}
+
+.sanctuary-main .om-datetime-nav {
+  display: inline-flex !important;
+  gap: 0.25rem !important;
+}
+
+.sanctuary-main .om-datetime-year-month {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+}
+
+.sanctuary-main .om-datetime-popover .om-datetime-select {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.25rem !important;
+  height: 2rem !important;
+  min-width: 4.5rem !important;
+  padding: 0 0.45rem !important;
+  font-size: 0.8rem !important;
+  line-height: 1 !important;
+  font-weight: 600 !important;
+  border: 1px solid var(--om-line) !important;
+  border-radius: 0.5rem !important;
+  background: var(--om-card-soft) !important;
+  color: var(--om-ink) !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+}
+
+.sanctuary-main .om-datetime-popover .om-datetime-select:hover,
+.sanctuary-main .om-datetime-popover .om-datetime-select:focus-visible {
+  border-color: var(--color-brand, #b88648) !important;
+  background: var(--om-card) !important;
+  outline: none !important;
+}
+
+.om-datetime-select-wrap {
+  position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.65rem 0.75rem;
 }
 
-.om-datetime-header {
-  border-bottom: 1px solid var(--om-line);
-  background: color-mix(in srgb, var(--color-brand, #b88648) 7%, var(--om-card));
-  font-size: 0.8rem;
-  font-weight: 700;
+.om-datetime-select > span {
+  max-width: 6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.om-datetime-footer {
-  border-top: 1px solid var(--om-line);
+.om-datetime-popover.is-menu-open {
+  overflow: visible;
 }
 
-.om-datetime-footer button,
-.om-datetime-nav button {
-  display: inline-flex;
-  min-height: 2rem;
-  min-width: 2rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid transparent;
-  border-radius: 0.55rem;
+.om-datetime-select-menu {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  z-index: 6;
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  max-width: 9rem;
+  max-height: 11.5rem;
+  flex-direction: column;
+  gap: 0.1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--om-line);
+  border-radius: 0.6rem;
+  padding: 0.25rem;
+  background: var(--om-card-base, var(--om-card));
+  box-shadow: 0 10px 24px rgb(15 23 42 / 35%);
+  scrollbar-width: thin;
+}
+
+.om-datetime-popover::-webkit-scrollbar,
+.om-datetime-time-list::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.om-datetime-select-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.om-datetime-select-menu::-webkit-scrollbar-track {
   background: transparent;
-  color: var(--color-brand, #b88648);
-  font-size: 0.75rem;
-  font-weight: 700;
+}
+
+.om-datetime-select-menu::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgba(148, 163, 184, 0.35);
+}
+
+.om-datetime-select-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
+
+.om-datetime-select-menu button {
+  min-height: 1.7rem;
+  padding: 0 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--om-ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.om-datetime-footer button:hover,
-.om-datetime-nav button:hover {
-  border-color: var(--om-line);
-  background: color-mix(in srgb, var(--color-brand, #b88648) 10%, var(--om-card));
+.om-datetime-select-menu button:hover {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 14%, var(--om-card));
 }
 
-.om-datetime-nav {
-  display: inline-flex;
-  gap: 0.25rem;
+.om-datetime-select-menu button[aria-selected="true"] {
+  border-color: var(--color-brand, #b88648);
+  background: var(--color-brand, #b88648);
+  color: var(--om-on-accent, #fff);
 }
 
 .om-datetime-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.15rem;
-  padding: 0.55rem;
-}
-
-.om-datetime-calendar.is-compact .om-datetime-calendar-grid {
   gap: 0.05rem;
   padding: 0.3rem;
 }
 
-.om-datetime-calendar.is-compact .om-datetime-weekday {
-  min-height: 1.25rem;
-}
-
-.om-datetime-calendar.is-compact .om-datetime-day {
-  min-height: 1.55rem;
-  aspect-ratio: auto;
-}
-
 .om-datetime-weekday {
   display: grid;
-  min-height: 1.75rem;
+  min-height: 1.25rem;
   place-items: center;
   color: var(--om-ink-soft);
   font-size: 0.68rem;
@@ -2323,7 +2446,7 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
 .om-datetime-day {
   display: grid;
   min-width: 0;
-  aspect-ratio: 1;
+  min-height: 1.55rem;
   place-items: center;
   border: 1px solid transparent;
   border-radius: 0.45rem;
@@ -2383,7 +2506,8 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   border: 1px solid var(--om-line);
   border-radius: 0.65rem;
   background: color-mix(in srgb, var(--om-card-soft) 72%, transparent);
-  scrollbar-color: var(--color-brand, #b88648) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .om-datetime-time-list button {

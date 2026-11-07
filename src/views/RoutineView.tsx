@@ -475,7 +475,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       dueAt: today,
       goalId: r.goalId || goals[0]?.id || '',
       armAlarm: true,
-      ringtone: 'zen_bell',
+      ringtone: 'om_namah_shivay',
       alarmTime: r.startTime || '08:00'
     });
   };
@@ -490,7 +490,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       dueAt: today,
       goalId: resolveHabitGoalId(h, routines) || '',
       armAlarm: true,
-      ringtone: 'morning_chime',
+      ringtone: 'om_namah_shivay',
       alarmTime: (h.times && h.times[0]) || '09:00'
     });
   };
@@ -550,7 +550,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       title: `DELAY ALERT: ${title}`,
       subtitle: subtitle || 'Routine block is past scheduled time window!',
       timeStr: 'NOW',
-      ringtone: 'zen_bell'
+      ringtone: 'om_namah_shivay'
     });
     onSuccess(`Urgent alarm ringing for "${title}"!`);
   };
@@ -670,7 +670,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     alarmService.addFocusAlarm({
       time: alarmTime,
       label: routine.name,
-      ringtone: 'zen_bell',
+      ringtone: 'om_namah_shivay',
       enabled: true,
       days,
       linkedRoutineId: routine.id,

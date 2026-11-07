@@ -988,7 +988,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
             <div className="grid gap-3 pt-1 [grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr))]">
               {[...alarmsList].sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(alarm => {
                   const ringtoneMeta = BUILTIN_RINGTONES.find(r => r.id === alarm.ringtone) || {
-                    name: alarm.ringtone === 'custom' ? 'Custom Ringtone' : 'Zen Bell'
+                    name: alarm.ringtone === 'custom' ? 'Custom Ringtone' : 'Om Namah Shivay'
                   };
                   return (
                     <div
@@ -1207,7 +1207,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                       onClick={() => {
                         alarmAudio.removeCustomRingtone();
                         setCustomRingtone(null);
-                        setSelectedDefaultRingtone('zen_bell');
+                        setSelectedDefaultRingtone('om_namah_shivay');
                         onSuccess('Custom ringtone removed');
                       }}
                       className="ringtone-flat-icon-action p-2 text-rose-600 cursor-pointer"

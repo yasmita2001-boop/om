@@ -86,7 +86,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
     dueAt: today,
     goalId: goals[0]?.id || '',
     armAlarm: true,
-    ringtone: 'digital_pulse',
+    ringtone: 'om_namah_shivay',
     alarmTime: '09:00'
   });
 
@@ -100,7 +100,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [learnArmGenesis, setLearnArmGenesis] = useState(false);
   const [learnTaskPriority, setLearnTaskPriority] = useState<TaskPriority>('Medium');
   const [learnAlarmTime, setLearnAlarmTime] = useState('10:00');
-  const learnRingtone = 'morning_chime';
+  const learnRingtone = 'om_namah_shivay';
 
   // New Item Forms: Skills
   const [skillName, setSkillName] = useState('');
@@ -112,7 +112,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [skillArmGenesis, setSkillArmGenesis] = useState(false);
   const [skillTaskPriority, setSkillTaskPriority] = useState<TaskPriority>('Medium');
   const [skillAlarmTime, setSkillAlarmTime] = useState('18:00');
-  const skillRingtone = 'zen_bell';
+  const skillRingtone = 'om_namah_shivay';
 
   // Quick Preset Alarm Modal
   const [quickAlarmItem, setQuickAlarmItem] = useState<{
@@ -124,7 +124,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [alarmPresetChoice, setAlarmPresetChoice] = useState<'5m' | '15m' | '30m' | '1h' | 'tonight' | 'tomorrow' | 'custom'>('15m');
   const quickCustomDate = today;
   const quickCustomTime = '18:00';
-  const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('digital_pulse');
+  const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('om_namah_shivay');
 
   // Edit & Delete modal states
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -261,7 +261,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       dueAt: today,
       goalId: item.goalId || goals[0]?.id || '',
       armAlarm: true,
-      ringtone: 'morning_chime',
+      ringtone: 'om_namah_shivay',
       alarmTime: '10:00'
     });
   };
@@ -276,7 +276,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       dueAt: today,
       goalId: s.goalId || goals[0]?.id || '',
       armAlarm: true,
-      ringtone: 'zen_bell',
+      ringtone: 'om_namah_shivay',
       alarmTime: '18:00'
     });
   };
@@ -336,7 +336,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       title: `DELAY ALERT: ${title}`,
       subtitle: subtitle || 'Deliverable is overdue beyond scheduled date!',
       timeStr: 'NOW',
-      ringtone: 'digital_pulse'
+      ringtone: 'om_namah_shivay'
     });
     onSuccess(`Urgent alarm ringing for "${title}"!`);
   };

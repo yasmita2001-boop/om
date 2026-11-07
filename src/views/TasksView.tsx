@@ -82,12 +82,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   // Progressive rendering: very long rosters choke scroll/input latency.
   const [quickCustomTime, setQuickCustomTime] = useState('18:00');
-  const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('digital_pulse');
+  const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('om_namah_shivay');
 
   // Task Genesis Creation Alarm options in Task Roster
   const [armTaskGenesisAlarm, setArmTaskGenesisAlarm] = useState(false);
   const [taskGenesisAlarmTime, setTaskGenesisAlarmTime] = useState('09:00');
-  const [taskGenesisRingtone, setTaskGenesisRingtone] = useState('digital_pulse');
+  const [taskGenesisRingtone, setTaskGenesisRingtone] = useState('om_namah_shivay');
 
   const handleTriggerUrgentAlarm = (taskTitle: string, subtitle?: string) => {
     alarmService.triggerAlarm({
@@ -96,7 +96,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       title: `DELAY ALERT: ${taskTitle}`,
       subtitle: subtitle || 'Overdue action unit! Urgent execution required.',
       timeStr: 'NOW',
-      ringtone: 'digital_pulse'
+      ringtone: 'om_namah_shivay'
     });
     onSuccess(`Urgent alarm ringing for "${taskTitle}"!`);
   };

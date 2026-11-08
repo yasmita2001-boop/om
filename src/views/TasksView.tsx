@@ -9,10 +9,13 @@ import {
 import { EmptyState } from '../components/EmptyState';
 import {
   Task, TaskDomain, TaskPriority, DailyPlanner, Goal,
-  LearningItem, Skill, Routine, Habit, HabitLog, ReminderItem, Strategy, Mission
+  LearningItem, Skill, Routine, Habit, HabitLog, ReminderItem, Strategy, Mission,
+  RecurrenceConfig
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { resolveTaskGoalId, syncGoalProgressFromTasks } from '../lib/goalTaskSync';
+import { applyTaskCompletionEffects } from '../lib/recurrenceEngine';
+import { RecurrenceSelector } from '../components/RecurrenceSelector';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { globalTextReader } from '../lib/voiceService';
 import { alarmService } from '../lib/alarmService';
@@ -24,6 +27,7 @@ import { TaskRoutineFocusSwitcher, type WorkAreaSection } from '../components/Ta
 import { GoalPicker } from '../components/GoalPicker';
 import { soundEngine } from '../lib/soundEngine';
 import { getLocalDateString, getLocalDateTimeString } from '../lib/dateUtils';
+import { CardCloseButton } from '../components/CardCloseButton';
 
 interface TasksViewProps {
   tasks: Task[];
@@ -64,6 +68,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   learningItems = [],
   skills = [],
   routines = [],
+  reminders = [],
   activeWorkAreaSection,
   onSelectWorkAreaSection,
   onRefresh,
@@ -125,19 +130,13 @@ export const TasksView: React.FC<TasksViewProps> = ({
       targetDueAt = `${quickCustomDate}T${quickCustomTime}`;
     }
 
-    await storage.put('reminders', {
-      id: generateUUID(),
-      title: `Task Reminder: ${quickAlarmItem.title}`,
-      dueAt: targetDueAt,
-      repeatRule: 'none',
-      status: 'open',
-      linkedType: 'task',
-      linkedId: quickAlarmItem.id,
-      alarmEnabled: true,
-      ringtone: quickAlarmRingtone,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    });
+    void alarmService.requestNotificationPermission();
+    await saveTaskReminder(
+      quickAlarmItem.id,
+      `Task Reminder: ${quickAlarmItem.title}`,
+      targetDueAt,
+      quickAlarmRingtone
+    );
 
     onSuccess(`Reminder alarm scheduled for "${quickAlarmItem.title}" at ${targetDueAt.replace('T', ' ')}!`);
     setQuickAlarmItem(null);
@@ -148,7 +147,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [filterTab, setFilterTab] = useState<'all' | 'today' | 'high' | 'work' | 'personal' | 'done'>('all');
   const taskFilterMenuRef = useRef<HTMLDetailsElement>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [taskFormOpen, setTaskFormOpen] = useState(true);
+  const [dailyTargetOpen, setDailyTargetOpen] = useState(true);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // New/Edit task form state
   const [title, setTitle] = useState('');
@@ -162,6 +166,48 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [missionId, setMissionId] = useState('');
   const [plannerMissionId, setPlannerMissionId] = useState(dailyPlanner?.missionId || '');
   const [taskInputMode, setTaskInputMode] = useState<'manual' | 'link'>('manual');
+  const [recurringConfig, setRecurringConfig] = useState<RecurrenceConfig | undefined>(undefined);
+
+  // Monthly recurrences keep the original day-of-month even in short months.
+  const withRecurrenceAnchor = (config: RecurrenceConfig | undefined): RecurrenceConfig | undefined => {
+    if (!config) return undefined;
+    if (config.frequency !== 'monthly') return config;
+    const day = Number((dueAt || today).slice(8, 10));
+    return {
+      ...config,
+      monthDay: Number.isInteger(day) && day >= 1 && day <= 31 ? day : config.monthDay
+    };
+  };
+
+  // Re-arm replaces the previous alarm for the same task instead of stacking duplicates.
+  const hasArmedTaskReminder = (taskId: string) =>
+    Boolean(reminders?.some(reminder =>
+      reminder.linkedType === 'task' &&
+      reminder.linkedId === taskId &&
+      reminder.status !== 'done' &&
+      reminder.alarmEnabled !== false
+    ));
+
+  const saveTaskReminder = async (taskId: string, title: string, dueAtValue: string, ringtone: string) => {
+    const existingReminders = await storage.getAll<ReminderItem>('reminders');
+    const current = existingReminders.find(
+      reminder => reminder.linkedType === 'task' && reminder.linkedId === taskId && reminder.status !== 'done'
+    );
+    const reminder: ReminderItem = {
+      ...(current || { id: generateUUID(), createdAt: Date.now() }),
+      title,
+      dueAt: dueAtValue,
+      repeatRule: 'none',
+      status: 'open',
+      linkedType: 'task',
+      linkedId: taskId,
+      alarmEnabled: true,
+      ringtone,
+      lastNotifiedAt: undefined,
+      updatedAt: Date.now()
+    };
+    await storage.put('reminders', reminder);
+  };
 
   const formRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -302,6 +348,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           goalId: goalId || null,
           strategyId: strategyId || null,
           missionId: missionId || null,
+          recurringConfig: withRecurrenceAnchor(recurringConfig),
           checklist: checklist.length ? checklist : undefined,
           updatedAt: now
         };
@@ -328,6 +375,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         goalId: goalId || null,
         strategyId: strategyId || null,
         missionId: missionId || null,
+        recurringConfig: withRecurrenceAnchor(recurringConfig),
         checklist: checklist.length ? checklist : undefined,
         done: false,
         status: 'open',
@@ -337,20 +385,13 @@ export const TasksView: React.FC<TasksViewProps> = ({
       await storage.put('tasks', newTask);
 
       if (armTaskGenesisAlarm) {
-        const alarmDueAt = `${dueAt}T${taskGenesisAlarmTime}`;
-        await storage.put('reminders', {
-          id: generateUUID(),
-          title: `Task Genesis Alarm: ${newTask.title}`,
-          dueAt: alarmDueAt,
-          repeatRule: 'none',
-          status: 'open',
-          linkedType: 'task',
-          linkedId: newTask.id,
-          alarmEnabled: true,
-          ringtone: taskGenesisRingtone,
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        });
+        void alarmService.requestNotificationPermission();
+        await saveTaskReminder(
+          newTask.id,
+          `Task Genesis Alarm: ${newTask.title}`,
+          `${dueAt}T${taskGenesisAlarmTime}`,
+          taskGenesisRingtone
+        );
       }
 
       onSuccess(
@@ -372,11 +413,13 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setGoalId('');
     setStrategyId('');
     setMissionId('');
+    setRecurringConfig(undefined);
     onRefresh();
   };
 
   const handleEditClick = (task: Task) => {
     onSelectWorkAreaSection('tasks-roster');
+    setTaskFormOpen(true);
     setEditingTaskId(task.id);
     setTitle(task.title);
     setDescription(task.description || '');
@@ -388,6 +431,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setStrategyId(task.strategyId || '');
     setMissionId(task.missionId || '');
     setTaskInputMode(task.goalId ? 'link' : 'manual');
+    setRecurringConfig(task.recurringConfig);
 
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setTimeout(() => {
@@ -403,6 +447,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setGoalId('');
     setStrategyId('');
     setMissionId('');
+    setRecurringConfig(undefined);
   };
 
   const handleToggleTask = async (task: Task) => {
@@ -419,6 +464,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
       updatedAt: Date.now()
     };
     await storage.put('tasks', updated);
+    const nextOccurrence = await applyTaskCompletionEffects(updated, nextDone);
+    if (nextOccurrence) {
+      onSuccess(`↻ Recurring task scheduled next for ${nextOccurrence.date}`);
+    }
 
     // Reflect task completion in linked goal progress & rollup through 3-tier hierarchy!
     const linkedGoalId = resolveTaskGoalId(task, { routines, skills, learningItems });
@@ -465,6 +514,63 @@ export const TasksView: React.FC<TasksViewProps> = ({
     } catch (err) {
       console.error('Failed to delete task', err);
     }
+  };
+
+  const handleBulkDelete = async () => {
+    if (isBulkDeleting) return;
+    const selectedTasks = tasks.filter(task => selectedTaskIds.has(task.id));
+    if (selectedTasks.length === 0) {
+      setIsBulkDeleteOpen(false);
+      setSelectedTaskIds(new Set());
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    const deletedIds = new Set<string>();
+    const linkedGoalIds = new Set<string>();
+    try {
+      for (const task of selectedTasks) {
+        await storage.delete('tasks', task.id);
+        deletedIds.add(task.id);
+        const linkedGoalId = resolveTaskGoalId(task, { routines, skills, learningItems });
+        if (linkedGoalId) linkedGoalIds.add(linkedGoalId);
+      }
+    } catch (error) {
+      console.error('Failed to delete selected tasks', error);
+      setSelectedTaskIds(new Set(selectedTasks.filter(task => !deletedIds.has(task.id)).map(task => task.id)));
+      setIsBulkDeleteOpen(false);
+      if (deletedIds.size > 0) {
+        if (editingTaskId && deletedIds.has(editingTaskId)) handleCancelEdit();
+        onRefresh();
+      }
+      onSuccess(
+        deletedIds.size > 0
+          ? `Deleted ${deletedIds.size} task(s), but could not delete the rest. Remaining tasks are still selected.`
+          : 'Could not delete the selected tasks. Please try again.'
+      );
+      setIsBulkDeleting(false);
+      return;
+    }
+
+    if (editingTaskId && deletedIds.has(editingTaskId)) handleCancelEdit();
+    setSelectedTaskIds(new Set());
+    setIsBulkDeleteOpen(false);
+
+    try {
+      for (const linkedGoalId of linkedGoalIds) {
+        await syncGoalProgressFromTasks(linkedGoalId);
+      }
+    } catch (error) {
+      console.error('Selected tasks were deleted, but linked goal progress could not be refreshed', error);
+      onSuccess(`Deleted ${deletedIds.size} task(s), but linked goal progress could not be refreshed.`);
+      onRefresh();
+      setIsBulkDeleting(false);
+      return;
+    }
+
+    onSuccess(`✓ Deleted ${deletedIds.size} selected task(s)`);
+    onRefresh();
+    setIsBulkDeleting(false);
   };
 
   // Save Daily Command Target
@@ -775,7 +881,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
         <TaskRoutineFocusSwitcher
           activeSection={activeWorkAreaSection}
           taskCount={openCount}
-          onSelectSection={onSelectWorkAreaSection}
+          onSelectSection={section => {
+            if (section === 'tasks-daily') setDailyTargetOpen(true);
+            onSelectWorkAreaSection(section);
+          }}
         />
       </div>
 
@@ -815,8 +924,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       {/* SUBMENU 1: TASK ROSTER & INLINE PLANNER */}
       {activeWorkAreaSection === 'tasks-roster' && (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
-          {/* Keep the task entry card visible, and show roster data only when tasks exist. */}
-          <div
+          {taskFormOpen && <div
             id="task-genesis-form"
             ref={formRef}
             data-task-genesis-card
@@ -837,7 +945,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   </h2>
                 </div>
               </div>
-              {editingTaskId && (
+              <div className="flex items-center gap-2">
+                {editingTaskId && (
                 <button
                   type="button"
                   onClick={handleCancelEdit}
@@ -845,7 +954,17 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 >
                   Cancel
                 </button>
-              )}
+                )}
+                <button
+                  type="button"
+                  onClick={() => setTaskFormOpen(false)}
+                  aria-label="Close task form"
+                  title="Hide task form"
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleCreateOrUpdateTask} className="task-genesis-form mt-4 space-y-3">
@@ -877,7 +996,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       goals={goals}
                       value={goalId}
                       onChange={handleSelectGoalForTask}
-                      placeholder="-- Choose Goal --"
+
                       flatFilters
                       className="task-genesis-field h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                     />
@@ -887,14 +1006,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
                 <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Linked Strategy (optional)
+                    Linked Strategy
                     <select value={strategyId} onChange={event => handleSelectStrategyForTask(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                       <option value="">None</option>
                       {strategies.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
                     </select>
                   </label>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Linked Mission (optional)
+                    Linked Mission
                     <select value={missionId} onChange={event => handleSelectMissionForTask(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
                       <option value="">None</option>
                       {missions.filter(item => item.status !== 'archived').map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
@@ -954,8 +1073,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="min-w-0">
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Due Date
                   </label>
@@ -967,9 +1086,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Strategic Goal
+                    Link to Strategic Goal
                   </label>
                   <div className="relative mt-1">
                     <select
@@ -986,6 +1105,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   </div>
                 </div>
               </div>
+
+              <RecurrenceSelector
+                value={recurringConfig}
+                onChange={setRecurringConfig}
+                startDate={(dueAt || today).slice(0, 10)}
+              />
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
@@ -1006,7 +1131,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   rows={3}
                   value={checklistText}
                   onChange={e => setChecklistText(e.target.value)}
-                  placeholder={'Enter one step per line'}
+
                   className="task-genesis-field mt-1 h-[5.25rem] w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1061,14 +1186,69 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 {editingTaskId ? 'Update Task' : '＋ Add Task to Planner'}
               </button>
             </form>
-          </div>
+          </div>}
+
+          {!taskFormOpen && tasks.length === 0 && (
+            <div className="lg:col-span-12 flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Task Genesis hidden</h2>
+              <button
+                type="button"
+                onClick={() => setTaskFormOpen(true)}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+              >
+                + Add Task
+              </button>
+            </div>
+          )}
 
           {/* Task Filter Tabs & All Tasks List */}
-          {tasks.length > 0 && <section id="task-roster-card" data-task-roster-card className="lg:col-span-7 rounded-lg border border-slate-200/80 bg-white p-5 shadow-none dark:border-slate-800/80 dark:bg-slate-900">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+          {tasks.length > 0 && <section id="task-roster-card" data-task-roster-card className={`${taskFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-lg border border-slate-200/80 bg-white p-5 shadow-none dark:border-slate-800/80 dark:bg-slate-900`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div className="flex min-w-0 items-center gap-2">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                 Task Roster ({filteredTasks.length})
               </h2>
+              {filteredTasks.length > 0 && (
+                <label className="flex shrink-0 items-center gap-1.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={filteredTasks.every(task => selectedTaskIds.has(task.id))}
+                    onChange={event => {
+                      const isChecked = event.currentTarget.checked;
+                      const visibleIds = filteredTasks.map(task => task.id);
+                      setSelectedTaskIds(current => {
+                        const next = new Set(current);
+                        visibleIds.forEach(id => isChecked ? next.add(id) : next.delete(id));
+                        return next;
+                      });
+                    }}
+                    aria-label="Select all visible tasks"
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500 dark:border-slate-600"
+                  />
+                  Select all
+                </label>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {!taskFormOpen && (
+                <button
+                  type="button"
+                  onClick={() => setTaskFormOpen(true)}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-emerald-200 px-2.5 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-900/70 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                >
+                  + Add Task
+                </button>
+              )}
+              {selectedTaskIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDeleteOpen(true)}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-rose-200 px-2.5 text-[11px] font-semibold text-rose-600 transition-colors hover:bg-rose-50 dark:border-rose-900/70 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete selected ({selectedTaskIds.size})
+                </button>
+              )}
               <details ref={taskFilterMenuRef} className="relative shrink-0">
                 <summary className="flex h-5 cursor-pointer list-none items-center gap-2 rounded-none border-0 bg-transparent px-2.5 text-xs font-semibold text-slate-700 shadow-none hover:bg-slate-50 dark:bg-transparent dark:text-slate-200 dark:hover:bg-slate-800/40">
                   <Filter className="h-3.5 w-3.5" />
@@ -1089,6 +1269,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       type="button"
                       onClick={() => {
                         setFilterTab(tab.id as typeof filterTab);
+                        setSelectedTaskIds(new Set());
                         if (taskFilterMenuRef.current) taskFilterMenuRef.current.open = false;
                       }}
                       className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold transition-colors ${
@@ -1103,6 +1284,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   ))}
                 </div>
               </details>
+            </div>
             </div>
 
             {/* Tasks List */}
@@ -1120,8 +1302,21 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 filteredTasks.map(task => (
                   <div
                     key={task.id}
+                    data-record-id={task.id}
                     className="dashboard-item-row progressive-row flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-none border-0 p-3 text-sm shadow-none transition-all hover:border-0 hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
                   >
+                    <input
+                      type="checkbox"
+                      checked={selectedTaskIds.has(task.id)}
+                      onChange={event => setSelectedTaskIds(current => {
+                        const next = new Set(current);
+                        if (event.target.checked) next.add(task.id);
+                        else next.delete(task.id);
+                        return next;
+                      })}
+                      aria-label={`Select task ${task.title}`}
+                      className="h-4 w-4 shrink-0 rounded border-slate-300 text-rose-600 focus:ring-rose-500 dark:border-slate-600"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className={`truncate font-semibold ${task.done ? 'line-through text-slate-400' : 'text-slate-900 dark:text-white'}`}>
                         {task.title}
@@ -1204,10 +1399,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setQuickAlarmItem({ id: task.id, title: task.title, dueAt: task.dueAt })}
-                        className="h-7 px-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold"
-                        title="Set Reminder Alarm"
+                        className={hasArmedTaskReminder(task.id)
+                          ? 'h-7 px-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold'
+                          : 'h-7 px-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 cursor-pointer flex items-center gap-1 text-[10px] font-bold'}
+                        title={hasArmedTaskReminder(task.id) ? 'Reminder alarm armed — click to re-arm' : 'Set Reminder Alarm'}
                       >
-                        <Bell className="h-3 w-3" />
+                        {hasArmedTaskReminder(task.id)
+                          ? <BellRing className="h-3 w-3" />
+                          : <Bell className="h-3 w-3" />}
                         <span className="hidden sm:inline">Alarm</span>
                       </button>
 
@@ -1252,14 +1451,25 @@ export const TasksView: React.FC<TasksViewProps> = ({
       {/* SUBMENU 2: DAILY COMMAND TARGET (With File Save, Export, and History!) */}
       {activeWorkAreaSection === 'tasks-daily' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div className={`${savedTargetsArchive.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+          <div className={`${dailyTargetOpen && savedTargetsArchive.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+            <div className="flex items-center justify-between gap-2">
+              {dailyTargetOpen && <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-300">
                   <ThemeIcon name="target" className="h-4 w-4" />
                 </span>
                 <span>Daily Command Target</span>
-              </h2>
-              <div className="mt-4 space-y-3.5">
+              </h2>}
+              {dailyTargetOpen
+                ? <CardCloseButton label="daily command target" onClick={() => setDailyTargetOpen(false)} />
+                : <button
+                    type="button"
+                    onClick={() => setDailyTargetOpen(true)}
+                    className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500"
+                  >
+                    + Open Daily Command Target
+                  </button>}
+            </div>
+              <div className={`mt-4 space-y-3.5 ${dailyTargetOpen ? '' : 'hidden'}`}>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {/* Decisive Victory Target */}
                   <div>
@@ -1434,7 +1644,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className={`flex flex-wrap justify-end gap-2 ${dailyTargetOpen ? '' : 'hidden'}`}>
                 <button
                   type="button"
                   onClick={handleSaveToFile}
@@ -1462,10 +1672,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   </button>
                 )}
               </div>
-            </div>
+              </div>
 
             {savedTargetsArchive.length > 0 && (
-              <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+              <div className={`${dailyTargetOpen ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
                 <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                     Command history
@@ -1550,6 +1760,18 @@ export const TasksView: React.FC<TasksViewProps> = ({
         isDanger={true}
         onConfirm={handleConfirmDelete}
         onCancel={() => setTaskToDelete(null)}
+      />
+      <ConfirmModal
+        isOpen={isBulkDeleteOpen}
+        title={`Delete ${selectedTaskIds.size} Selected Task(s)?`}
+        message={`This will delete ${selectedTaskIds.size} selected task(s). This action cannot be undone.`}
+        confirmText={isBulkDeleting ? 'Deleting…' : `Delete ${selectedTaskIds.size} Tasks`}
+        cancelText="Cancel"
+        isDanger={true}
+        onConfirm={() => void handleBulkDelete()}
+        onCancel={() => {
+          if (!isBulkDeleting) setIsBulkDeleteOpen(false);
+        }}
       />
 
       {/* QUICK PRESET REMINDER ALARM MODAL */}

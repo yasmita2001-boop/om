@@ -72,7 +72,7 @@ export const GoalLinkSelector: React.FC<GoalLinkSelectorProps> = ({
             goals={goals}
             value={goalId}
             onChange={onGoalChange}
-            placeholder="-- Choose Goal --"
+
             className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs font-medium text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer"
           />
           {selectedGoal && (

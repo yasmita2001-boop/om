@@ -461,8 +461,8 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                     aria-label="Dictation transcript"
                     value={dictationText}
                     onChange={event => setDictationText(event.target.value)}
-                    placeholder="Your spoken words will appear here. You can edit the transcript."
-                    className="min-h-48 w-full resize-y rounded-2xl border border-line bg-card p-3 text-sm font-normal leading-relaxed text-ink placeholder:text-ink-muted"
+
+                    className="min-h-48 w-full resize-y rounded-2xl border border-line bg-card p-3 text-sm font-normal leading-relaxed text-ink "
                   />
                 </label>
                 {dictationInterim && (
@@ -526,8 +526,8 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                     rows={3}
                     value={readerText}
                     onChange={(e) => setReaderText(e.target.value)}
-                    placeholder="Enter or paste text in Hindi, Hinglish, or English to read aloud with natural human cadence..."
-                    className="w-full rounded-2xl border border-line bg-card p-3.5 text-xs sm:text-sm text-ink leading-relaxed placeholder:text-ink-muted focus:border-indigo-500 focus:outline-none transition-colors"
+
+                    className="w-full rounded-2xl border border-line bg-card p-3.5 text-xs sm:text-sm text-ink leading-relaxed focus:border-indigo-500 focus:outline-none transition-colors"
                   />
                 </div>
 

@@ -15,11 +15,17 @@ import { AttachmentUploader, AttachmentViewer, StoredAttachmentMeta } from '../c
 import { NoteRichEditor } from '../components/NoteRichEditor';
 import { globalTextReader } from '../lib/voiceService';
 import { htmlToPlainText, plainTextToHtml, sanitizeHtml } from '../lib/sanitizeHtml';
+import { readDraft, writeDraft, clearDraft } from '../lib/draftStore';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { GoalPicker } from '../components/GoalPicker';
 import { ThemeIcon } from '../components/ThemeIcon';
 import { NotesJournalSwitcher } from '../components/NotesJournalSwitcher';
+
+const NOTE_DRAFT_KEY = 'om-note-draft-v1';
+
+// Drafts must not leak between profiles (master vs Google accounts).
+const noteDraftKey = () => `${NOTE_DRAFT_KEY}:${storage.getActiveProfileId()}`;
 
 interface NotesViewProps {
   notes: Note[];
@@ -94,6 +100,71 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [modalAttachments, setModalAttachments] = useState<StoredAttachmentMeta[]>([]);
   const [isSpeakingNote, setIsSpeakingNote] = useState(false);
   const [speakingNoteCardId, setSpeakingNoteCardId] = useState<string | null>(null);
+
+  // Restore an unsaved note draft (module switch or reload).
+  useEffect(() => {
+    const draft = readDraft<{
+      title?: string;
+      text?: string;
+      html?: string;
+      category?: string;
+      tags?: string;
+      colorTheme?: string;
+      noteInputMode?: 'manual' | 'link';
+      noteGoalId?: string;
+      editingNoteId?: string | null;
+    }>(noteDraftKey());
+    if (!draft) return;
+    if (draft.title) setTitle(draft.title);
+    if (draft.text) setEditorText(draft.text);
+    if (draft.html) setEditorHtml(draft.html);
+    if (draft.category) setCategory(draft.category);
+    if (draft.tags) setTags(draft.tags);
+    if (draft.colorTheme) setColorTheme(draft.colorTheme);
+    if (draft.noteInputMode) setNoteInputMode(draft.noteInputMode);
+    if (draft.noteGoalId) setNoteGoalId(draft.noteGoalId);
+    if (draft.editingNoteId) setEditingNoteId(draft.editingNoteId);
+    setIsNoteEditorOpen(true);
+  }, []);
+
+  // Persist the inline editor draft shortly after each change.
+  const skipFirstNoteAutosave = useRef(true);
+  useEffect(() => {
+    // Skip the initial empty state so a restored draft is not cleared before it renders.
+    if (skipFirstNoteAutosave.current) {
+      skipFirstNoteAutosave.current = false;
+      return;
+    }
+    if (!title.trim() && !editorText.trim()) {
+      clearDraft(noteDraftKey());
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      writeDraft(noteDraftKey(), {
+        title,
+        text: editorText,
+        html: editorHtml,
+        category,
+        tags,
+        colorTheme,
+        noteInputMode,
+        noteGoalId,
+        editingNoteId
+      });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [title, editorText, editorHtml, category, tags, colorTheme, noteInputMode, noteGoalId, editingNoteId]);
+
+  // Warn before leaving with unsaved editor content.
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (!isNoteEditorOpen || (!title.trim() && !editorText.trim())) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isNoteEditorOpen, title, editorText]);
 
   const handleSelectGoalForNote = (gId: string) => {
     setNoteGoalId(gId);
@@ -459,6 +530,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     return (
       <div
         key={n.id}
+        data-record-id={n.id}
         onClick={() => setViewingNote(n)}
         className="dashboard-item-row progressive-row flex min-w-0 cursor-pointer flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
       >
@@ -676,7 +748,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     goals={goals}
                     value={noteGoalId}
                     onChange={handleSelectGoalForNote}
-                    placeholder="-- Choose Goal --"
+
                     className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
                   />
                   {noteGoalId && (
@@ -693,8 +765,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 required
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder="Give your note an inspiring title..."
-                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
@@ -721,7 +793,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   <input
                     type="text"
                     required
-                    placeholder="Enter notebook name"
+
                     value={customCategoryInput}
                     onChange={e => setCustomCategoryInput(e.target.value)}
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -738,7 +810,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     type="text"
                     value={tags}
                     onChange={e => setTags(e.target.value)}
-                    placeholder="ideas, architecture"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-7 pr-3 text-sm font-medium text-slate-800 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                   />
                   <Hash className="pointer-events-none absolute left-2.5 top-3 h-3.5 w-3.5 text-slate-400" />
@@ -815,7 +887,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   setEditorHtml(html);
                   setEditorText(text);
                 }}
-                placeholder=""
+
                 minHeight="min-h-[150px]"
                 maxHeight="max-h-[280px]"
               />
@@ -883,8 +955,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search notes by title, notebook, tags, or content..."
-                className="h-9.5 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-10 pr-9 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white transition-all shadow-2xs"
+                aria-label="Search notes"
+                className="h-9.5 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-10 pr-9 text-xs sm:text-sm text-slate-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white transition-all shadow-2xs"
               />
               {searchQuery && (
                 <button
@@ -1031,7 +1103,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                       goals={goals}
                       value={modalGoalId}
                       onChange={handleSelectGoalForModalNote}
-                      placeholder="-- Choose Goal --"
+
                       className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
                     />
                   </div>
@@ -1042,7 +1114,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   required
                   value={modalTitle}
                   onChange={e => setModalTitle(e.target.value)}
-                  placeholder="Note title..."
+
                   className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 text-xs sm:text-sm font-semibold text-slate-900 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1069,7 +1141,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     <input
                       type="text"
                       required
-                      placeholder="Notebook name"
+
                       value={modalCustomCat}
                       onChange={e => setModalCustomCat(e.target.value)}
                       className="mt-1.5 h-8.5 w-full rounded-xl border border-indigo-200 px-3 text-xs dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
@@ -1085,7 +1157,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     type="text"
                     value={modalTags}
                     onChange={e => setModalTags(e.target.value)}
-                    placeholder="ideas, plans"
+
                     className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1155,7 +1227,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     setModalHtml(html);
                     setModalContent(text);
                   }}
-                  placeholder=""
+
                   minHeight="min-h-[150px]"
                   maxHeight="max-h-[280px]"
                 />

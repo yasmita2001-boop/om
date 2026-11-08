@@ -8,6 +8,7 @@ import { getLocalDateString } from '../lib/dateUtils';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { GoalLinkSelector } from '../components/GoalLinkSelector';
 import { syncGoalProgressFromMeetings } from '../lib/goalTaskSync';
+import { CardCloseButton } from '../components/CardCloseButton';
 
 interface PeopleViewProps {
   people: Person[];
@@ -282,9 +283,12 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
         }`}>
           <form onSubmit={handleSavePeopleCard} className="space-y-3">
           <div>
-            <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-              <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">{editingPerson ? 'Edit Important Person' : 'Add Important Person'}</h2>
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">{editingPerson ? 'Edit Important Person' : 'Add Important Person'}</h2>
+              </div>
+              <CardCloseButton label="people form" onClick={() => setOpenPeopleForm(null)} />
             </div>
 
             <div className="mt-4 space-y-3">
@@ -307,7 +311,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                     required={!editingInteraction}
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="e.g. Elena Rostova"
+                    aria-label="Full name"
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </GoalLinkSelector>
@@ -345,7 +349,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   type="text"
                   value={contact}
                   onChange={e => setContact(e.target.value)}
-                  placeholder="elena@example.com or phone"
+                  aria-label="Contact / Email / Phone"
                   className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -360,7 +364,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                 type="text"
                 value={meetingPeople}
                 onChange={event => setMeetingPeople(event.target.value)}
-                placeholder="Team, Alex"
+                aria-label="Attendees"
                 className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
@@ -376,7 +380,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   required={Boolean(editingInteraction)}
                   value={interactionText}
                   onChange={e => setInteractionText(e.target.value)}
-                  placeholder="Discussed architecture direction and shared priorities..."
+                  aria-label="Interaction memo"
                   className="people-interaction-memo mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm leading-relaxed text-slate-900 outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-indigo-500"
                 />
               </div>
@@ -392,11 +396,22 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
         </section>}
 
         {/* Contacts Directory */}
-        {(!embedded || hasDirectoryRecords) && <div className={`${openPeopleForm ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-4`}>
+        {(!embedded || hasDirectoryRecords || !openPeopleForm) && <div className={`${openPeopleForm ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-4`}>
           <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
-            <h2 className="border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
               <span>Relationships Directory ({people.length})</span>
             </h2>
+            {!openPeopleForm && (
+              <button
+                type="button"
+                onClick={() => setOpenPeopleForm('person')}
+                className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-500"
+              >
+                + Add Contact
+              </button>
+            )}
+            </div>
 
             <div className="adaptive-card-grid mt-3 gap-3">
               {people.length === 0 ? (
@@ -415,7 +430,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   const displayedInteractions = isExpanded ? pInteractions : pInteractions.slice(0, 2);
 
                   return (
-                    <div key={p.id} className="dashboard-item-row flex flex-col justify-between rounded-xl border border-slate-100 p-2.5 text-xs transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
+                    <div key={p.id} data-record-id={p.id} className="dashboard-item-row flex flex-col justify-between rounded-xl border border-slate-100 p-2.5 text-xs transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
                       <div>
                         <div className="flex flex-wrap justify-between items-start gap-1">
                           <div className="flex min-w-0 flex-1 items-center gap-2">

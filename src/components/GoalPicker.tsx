@@ -15,7 +15,6 @@ interface GoalPickerProps {
   goals: Goal[];
   value: string;
   onChange: (goalId: string) => void;
-  placeholder?: string;
   className?: string;
   flatFilters?: boolean;
 }
@@ -24,7 +23,6 @@ export const GoalPicker: React.FC<GoalPickerProps> = ({
   goals,
   value,
   onChange,
-  placeholder = '-- Choose Goal --',
   className = '',
   flatFilters = false
 }) => {
@@ -78,7 +76,7 @@ export const GoalPicker: React.FC<GoalPickerProps> = ({
         aria-label="Choose a goal"
         className={className}
       >
-        <option value="">{placeholder}</option>
+        <option value="" />
         {selectedGoal && selectedLevel !== null && selectedLevel !== activeLevel && activeLevel !== 'all' && (
           <option value={selectedGoal.id}>
             Current selection - {goalLevels[selectedLevel - 1].label}: {selectedGoal.title} ({selectedGoal.progress}%)

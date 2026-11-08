@@ -18,6 +18,8 @@ import {
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
+import { getTaskPeriodProgress, hasFullYearGoalHorizon } from '../lib/taskPeriodProgress';
+import { getGoalHierarchyPeriodProgress } from '../lib/goalPeriodProgress';
 import { SlideTabs } from './SlideTabs';
 import { GoalTierIcon, ThemeIcon, type ThemeIconName } from './ThemeIcon';
 import { alarmService } from '../lib/alarmService';
@@ -107,6 +109,15 @@ export function getLocalDateTimeStr(offsetMinutes: number = 0): string {
   const h = String(d.getHours()).padStart(2, '0');
   const m = String(d.getMinutes()).padStart(2, '0');
   return `${year}-${month}-${day}T${h}:${m}`;
+}
+
+function formatProgressPercent(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatProgressCount(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
 export function addDaysToDateStr(dateStr: string | undefined, days: number): string {
@@ -678,10 +689,6 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
     loans.length +
     investments.length;
 
-  const onTimeHealthRate = totalItemsAllCount > 0
-    ? Math.max(0, Math.round(((totalItemsAllCount - totalDelayedAllCount) / totalItemsAllCount) * 100))
-    : 100;
-
   // ----------------------------------------------------
   // FILTERED COLLECTIONS FOR SEARCH & STATUS
   // ----------------------------------------------------
@@ -973,20 +980,24 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
     }
 
     if (timelineGranularity === 'monthly') {
-      const targetYear = currentYear + timelineOffset;
+      const currentQuarter = Math.floor(currentMonth / 3);
+      const absoluteQuarter = currentQuarter + timelineOffset;
+      const quarterIndex = ((absoluteQuarter % 4) + 4) % 4;
+      const targetYear = currentYear + Math.floor(absoluteQuarter / 4);
+      const firstQuarterMonth = quarterIndex * 3;
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const cols = monthNames.map((name, idx) => {
+      const cols = monthNames.slice(firstQuarterMonth, firstQuarterMonth + 3).map((name, offset) => {
+        const idx = firstQuarterMonth + offset;
         const mStr = String(idx + 1).padStart(2, '0');
         const startIso = `${targetYear}-${mStr}-01`;
         const lastDay = new Date(targetYear, idx + 1, 0).getDate();
         const endIso = `${targetYear}-${mStr}-${String(lastDay).padStart(2, '0')}`;
         const isCurrentMonth = targetYear === currentYear && idx === currentMonth;
 
-        const quarters = ['Q1', 'Q1', 'Q1', 'Q2', 'Q2', 'Q2', 'Q3', 'Q3', 'Q3', 'Q4', 'Q4', 'Q4'];
         return {
           id: `${targetYear}-${mStr}`,
           label: name,
-          subLabel: quarters[idx],
+          subLabel: `Q${quarterIndex + 1}`,
           dateStr: `${targetYear}-${mStr}-01`,
           startIso,
           endIso,
@@ -995,21 +1006,55 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
         };
       });
 
-      const title = `Monthly View · ${targetYear}`;
-      return { cols, title, minYear, maxYear, singleDateStr: undefined, isSingleDay: false, periodStartIso: `${targetYear}-01-01`, periodEndIso: `${targetYear}-12-31` };
+      const quarterStartMonth = firstQuarterMonth + 1;
+      const quarterEndMonth = firstQuarterMonth + 3;
+      const progressStart = `${targetYear}-${String(quarterStartMonth).padStart(2, '0')}-01`;
+      const progressEnd = `${targetYear}-${String(quarterEndMonth).padStart(2, '0')}-${String(new Date(targetYear, quarterEndMonth, 0).getDate()).padStart(2, '0')}`;
+      const title = `Monthly View · Q${quarterIndex + 1} · ${targetYear}`;
+      return { cols, title, minYear, maxYear, singleDateStr: undefined, isSingleDay: false, periodStartIso: progressStart, periodEndIso: progressEnd };
     }
 
     if (timelineGranularity === 'yearly') {
-      const baseYear = currentYear + timelineOffset * 5;
-      const startYear = Math.max(2022, baseYear - 2);
-      const endYear = Math.max(startYear + 8, Math.max(baseYear + 7, maxYear));
+      const scopedGoals = selectedGoalId === 'all'
+        ? goals
+        : goals.filter(goal => goal.id === selectedGoalId);
+      const scopedGoalIds = new Set(scopedGoals.map(goal => goal.id));
+      const scopedTasks = annotatedTasks.filter(task => task.goalId && scopedGoalIds.has(task.goalId));
+      const goalStartDates = scopedGoals.map(goal =>
+        goal.date?.slice(0, 10) ||
+        (goal.createdAt ? getLocalDateString(new Date(goal.createdAt)) : undefined)
+      ).filter((date): date is string => Boolean(date));
+      const projectStartDates = goalStartDates.length > 0
+        ? goalStartDates
+        : scopedTasks.map(task => (task.dueAt || task.date)?.slice(0, 10))
+          .filter((date): date is string => Boolean(date));
+      const goalTargetDates = scopedGoals.map(goal => goal.targetDate?.slice(0, 10))
+        .filter((date): date is string => Boolean(date));
+      const recurringTargetDates = scopedTasks.map(task => task.recurringConfig?.endByDate)
+        .filter((date): date is string => Boolean(date));
+      const taskTargetDates = scopedTasks.map(task => (task.dueAt || task.date)?.slice(0, 10))
+        .filter((date): date is string => Boolean(date));
+      const projectTargetDates = goalTargetDates.length > 0
+        ? goalTargetDates
+        : recurringTargetDates.length > 0
+          ? recurringTargetDates
+          : taskTargetDates;
+      const startYear = projectStartDates.length > 0
+        ? Math.min(...projectStartDates.map(date => Number(date.slice(0, 4))))
+        : currentYear;
+      const endYear = projectTargetDates.length > 0
+        ? Math.max(...projectTargetDates.map(date => Number(date.slice(0, 4))))
+        : currentYear;
 
       const cols = [];
       for (let yr = startYear; yr <= endYear; yr++) {
         cols.push({
           id: `year-${yr}`,
           label: String(yr),
-          subLabel: yr === currentYear ? 'Current' : yr === maxYear ? 'Target' : undefined,
+          subLabel: [
+            ...(yr === currentYear ? ['Current'] : []),
+            ...(yr === endYear ? ['Target'] : [])
+          ].join(' · ') || undefined,
           dateStr: `${yr}-01-01`,
           startIso: `${yr}-01-01`,
           endIso: `${yr}-12-31`,
@@ -1018,29 +1063,100 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
         });
       }
 
-      const title = `Yearly Horizons (${startYear} – ${endYear})`;
-      return { cols, title, minYear, maxYear, singleDateStr: undefined, isSingleDay: false, periodStartIso: `${startYear}-01-01`, periodEndIso: `${endYear}-12-31` };
+      const title = `Yearly View (${startYear} – ${endYear})`;
+      const periodYear = Math.min(endYear, Math.max(startYear, currentYear + timelineOffset));
+      return { cols, title, minYear: startYear, maxYear: endYear, singleDateStr: undefined, isSingleDay: false, periodStartIso: `${periodYear}-01-01`, periodEndIso: `${periodYear}-12-31` };
     }
 
-    // Lifecycle
-    const startYr = Math.min(2024, minYear, currentYear);
-    const endYr = Math.max(currentYear + 5, maxYear);
+    // Lifecycle is bounded by the selected Goal(s), rather than padded with
+    // unrelated default years that make short plans look like annual plans.
+    const scopedGoals = selectedGoalId === 'all'
+      ? goals
+      : goals.filter(goal => goal.id === selectedGoalId);
+    const scopedGoalIds = new Set(scopedGoals.map(goal => goal.id));
+    const scopedTasks = annotatedTasks.filter(task => task.goalId && scopedGoalIds.has(task.goalId));
+    const goalStartDates = scopedGoals.map(goal =>
+      goal.date?.slice(0, 10) ||
+      (goal.createdAt ? getLocalDateString(new Date(goal.createdAt)) : undefined)
+    ).filter((date): date is string => Boolean(date));
+    const goalEndDates = [
+      ...scopedGoals.map(goal => goal.targetDate?.slice(0, 10)),
+      ...scopedTasks.map(task => task.recurringConfig?.endByDate)
+    ].filter((date): date is string => Boolean(date));
+    const taskDates = scopedTasks.map(task => (task.dueAt || task.date)?.slice(0, 10))
+      .filter((date): date is string => Boolean(date));
+    const allLifecycleDates = [...goalStartDates, ...goalEndDates, ...taskDates];
+    const lifecycleStart = allLifecycleDates.length > 0
+      ? allLifecycleDates.reduce((earliest, date) => date < earliest ? date : earliest)
+      : todayStr;
+    const lifecycleEnd = allLifecycleDates.length > 0
+      ? allLifecycleDates.reduce((latest, date) => date > latest ? date : latest)
+      : todayStr;
+    const startDate = new Date(`${lifecycleStart}T00:00:00`);
+    const endDate = new Date(`${lifecycleEnd}T00:00:00`);
+    const monthSpan = Math.max(1,
+      (endDate.getFullYear() - startDate.getFullYear()) * 12 +
+      endDate.getMonth() - startDate.getMonth() + 1
+    );
     const cols = [];
-    for (let yr = startYr; yr <= endYr; yr++) {
-      cols.push({
-        id: `lifecycle-${yr}`,
-        label: String(yr),
-        subLabel: yr === currentYear ? 'Today' : yr === endYr ? 'Target' : undefined,
-        dateStr: `${yr}-01-01`,
-        startIso: `${yr}-01-01`,
-        endIso: `${yr}-12-31`,
-        isToday: yr === currentYear,
-        isWeekend: false
-      });
+
+    if (monthSpan <= 24) {
+      for (let offset = 0; offset < monthSpan; offset++) {
+        const monthDate = new Date(startDate.getFullYear(), startDate.getMonth() + offset, 1);
+        const year = monthDate.getFullYear();
+        const month = monthDate.getMonth();
+        const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`;
+        cols.push({
+          id: `lifecycle-${year}-${String(month + 1).padStart(2, '0')}`,
+          label: monthDate.toLocaleDateString('en-US', { month: 'short' }),
+          subLabel: month === 0 || offset === 0 ? String(year) : undefined,
+          dateStr: monthStart,
+          startIso: monthStart,
+          endIso: monthEnd,
+          isToday: year === currentYear && month === currentMonth,
+          isWeekend: false
+        });
+      }
+    } else {
+      for (let year = startDate.getFullYear(); year <= endDate.getFullYear(); year++) {
+        cols.push({
+          id: `lifecycle-${year}`,
+          label: String(year),
+          subLabel: year === currentYear ? 'Today' : undefined,
+          dateStr: `${year}-01-01`,
+          startIso: `${year}-01-01`,
+          endIso: `${year}-12-31`,
+          isToday: year === currentYear,
+          isWeekend: false
+        });
+      }
     }
-    const title = `Full Timeline (${startYr} – ${endYr})`;
-    return { cols, title, minYear, maxYear, singleDateStr: undefined, isSingleDay: false, periodStartIso: `${startYr}-01-01`, periodEndIso: `${endYr}-12-31` };
-  }, [timelineGranularity, timelineOffset, goals]);
+
+    const title = `Full Timeline (${startDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })} – ${endDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`;
+    return {
+      cols,
+      title,
+      minYear: startDate.getFullYear(),
+      maxYear: endDate.getFullYear(),
+      singleDateStr: undefined,
+      isSingleDay: false,
+      periodStartIso: lifecycleStart,
+      periodEndIso: lifecycleEnd
+    };
+  }, [timelineGranularity, timelineOffset, goals, selectedGoalId, annotatedTasks]);
+
+  const hasFullYearHorizon = useMemo(
+    () => hasFullYearGoalHorizon(goals, annotatedTasks, selectedGoalId),
+    [goals, annotatedTasks, selectedGoalId]
+  );
+
+  useEffect(() => {
+    if (timelineGranularity === 'yearly' && !hasFullYearHorizon) {
+      setTimelineGranularity('lifecycle');
+      setTimelineOffset(0);
+    }
+  }, [timelineGranularity, hasFullYearHorizon]);
 
   // ----------------------------------------------------
   // DYNAMIC PERIOD-AWARE METRICS (RESPONDS TO TIME WINDOW)
@@ -1063,10 +1179,18 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
     const pAppointments = annotatedAppointments.filter(a => inPeriod(a.date));
     const pMeetings = annotatedMeetings.filter(m => inPeriod(m.date));
 
-    const totalPeriodItems = pTasks.length + pMilestones.length + pLearning.length + pSkills.length + pAppointments.length + pMeetings.length;
+    const taskProgress = getTaskPeriodProgress(
+      annotatedTasks,
+      annotatedTasks,
+      start,
+      end,
+      timelineGranularity
+    );
+    const totalPeriodItems =
+      taskProgress.total + pMilestones.length + pLearning.length + pSkills.length + pAppointments.length + pMeetings.length;
 
     const completedPeriodItems =
-      pTasks.filter(t => Boolean(t.done)).length +
+      taskProgress.completed +
       pMilestones.filter(m => m.status === 'completed' || m.progress >= 100).length +
       pLearning.filter(l => l.progress >= 100).length +
       pSkills.filter(s => (s.progress || 0) >= 100).length +
@@ -1082,15 +1206,15 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
       pMeetings.filter(m => !m.completed && m.status !== 'completed' && m.delay.isDelayed).length;
 
     const periodRate = totalPeriodItems > 0
-      ? Math.round((completedPeriodItems / totalPeriodItems) * 100)
-      : (timelineGranularity === 'single_day' ? 100 : onTimeHealthRate);
+      ? Math.round((completedPeriodItems / totalPeriodItems) * 1000) / 10
+      : null;
 
     const periodLabel =
-      timelineGranularity === 'single_day' ? 'Daily Execution Health' :
-      timelineGranularity === 'daily' ? 'Weekly Sprint Health' :
-      timelineGranularity === 'monthly' ? 'Monthly Execution Health' :
-      timelineGranularity === 'yearly' ? 'Yearly Horizons Health' :
-      'Lifecycle Execution Health';
+      timelineGranularity === 'single_day' ? 'Today' :
+      timelineGranularity === 'daily' ? 'This Week' :
+      timelineGranularity === 'monthly' ? 'This Month' :
+      timelineGranularity === 'yearly' ? 'This Year' :
+      'Lifecycle';
 
     return {
       start,
@@ -1110,7 +1234,6 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
     annotatedAppointments,
     annotatedMeetings,
     timelineGranularity,
-    onTimeHealthRate,
     today
   ]);
 
@@ -1235,7 +1358,12 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
   // ----------------------------------------------------
   const handleToggleTask = async (task: Task) => {
     const nextDone = !(task.done || task.status === 'done');
-    const updated: Task = { ...task, done: nextDone, status: nextDone ? 'done' : 'open', updatedAt: Date.now() };
+    const updated: Task = {
+      ...task,
+      done: nextDone,
+      status: nextDone ? 'done' : 'open',
+      updatedAt: Date.now()
+    };
     await storage.put('tasks', updated);
     const linkedGoalId = resolveTaskGoalId(task, { routines, skills, learningItems });
     if (linkedGoalId) await syncGoalProgressFromTasks(linkedGoalId, task.id, nextDone, nextDone ? 'done' : 'open');
@@ -1577,7 +1705,7 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
             <Target className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
-            {periodMetrics.periodRate}%
+            {periodMetrics.periodRate === null ? '—' : `${formatProgressPercent(periodMetrics.periodRate)}%`}
           </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
             {periodMetrics.totalPeriodItems > 0
@@ -1777,8 +1905,8 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search plan..."
-                className="w-24 min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-500 focus-visible:ring-1 focus-visible:ring-amber-500 dark:text-white dark:placeholder:text-slate-400 sm:flex-none sm:w-32"
+                aria-label="Search plan"
+                className="w-24 min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none focus-visible:ring-1 focus-visible:ring-amber-500 dark:text-white sm:flex-none sm:w-32"
               />
               {searchQuery && (
                 <button type="button" onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600">
@@ -1878,29 +2006,24 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
 
             {/* Granularity Switcher & Period Controls */}
             <div className={`flex flex-col justify-between gap-2 border-b border-[var(--om-line)] bg-card-soft px-4 py-2 sm:flex-row sm:items-center ${activeStream === 'finance' ? '' : 'timeline-table-preceding'}`}>
-              <div className="timeline-granularity-tabs flex w-full max-w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:flex-1">
+              <div className="timeline-granularity-tabs flex w-fit max-w-full min-w-0 items-center gap-0.5">
                 {([
                   ['single_day', 'Day'],
                   ['daily', 'Week'],
                   ['monthly', 'Monthly'],
                   ['yearly', 'Yearly'],
                   ['lifecycle', 'Lifecycle']
-                ] as const).map(([granularity, label], index) => (
-                  <React.Fragment key={granularity}>
-                    {index > 0 && <span aria-hidden="true" className="px-0.5 text-amber-400/80 dark:text-amber-700">·</span>}
+                ] as const)
+                  .filter(([granularity]) => granularity !== 'yearly' || hasFullYearHorizon)
+                  .map(([granularity, label]) => (
                     <button
                       type="button"
                       aria-pressed={timelineGranularity === granularity}
                       onClick={() => { setTimelineGranularity(granularity); setTimelineOffset(0); }}
-                      className={`timeline-granularity-tab px-1.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap sm:text-xs ${
-                        timelineGranularity === granularity
-                          ? 'text-amber-800 dark:text-amber-200'
-                          : 'text-amber-700 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-100'
-                      }`}
+                      className="timeline-granularity-tab"
                     >
                       {label}
                     </button>
-                  </React.Fragment>
                 ))}
               </div>
 
@@ -1909,7 +2032,7 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                   type="button"
                   onClick={() => setTimelineOffset(prev => prev - 1)}
                   className="p-1 text-amber-800 transition-colors hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
-                  title="Previous Window"
+                  title={timelineGranularity === 'monthly' ? 'Previous Quarter' : 'Previous Window'}
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </button>
@@ -1928,7 +2051,7 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                   type="button"
                   onClick={() => setTimelineOffset(prev => prev + 1)}
                   className="p-1 text-amber-800 transition-colors hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer"
-                  title="Next Window"
+                  title={timelineGranularity === 'monthly' ? 'Next Quarter' : 'Next Window'}
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
@@ -2027,7 +2150,6 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                     const childGoalCount = goals.filter(child =>
                       child.parentId === goal.id || child.parentIds?.includes(goal.id)
                     ).length;
-
                     const isGoalExpanded = expandedGoalIds[goal.id] !== false;
                     const totalGoalItems =
                       childGoalCount +
@@ -2051,58 +2173,62 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                     if (activeStream === 'tasks' && goalTasks.length === 0) return null;
                     if (activeStream === 'finance' && goalSavings.length === 0 && goalLoans.length === 0 && goalInvestments.length === 0) return null;
 
-                    // Dynamic period items calculation for this goal
                     const pStart = timelineData.periodStartIso || '';
                     const pEnd = timelineData.periodEndIso || '';
-                    const periodGoalItems =
-                      goalTasks.filter(t => {
-                        const d = (t.dueAt || t.date || '').slice(0, 10);
-                        return Boolean(d && pStart && pEnd && d >= pStart && d <= pEnd);
-                      }).length +
-                      goalMilestones.filter(m => {
-                        const d = (m.dueDate || '').slice(0, 10);
-                        return Boolean(d && pStart && pEnd && d >= pStart && d <= pEnd);
-                      }).length +
-                      goalAppointments.filter(a => {
-                        const d = (a.date || '').slice(0, 10);
-                        return Boolean(d && pStart && pEnd && d >= pStart && d <= pEnd);
-                      }).length +
-                      goalMeetings.filter(m => {
-                        const d = (m.date || '').slice(0, 10);
-                        return Boolean(d && pStart && pEnd && d >= pStart && d <= pEnd);
-                      }).length;
-
-                    const periodGoalDone =
-                      goalTasks.filter(t => {
-                        const d = (t.dueAt || t.date || '').slice(0, 10);
-                        return Boolean(t.done && d && pStart && pEnd && d >= pStart && d <= pEnd);
-                      }).length +
-                      goalMilestones.filter(m => {
-                        const d = (m.dueDate || '').slice(0, 10);
-                        return Boolean((m.status === 'completed' || m.progress >= 100) && d && pStart && pEnd && d >= pStart && d <= pEnd);
-                      }).length +
-                      goalAppointments.filter(a => {
-                        const d = (a.date || '').slice(0, 10);
-                        const isDone = Boolean(a.completed || a.status === 'completed');
-                        return Boolean(isDone && d && pStart && pEnd && d >= pStart && d <= pEnd);
-                      }).length +
-                      goalMeetings.filter(m => {
-                        const d = (m.date || '').slice(0, 10);
-                        const isDone = Boolean(m.completed || m.status === 'completed');
-                        return Boolean(isDone && d && pStart && pEnd && d >= pStart && d <= pEnd);
-                      }).length;
+                    const goalStart = goal.date || (goal.createdAt ? getLocalDateString(new Date(goal.createdAt)) : undefined);
+                    const goalEnd = goal.targetDate?.slice(0, 10);
+                    const selectedMonth = timelineGranularity === 'monthly'
+                      ? timelineData.cols.find(column => column.isToday) || timelineData.cols[0]
+                      : undefined;
+                    const rangeStart = selectedMonth?.startIso || pStart;
+                    const rangeEnd = selectedMonth?.endIso || pEnd;
+                    const progressStart = goalStart && goalStart > rangeStart ? goalStart : rangeStart;
+                    const progressEnd = goalEnd && goalEnd < rangeEnd ? goalEnd : rangeEnd;
+                    const periodInput = {
+                      goal,
+                      childGoals: [],
+                      allGoals: goals,
+                      tasks: annotatedTasks,
+                      allTasks: annotatedTasks,
+                      milestones,
+                      learningItems,
+                      skills,
+                      routines,
+                      habits: annotatedHabits,
+                      habitLogs,
+                      appointments,
+                      meetings,
+                      savingsPlans,
+                      loans,
+                      investments,
+                      reminders
+                    };
+                    const periodProgress = getGoalHierarchyPeriodProgress(
+                      periodInput,
+                      progressStart,
+                      progressEnd,
+                      timelineGranularity
+                    );
+                    const periodGoalItems = periodProgress.total;
+                    const periodGoalDone = periodProgress.completed;
 
                     const windowLabel =
                       timelineGranularity === 'single_day' ? 'Today' :
                       timelineGranularity === 'daily' ? 'This Week' :
                       timelineGranularity === 'monthly' ? 'This Month' :
-                      timelineGranularity === 'yearly' ? 'Yearly' : 'Lifecycle';
-
+                      timelineGranularity === 'yearly' ? 'This Year' :
+                      timelineGranularity === 'lifecycle' ? 'Project Timeline' : 'Lifecycle';
+                    const periodDisplayLabel =
+                      timelineGranularity === 'single_day' ? 'Day' :
+                      timelineGranularity === 'daily' ? 'Week' :
+                      timelineGranularity === 'monthly' ? 'Month' :
+                      timelineGranularity === 'yearly' ? 'Year' : 'Lifecycle';
                     const periodGoalRate = periodGoalItems > 0
-                      ? Math.round((periodGoalDone / periodGoalItems) * 100)
-                      : null;
+                      ? Math.round((periodGoalDone / periodGoalItems) * 1000) / 10
+                      : timelineGranularity === 'lifecycle'
+                        ? Math.max(0, Math.min(100, Math.round(Number(goal.progress) || 0)))
+                        : null;
 
-                    const goalStart = goal.createdAt ? getLocalDateString(new Date(goal.createdAt)) : undefined;
                     const goalSpan = computeSpan(goalStart, goal.targetDate, timelineData.cols);
                     const tierMeta = getGoalTierBadge(goal.level);
                     const indentPx = (goal.level ? (goal.level - 1) : 0) * 12;
@@ -2143,8 +2269,20 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                                   </span>
                                 </div>
                                 {!isMobileCompactView && (
-                                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                    {activeStream === 'finance' ? (
+                                  <div className="mt-1">
+                                    <span className="timeline-goal-period-badge">
+                                      <span className="timeline-goal-period-badge__period">{periodDisplayLabel}</span>
+                                      <span aria-hidden="true">·</span>
+                                      <span className="timeline-goal-period-badge__count">{formatProgressCount(periodGoalDone)}/{formatProgressCount(periodGoalItems)}</span>
+                                      <span aria-hidden="true">·</span>
+                                      <span className="timeline-goal-period-badge__rate">
+                                        {periodGoalRate === null ? '—' : `${formatProgressPercent(periodGoalRate)}%`}
+                                      </span>
+                                    </span>
+                                  </div>
+                                )}
+                                {!isMobileCompactView && activeStream === 'finance' && (
+                                  <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
                                       <div className="flex items-center gap-1 font-mono text-emerald-700 dark:text-emerald-400">
                                         <span className="inline-flex items-center gap-1 font-bold"><ThemeIcon name="savings" className="h-3 w-3" /> Savings: {goalSavings.length}</span>
                                         <span>·</span>
@@ -2152,24 +2290,6 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                                         <span>·</span>
                                         <span className="inline-flex items-center gap-1 font-bold text-blue-600 dark:text-blue-400"><ThemeIcon name="portfolio" className="h-3 w-3" /> Inv: {goalInvestments.length}</span>
                                       </div>
-                                    ) : periodGoalRate !== null ? (
-                                      <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded font-mono">
-                                        {windowLabel}: {periodGoalRate}% ({periodGoalDone}/{periodGoalItems})
-                                      </span>
-                                    ) : (
-                                      <span className="text-slate-400">
-                                        {windowLabel}: 0 tasks
-                                      </span>
-                                    )}
-                                    <span>·</span>
-                                    <span
-                                      className="font-bold text-indigo-600 dark:text-indigo-400 font-mono"
-                                      title={totalGoalItems === 0
-                                        ? 'No linked timeline items or subgoals are shown here. Progress may be manually set or based on linked data outside this timeline.'
-                                        : 'Progress is based on linked work items and subgoals.'}
-                                    >
-                                      {totalGoalItems === 0 ? 'Manual progress' : 'Overall'}: {goal.progress}%
-                                    </span>
                                   </div>
                                 )}
                               </div>
@@ -2201,53 +2321,21 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                                   left: `${goalSpan.leftPct}%`,
                                   width: `${goalSpan.widthPct}%`
                                 }}
-                                title={`Goal: ${goal.title}\nPlanned: ${goalStart || 'Genesis'} → ${goal.targetDate || 'Ongoing'}\nProgress: ${goal.progress}%\nWindow Pace: ${periodGoalRate !== null ? `${periodGoalRate}% (${periodGoalDone}/${periodGoalItems})` : 'No items'}`}
+                                title={`${goal.title}: ${periodGoalRate !== null ? `${windowLabel} ${formatProgressPercent(periodGoalRate)}%` : 'No scheduled items in this period'}`}
                               >
                                 <div
                                   className={`h-full transition-all duration-300 rounded-lg ${
-                                    goal.progress >= 100 ? 'bg-emerald-500' : 'bg-indigo-600 dark:bg-indigo-500'
+                                    (periodGoalRate ?? 0) >= 100 ? 'bg-emerald-500' : 'bg-indigo-600 dark:bg-indigo-500'
                                   }`}
-                                  style={{ width: `${Math.min(100, Math.max(0, goal.progress))}%` }}
+                                  style={{ width: `${Math.min(100, Math.max(0, periodGoalRate ?? 0))}%` }}
                                 />
-                                <div className="absolute inset-0 flex items-center justify-between px-2 text-[10px] font-bold pointer-events-none min-w-0">
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    {/* Prominent Window Pace Badge / Finance Portfolio Badge */}
-                                    {activeStream === 'finance' ? (
-                                      <span className="font-mono text-white px-1.5 py-0.5 rounded bg-emerald-600 shadow-xs flex items-center gap-1 text-[9px]">
-                                        <span>Portfolio:</span>
-                                        <span>{getCurrencySymbol()} {goalSavings.reduce((s, sp) => s + (Number(sp.currentAmount) || 0), 0).toLocaleString('en-IN')} saved</span>
-                                        {goalLoans.length > 0 && <span className="opacity-90">· {getCurrencySymbol()} {goalLoans.reduce((s, l) => s + (Number((l as any).outstanding) || 0), 0).toLocaleString('en-IN')} debt</span>}
-                                      </span>
-                                    ) : periodGoalRate !== null ? (
-                                      <span className="font-mono text-white px-1.5 py-0.5 rounded bg-emerald-600 shadow-xs flex items-center gap-1 text-[9px]">
-                                        <span className="opacity-90">{windowLabel}:</span>
-                                        <span>{periodGoalRate}%</span>
-                                        <span className="opacity-75 font-normal">({periodGoalDone}/{periodGoalItems})</span>
-                                      </span>
-                                    ) : null}
-
-                                    {/* Overall Destination Progress */}
-                                    <span
-                                      className="font-mono text-white px-1.5 py-0.5 rounded bg-black/40 shadow-xs text-[9px]"
-                                      title={totalGoalItems === 0
-                                        ? 'No linked timeline items or subgoals are shown here. Progress may be manually set or based on linked data outside this timeline.'
-                                        : 'Progress is based on linked work items and subgoals.'}
-                                    >
-                                      {totalGoalItems === 0 ? 'Manual' : 'Overall'}: {goal.progress}%
-                                    </span>
-
-                                    <span className="text-slate-800 dark:text-slate-100 truncate hidden sm:inline drop-shadow-xs font-semibold">
-                                      {goal.title}
-                                    </span>
-                                  </div>
-                                  <span className="text-[9px] text-slate-600 dark:text-slate-300 font-mono hidden md:inline font-semibold">
-                                    {goal.targetDate || 'Ongoing'}
-                                  </span>
-                                </div>
+                                <span className="timeline-goal-bar-rate">
+                                  {periodGoalRate === null ? '—' : `${formatProgressPercent(periodGoalRate)}%`}
+                                </span>
                               </div>
                             ) : (
                               <div className="absolute top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium px-3 italic z-10">
-                                {goalSpan.isFuture ? `Target ${goal.targetDate || 'future'}` : `Target: ${goal.targetDate || 'Ongoing'}`} ({goal.progress}%)
+                                {goalSpan.isFuture ? `Target ${goal.targetDate || 'future'}` : `Target: ${goal.targetDate || 'Ongoing'}`}
                               </div>
                             )}
                           </div>
@@ -2549,9 +2637,15 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                             {/* 7. TASKS STREAM (MAPPED ACCURATELY) */}
                             {(activeStream === 'all' || activeStream === 'tasks') &&
                               goalTasks.map(task => {
-                                const isDelayed = task.delay.isDelayed && !task.done;
+                                const isDone = Boolean(task.done || task.status === 'done');
+                                const isDelayed = task.delay.isDelayed && !isDone;
                                 const taskDateStr = (task.dueAt || task.date || '').slice(0, 10);
-                                const taskSpan = computeSpan(taskDateStr, taskDateStr, timelineData.cols, true);
+                                const taskSpan = computeSpan(
+                                  taskDateStr,
+                                  taskDateStr,
+                                  timelineData.cols,
+                                  true
+                                );
 
                                 return (
                                   <div
@@ -2567,9 +2661,9 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                                           onClick={() => handleToggleTask(task)}
                                           className="text-slate-400 hover:text-emerald-600 cursor-pointer shrink-0"
                                         >
-                                          {task.done ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Circle className="h-3.5 w-3.5" />}
+                                          {isDone ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Circle className="h-3.5 w-3.5" />}
                                         </button>
-                                        <span className={`text-xs truncate ${task.done ? 'line-through text-slate-400' : isDelayed ? 'font-bold text-rose-700 dark:text-rose-300' : 'font-medium text-slate-800 dark:text-slate-200'}`}>
+                                        <span className={`text-xs truncate ${isDone ? 'line-through text-slate-400' : isDelayed ? 'font-bold text-rose-700 dark:text-rose-300' : 'font-medium text-slate-800 dark:text-slate-200'}`}>
                                           {task.title}
                                         </span>
                                       </div>
@@ -2605,18 +2699,18 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                                           <div
                                             onClick={() => handleToggleTask(task)}
                                             className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[10px] font-bold shadow-xs whitespace-nowrap cursor-pointer transition-transform hover:scale-102 border ${
-                                              task.done
+                                              isDone
                                                 ? 'bg-emerald-500 text-white border-emerald-600'
                                                 : isDelayed
                                                 ? 'bg-rose-600 text-white border-rose-700 ring-2 ring-rose-400/50 animate-pulse'
                                                 : 'bg-white text-indigo-700 border-indigo-200 dark:bg-slate-800 dark:text-indigo-300'
                                             }`}
-                                            title={`${task.title} · Due ${taskDateStr || 'Today'}`}
+                                            title={`${task.title} · ${isDone ? `Completed ${taskDateStr || 'at unknown time'}` : `Due ${taskDateStr || 'Today'}`}`}
                                           >
-                                            {task.done ? <Check className="h-3 w-3 shrink-0 text-white" /> : <Circle className="h-2.5 w-2.5 shrink-0 opacity-70" />}
+                                            {isDone ? <Check className="h-3 w-3 shrink-0 text-white" /> : <Circle className="h-2.5 w-2.5 shrink-0 opacity-70" />}
                                             <span className="truncate max-w-[130px] sm:max-w-[200px]">{task.title}</span>
                                             <span className="text-[9px] opacity-75 font-mono ml-0.5">
-                                              {task.done ? '✓' : taskDateStr ? taskDateStr.slice(5) : 'Today'}
+                                              {isDone ? '✓' : taskDateStr ? taskDateStr.slice(5) : 'Today'}
                                             </span>
                                           </div>
                                         </div>
@@ -3886,7 +3980,7 @@ export const TimelinePlan: React.FC<TimelinePlanProps> = ({
                   required
                   value={genesisModal.title}
                   onChange={e => setGenesisModal({ ...genesisModal, title: e.target.value })}
-                  placeholder="Concrete executable action..."
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>

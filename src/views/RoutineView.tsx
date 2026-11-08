@@ -19,6 +19,7 @@ import { LinkModeSelector } from '../components/LinkModeSelector';
 import { GoalPicker } from '../components/GoalPicker';
 import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
 import { TaskRoutineFocusSwitcher, type WorkAreaSection } from '../components/TaskRoutineFocusSwitcher';
+import { CardCloseButton } from '../components/CardCloseButton';
 
 interface RoutineViewProps {
   routines: Routine[];
@@ -823,6 +824,13 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 {editingRoutine ? 'Edit Routine Block' : 'Routine Genesis'}
               </h2>
             </div>
+            <CardCloseButton
+              label="routine form"
+              onClick={() => {
+                setRoutineFormOpen(false);
+                setRoutineMenuSection('routine');
+              }}
+            />
           </div>
 
           <form onSubmit={handleAddRoutine} className="mt-4 space-y-3">
@@ -1022,6 +1030,13 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 Habit Genesis
               </h2>
             </div>
+            <CardCloseButton
+              label="habit form"
+              onClick={() => {
+                setHabitFormOpen(false);
+                setHabitMenuSection('routine-habits');
+              }}
+            />
           </div>
 
           <form onSubmit={handleAddHabit} className="mt-4 space-y-3">
@@ -1838,7 +1853,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   required
                   value={genesisModal.title}
                   onChange={e => setGenesisModal({ ...genesisModal, title: e.target.value })}
-                  placeholder="Concrete executable action..."
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>

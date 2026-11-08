@@ -26,6 +26,7 @@ import { FormDisclosure } from '../components/FormDisclosure';
 import { syncGoalProgressFromFinance } from '../lib/goalTaskSync';
 import { addSchedulePeriod, advanceSchedule, estimateRemainingInvestmentValue, getFinancialPosition, getInvestmentMetrics } from '../lib/financeCalculations';
 import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
+import { CardCloseButton } from '../components/CardCloseButton';
 import {
   addLoanPaymentPeriod,
   BANK_SAVINGS_PRODUCTS,
@@ -262,7 +263,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   // Progressive rendering for the ledger: slicing beats rendering thousands of rows.
   const [visibleLedgerCount, setVisibleLedgerCount] = useState(150);
-  const MAX_RECEIPT_FILE_BYTES = 500 * 1024 * 1024;
+  const MAX_RECEIPT_FILE_BYTES = 20 * 1024 * 1024;
   const ALLOWED_RECEIPT_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp']);
 
   const formatFileSize = (bytes: number) => {
@@ -287,7 +288,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     if (!file) return;
     try {
       if (file.size > MAX_RECEIPT_FILE_BYTES) {
-        onSuccess('Receipt attachment must be 500 MB or smaller.');
+        onSuccess('Receipt attachment must be 20 MB or smaller.');
         return;
       }
       if (!ALLOWED_RECEIPT_TYPES.has(file.type)) {
@@ -710,7 +711,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     schedule.forEach(payment => {
       const hasBreakdown = payment.principal !== undefined || payment.interest !== undefined;
       const periodAmount = hasBreakdown
-        ? Math.max(0, (Number(payment.principal) || 0) - (Number(payment.extraPrincipal) || 0) + (Number(payment.interest) || 0))
+        ? Math.max(0, (Number(payment.principal) || 0) + (Number(payment.interest) || 0))
         : Math.max(0, (Number(payment.amount) || 0) - (Number(payment.lateFee) || 0) -
           (Number(payment.penalInterest) || 0) - (Number(payment.processingFee) || 0) -
           (Number(payment.administrativeFee) || 0) - (Number(payment.applicableTax) || 0) -
@@ -3907,11 +3908,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         <div className={`${overviewPanel === 'transaction' ? 'finance-unified-pane finance-unified-split' : ''} grid grid-cols-1 items-start gap-6 lg:grid-cols-12`}>
           {/* Cash-flow actions remain beside the statement they affect. */}
           {overviewPanel === 'transaction' && <div ref={transactionPanelRef} className="lg:col-span-8 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
-              <Plus className="h-4 w-4" />
+            <div className="flex items-center justify-between gap-2 text-sm font-bold text-slate-900 dark:text-white">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                  <Plus className="h-4 w-4" />
+                </div>
+                <h2>Record Transaction</h2>
               </div>
-              <h2>Record Transaction</h2>
+              <CardCloseButton label="transaction form" onClick={() => setOverviewPanel(null)} />
             </div>
 
             <form onSubmit={handleCreateTransaction} className="finance-transaction-form mt-4 space-y-3.5">
@@ -3971,7 +3975,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           setTxAmount(String(txAmountResult));
                         }
                       }}
-                      placeholder="0.00"
+
                       className="finance-transaction-field mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm font-semibold text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
@@ -4046,11 +4050,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           setIsCategoryDropdownOpen(true);
                         }}
                         onFocus={() => setIsCategoryDropdownOpen(true)}
-                        placeholder={
-                          txType === 'income'
-                            ? 'Select or type (Default: Income)'
-                            : 'Select or type (e.g. Food, Groceries)'
-                        }
+
                         className="finance-transaction-field mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-3 pr-16 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                       <div className="absolute inset-y-0 right-0 flex items-center pr-1.5 gap-0.5">
@@ -4175,7 +4175,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   type="text"
                   value={txNote}
                   onChange={e => setTxNote(e.target.value)}
-                  placeholder="Order ID, vendor details, memo..."
+
                   className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -4558,7 +4558,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               <input
                 type="text"
                 required
-                placeholder="New Account Name (e.g. HDFC, Cash Vault)"
+
                 value={acctName}
                 onChange={e => setAcctName(e.target.value)}
                 className="flex-1 min-w-[200px] h-9 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-indigo-500"
@@ -4575,7 +4575,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </select>
               <input
                 type="number"
-                placeholder={"Opening NPR ".split('NPR').join(getCurrencySymbol())}
+
                 value={acctBalance}
                 onChange={e => setAcctBalance(e.target.value)}
                 className="w-28 h-9 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -4596,11 +4596,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 {cashFlowSchedules.length === 0 && <h2 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">Scheduled Cash Flow</h2>}
                 <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-200">Create a schedule</h3>
                 <form onSubmit={handleCreateCashFlowSchedule} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-2">
-                <input required value={scheduleName} onChange={event => setScheduleName(event.target.value)} placeholder="Name (e.g. House rent)" className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white sm:col-span-2" />
+                <input required value={scheduleName} onChange={event => setScheduleName(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white sm:col-span-2" />
                 <select value={scheduleType} onChange={event => setScheduleType(event.target.value as 'income' | 'expense')} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="expense">Expected expense</option><option value="income">Expected income</option></select>
                 <select value={scheduleFrequency} onChange={event => setScheduleFrequency(event.target.value as CashFlowScheduleFrequency)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="once">One time</option><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>
-                <input required value={scheduleCategory} onChange={event => setScheduleCategory(event.target.value)} placeholder="Category (e.g. Rent)" className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
-                <input required type="number" min="0.01" step="0.01" value={scheduleAmount} onChange={event => setScheduleAmount(event.target.value)} placeholder={"Amount NPR".split('NPR').join(getCurrencySymbol())} className="h-10 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input required value={scheduleCategory} onChange={event => setScheduleCategory(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <input required type="number" min="0.01" step="0.01" value={scheduleAmount} onChange={event => setScheduleAmount(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 <ThemedDateTimeInput required type="date" value={scheduleNextDueDate} onChange={event => setScheduleNextDueDate(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 <select value={scheduleAccountId} onChange={event => setScheduleAccountId(event.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="">No tracked account</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select>
                     <button type="submit" className="sanctuary-flat-primary h-10 rounded-xl px-3 text-xs font-semibold sm:col-span-2">+ Save expected schedule</button>
@@ -4737,7 +4737,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       required
                       value={payAmount}
                       onChange={e => setPayAmount(e.target.value)}
-                      placeholder="Actual amount"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
@@ -4823,7 +4823,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <>
                         <label className="mt-2 block text-[10px] font-medium text-slate-500">
                           Closure statement reference (optional)
-                          <input value={payClosureReference} onChange={event => setPayClosureReference(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" placeholder="Bank quotation / certificate ref" />
+                          <input value={payClosureReference} onChange={event => setPayClosureReference(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                         </label>
                       </>
                     )}
@@ -4897,7 +4897,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     required
                     value={loanName}
                     onChange={e => setLoanName(e.target.value)}
-                    placeholder="e.g. Home mortgage, business loan, personal loan"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -4918,7 +4918,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       value={loanPrincipal}
                       disabled={Boolean(editingLoanId)}
                       onChange={e => setLoanPrincipal(e.target.value)}
-                      placeholder="100000"
+
                       className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
@@ -4987,7 +4987,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       <select value={loanInterestMethod} onChange={event => setLoanInterestMethod(event.target.value as NonNullable<Loan['interestMethod']>)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="reducing">Reducing balance</option><option value="flat">Flat rate</option><option value="simple">Simple interest</option></select>
                     </label>
                     <label className="col-span-2 text-[10px] font-medium text-slate-500">Actual disbursed / received amount ({getCurrencySymbol()})
-                      <input type="number" min="0.01" step="0.01" value={loanDisbursedAmount} disabled={Boolean(editingLoanId)} onChange={event => setLoanDisbursedAmount(event.target.value)} placeholder={loanPrincipal || 'Defaults to principal'} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-60" />
+                      <input type="number" min="0.01" step="0.01" value={loanDisbursedAmount} disabled={Boolean(editingLoanId)} onChange={event => setLoanDisbursedAmount(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white disabled:opacity-60" />
                     </label>
                     <label className="col-span-2 text-[10px] font-medium text-slate-500">Lender's installment amount per period (actual, optional)
                       <input type="number" min="0.01" step="0.01" value={loanActualInstallment} onChange={event => setLoanActualInstallment(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
@@ -5087,7 +5087,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     required
                     value={liabName}
                     onChange={e => setLiabName(e.target.value)}
-                    placeholder="e.g. Credit Card Balance, IOU to Partner, Vendor Dues"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -5101,7 +5101,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       required
                       value={liabVal}
                       onChange={e => setLiabVal(e.target.value)}
-                      placeholder="15000"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
@@ -5376,7 +5376,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             required
                             value={liabilityRepaymentAmount}
                             onChange={e => setLiabilityRepaymentAmount(e.target.value)}
-                            placeholder={"Repayment NPR ".split('NPR').join(getCurrencySymbol())}
+
                             aria-label={`Repayment amount for ${l.name}`}
                             className="h-9 rounded-lg border border-slate-200 px-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                           />
@@ -5459,7 +5459,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   required
                   value={invName}
                   onChange={e => setInvName(e.target.value)}
-                  placeholder="e.g. Nifty 50 Index, Sovereign Gold, Tech Equity"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -5477,7 +5477,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     required
                     value={invAmount}
                     onChange={e => setInvAmount(e.target.value)}
-                    placeholder="100000"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -5487,7 +5487,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     type="number"
                     value={invCurrentVal}
                     onChange={e => setInvCurrentVal(e.target.value)}
-                    placeholder="115000"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -5810,7 +5810,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       type="text"
                       value={saveBankName}
                       onChange={event => setSaveBankName(event.target.value)}
-                      placeholder="Bank or cooperative"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </label>
@@ -5820,7 +5820,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       type="text"
                       value={saveBranchName}
                       onChange={event => setSaveBranchName(event.target.value)}
-                      placeholder="Branch name"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </label>
@@ -5830,7 +5830,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       type="text"
                       value={saveReference}
                       onChange={event => setSaveReference(event.target.value)}
-                      placeholder="Use a safe label; avoid full account numbers"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </label>
@@ -5853,7 +5853,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   required
                   value={saveName}
                   onChange={e => setSaveName(e.target.value)}
-                  placeholder="e.g. New Workstation, Emergency Vault, Travel Fund"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -5869,7 +5869,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     value={saveCurrent}
                     disabled={Boolean(editingSavingsPlanId)}
                     onChange={e => setSaveCurrent(e.target.value)}
-                    placeholder="e.g. 100000"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -5881,7 +5881,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     step="0.01"
                     value={saveTarget}
                     onChange={e => setSaveTarget(e.target.value)}
-                    placeholder="100000"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div> : (
@@ -5895,7 +5895,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       required={saveProductType === 'fixed_deposit'}
                       value={saveAnnualInterestRate}
                       onChange={e => setSaveAnnualInterestRate(e.target.value)}
-                      placeholder="Enter bank's stated rate"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
@@ -5938,7 +5938,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       step="0.01"
                       value={saveContributionAmount}
                       onChange={event => setSaveContributionAmount(event.target.value)}
-                      placeholder="Optional"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </label>
@@ -5954,7 +5954,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     required
                     value={saveCustomPeriodDays}
                     onChange={event => setSaveCustomPeriodDays(event.target.value)}
-                    placeholder="e.g. 10"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </label>
@@ -5971,7 +5971,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         required
                         value={saveMonths}
                         onChange={e => setSaveMonths(e.target.value)}
-                        placeholder="60"
+
                         className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                     </div>
@@ -6019,7 +6019,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       step="0.01"
                       value={saveContributionAmount}
                       onChange={event => setSaveContributionAmount(event.target.value)}
-                      placeholder="Optional"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </label>
@@ -6075,7 +6075,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         step="0.01"
                         value={saveTdsRate}
                         onChange={event => setSaveTdsRate(event.target.value)}
-                        placeholder="Optional"
+
                         className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                     </label>
@@ -6087,7 +6087,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         step="0.01"
                         value={saveServiceCharges}
                         onChange={event => setSaveServiceCharges(event.target.value)}
-                        placeholder="Optional"
+
                         className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                     </label>
@@ -6099,7 +6099,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         step="0.01"
                         value={savePenalty}
                         onChange={event => setSavePenalty(event.target.value)}
-                        placeholder="Optional penalty"
+
                         className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                     </label>
@@ -6111,7 +6111,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         step="0.01"
                         value={saveOtherDeductions}
                         onChange={event => setSaveOtherDeductions(event.target.value)}
-                        placeholder="Optional"
+
                         className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                     </label>
@@ -6178,7 +6178,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   type="text"
                   value={saveNotes}
                   onChange={event => setSaveNotes(event.target.value)}
-                  placeholder="Short note about this savings record"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </label>
@@ -6229,7 +6229,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   type="search"
                   value={savingsSearch}
                   onChange={event => setSavingsSearch(event.target.value)}
-                  placeholder="Search name / bank / ref"
+                  aria-label="Search savings"
                   className="finance-flat-select h-8 w-36 rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-[11px] focus:outline-none dark:border-slate-700 dark:text-white"
                 />
                 <select
@@ -6458,7 +6458,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   required
                   value={assetName}
                   onChange={e => setAssetName(e.target.value)}
-                  placeholder="e.g. Family home, motorcycle, tractor"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -6469,12 +6469,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </label>
               {assetCategory === 'custom' && (
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Custom asset type
-                  <input required value={assetCustomCategory} onChange={event => setAssetCustomCategory(event.target.value)} placeholder="e.g. musical instrument" className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                  <input required value={assetCustomCategory} onChange={event => setAssetCustomCategory(event.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 </label>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Purchase cost ({getCurrencySymbol()})
-                  <input type="number" min="0" step="0.01" value={assetPurchaseCost} onChange={event => setAssetPurchaseCost(event.target.value)} placeholder={assetVal || 'Defaults to value'} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                  <input type="number" min="0" step="0.01" value={assetPurchaseCost} onChange={event => setAssetPurchaseCost(event.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 </label>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Latest market value ({getCurrencySymbol()})
                 <input
@@ -6484,7 +6484,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   required
                   value={assetVal}
                   onChange={e => setAssetVal(e.target.value)}
-                  placeholder="Enter manually"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
                 </label>
@@ -6504,7 +6504,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   {!editingAssetId && (
                     <>
                       <label className="text-[10px] font-medium text-slate-500">Purchase payment (optional, {getCurrencySymbol()})
-                        <input type="number" min="0" step="0.01" value={assetPaidAmount} onChange={event => setAssetPaidAmount(event.target.value)} placeholder="Blank = cost basis if account selected" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                        <input type="number" min="0" step="0.01" value={assetPaidAmount} onChange={event => setAssetPaidAmount(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="text-[10px] font-medium text-slate-500">Paid from account (optional)
                         <select value={assetPurchaseAccountId} onChange={event => setAssetPurchaseAccountId(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
@@ -6517,13 +6517,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <input type="number" min="0.001" step="any" value={assetQuantity} onChange={event => setAssetQuantity(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
                   <label className="text-[10px] font-medium text-slate-500">Unit (optional)
-                    <input value={assetUnit} onChange={event => setAssetUnit(event.target.value)} placeholder="piece, ropani, gram" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                    <input value={assetUnit} onChange={event => setAssetUnit(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
                   <label className="text-[10px] font-medium text-slate-500">Location
                     <input value={assetLocation} onChange={event => setAssetLocation(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
                   <label className="text-[10px] font-medium text-slate-500">Condition
-                    <input value={assetCondition} onChange={event => setAssetCondition(event.target.value)} placeholder="Good, needs repair…" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                    <input value={assetCondition} onChange={event => setAssetCondition(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                   </label>
                   <label className="text-[10px] font-medium text-slate-500">Depreciation method
                     <select value={assetDepreciationMethod} onChange={event => setAssetDepreciationMethod(event.target.value as NonNullable<Asset['depreciationMethod']>)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
@@ -6814,10 +6814,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
-                placeholder="Search ledger..."
+                aria-label="Search ledger"
                 value={txSearch}
                 onChange={e => setTxSearch(e.target.value)}
-                className="h-8 w-full sm:w-44 rounded-xl border border-amber-200 bg-amber-50/40 px-2.5 text-xs placeholder:text-slate-500 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-400"
+                className="h-8 w-full sm:w-44 rounded-xl border border-amber-200 bg-amber-50/40 px-2.5 text-xs focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
               />
               {/* Filter & Sort Dropdown Menu (Option A) */}
               <div className="relative" ref={filterDropdownRef}>
@@ -7050,7 +7050,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 const attachType = tx.fileType;
 
                 return (
-                  <div key={tx.id} className="py-3 text-xs">
+                  <div key={tx.id} data-record-id={tx.id} className="py-3 text-xs">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
@@ -7242,7 +7242,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         <input
                           type="text"
                           aria-label="Transaction note"
-                          placeholder="Note (optional)"
+
                           value={editingTransactionNote}
                           onChange={event => setEditingTransactionNote(event.target.value)}
                           className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -7381,7 +7381,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   min="1"
                   value={depositAmount}
                   onChange={e => setDepositAmount(e.target.value)}
-                  placeholder="e.g. 5000"
+
                   className="mt-1 h-9.5 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-indigo-500 outline-none"
                 />
               </div>
@@ -7413,7 +7413,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   type="text"
                   value={depositNote}
                   onChange={e => setDepositNote(e.target.value)}
-                  placeholder="Monthly deposit, bonus, etc."
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none"
                 />
               </div>
@@ -7478,23 +7478,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
                         Interest received ({getCurrencySymbol()})
-                        <input type="number" min="0" step="0.01" value={withdrawalInterest} onChange={event => setWithdrawalInterest(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                        <input type="number" min="0" step="0.01" value={withdrawalInterest} onChange={event => setWithdrawalInterest(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
                         TDS / tax deducted ({getCurrencySymbol()})
-                        <input type="number" min="0" step="0.01" value={withdrawalTds} onChange={event => setWithdrawalTds(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                        <input type="number" min="0" step="0.01" value={withdrawalTds} onChange={event => setWithdrawalTds(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
                         Service charge ({getCurrencySymbol()})
-                        <input type="number" min="0" step="0.01" value={withdrawalServiceCharge} onChange={event => setWithdrawalServiceCharge(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                        <input type="number" min="0" step="0.01" value={withdrawalServiceCharge} onChange={event => setWithdrawalServiceCharge(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
                         Penalty ({getCurrencySymbol()})
-                        <input type="number" min="0" step="0.01" value={withdrawalPenalty} onChange={event => setWithdrawalPenalty(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                        <input type="number" min="0" step="0.01" value={withdrawalPenalty} onChange={event => setWithdrawalPenalty(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <label className="col-span-2 block text-[10px] font-semibold text-slate-600 dark:text-slate-300">
                         Other deduction ({getCurrencySymbol()})
-                        <input type="number" min="0" step="0.01" value={withdrawalOtherDeduction} onChange={event => setWithdrawalOtherDeduction(event.target.value)} placeholder="0" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                        <input type="number" min="0" step="0.01" value={withdrawalOtherDeduction} onChange={event => setWithdrawalOtherDeduction(event.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                       </label>
                       <div className="col-span-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         Manual net comparison: {getCurrencySymbol()} {Math.max(

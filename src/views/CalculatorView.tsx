@@ -393,7 +393,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                               max={field.max}
                               step={field.step || 'any'}
                               value={val}
-                              placeholder={field.placeholder}
+
                               onChange={e => setInputs({ ...inputs, [fieldKey]: e.target.value })}
                               className="mt-1 h-9.5 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                             />

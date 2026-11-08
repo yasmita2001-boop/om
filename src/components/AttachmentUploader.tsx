@@ -30,7 +30,7 @@ export const AttachmentUploader: React.FC<AttachmentUploaderProps> = ({
   attachments,
   onChange,
   maxFiles = 25,
-  maxSizeMB = 500,
+  maxSizeMB = 20,
   className = '',
   label = 'Attach Files (Images, PDF, Docs)'
 }) => {

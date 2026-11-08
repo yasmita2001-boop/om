@@ -1,5 +1,5 @@
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Heart, Activity, Droplet, Calendar, Trash2, Compass, Briefcase,
   Stethoscope, FileText, Edit3, X, CheckCircle2, Circle
@@ -21,8 +21,10 @@ import { PeopleView } from './PeopleView';
 import { SpiritualView } from './SpiritualView';
 import { WorkView } from './WorkView';
 import { HeaderDropdown } from '../components/HeaderDropdown';
+import { CardCloseButton } from '../components/CardCloseButton';
 
 interface HealthViewProps {
+  initialTab?: HealthTab;
   profile?: HealthProfile;
   measurements: HealthMeasurement[];
   sleepRecords: SleepRecord[];
@@ -53,6 +55,8 @@ type HealthTab =
   | 'work-learning'
   | 'work-skills';
 
+export type { HealthTab };
+
 interface DeleteTarget {
   store: 'healthMeasurements' | 'sleepRecords' | 'waterRecords' | 'nutritionRecords' | 'healthAppointments' | 'healthNotes';
   id: string;
@@ -65,6 +69,7 @@ interface EditTarget {
 }
 
 export const HealthView: React.FC<HealthViewProps> = ({
+  initialTab,
   profile,
   measurements,
   sleepRecords,
@@ -85,7 +90,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
   onSuccess
 }) => {
   const today = getLocalDateString();
-  const [activeTab, setActiveTab] = useState<HealthTab>('movement');
+  const [activeTab, setActiveTab] = useState<HealthTab>(initialTab ?? 'movement');
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
   const [movementFormOpen, setMovementFormOpen] = useState(true);
   const [wellnessFormOpen, setWellnessFormOpen] = useState(false);
   const [appointmentFormOpen, setAppointmentFormOpen] = useState<'appointment' | 'observation' | 'both' | null>(null);
@@ -103,6 +111,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
   // Profile form
   const [name, setName] = useState(profile?.name || '');
   const [dob, setDob] = useState(profile?.dob || '');
+  const [sex, setSex] = useState<'male' | 'female'>(profile?.sex === 'female' ? 'female' : 'male');
   const [height, setHeight] = useState<number | ''>(profile?.height && profile.height > 0 ? profile.height : '');
   const [weight, setWeight] = useState<number | ''>(profile?.weight && profile.weight > 0 ? profile.weight : '');
   const [targetWeight, setTargetWeight] = useState<number | ''>(profile?.targetWeight && profile.targetWeight > 0 ? profile.targetWeight : '');
@@ -154,7 +163,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
   const hasSavedBmi = hasSavedHeight && hasSavedWeight;
   const bmi = hasSavedBmi ? (weightValue / ((heightValue / 100) ** 2)).toFixed(1) : 'Not set';
   const bmr = hasSavedBmi && age !== null && age >= 0
-    ? Math.round(10 * weightValue + 6.25 * heightValue - 5 * age + 5)
+    ? Math.round(10 * weightValue + 6.25 * heightValue - 5 * age + (sex === 'female' ? -161 : 5))
     : null;
 
   const handleOpenEdit = (store: EditTarget['store'], item: any) => {
@@ -299,6 +308,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
     const updated: HealthProfile = {
       name,
       dob,
+      sex,
       height: height === '' ? undefined : height,
       weight: weight === '' ? undefined : weight,
       targetWeight: targetWeight === '' ? undefined : targetWeight,
@@ -493,7 +503,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
     { id: 'wellness', label: 'Sleep & Fuel', count: sleepRecords.length + waterRecords.length + nutritionRecords.length, icon: Droplet },
     { id: 'appointments', label: 'Appointments', count: appointments.length + healthNotes.length, icon: Stethoscope },
     { id: 'profile', label: 'Biometrics', count: biometricFieldCount, icon: Heart },
-    { id: 'people', label: 'Add Person', count: people.length, icon: Heart },
+    { id: 'people', label: 'People', count: people.length, icon: Heart },
     { id: 'foundation-practices', label: 'Daily Practices', count: practices.length, icon: Compass },
     { id: 'work-learning', label: 'Learning Tracks', count: learningItems.length, icon: Briefcase },
     { id: 'work-skills', label: 'Skill Trees', count: skills.length, icon: Briefcase }
@@ -590,12 +600,15 @@ export const HealthView: React.FC<HealthViewProps> = ({
           {movementFormOpen && <div className={`${
             measurements.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'
           } rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
-                <Activity className="h-4 w-4" />
-              </span>
-              <span>Log Workout / Steps</span>
-            </h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                  <Activity className="h-4 w-4" />
+                </span>
+                <span>Log Workout / Steps</span>
+              </h2>
+              <CardCloseButton label="workout form" onClick={() => setMovementFormOpen(false)} />
+            </div>
             <form onSubmit={handleAddMeasurement} className="mt-4 space-y-3.5">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -607,7 +620,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     max="500"
                     value={weightLog}
                     onChange={e => setWeightLog(e.target.value)}
-                    placeholder="e.g. 71.5"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -619,7 +632,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     max="100000"
                     value={stepsLog}
                     onChange={e => setStepsLog(e.target.value)}
-                    placeholder="e.g. 10000"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -631,7 +644,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     type="text"
                     value={exerciseLog}
                     onChange={e => setExerciseLog(e.target.value)}
-                    placeholder="Running, Gym, Yoga"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -643,7 +656,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     max="1440"
                     value={durationLog}
                     onChange={e => setDurationLog(e.target.value)}
-                    placeholder="45"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -721,12 +734,15 @@ export const HealthView: React.FC<HealthViewProps> = ({
           {wellnessFormOpen && <div className={`${
             wellnessEntries.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'
           } rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300">
-                <Droplet className="h-4 w-4" />
-              </span>
-              <span>Log Sleep, Water & Nutrition</span>
-            </h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300">
+                  <Droplet className="h-4 w-4" />
+                </span>
+                <span>Log Sleep, Water & Nutrition</span>
+              </h2>
+              <CardCloseButton label="wellness form" onClick={() => setWellnessFormOpen(false)} />
+            </div>
             <form onSubmit={handleAddWellness} className="mt-4 space-y-3.5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
@@ -738,7 +754,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     max="24"
                     value={sleepHours}
                     onChange={e => setSleepHours(e.target.value)}
-                    placeholder="e.g. 7.5"
+
                     className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -750,7 +766,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     max="10000"
                     value={waterMl}
                     onChange={e => setWaterMl(e.target.value)}
-                    placeholder="e.g. 2500"
+
                     className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -762,7 +778,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     max="50000"
                     value={calories}
                     onChange={e => setCalories(e.target.value)}
-                    placeholder="e.g. 2200"
+
                     className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -773,7 +789,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   type="text"
                   value={nutritionNote}
                   onChange={e => setNutritionNote(e.target.value)}
-                  placeholder="e.g. meals or nutrition notes"
+
                   className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -894,10 +910,13 @@ export const HealthView: React.FC<HealthViewProps> = ({
       {/* Tab: Appointments & Health Notes */}
       {activeTab === 'appointments' && (
         <div className="space-y-6">
-          {appointmentFormOpen && <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+          {appointmentFormOpen && <div className={`grid grid-cols-1 items-start gap-4 ${
+            appointmentFormOpen === 'both' ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
+          }`}>
             {(appointmentFormOpen === 'appointment' || appointmentFormOpen === 'both') && (
               <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300">
                     <Stethoscope className="h-4 w-4" />
                   </span>
@@ -905,6 +924,11 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     <h2 className="text-sm font-bold text-slate-900 dark:text-white">Medical appointment</h2>
                     <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Schedule a consultation or checkup.</p>
                   </div>
+                  </div>
+                  <CardCloseButton
+                    label="appointment form"
+                    onClick={() => setAppointmentFormOpen(current => current === 'both' ? 'observation' : null)}
+                  />
                 </div>
                 <form onSubmit={handleAddAppointment} className="mt-4 space-y-3">
                 <GoalLinkSelector
@@ -919,7 +943,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   required
                   value={apptTitle}
                   onChange={e => setApptTitle(e.target.value)}
-                  placeholder="Reason / Consultation (e.g. Annual Checkup)"
+
                   className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
                 <div className="grid grid-cols-2 gap-2">
@@ -927,7 +951,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     type="text"
                     value={apptDoctor}
                     onChange={e => setApptDoctor(e.target.value)}
-                    placeholder="Doctor / Clinic"
+
                     className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                   <ThemedDateTimeInput
@@ -945,7 +969,8 @@ export const HealthView: React.FC<HealthViewProps> = ({
             )}
             {(appointmentFormOpen === 'observation' || appointmentFormOpen === 'both') && (
               <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
                     <FileText className="h-4 w-4" />
                   </span>
@@ -953,6 +978,11 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     <h2 className="text-sm font-bold text-slate-900 dark:text-white">Health observation</h2>
                     <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Keep symptoms and recovery notes.</p>
                   </div>
+                  </div>
+                  <CardCloseButton
+                    label="health observation form"
+                    onClick={() => setAppointmentFormOpen(current => current === 'both' ? 'appointment' : null)}
+                  />
                 </div>
                 <form onSubmit={handleAddHealthNote} className="mt-4 space-y-3">
                   <GoalLinkSelector
@@ -967,7 +997,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     required
                     value={hNoteText}
                     onChange={e => setHNoteText(e.target.value)}
-                    placeholder="Blood test results, recovery notes, symptoms..."
+
                     className="w-full rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                   <button type="submit" className="w-full rounded-lg bg-slate-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-700">
@@ -1117,9 +1147,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
       {activeTab === 'profile' && (
         profileFormOpen ? (
           <div className="max-w-3xl rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-              Biometric Profile
-            </h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Biometric Profile</h2>
+              <CardCloseButton label="biometric profile form" onClick={() => setProfileFormOpen(false)} />
+            </div>
             <form onSubmit={handleSaveProfile} className="mt-4 space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
@@ -1128,7 +1159,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     type="text"
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="Your Name"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1141,6 +1172,17 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Sex (for BMR)</label>
+                  <select
+                    value={sex}
+                    onChange={e => setSex(e.target.value === 'female' ? 'female' : 'male')}
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -1150,7 +1192,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     type="number"
                     value={height}
                     onChange={e => setHeight(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="e.g. 175"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1161,7 +1203,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     step="0.1"
                     value={weight}
                     onChange={e => setWeight(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="e.g. 70"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1172,7 +1214,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     step="0.1"
                     value={targetWeight}
                     onChange={e => setTargetWeight(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="e.g. 68"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1198,6 +1240,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
               {profile?.dob && <div>
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Date of birth</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{profile.dob}</p>
+              </div>}
+              {profile?.sex && <div>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Sex</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{profile.sex === 'female' ? 'Female' : 'Male'}</p>
               </div>}
               {hasSavedHeight && <div>
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Height</p>
@@ -1335,7 +1381,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       type="text"
                       value={editTitle}
                       onChange={e => setEditTitle(e.target.value)}
-                      placeholder="Running, Gym, Yoga"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
@@ -1346,7 +1392,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                         type="number"
                         value={editVal1}
                         onChange={e => setEditVal1(e.target.value)}
-                        placeholder="10000"
+
                         className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                     </div>
@@ -1356,7 +1402,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                         type="number"
                         value={editVal2}
                         onChange={e => setEditVal2(e.target.value)}
-                        placeholder="45"
+
                         className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                     </div>
@@ -1367,7 +1413,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                         step="0.1"
                         value={editSubtitle}
                         onChange={e => setEditSubtitle(e.target.value)}
-                        placeholder="70"
+
                         className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
                     </div>
@@ -1383,7 +1429,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     step="0.1"
                     value={editVal1}
                     onChange={e => setEditVal1(e.target.value)}
-                    placeholder="7.5"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1396,7 +1442,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     type="number"
                     value={editVal1}
                     onChange={e => setEditVal1(e.target.value)}
-                    placeholder="500"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1410,7 +1456,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       type="number"
                       value={editVal1}
                       onChange={e => setEditVal1(e.target.value)}
-                      placeholder="2200"
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
@@ -1420,7 +1466,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       type="text"
                       value={editNote}
                       onChange={e => setEditNote(e.target.value)}
-                      placeholder="Meal note..."
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>

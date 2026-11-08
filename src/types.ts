@@ -613,6 +613,7 @@ export interface Liability {
 export interface HealthProfile {
   name?: string;
   dob?: string;
+  sex?: 'male' | 'female';
   height?: number;
   weight?: number;
   targetWeight?: number;

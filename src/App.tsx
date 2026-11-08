@@ -45,7 +45,13 @@ import { AlarmTriggerModal } from './components/AlarmTriggerModal';
 import { VoiceStudioWidget } from './components/VoiceStudioWidget';
 import { alarmService, TriggeredAlarmData } from './lib/alarmService';
 import { lazyWithRetry } from './lib/lazyWithRetry';
-import { syncGoalProgressFromTasks, syncGoalProgressFromHabits, recalculateAllGoalsProgress, resolveHabitGoalId } from './lib/goalTaskSync';
+import {
+  syncGoalProgressFromTasks,
+  syncGoalProgressFromHabits,
+  recalculateAllGoalsProgress,
+  resolveHabitGoalId
+} from './lib/goalTaskSync';
+import { applyTaskCompletionEffects } from './lib/recurrenceEngine';
 import { soundEngine } from './lib/soundEngine';
 import { setActiveCurrencySymbol } from './lib/currencyDisplay';
 
@@ -72,6 +78,10 @@ export default function App() {
 function LifeOSApp() {
   const [activeModule, setActiveModule] = useState<NavModule>('dashboard');
   const [activeWorkAreaSection, setActiveWorkAreaSection] = useState<WorkAreaSection>('tasks-roster');
+  const [healthInitialTab, setHealthInitialTab] = useState<
+    'movement' | 'wellness' | 'appointments' | 'profile' | 'people' | 'foundation-practices' | 'work-learning' | 'work-skills'
+  >('movement');
+  const [pendingRecordId, setPendingRecordId] = useState<string | null>(null);
   const [pendingNotesJournalAction, setPendingNotesJournalAction] = useState<'note' | 'reflection' | 'note-filters' | 'journal-timeline' | null>(null);
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => readSavedAppearance());
   const [wallpaperVideoUrl, setWallpaperVideoUrl] = useState('');
@@ -101,8 +111,19 @@ function LifeOSApp() {
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
 
   // Module switches get a soft cross-fade/slide via the View Transitions API.
-  const changeModule = useCallback((module: NavModule) => {
-    const destination = module === 'people' || module === 'spiritual' || module === 'work' ? 'health' : module;
+  const changeModule = useCallback((module: NavModule, recordId?: string) => {
+    const healthTabTarget = module === 'people'
+      ? 'people'
+      : module === 'spiritual'
+        ? 'foundation-practices'
+        : module === 'work'
+          ? 'work-learning'
+          : module === 'health'
+            ? 'movement'
+            : null;
+    if (healthTabTarget) setHealthInitialTab(healthTabTarget);
+    const destination = healthTabTarget ? 'health' : module;
+    setPendingRecordId(recordId ?? null);
     const updateModule = () => {
       setActiveModule(destination);
       window.scrollTo(0, 0);
@@ -116,6 +137,25 @@ function LifeOSApp() {
     }
     updateModule();
   }, []);
+
+  // After navigating from a search result, scroll to the record and flash a highlight.
+  useEffect(() => {
+    if (!pendingRecordId) return;
+    const timer = window.setTimeout(() => {
+      const cssEscape = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+        ? CSS.escape(pendingRecordId)
+        : pendingRecordId.replace(/["\\]/g, '\\$&');
+      const element = document.querySelector<HTMLElement>(`[data-record-id="${cssEscape}"]`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.classList.add('om-record-focus');
+        window.setTimeout(() => element.classList.remove('om-record-focus'), 2400);
+      }
+      setPendingRecordId(null);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [pendingRecordId, activeModule]);
+
   const selectWorkAreaSection = useCallback((section: WorkAreaSection) => {
     if (section.startsWith('tasks-')) changeModule('tasks');
     else if (section === 'routine' || section.startsWith('routine-')) changeModule('routine');
@@ -710,15 +750,17 @@ function LifeOSApp() {
     } else {
       soundEngine.play('taskUncheck');
     }
-    const updated: Task = {
+    const updated = {
       ...t,
       done: nextDone,
-      status: nextDone ? 'done' : 'open',
+      status: nextDone ? 'done' as const : 'open' as const,
       updatedAt: Date.now()
     };
     await storage.put('tasks', updated);
-    if (t.goalId) {
-      await syncGoalProgressFromTasks(t.goalId, t.id, nextDone);
+    await applyTaskCompletionEffects(updated, nextDone);
+    const linkedGoalId = t.goalId;
+    if (linkedGoalId) {
+      await syncGoalProgressFromTasks(linkedGoalId, t.id, nextDone);
     }
     loadAllData();
   };
@@ -1094,6 +1136,7 @@ function LifeOSApp() {
 
             {activeModule === 'health' && (
               <HealthView
+                initialTab={healthInitialTab}
                 profile={healthProfile}
                 measurements={healthMeasurements}
                 sleepRecords={sleepRecords}

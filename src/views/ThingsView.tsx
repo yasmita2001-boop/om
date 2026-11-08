@@ -18,6 +18,7 @@ import { ThemeIcon } from '../components/ThemeIcon';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { HeaderDropdown } from '../components/HeaderDropdown';
 import { GoalBadge } from '../components/GoalLinkSelector';
+import { CardCloseButton } from '../components/CardCloseButton';
 
 interface ThingsViewProps {
   things: ThingItem[];
@@ -137,8 +138,17 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   const [editAttachedFile, setEditAttachedFile] = useState<{ name: string; size: string; data: string; type: string } | null>(null);
   const [editRemoveAttachment, setEditRemoveAttachment] = useState(false);
 
-  const MAX_RECEIPT_FILE_BYTES = 500 * 1024 * 1024;
+  const MAX_RECEIPT_FILE_BYTES = 20 * 1024 * 1024;
+  const MAX_ATTACHMENT_FILE_BYTES = 20 * 1024 * 1024;
   const ALLOWED_RECEIPT_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp']);
+  const validateAttachmentFile = (file: File, receiptOnly: boolean): string | null => {
+    const limit = receiptOnly ? MAX_RECEIPT_FILE_BYTES : MAX_ATTACHMENT_FILE_BYTES;
+    if (file.size > limit) return 'Attachment must be 20 MB or smaller.';
+    if (receiptOnly && !ALLOWED_RECEIPT_TYPES.has(file.type)) {
+      return 'Receipt attachment must be PDF, PNG, JPG/JPEG, or WebP.';
+    }
+    return null;
+  };
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -161,6 +171,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   const handleImportFileToCurrentTab = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validationError = validateAttachmentFile(file, activeTab === 'receipts');
+    if (validationError) {
+      onSuccess(validationError);
+      e.target.value = '';
+      return;
+    }
 
     try {
       const dataUrl = await readFileAsDataUrl(file);
@@ -280,15 +297,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      if (activeTab === 'receipts') {
-        if (file.size > MAX_RECEIPT_FILE_BYTES) {
-          onSuccess('Receipt attachment must be 500 MB or smaller.');
-          return;
-        }
-        if (!ALLOWED_RECEIPT_TYPES.has(file.type)) {
-          onSuccess('Receipt attachment must be PDF, PNG, JPG/JPEG, or WebP.');
-          return;
-        }
+      const validationError = validateAttachmentFile(file, activeTab === 'receipts');
+      if (validationError) {
+        onSuccess(validationError);
+        return;
       }
       const dataUrl = await readFileAsDataUrl(file);
       setAttachedFile({
@@ -741,7 +753,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           type="text"
           value={searchQuery}
           onChange={event => setSearchQuery(event.target.value)}
-          placeholder={`Search ${selectedTabLabel.toLowerCase()}...`}
+          aria-label="Search records"
           className="h-8 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-8 pr-3 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
         />
       </div>
@@ -812,7 +824,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </span>
               <span>Register Physical Item</span>
               </h2>
-              {!hasVaultRecords && renderVaultImportAction()}
+              <div className="flex items-center gap-1">
+                {!hasVaultRecords && renderVaultImportAction()}
+                <CardCloseButton label="physical item form" onClick={() => setOpenThingsForm(null)} />
+              </div>
             </div>
             <form onSubmit={handleAddThing} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
@@ -822,7 +837,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   required
                   value={thingName}
                   onChange={e => setThingName(e.target.value)}
-                  placeholder="e.g. M3 MacBook Pro, Audio Interface"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -850,7 +865,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     min="0"
                     value={thingValue}
                     onChange={e => setThingValue(e.target.value)}
-                    placeholder="150000"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -862,7 +877,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   rows={2}
                   value={thingNote}
                   onChange={e => setThingNote(e.target.value)}
-                  placeholder="Serial number, warranty note, location..."
+
                   className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1014,7 +1029,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </span>
               <span>Add Official Document</span>
               </h2>
-              {!hasVaultRecords && renderVaultImportAction()}
+              <div className="flex items-center gap-1">
+                {!hasVaultRecords && renderVaultImportAction()}
+                <CardCloseButton label="document form" onClick={() => setOpenThingsForm(null)} />
+              </div>
             </div>
             <form onSubmit={handleAddDocument} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
@@ -1024,7 +1042,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   required
                   value={docTitle}
                   onChange={e => setDocTitle(e.target.value)}
-                  placeholder="e.g. Passport, Tax Identification, Property Deed"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1036,7 +1054,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     type="text"
                     value={docType}
                     onChange={e => setDocType(e.target.value)}
-                    placeholder="Identity, Property, Legal, Medical"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1046,7 +1064,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     type="text"
                     value={docRef}
                     onChange={e => setDocRef(e.target.value)}
-                    placeholder="ID / Folio / Serial code"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1088,7 +1106,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   rows={2}
                   value={docNote}
                   onChange={e => setDocNote(e.target.value)}
-                  placeholder="Locker number, physical folder, notes..."
+
                   className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1186,7 +1204,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </span>
               <span>Register Warranty</span>
               </h2>
-              {!hasVaultRecords && renderVaultImportAction()}
+              <div className="flex items-center gap-1">
+                {!hasVaultRecords && renderVaultImportAction()}
+                <CardCloseButton label="warranty form" onClick={() => setOpenThingsForm(null)} />
+              </div>
             </div>
             <form onSubmit={handleAddWarranty} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
@@ -1196,7 +1217,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   required
                   value={warTitle}
                   onChange={e => setWarTitle(e.target.value)}
-                  placeholder="e.g. Sony Mirrorless Camera Warranty"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1217,7 +1238,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   rows={2}
                   value={warNote}
                   onChange={e => setWarNote(e.target.value)}
-                  placeholder="Coverage terms, claim helpline, retailer..."
+
                   className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1335,7 +1356,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </span>
               <span>Add Purchase Receipt</span>
               </h2>
-              {!hasVaultRecords && renderVaultImportAction()}
+              <div className="flex items-center gap-1">
+                {!hasVaultRecords && renderVaultImportAction()}
+                <CardCloseButton label="receipt form" onClick={() => setOpenThingsForm(null)} />
+              </div>
             </div>
 
             <form onSubmit={handleAddReceipt} className={`mt-4 space-y-4 ${vaultFormControlClasses}`}>
@@ -1348,7 +1372,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   required
                   value={recTitle}
                   onChange={e => setRecTitle(e.target.value)}
-                  placeholder="e.g. Ergonomic Office Desk, MacBook Pro"
+
                   className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
                 />
               </div>
@@ -1367,7 +1391,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                       step="0.01"
                       value={recAmount}
                       onChange={e => setRecAmount(e.target.value)}
-                      placeholder="0.00"
+
                       className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 pl-7 pr-3 font-mono text-xs sm:text-sm font-semibold text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
                     />
                   </div>
@@ -1439,7 +1463,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   type="text"
                   value={recNote}
                   onChange={e => setRecNote(e.target.value)}
-                  placeholder="Order ID, warranty link, credit card, retailer..."
+
                   className="h-10 sm:h-10.5 w-full rounded-xl border border-slate-200 px-3 text-xs sm:text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white outline-none transition-all"
                 />
               </div>
@@ -1643,7 +1667,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </span>
               <span>Register Certificate</span>
               </h2>
-              {!hasVaultRecords && renderVaultImportAction()}
+              <div className="flex items-center gap-1">
+                {!hasVaultRecords && renderVaultImportAction()}
+                <CardCloseButton label="certificate form" onClick={() => setOpenThingsForm(null)} />
+              </div>
             </div>
             <form onSubmit={handleAddCertificate} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
@@ -1653,7 +1680,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   required
                   value={certTitle}
                   onChange={e => setCertTitle(e.target.value)}
-                  placeholder="e.g. AWS Solutions Architect, Degree"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1665,7 +1692,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     type="text"
                     value={certIssuer}
                     onChange={e => setCertIssuer(e.target.value)}
-                    placeholder="Amazon, University, Google"
+
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1705,7 +1732,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   rows={2}
                   value={certNote}
                   onChange={e => setCertNote(e.target.value)}
-                  placeholder="Verification ID, credential link, notes..."
+
                   className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1805,7 +1832,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </span>
               <span>Save Important Record</span>
               </h2>
-              {!hasVaultRecords && renderVaultImportAction()}
+              <div className="flex items-center gap-1">
+                {!hasVaultRecords && renderVaultImportAction()}
+                <CardCloseButton label="important record form" onClick={() => setOpenThingsForm(null)} />
+              </div>
             </div>
             <form onSubmit={handleAddRecord} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
@@ -1815,7 +1845,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   required
                   value={recrdTitle}
                   onChange={e => setRecrdTitle(e.target.value)}
-                  placeholder="e.g. Bank Locker Key Ref, Real Estate Deed"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1855,7 +1885,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   rows={3}
                   value={recrdNote}
                   onChange={e => setRecrdNote(e.target.value)}
-                  placeholder="Registry office, locker number, folio reference, custody..."
+
                   className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -2043,9 +2073,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (!f) return;
-                      if (editTarget.store === 'receipts') {
-                        if (f.size > MAX_RECEIPT_FILE_BYTES) { onSuccess('Receipt attachment must be 500 MB or smaller.'); e.target.value = ''; return; }
-                        if (!ALLOWED_RECEIPT_TYPES.has(f.type)) { onSuccess('Receipt attachment must be PDF, PNG, JPG/JPEG, or WebP.'); e.target.value = ''; return; }
+                      const validationError = validateAttachmentFile(f, editTarget.store === 'receipts');
+                      if (validationError) {
+                        onSuccess(validationError);
+                        e.target.value = '';
+                        return;
                       }
                       const d = await readFileAsDataUrl(f);
                       setEditAttachedFile({

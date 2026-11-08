@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { X, CheckSquare, FileText, BookOpen, DollarSign, Target, Bell, User, Volume2 } from 'lucide-react';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
+import { plainTextToHtml } from '../lib/sanitizeHtml';
 import { Task, Note, JournalEntry, FinanceTransaction, FinanceAccount, Goal, ReminderItem, Person } from '../types';
 import { AttachmentUploader, StoredAttachmentMeta } from './AttachmentUploader';
 import { alarmAudio, BUILTIN_RINGTONES } from '../lib/alarmAudio';
@@ -109,7 +110,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           id: generateUUID(),
           title: title.trim(),
           body: details.trim(),
-          html: `<p>${details.trim().replace(/\n/g, '<br>')}</p>`,
+          html: `<p>${plainTextToHtml(details.trim())}</p>`,
           category: category.trim() || 'General',
           attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
           date,
@@ -124,7 +125,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           id: generateUUID(),
           title: title.trim() || 'Daily Reflection',
           text: details.trim(),
-          html: `<p>${details.trim().replace(/\n/g, '<br>')}</p>`,
+          html: `<p>${plainTextToHtml(details.trim())}</p>`,
           attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
           date,
           createdAt: now,
@@ -294,14 +295,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               required={activeType !== 'expense'}
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder={
-                activeType === 'task' ? 'e.g. Finish quarterly proposal' :
-                activeType === 'note' ? 'e.g. System Architecture Notes' :
-                activeType === 'journal' ? 'e.g. Evening Reflection & Wins' :
-                activeType === 'expense' ? 'e.g. Team lunch or cloud hosting' :
-                activeType === 'goal' ? 'e.g. Launch SaaS product by Q4' :
-                activeType === 'person' ? 'e.g. Alexander Vance' : 'Title...'
-              }
+
               className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               autoFocus
             />
@@ -320,7 +314,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                     required
                     value={amount}
                     onChange={e => setAmount(e.target.value)}
-                    placeholder="0.00"
+
                     className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -332,7 +326,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                     type="text"
                     value={category}
                     onChange={e => setCategory(e.target.value)}
-                    placeholder="Food, Tech, Travel..."
+
                     className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -483,7 +477,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               rows={3}
               value={details}
               onChange={e => setDetails(e.target.value)}
-              placeholder="Add additional context or notes here..."
+
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
             />
           </div>

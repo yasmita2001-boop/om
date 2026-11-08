@@ -22,6 +22,7 @@ import { SlideTabs } from '../components/SlideTabs';
 import { FormToggleButton } from '../components/FormToggleButton';
 import { computeItemDelay } from '../components/TimelinePlan';
 import { alarmService } from '../lib/alarmService';
+import { CardCloseButton } from '../components/CardCloseButton';
 import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { GoalPicker } from '../components/GoalPicker';
@@ -308,6 +309,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
     }
 
     if (genesisModal.armAlarm) {
+      void alarmService.requestNotificationPermission();
       const alarmDueAt = `${genesisModal.dueAt}T${genesisModal.alarmTime}`;
       await storage.put('reminders', {
         id: generateUUID(),
@@ -529,16 +531,22 @@ export const WorkView: React.FC<WorkViewProps> = ({
       targetDueAt = `${quickCustomDate}T${quickCustomTime}`;
     }
 
+    await alarmService.requestNotificationPermission();
+    const existingReminders = await storage.getAll<ReminderItem>('reminders');
+    const currentReminder = existingReminders.find(
+      reminder => reminder.linkedType === 'task' && reminder.linkedId === quickAlarmItem.id && reminder.status !== 'done'
+    );
     await storage.put('reminders', {
-      id: generateUUID(),
+      ...(currentReminder || { id: generateUUID(), createdAt: Date.now() }),
       title: `Reminder Alarm: ${quickAlarmItem.title}`,
       dueAt: targetDueAt,
       repeatRule: 'none',
       status: 'open',
       linkedId: quickAlarmItem.id,
+      linkedType: 'task',
       alarmEnabled: true,
       ringtone: quickAlarmRingtone,
-      createdAt: Date.now(),
+      lastNotifiedAt: undefined,
       updatedAt: Date.now()
     });
 
@@ -704,10 +712,18 @@ export const WorkView: React.FC<WorkViewProps> = ({
       {/* Tab: Learning */}
       {activeTab === 'learning' && (
         <div className={`grid grid-cols-1 items-start lg:grid-cols-12 ${embedded ? 'gap-4' : 'gap-6'}`}>
+          {embedded && !openWorkForm && (
+            <div className="lg:col-span-12 flex justify-end">
+              {renderWorkFormAction()}
+            </div>
+          )}
           {openWorkForm === 'learning' && <div className={`${embedded && learningItems.length === 0 ? 'lg:col-span-12' : 'lg:col-span-5'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Learning Genesis</h2>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Learning Genesis</h2>
+              </div>
+              <CardCloseButton label="learning form" onClick={() => setOpenWorkForm(null)} />
             </div>
             <form onSubmit={handleAddLearning} className="mt-4 space-y-3.5">
               {/* LEARNING TRACK TITLE WITH INTEGRATED LINK GOAL / MANUAL TOGGLE (As in image.png) */}
@@ -749,7 +765,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                       goals={goals || []}
                       value={learnGoalId}
                       onChange={handleSelectGoalForLearning}
-                      placeholder="-- Choose Goal --"
+
                       className="h-10 w-full rounded-lg border border-indigo-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
                     />
                     {learnGoalId && (
@@ -765,7 +781,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   required
                   value={learnTitle}
                   onChange={e => setLearnTitle(e.target.value)}
-                  placeholder="e.g. Distributed Systems in Go"
+
                   className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -777,7 +793,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     type="text"
                     value={learnType}
                     onChange={e => setLearnType(e.target.value)}
-                    placeholder="Book, Course, Paper"
+
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -1004,10 +1020,18 @@ export const WorkView: React.FC<WorkViewProps> = ({
       {/* Tab: Skills */}
       {activeTab === 'skills' && (
         <div className={`grid grid-cols-1 items-start lg:grid-cols-12 ${embedded ? 'gap-4' : 'gap-6'}`}>
+          {embedded && !openWorkForm && (
+            <div className="lg:col-span-12 flex justify-end">
+              {renderWorkFormAction()}
+            </div>
+          )}
           {openWorkForm === 'skills' && <div className={`${embedded && skills.length === 0 ? 'lg:col-span-12' : 'lg:col-span-5'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-            <div className="flex items-center gap-2">
-              <Award className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Skill Genesis</h2>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Award className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Skill Genesis</h2>
+              </div>
+              <CardCloseButton label="skill form" onClick={() => setOpenWorkForm(null)} />
             </div>
             <form onSubmit={handleAddSkill} className="mt-4 space-y-3.5">
               {/* SKILL TREE TITLE WITH INTEGRATED LINK GOAL / MANUAL TOGGLE (As in image.png) */}
@@ -1049,7 +1073,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                       goals={goals || []}
                       value={skillGoalId}
                       onChange={handleSelectGoalForSkill}
-                      placeholder="-- Choose Goal --"
+
                       className="h-10 w-full rounded-lg border border-indigo-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
                     />
                     {skillGoalId && (
@@ -1065,7 +1089,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   required
                   value={skillName}
                   onChange={e => setSkillName(e.target.value)}
-                  placeholder="e.g. TypeScript, System Architecture"
+
                   className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -1486,7 +1510,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   required
                   value={genesisModal.title}
                   onChange={e => setGenesisModal({ ...genesisModal, title: e.target.value })}
-                  placeholder="Concrete executable action..."
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>

@@ -342,8 +342,8 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search deleted records by title, category, or module..."
-                  className="h-8.5 w-full rounded-lg border border-amber-200 bg-amber-50/40 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
+                  aria-label="Search deleted records"
+                  className="h-8.5 w-full rounded-lg border border-amber-200 bg-amber-50/40 pl-9 pr-3 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 

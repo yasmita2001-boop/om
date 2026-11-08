@@ -8,6 +8,7 @@ import { syncGoalProgressFromPractices } from '../lib/goalTaskSync';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { ThemeIcon } from '../components/ThemeIcon';
 import { FormToggleButton } from '../components/FormToggleButton';
+import { CardCloseButton } from '../components/CardCloseButton';
 
 interface SpiritualViewProps {
   practices: SpiritualPractice[];
@@ -191,6 +192,9 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
         {openSpiritualForm && <section className={`rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${
           embedded && practices.length === 0 ? 'lg:col-span-12' : 'lg:col-span-5'
         }`}>
+        <div className="flex justify-end">
+          <CardCloseButton label="practice form" onClick={() => setOpenSpiritualForm(null)} />
+        </div>
 
         <div className={embedded ? '' : 'mt-4'}>
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
@@ -211,14 +215,14 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
               required
               value={pracName}
               onChange={e => setPracName(e.target.value)}
-              placeholder="Practice (e.g. Breathwork, Meditation)"
+
               className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <input
               type="text"
               value={pracFreq}
               onChange={e => setPracFreq(e.target.value)}
-              placeholder="Frequency (e.g. Daily, Weekly)"
+
               className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:text-white dark:border-slate-700 dark:bg-slate-800"
             />
             <button
@@ -233,8 +237,19 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
 
         </section>}
 
-        {(!embedded || practices.length > 0) && <section className={`${openSpiritualForm ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
-          {!embedded && <h2 className="text-sm font-bold text-slate-900 dark:text-white">Saved practices</h2>}
+        {(!embedded || practices.length > 0 || !openSpiritualForm) && <section className={`${openSpiritualForm ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5`}>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Saved practices</h2>
+            {!openSpiritualForm && (
+              <button
+                type="button"
+                onClick={() => setOpenSpiritualForm('practices')}
+                className="rounded-lg bg-rose-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-500"
+              >
+                + Add Practice
+              </button>
+            )}
+          </div>
           <div className="mt-4">
             <div>
               <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
@@ -385,8 +400,8 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                   required
                   value={editPracName}
                   onChange={e => setEditPracName(e.target.value)}
-                  placeholder="Practice (e.g. Breathwork, Meditation)"
-                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+
+                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
@@ -398,8 +413,8 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                   type="text"
                   value={editPracFreq}
                   onChange={e => setEditPracFreq(e.target.value)}
-                  placeholder="Frequency (e.g. Daily, Weekly)"
-                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+
+                  className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 

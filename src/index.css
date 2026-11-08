@@ -3055,20 +3055,88 @@ html[data-foreground-contrast="true"] .sanctuary-shell :is(.command-bar, .sanctu
   box-shadow: none !important;
 }
 
+.sanctuary-shell .timeline-granularity-tabs {
+  width: fit-content;
+  padding: 3px;
+  border: 1px solid var(--om-line);
+  border-radius: 10px;
+  background: var(--om-card);
+}
+
 .sanctuary-shell .timeline-granularity-tabs .timeline-granularity-tab,
 .sanctuary-shell .timeline-granularity-tabs .timeline-granularity-tab:hover {
-  border: 0 !important;
-  border-radius: 0 !important;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
   background: transparent !important;
+  color: var(--om-ink-muted) !important;
   box-shadow: none !important;
-  transform: none !important;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.sanctuary-shell .timeline-granularity-tabs .timeline-granularity-tab:hover {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 8%, var(--om-card)) !important;
+  color: var(--om-ink) !important;
 }
 
 .sanctuary-shell .timeline-granularity-tabs .timeline-granularity-tab[aria-pressed="true"] {
-  text-decoration: underline;
-  text-decoration-color: var(--color-brand, #b88648);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 5px;
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 24%, var(--om-line)) !important;
+  background: color-mix(in srgb, var(--color-brand, #b88648) 13%, var(--om-card)) !important;
+  color: var(--om-ink) !important;
+}
+
+.sanctuary-shell .timeline-granularity-tabs .timeline-granularity-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-brand, #b88648) 65%, transparent);
+  outline-offset: 2px;
+}
+
+.timeline-goal-period-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 25%, var(--om-line));
+  border-radius: 5px;
+  padding: 2px 5px;
+  background: color-mix(in srgb, var(--om-card) 88%, transparent);
+  color: var(--om-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.timeline-goal-period-badge__period,
+.timeline-goal-period-badge__count {
+  color: var(--om-ink-muted);
+  font-weight: 550;
+}
+
+.timeline-goal-period-badge__rate {
+  color: var(--color-brand, #b88648);
+  font-weight: 750;
+}
+
+.timeline-goal-bar-rate {
+  position: absolute;
+  z-index: 1;
+  left: 5px;
+  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 25%, var(--om-line));
+  border-radius: 5px;
+  padding: 2px 5px;
+  background: color-mix(in srgb, var(--om-card) 88%, transparent);
+  color: var(--om-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .dark .sanctuary-main button.sanctuary-flat-primary {
@@ -4427,11 +4495,6 @@ html[data-custom-theme="true"] .sanctuary-shell [class*="dark:text-white"] {
 html[data-custom-theme="true"] [class*="border-slate-"],
 html[data-custom-theme="true"] [class*="border-gray-"] {
   border-color: var(--om-custom-border) !important;
-}
-
-html[data-custom-theme="true"] input::placeholder,
-html[data-custom-theme="true"] textarea::placeholder {
-  color: color-mix(in srgb, var(--om-custom-text) 58%, var(--om-custom-surface)) !important;
 }
 
 html[data-custom-theme="true"] .sanctuary-shell :is(.command-bar, .sanctuary-sidebar, .sanctuary-mobile-bottom-nav, .sanctuary-mobile-module-sheet) {
@@ -6515,4 +6578,17 @@ html[data-appearance-preset][data-lifeos-mode] .sanctuary-shell .sanctuary-main 
 html body #root .sanctuary-shell .sanctuary-main form textarea.people-interaction-memo {
   height: 7rem !important;
   min-height: 7rem !important;
+}
+
+/* Search deep-link highlight: transient focus ring on the navigated record. */
+.om-record-focus {
+  outline: 2px solid var(--color-brand, #6366f1) !important;
+  outline-offset: 2px;
+  border-radius: 12px;
+  animation: om-record-pulse 1.2s ease-in-out 2;
+}
+
+@keyframes om-record-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand, #6366f1) 0%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-brand, #6366f1) 24%, transparent); }
 }

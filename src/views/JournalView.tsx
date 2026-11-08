@@ -13,11 +13,17 @@ import { AttachmentUploader, AttachmentViewer, StoredAttachmentMeta } from '../c
 import { globalTextReader } from '../lib/voiceService';
 import { NoteRichEditor } from '../components/NoteRichEditor';
 import { htmlToPlainText, plainTextToHtml, sanitizeHtml } from '../lib/sanitizeHtml';
+import { readDraft, writeDraft, clearDraft } from '../lib/draftStore';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { ThemeIcon, type ThemeIconName } from '../components/ThemeIcon';
 import { GoalPicker } from '../components/GoalPicker';
 import { NotesJournalSwitcher } from '../components/NotesJournalSwitcher';
+
+const JOURNAL_DRAFT_KEY = 'om-journal-draft-v1';
+
+// Drafts must not leak between profiles (master vs Google accounts).
+const journalDraftKey = () => `${JOURNAL_DRAFT_KEY}:${storage.getActiveProfileId()}`;
 
 interface JournalViewProps {
   journal: JournalEntry[];
@@ -68,6 +74,71 @@ export const JournalView: React.FC<JournalViewProps> = ({
   const [journalText, setJournalText] = useState('');
   const formRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // Restore an unsaved journal draft (module switch or reload).
+  useEffect(() => {
+    const draft = readDraft<{
+      title?: string;
+      text?: string;
+      html?: string;
+      date?: string;
+      mood?: string;
+      colorTheme?: string;
+      journalInputMode?: 'manual' | 'link';
+      journalGoalId?: string;
+      editingId?: string | null;
+    }>(journalDraftKey());
+    if (!draft) return;
+    if (draft.title) setTitle(draft.title);
+    if (draft.text) setJournalText(draft.text);
+    if (draft.html) setJournalHtml(draft.html);
+    if (draft.date) setDate(draft.date);
+    if (draft.mood) setMood(draft.mood);
+    if (draft.colorTheme) setColorTheme(draft.colorTheme);
+    if (draft.journalInputMode) setJournalInputMode(draft.journalInputMode);
+    if (draft.journalGoalId) setJournalGoalId(draft.journalGoalId);
+    if (draft.editingId) setEditingId(draft.editingId);
+    setIsEditorOpen(true);
+  }, []);
+
+  // Persist the inline editor draft shortly after each change.
+  const skipFirstJournalAutosave = useRef(true);
+  useEffect(() => {
+    // Skip the initial empty state so a restored draft is not cleared before it renders.
+    if (skipFirstJournalAutosave.current) {
+      skipFirstJournalAutosave.current = false;
+      return;
+    }
+    if (!title.trim() && !journalText.trim()) {
+      clearDraft(journalDraftKey());
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      writeDraft(journalDraftKey(), {
+        title,
+        text: journalText,
+        html: journalHtml,
+        date,
+        mood,
+        colorTheme,
+        journalInputMode,
+        journalGoalId,
+        editingId
+      });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [title, journalText, journalHtml, date, mood, colorTheme, journalInputMode, journalGoalId, editingId]);
+
+  // Warn before leaving with unsaved editor content.
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (!isEditorOpen || (!title.trim() && !journalText.trim())) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isEditorOpen, title, journalText]);
 
   useEffect(() => {
     if (!viewingEntry) return;
@@ -334,6 +405,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
     return (
       <article
         key={j.id}
+        data-record-id={j.id}
         role="button"
         tabIndex={0}
         aria-label={`Open reflection: ${j.title}`}
@@ -541,7 +613,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                     goals={goals}
                     value={journalGoalId}
                     onChange={handleSelectGoalForJournal}
-                    placeholder="-- Choose Goal --"
+
                     className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
                   />
                   {journalGoalId && (
@@ -557,8 +629,8 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 type="text"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder="e.g. Navigating strategic ambiguity"
-                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
@@ -652,7 +724,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                   setJournalHtml(html);
                   setJournalText(text);
                 }}
-                placeholder=""
+
                 minHeight="min-h-[150px]"
                 maxHeight="max-h-[280px]"
                 className="journal-reflection-editor"
@@ -709,7 +781,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search reflections by word, mood, or date..."
+                aria-label="Search journal"
                 className="h-9 w-full rounded-xl border border-amber-200 bg-amber-50/40 pl-9 pr-3 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
               />
             </div>

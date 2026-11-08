@@ -3,7 +3,7 @@ import {
   LayoutDashboard, CheckSquare, Target,
   MoreHorizontal, FileText,
   DollarSign, Heart, Folder, Settings,
-  X
+  X, BookOpen, Calculator, Repeat, Timer
 } from 'lucide-react';
 import { NavModule } from '../types';
 import { OmLogoMark } from './OmLogoMark';
@@ -63,10 +63,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   ];
 
   const secondaryModules: { id: NavModule; label: string; icon: React.ReactNode }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4 text-indigo-500" /> },
-    { id: 'goals', label: 'Goals', icon: <Target className="h-4 w-4 text-indigo-500" /> },
-    { id: 'tasks', label: 'Tasks', icon: <CheckSquare className="h-4 w-4 text-indigo-500" /> },
     { id: 'notes', label: 'Memo', icon: <FileText className="h-4 w-4 text-indigo-500" /> },
+    { id: 'journal', label: 'Journal', icon: <BookOpen className="h-4 w-4 text-indigo-500" /> },
+    { id: 'calculator', label: 'Calculator', icon: <Calculator className="h-4 w-4 text-indigo-500" /> },
+    { id: 'routine', label: 'Routines', icon: <Repeat className="h-4 w-4 text-indigo-500" /> },
+    { id: 'focus', label: 'Focus', icon: <Timer className="h-4 w-4 text-indigo-500" /> },
     { id: 'finance', label: 'Finance', icon: <DollarSign className="h-4 w-4 text-indigo-500" /> },
     { id: 'health', label: 'Life', icon: <Heart className="h-4 w-4 text-indigo-500" /> },
     { id: 'things', label: 'Vault', icon: <Folder className="h-4 w-4 text-indigo-500" /> },
@@ -125,7 +126,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
             <div className="grid grid-cols-2 gap-2.5 pt-4">
               {secondaryModules.map(mod => {
-                const isActive = selectedNavModule === mod.id;
+                const isActive = activeModule === mod.id;
                 return (
                   <button
                     key={mod.id}

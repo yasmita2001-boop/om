@@ -15,6 +15,7 @@ import { syncGoalProgressFromFocus } from '../lib/goalTaskSync';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { TaskRoutineFocusSwitcher, type WorkAreaSection } from '../components/TaskRoutineFocusSwitcher';
+import { CardCloseButton } from '../components/CardCloseButton';
 
 interface FocusViewProps {
   sessions: FocusSession[];
@@ -400,6 +401,8 @@ export const FocusView: React.FC<FocusViewProps> = ({
     e.preventDefault();
     if (!newAlarmTime) return;
 
+    void alarmService.requestNotificationPermission();
+
     const matchedRoutine = selectedRoutineId
       ? availableRoutines.find(r => r.id === selectedRoutineId)
       : null;
@@ -650,7 +653,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                     type="text"
                     value={sessionLabel}
                     onChange={e => setSessionLabel(e.target.value)}
-                    placeholder="e.g. Write architecture document"
+
                     className="focus-flat-field mt-1 h-9 w-full px-3 text-xs text-slate-900 focus:outline-none dark:text-white"
                   />
                 </div>
@@ -749,7 +752,8 @@ export const FocusView: React.FC<FocusViewProps> = ({
           <div className={`focus-alarm-panel rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5 ${
             alarmsList.length > 0 && isAddingAlarm ? 'lg:col-span-5' : 'lg:col-span-12'
           }`}>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
               <div className="focus-alarm-icon flex h-8 w-8 items-center justify-center rounded-lg">
                   <Clock className="h-5 w-5" />
               </div>
@@ -759,6 +763,10 @@ export const FocusView: React.FC<FocusViewProps> = ({
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Set a time and schedule</p>
               </div>
+              </div>
+              {alarmsList.length > 0 && isAddingAlarm && (
+                <CardCloseButton label="alarm form" onClick={() => setIsAddingAlarm(false)} />
+              )}
             </div>
 
             {isAddingAlarm && (
@@ -876,7 +884,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                               type="text"
                               value={newAlarmLabel}
                               onChange={e => setNewAlarmLabel(e.target.value)}
-                              placeholder="Routine alarm label"
+
                               className="focus-alarm-field h-9 w-full rounded-xl border px-3 text-xs"
                             />
                           </div>
@@ -889,7 +897,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         type="text"
                         value={newAlarmLabel}
                         onChange={e => setNewAlarmLabel(e.target.value)}
-                        placeholder="e.g. Morning Sprint, Standup, Medicine"
+
                         className="focus-alarm-field h-9 w-full rounded-xl border px-3 text-xs"
                       />
                     </div>

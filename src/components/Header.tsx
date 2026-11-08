@@ -31,6 +31,55 @@ interface HeaderProps {
   onDataRestored?: () => void;
 }
 
+const HeaderClock: React.FC = () => {
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [is24Hour, setIs24Hour] = useState(false);
+
+  // Isolated here so the per-second tick does not re-render the whole header.
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedTimeFull = currentTime.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: !is24Hour
+  });
+  const formattedTimeCompact = currentTime.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: !is24Hour
+  });
+  const compactHour = is24Hour
+    ? currentTime.getHours()
+    : currentTime.getHours() % 12 || 12;
+  const formattedTimeTiny = `${compactHour}:${String(currentTime.getMinutes()).padStart(2, '0')}:${String(currentTime.getSeconds()).padStart(2, '0')}`;
+
+  return (
+    <button
+      type="button"
+      onClick={() => setIs24Hour(prev => !prev)}
+      className="header-clock-chip flex h-9 items-center gap-1 sm:gap-2 px-0.5 min-[400px]:px-1 sm:px-2.5 text-left transition-colors shrink-0 cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+      title={`Live System Clock (${is24Hour ? '24h' : '12h'} - Click to toggle)`}
+      aria-label={`Current time ${formattedTimeFull}. Toggle 12/24 hour time format`}
+    >
+      <Clock className="header-chip-icon hidden min-[360px]:block h-3.5 w-3.5 shrink-0" />
+      <span className="header-chip-value min-[350px]:hidden inline md:hidden text-[9px] font-semibold tracking-tight [font-variant-numeric:tabular-nums] whitespace-nowrap">
+        {formattedTimeTiny}
+      </span>
+      <span className="header-chip-value hidden min-[350px]:inline md:hidden text-[9px] min-[360px]:text-[10px] font-semibold tracking-tight [font-variant-numeric:tabular-nums] whitespace-nowrap">
+        {formattedTimeCompact}
+      </span>
+      <span className="header-chip-value hidden text-[11px] md:inline md:text-sm font-semibold tracking-tight [font-variant-numeric:tabular-nums] whitespace-nowrap">
+        {formattedTimeFull}
+      </span>
+    </button>
+  );
+};
+
 export const Header: React.FC<HeaderProps> = ({
   activeModule,
   onNavigate,
@@ -65,16 +114,6 @@ export const Header: React.FC<HeaderProps> = ({
     }
   });
   const [isActionsOpen, setIsActionsOpen] = useState(false);
-  const [currentTime, setCurrentTime] = useState(() => new Date());
-  const [is24Hour, setIs24Hour] = useState(false);
-
-  // Live Clock interval
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Compute BS and AD dates
   useEffect(() => {
@@ -108,27 +147,14 @@ export const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isActionsOpen]);
 
-  const formattedTimeFull = currentTime.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: !is24Hour
-  });
-  const formattedTimeCompact = currentTime.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: !is24Hour
-  });
-  const compactHour = is24Hour
-    ? currentTime.getHours()
-    : currentTime.getHours() % 12 || 12;
-  const formattedTimeTiny = `${compactHour}:${String(currentTime.getMinutes()).padStart(2, '0')}:${String(currentTime.getSeconds()).padStart(2, '0')}`;
-  const formattedDateCompact = [
-    String(currentTime.getDate()).padStart(2, '0'),
-    String(currentTime.getMonth() + 1).padStart(2, '0'),
-    String(currentTime.getFullYear()).slice(-2)
-  ].join('-');
+  const formattedDateCompact = (() => {
+    const now = new Date();
+    return [
+      String(now.getDate()).padStart(2, '0'),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getFullYear()).slice(-2)
+    ].join('-');
+  })();
   const [bsYear = '', bsMonth = '', bsDay = ''] = bsDateInfo.bsIso.split('-');
   const formattedBsDate = bsYear && bsMonth && bsDay
     ? `${bsDay}-${bsMonth}-${bsYear.slice(-2)}`
@@ -270,24 +296,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Zone 3: Right - Consolidated Action Strip (Clock, Quick Capture, Fast Actions, Workspace, Theme) */}
       <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 shrink-0 select-none">
         {/* Live Digital Clock Widget - Always displays prominent time */}
-        <button
-          type="button"
-          onClick={() => setIs24Hour(prev => !prev)}
-          className="header-clock-chip flex h-9 items-center gap-1 sm:gap-2 px-0.5 min-[400px]:px-1 sm:px-2.5 text-left transition-colors shrink-0 cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-          title={`Live System Clock (${is24Hour ? '24h' : '12h'} - Click to toggle)`}
-          aria-label={`Current time ${formattedTimeFull}. Toggle 12/24 hour time format`}
-        >
-          <Clock className="header-chip-icon hidden min-[360px]:block h-3.5 w-3.5 shrink-0" />
-          <span className="header-chip-value min-[350px]:hidden inline md:hidden text-[9px] font-semibold tracking-tight [font-variant-numeric:tabular-nums] whitespace-nowrap">
-            {formattedTimeTiny}
-          </span>
-          <span className="header-chip-value hidden min-[350px]:inline md:hidden text-[9px] min-[360px]:text-[10px] font-semibold tracking-tight [font-variant-numeric:tabular-nums] whitespace-nowrap">
-            {formattedTimeCompact}
-          </span>
-          <span className="header-chip-value hidden text-[11px] md:inline md:text-sm font-semibold tracking-tight [font-variant-numeric:tabular-nums] whitespace-nowrap">
-            {formattedTimeFull}
-          </span>
-        </button>
+        <HeaderClock />
 
         {/* Quick Command Menu Dropdown (Actions) */}
         <div className="relative">

@@ -14,7 +14,6 @@ import { generateUUID, storage } from '../lib/storage';
 export interface NoteRichEditorProps {
   initialHtml?: string;
   onChange: (html: string, plainText: string) => void;
-  placeholder?: string;
   minHeight?: string;
   maxHeight?: string;
   className?: string;
@@ -304,17 +303,17 @@ const convertMarkdownToRichHtml = (markdown: string): string => {
   // Code blocks first (protect from other replacements)
   const codeBlocks: string[] = [];
   text = text.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+    const token = `__CODE_BLOCK_${codeBlocks.length}__`;
     codeBlocks.push(`<pre><code class="language-${lang || 'plaintext'}">${code.trim()}</code></pre>`);
-    return placeholder;
+    return token;
   });
 
   // Inline code
   const inlineCodes: string[] = [];
   text = text.replace(/`([^`]+)`/g, (_, code) => {
-    const placeholder = `__INLINE_CODE_${inlineCodes.length}__`;
+    const token = `__INLINE_CODE_${inlineCodes.length}__`;
     inlineCodes.push(`<code>${code}</code>`);
-    return placeholder;
+    return token;
   });
 
   // Tables
@@ -414,7 +413,6 @@ const convertPlainTextToHtmlWithLineBreaks = (text: string): string => {
 export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   initialHtml = '',
   onChange,
-  placeholder = '',
   minHeight = 'min-h-[150px]',
   maxHeight = 'max-h-[280px]',
   className = ''
@@ -1679,7 +1677,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
               type="text"
               value={fontFamilyInput}
               onChange={(e) => setFontFamilyInput(e.target.value)}
-              placeholder="Font family name, e.g. Aptos or Noto Sans"
+
               aria-label="Font family name"
               className="h-8 min-w-52 flex-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
@@ -1840,7 +1838,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                     type="text"
                     value={customTextColor}
                     onChange={(e) => setCustomTextColor(e.target.value)}
-                    placeholder="#B88648"
+
                     className="h-6 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 font-mono text-[11px] uppercase text-slate-900 dark:text-white"
                   />
                   <button
@@ -2045,7 +2043,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                     <input
                       type="text"
                       maxLength={6}
-                      placeholder="Add an emoji or bullet symbol"
+
                       value={customBulletInput}
                       onChange={(e) => setCustomBulletInput(e.target.value)}
                       className="h-6 w-28 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-xs text-slate-900 dark:text-white"
@@ -2093,7 +2091,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                     </span>
                     <input
                       type="text"
-                      placeholder="e.g. Step, Point"
+
                       value={customNumberPrefix}
                       onChange={(e) => setCustomNumberPrefix(e.target.value)}
                       className="h-6 w-28 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-xs text-slate-900 dark:text-white"
@@ -2369,9 +2367,8 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           [&_h1]:text-xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:my-1.5 [&_h1]:text-slate-950 dark:[&_h1]:text-white
           [&_h2]:text-lg [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:my-1 [&_h2]:text-slate-900 dark:[&_h2]:text-slate-100
           [&_h3]:text-base [&_h3]:font-bold [&_h3]:my-1 [&_h3]:text-slate-800 dark:[&_h3]:text-slate-200
-          [&_p]:my-1 [&_p]:leading-relaxed
-          empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/80 empty:before:pointer-events-none empty:before:italic`}
-        data-placeholder={placeholder}
+          [&_p]:my-1 [&_p]:leading-relaxed`}
+
       />
     </div>
   );

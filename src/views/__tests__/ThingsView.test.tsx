@@ -79,5 +79,19 @@ describe('Vault submenu layouts', () => {
       certificates: 'Certificate',
       records: 'Record'
     }[recordType]);
+
+    if (tab === 'things') {
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[aria-label="Close physical item form"]')!.click();
+      });
+      layout = container.querySelector('.vault-submenu-layout')!;
+      expect(layout.children).toHaveLength(1);
+      expect((layout.firstElementChild as HTMLElement).className).toContain('lg:col-span-12');
+
+      await selectTab();
+      layout = container.querySelector('.vault-submenu-layout')!;
+      expect(layout.children).toHaveLength(2);
+      expect((layout.firstElementChild as HTMLElement).className).toContain('lg:col-span-5');
+    }
   });
 });

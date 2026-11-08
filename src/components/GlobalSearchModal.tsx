@@ -17,7 +17,7 @@ interface SearchHit {
 interface GlobalSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onNavigate: (module: NavModule) => void;
+  onNavigate: (module: NavModule, recordId?: string) => void;
 }
 
 export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
@@ -224,8 +224,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search tasks, notes, journal, goals, finance, and people..."
-            className="sanctuary-search-input flex-1 bg-transparent px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none dark:text-white"
+            aria-label="Global search"
+            className="sanctuary-search-input flex-1 bg-transparent px-3 text-sm text-slate-900 focus:outline-none dark:text-white"
             autoFocus
           />
           {query && (
@@ -286,7 +286,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                 key={`${r.type}-${r.id}`}
                 type="button"
                 onClick={() => {
-                  onNavigate(r.module);
+                  onNavigate(r.module, r.id);
                   onClose();
                 }}
                 className="group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"

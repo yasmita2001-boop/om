@@ -782,7 +782,7 @@ export const NepaliPatroCalendar: React.FC<NepaliPatroCalendarProps> = ({
 
                   <input
                     type="text"
-                    placeholder="2082-06-16"
+
                     value={bsDateInput}
                     onChange={e => setBsDateInput(e.target.value)}
                     className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 bg-white font-medium focus:border-indigo-500 focus:outline-none dark:bg-slate-900 dark:border-slate-700 dark:text-white"

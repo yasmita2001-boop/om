@@ -168,7 +168,8 @@ describe('Finance entry and history card layouts', () => {
     await selectMenu('transactions');
 
     expect(container.textContent).toContain('Ledger Transactions (0)');
-    expect(container.querySelector('input[placeholder="Search ledger..."]')).not.toBeNull();
+    expect(container.querySelector('input[aria-label="Search ledger"]')).not.toBeNull();
+    expect(container.querySelector('input[placeholder]')).toBeNull();
     expect(container.textContent).not.toContain('No transactions found');
     expect(container.textContent).not.toContain('Adjust the search or filters');
   });

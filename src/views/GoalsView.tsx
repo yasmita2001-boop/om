@@ -89,7 +89,11 @@ function GoalLinkedBreakdownWidget({
 }) {
   const hasItems = breakdown.hasLinkedItems;
   const hasProgressItems = breakdown.progressItemCount > 0;
-  const averageItemWeight = breakdown.items.find(item => item.weightPercent > 0)?.weightPercent || 0;
+  const displayProgress = hasProgressItems ? breakdown.totalPercent : goal.progress;
+  const averageItemWeight = hasProgressItems
+    ? Number((100 / breakdown.progressItemCount).toFixed(1))
+    : 0;
+  const formatProgressCount = (count: number) => Number(count.toFixed(1)).toString();
 
   return (
     <div className="space-y-2">
@@ -98,19 +102,19 @@ function GoalLinkedBreakdownWidget({
         {/* Left: Progress percentage + contextual stats */}
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
           <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums shrink-0 whitespace-nowrap">
-            {goal.progress}%
+            {displayProgress}%
           </span>
           <span className="text-slate-300 dark:text-slate-700 shrink-0">·</span>
           {hasItems ? (
             <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
               <span className="hidden sm:inline">
                 {hasProgressItems
-                  ? `${breakdown.completedItems} of ${breakdown.progressItemCount} progress items complete · ${breakdown.totalItems} linked`
+                  ? `${formatProgressCount(breakdown.completedItems)} of ${formatProgressCount(breakdown.progressItemCount)} progress items complete · ${breakdown.totalItems} linked`
                   : `${breakdown.totalItems} reference links · manual progress`}
               </span>
               <span className="sm:hidden">
                 {hasProgressItems
-                  ? `${breakdown.completedItems}/${breakdown.progressItemCount} progress`
+                  ? `${formatProgressCount(breakdown.completedItems)}/${formatProgressCount(breakdown.progressItemCount)} progress`
                   : `${breakdown.totalItems} references`}
               </span>
             </span>
@@ -167,11 +171,11 @@ function GoalLinkedBreakdownWidget({
       <div className="goal-progress-track h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800/90">
         <div
           className={`h-full rounded-full transition-all duration-500 ease-out ${
-            goal.progress >= 100
+            displayProgress >= 100
               ? 'bg-emerald-500'
               : 'bg-indigo-600 dark:bg-indigo-500'
           }`}
-          style={{ width: `${Math.max(0, Math.min(100, goal.progress))}%` }}
+          style={{ width: `${Math.max(0, Math.min(100, displayProgress))}%` }}
         />
       </div>
 
@@ -185,13 +189,13 @@ function GoalLinkedBreakdownWidget({
               </h4>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 {hasProgressItems
-                  ? `${breakdown.progressItemCount} progress-driving links contribute about ${averageItemWeight}% each. ${breakdown.totalItems - breakdown.progressItemCount} reference links do not change progress.`
+                  ? `${formatProgressCount(breakdown.progressItemCount)} progress-driving items contribute about ${averageItemWeight}% each. ${formatProgressCount(breakdown.totalItems - breakdown.progressItemCount)} reference links do not change progress.`
                   : `${breakdown.totalItems} linked reference items are visible here but do not change Goal progress.`}
               </p>
             </div>
             <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
               {hasProgressItems
-                ? `${breakdown.completedItems}/${breakdown.progressItemCount} Progress`
+                ? `${formatProgressCount(breakdown.completedItems)}/${formatProgressCount(breakdown.progressItemCount)} Progress`
                 : 'Reference only'}
             </span>
           </div>
@@ -200,107 +204,107 @@ function GoalLinkedBreakdownWidget({
           <div className="goal-category-badges flex flex-wrap gap-1.5 text-[11px]">
             {breakdown.categories.tasks?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Tasks: {breakdown.categories.tasks.completedCount}/{breakdown.categories.tasks.count}
+                Tasks: {formatProgressCount(breakdown.categories.tasks.completedCount)}/{formatProgressCount(breakdown.categories.tasks.count)}
               </span>
             )}
             {breakdown.categories.milestones?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Milestones: {breakdown.categories.milestones.completedCount}/{breakdown.categories.milestones.count}
+                Milestones: {formatProgressCount(breakdown.categories.milestones.completedCount)}/{formatProgressCount(breakdown.categories.milestones.count)}
               </span>
             )}
             {breakdown.categories.habits?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Habits: {breakdown.categories.habits.completedCount}/{breakdown.categories.habits.count}
+                Habits: {formatProgressCount(breakdown.categories.habits.completedCount)}/{formatProgressCount(breakdown.categories.habits.count)}
               </span>
             )}
             {breakdown.categories.routines?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Routines: {breakdown.categories.routines.completedCount}/{breakdown.categories.routines.count}
+                Routines: {formatProgressCount(breakdown.categories.routines.completedCount)}/{formatProgressCount(breakdown.categories.routines.count)}
               </span>
             )}
             {breakdown.categories.learning?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Learning: {breakdown.categories.learning.completedCount}/{breakdown.categories.learning.count}
+                Learning: {formatProgressCount(breakdown.categories.learning.completedCount)}/{formatProgressCount(breakdown.categories.learning.count)}
               </span>
             )}
             {breakdown.categories.skills?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Skills: {breakdown.categories.skills.completedCount}/{breakdown.categories.skills.count}
+                Skills: {formatProgressCount(breakdown.categories.skills.completedCount)}/{formatProgressCount(breakdown.categories.skills.count)}
               </span>
             )}
             {breakdown.categories.notes?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Notebooks: {breakdown.categories.notes.completedCount}/{breakdown.categories.notes.count}
+                Notebooks: {formatProgressCount(breakdown.categories.notes.completedCount)}/{formatProgressCount(breakdown.categories.notes.count)}
               </span>
             )}
             {breakdown.categories.journal?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Journal: {breakdown.categories.journal.completedCount}/{breakdown.categories.journal.count}
+                Journal: {formatProgressCount(breakdown.categories.journal.completedCount)}/{formatProgressCount(breakdown.categories.journal.count)}
               </span>
             )}
             {breakdown.categories.childGoals?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Sub-Goals: {breakdown.categories.childGoals.completedCount}/{breakdown.categories.childGoals.count}
+                Sub-Goals: {formatProgressCount(breakdown.categories.childGoals.completedCount)}/{formatProgressCount(breakdown.categories.childGoals.count)}
               </span>
             )}
             {breakdown.categories.savingsPlans?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-emerald-700 shadow-2xs border border-emerald-200/70 dark:bg-slate-800 dark:text-emerald-400 dark:border-emerald-800/60">
-                Savings: {breakdown.categories.savingsPlans.completedCount}/{breakdown.categories.savingsPlans.count}
+                Savings: {formatProgressCount(breakdown.categories.savingsPlans.completedCount)}/{formatProgressCount(breakdown.categories.savingsPlans.count)}
               </span>
             )}
             {breakdown.categories.loans?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-700 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
-                Loans: {breakdown.categories.loans.completedCount}/{breakdown.categories.loans.count}
+                Loans: {formatProgressCount(breakdown.categories.loans.completedCount)}/{formatProgressCount(breakdown.categories.loans.count)}
               </span>
             )}
             {breakdown.categories.investments?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-blue-700 shadow-2xs border border-blue-200/70 dark:bg-slate-800 dark:text-blue-400 dark:border-blue-800/60">
-                Investments: {breakdown.categories.investments.completedCount}/{breakdown.categories.investments.count}
+                Investments: {formatProgressCount(breakdown.categories.investments.completedCount)}/{formatProgressCount(breakdown.categories.investments.count)}
               </span>
             )}
             {breakdown.categories.assets?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-700 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
-                Assets: {breakdown.categories.assets.completedCount}/{breakdown.categories.assets.count}
+                Assets: {formatProgressCount(breakdown.categories.assets.completedCount)}/{formatProgressCount(breakdown.categories.assets.count)}
               </span>
             )}
             {breakdown.categories.liabilities?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-orange-700 shadow-2xs border border-orange-200/70 dark:bg-slate-800 dark:text-orange-400 dark:border-orange-800/60">
-                Liabilities: {breakdown.categories.liabilities.completedCount}/{breakdown.categories.liabilities.count}
+                Liabilities: {formatProgressCount(breakdown.categories.liabilities.completedCount)}/{formatProgressCount(breakdown.categories.liabilities.count)}
               </span>
             )}
             {breakdown.categories.transactions?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-teal-700 shadow-2xs border border-teal-200/70 dark:bg-slate-800 dark:text-teal-400 dark:border-teal-800/60">
-                Ledger: {breakdown.categories.transactions.completedCount}/{breakdown.categories.transactions.count}
+                Ledger: {formatProgressCount(breakdown.categories.transactions.completedCount)}/{formatProgressCount(breakdown.categories.transactions.count)}
               </span>
             )}
             {breakdown.categories.appointments?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-pink-700 shadow-2xs border border-pink-200/70 dark:bg-slate-800 dark:text-pink-400 dark:border-pink-800/60">
-                Appointments: {breakdown.categories.appointments.completedCount}/{breakdown.categories.appointments.count}
+                Appointments: {formatProgressCount(breakdown.categories.appointments.completedCount)}/{formatProgressCount(breakdown.categories.appointments.count)}
               </span>
             )}
             {breakdown.categories.healthNotes?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-700 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Health Notes: {breakdown.categories.healthNotes.completedCount}/{breakdown.categories.healthNotes.count}
+                Health Notes: {formatProgressCount(breakdown.categories.healthNotes.completedCount)}/{formatProgressCount(breakdown.categories.healthNotes.count)}
               </span>
             )}
             {breakdown.categories.meetings?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-violet-700 shadow-2xs border border-violet-200/70 dark:bg-slate-800 dark:text-violet-400 dark:border-violet-800/60">
-                Meetings: {breakdown.categories.meetings.completedCount}/{breakdown.categories.meetings.count}
+                Meetings: {formatProgressCount(breakdown.categories.meetings.completedCount)}/{formatProgressCount(breakdown.categories.meetings.count)}
               </span>
             )}
             {breakdown.categories.practices?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-emerald-600 shadow-2xs border border-emerald-200/70 dark:bg-slate-800 dark:text-emerald-400 dark:border-emerald-800/60">
-                Practices: {breakdown.categories.practices.completedCount}/{breakdown.categories.practices.count}
+                Practices: {formatProgressCount(breakdown.categories.practices.completedCount)}/{formatProgressCount(breakdown.categories.practices.count)}
               </span>
             )}
             {breakdown.categories.focusSessions?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-500 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
-                Focus: {breakdown.categories.focusSessions.completedCount}/{breakdown.categories.focusSessions.count}
+                Focus: {formatProgressCount(breakdown.categories.focusSessions.completedCount)}/{formatProgressCount(breakdown.categories.focusSessions.count)}
               </span>
             )}
             {breakdown.categories.reminders?.count > 0 && (
               <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-500 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
-                Reminders: {breakdown.categories.reminders.completedCount}/{breakdown.categories.reminders.count}
+                Reminders: {formatProgressCount(breakdown.categories.reminders.completedCount)}/{formatProgressCount(breakdown.categories.reminders.count)}
               </span>
             )}
           </div>
@@ -313,7 +317,7 @@ function GoalLinkedBreakdownWidget({
                 className="flex items-center justify-between gap-2 rounded-lg border border-slate-200/70 bg-white p-2 text-xs dark:border-slate-800 dark:bg-slate-800/80 transition-colors hover:border-slate-300 dark:hover:border-slate-700"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  {item.type === 'task' && onQuickToggleTask ? (
+                  {item.type === 'task' && onQuickToggleTask && !item.isAggregate ? (
                     <button
                       type="button"
                       onClick={() => onQuickToggleTask(item.id)}
@@ -386,7 +390,9 @@ function GoalLinkedBreakdownWidget({
 
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-[10px] text-slate-400 font-mono">
-                    {item.weightPercent > 0 ? `~${item.weightPercent}%` : 'Reference'}
+                    {item.isAggregate && item.progressWeight
+                      ? `~${averageItemWeight}% each`
+                      : item.weightPercent > 0 ? `~${item.weightPercent}%` : 'Reference'}
                   </span>
                   <span className={`font-mono text-[11px] font-semibold rounded px-1.5 py-0.5 ${
                     item.progress >= 100
@@ -395,7 +401,7 @@ function GoalLinkedBreakdownWidget({
                       ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
                       : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                   }`}>
-                    {item.progress}%
+                    {Number.isInteger(item.progress) ? item.progress : item.progress.toFixed(1)}%
                   </span>
                 </div>
               </div>
@@ -878,10 +884,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     setGoalParentId(current => eligibleParents.some(goal => goal.id === current)
       ? current
       : eligibleParents[0]?.id || '');
-  };
-
-  const getChildrenOf = (parentId: string) => {
-    return sortGoals(goals.filter(g => g.parentId === parentId));
   };
 
   const getDescendantIds = (goalId: string) => {
@@ -1583,6 +1585,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       const toDeleteIds = new Set<string>([deleteTarget.id]);
       const findDescendants = (parentId: string) => {
         goals.filter(g => g.parentId === parentId).forEach(child => {
+          // Guard against cyclic parentId data (e.g. from an import).
+          if (toDeleteIds.has(child.id)) return;
           toDeleteIds.add(child.id);
           findDescendants(child.id);
         });
@@ -1978,17 +1982,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       required
                       value={goalTitle}
                       onChange={e => setGoalTitle(e.target.value)}
-                      placeholder={
-                        goalLevel === 1
-                          ? ("e.g. Build NPR 1M Liquid Runway, Launch SaaS Product").split('NPR').join(getCurrencySymbol())
-                          : goalLevel === 2
-                          ? ("e.g. Master Backend Architecture, Save First NPR 200k").split('NPR').join(getCurrencySymbol())
-                          : goalLevel === 3
-                          ? 'e.g. Complete Postgres Indexing, Automate Monthly SIP'
-                          : goalLevel === 4
-                          ? 'e.g. Benchmark Query Index Plans, Configure Netbanking Auto-Debit'
-                          : 'e.g. Run EXPLAIN ANALYZE on users table, Authorize bank mandate'
-                      }
+
                       className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
@@ -2024,15 +2018,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                        Sibling Order (optional)
+                      <label className="block whitespace-nowrap text-[9px] leading-4 font-semibold text-slate-600 dark:text-slate-300">
+                        Order
                       </label>
                       <input
                         type="number"
                         min="1"
-                        placeholder={`Auto (${goalParentId
-                          ? `${hierarchySequenceById.get(goalParentId) || ''}.${getChildrenOf(goalParentId).length + 1}`
-                          : mainGoals.length + 1})`}
+
                         value={goalOrder}
                         onChange={e => setGoalOrder(e.target.value)}
                         className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -2049,7 +2041,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       rows={2}
                       value={goalDescription}
                       onChange={e => setGoalDescription(e.target.value)}
-                      placeholder="Outline specific milestones or conditions to mark this complete..."
                       className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
@@ -2871,6 +2862,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         return (
                           <div
                             key={g.id}
+                            data-record-id={g.id}
                             className="rounded-2xl border border-slate-200/80 bg-white p-4.5 shadow-xs transition-all hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 space-y-3"
                           >
                             <div className="space-y-1.5">
@@ -2978,7 +2970,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   required
                   value={stratTitle}
                   onChange={e => setStratTitle(e.target.value)}
-                  placeholder="e.g. Daily Deep Work Blocks, Asymmetric Leverage"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -3011,7 +3003,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   rows={3}
                   value={stratAction}
                   onChange={e => setStratAction(e.target.value)}
-                  placeholder="Specify the exact operating tactics and execution plan..."
+
                   className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -3108,7 +3100,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     <div className="space-y-2 border-t border-slate-100 pt-2 dark:border-slate-800">
                       <div className="text-[10px] text-slate-500 dark:text-slate-400">Execution tasks: {tasks.filter(task => task.strategyId === s.id && task.done).length}/{tasks.filter(task => task.strategyId === s.id).length} complete</div>
                       <form onSubmit={event => { event.preventDefault(); void handleAddStrategyTask(s); }} className="flex gap-2">
-                        <input value={strategyTaskDrafts[s.id] || ''} onChange={event => setStrategyTaskDrafts(previous => ({ ...previous, [s.id]: event.target.value }))} placeholder="Add a concrete execution task" aria-label={`Execution task for ${s.title}`} className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                        <input value={strategyTaskDrafts[s.id] || ''} onChange={event => setStrategyTaskDrafts(previous => ({ ...previous, [s.id]: event.target.value }))} aria-label={`Execution task for ${s.title}`} className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
                         <button type="submit" className="rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500">Add task</button>
                       </form>
                     </div>
@@ -3141,7 +3133,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   required
                   value={msTitle}
                   onChange={e => setMsTitle(e.target.value)}
-                  placeholder="e.g. Complete Phase 1 MVP, Save First 20%"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -3270,7 +3262,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   required
                   value={kpiName}
                   onChange={e => setKpiName(e.target.value)}
-                  placeholder="e.g. Monthly Recurring Revenue, Coding Hours"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -3298,7 +3290,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     required
                     value={kpiTarget}
                     onChange={e => setKpiTarget(e.target.value)}
-                    placeholder="10000"
+
                     className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -3310,7 +3302,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     step="0.01"
                     value={kpiCurrent}
                     onChange={e => setKpiCurrent(e.target.value)}
-                    placeholder="6500"
+
                     className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -3320,7 +3312,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     type="text"
                     value={kpiUnit}
                     onChange={e => setKpiUnit(e.target.value)}
-                    placeholder={"NPR, reps, hrs".split('NPR').join(getCurrencySymbol())}
+
                     className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -3440,7 +3432,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   required
                   value={missionTitle}
                   onChange={e => setMissionTitle(e.target.value)}
-                  placeholder="e.g. Launch AI Studio Applet to Production"
+
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -3451,7 +3443,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     type="text"
                     value={missionPeriod}
                     onChange={e => setMissionPeriod(e.target.value)}
-                    placeholder="e.g. October 2026"
+
                     className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -3461,7 +3453,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     type="text"
                     value={missionTarget}
                     onChange={e => setMissionTarget(e.target.value)}
-                    placeholder="100% test coverage"
+
                     className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -3472,7 +3464,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   type="text"
                   value={missionAction}
                   onChange={e => setMissionAction(e.target.value)}
-                  placeholder="Daily core routine execution"
+
                   className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
@@ -3734,7 +3726,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   <input
                     type="number"
                     min="1"
-                    placeholder="e.g. 1, 2, 3..."
+
                     value={editingGoal.order ?? ''}
                     onChange={e => setEditingGoal({ ...editingGoal, order: e.target.value === '' ? undefined : Number(e.target.value) })}
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"

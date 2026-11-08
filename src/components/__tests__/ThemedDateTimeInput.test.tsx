@@ -71,4 +71,45 @@ describe('ThemedDateTimeInput', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('changes the year and month through the themed dropdowns', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<ThemedDateTimeInput type="date" value="2026-11-15" onChange={() => undefined} />);
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Open date picker"]')?.click();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Select year"]')?.click();
+    });
+    const yearMenu = container.querySelector('[aria-label="Years"]');
+    const yearOption = [...(yearMenu?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
+      .find(button => button.textContent === '2027');
+    expect(yearOption).toBeDefined();
+
+    await act(async () => {
+      yearOption?.click();
+    });
+    expect(container.querySelector('[aria-label="Select year"]')?.textContent).toContain('2027');
+    expect(container.querySelector('[aria-label="Years"]')).toBeNull();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Select month"]')?.click();
+    });
+    const monthMenu = container.querySelector('[aria-label="Months"]');
+    const monthOption = [...(monthMenu?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
+      .find(button => button.textContent === 'February');
+
+    await act(async () => {
+      monthOption?.click();
+    });
+    expect(container.querySelector('[aria-label="Select month"]')?.textContent).toContain('February');
+
+    await act(async () => root.unmount());
+  });
 });

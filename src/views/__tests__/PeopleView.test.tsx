@@ -151,7 +151,7 @@ describe('People card', () => {
     expect(container.textContent).toContain('Alex');
     expect(formCard?.textContent).not.toContain('Agenda / Topic');
     expect(formCard?.textContent).not.toContain('Related Person');
-    expect(formCard?.querySelector('textarea[placeholder*="Discussed"]') ?? null).not.toBeNull();
+    expect(formCard?.querySelector('textarea[aria-label="Interaction memo"]') ?? null).not.toBeNull();
   });
 
   it('saves the contact, memo, and meeting together from the single submit button', async () => {
@@ -188,9 +188,9 @@ describe('People card', () => {
     };
 
     await act(async () => {
-      updateValue(container.querySelector('input[placeholder="e.g. Elena Rostova"]')!, 'Sam');
-      updateValue(container.querySelector('textarea[placeholder*="Discussed"]')!, 'Discussed the launch');
-      updateValue(container.querySelector('input[placeholder="Team, Alex"]')!, 'Sam, team');
+      updateValue(container.querySelector('input[aria-label="Full name"]')!, 'Sam');
+      updateValue(container.querySelector('textarea[aria-label="Interaction memo"]')!, 'Discussed the launch');
+      updateValue(container.querySelector('input[aria-label="Attendees"]')!, 'Sam, team');
       container.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Full Name mode"]')!.click();
     });
 

@@ -3,6 +3,7 @@ import { RecurrenceConfig, RecurrenceFrequency, RecurrenceEndType } from '../typ
 import { Repeat, Calendar, AlertCircle } from 'lucide-react';
 import { getRecurrenceDescription, getUpcomingOccurrences, isValidRecurrenceConfig, createDefaultRecurrenceConfig } from '../lib/recurrenceEngine';
 import { getLocalDateString } from '../lib/dateUtils';
+import { ThemedDateTimeInput } from './ThemedDateTimeInput';
 
 interface RecurrenceSelectorProps {
   value: RecurrenceConfig | undefined;
@@ -14,16 +15,24 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
   const [isEnabled, setIsEnabled] = useState(!!value);
   const [config, setConfig] = useState<RecurrenceConfig>(value || createDefaultRecurrenceConfig());
 
+  // The task form stays mounted between "create" and "edit", so the selector must
+  // adopt the config of the record being edited instead of keeping its first state.
   useEffect(() => {
-    if (isEnabled) {
-      onChange(config);
-    } else {
-      onChange(undefined);
-    }
-  }, [isEnabled, config]);
+    setIsEnabled(!!value);
+    setConfig(value || createDefaultRecurrenceConfig());
+  }, [value]);
 
+  // Emit from user events (not an effect) so an external edit does not re-emit a
+  // stale config over the one the parent just loaded.
   const updateConfig = (updates: Partial<RecurrenceConfig>) => {
-    setConfig(prev => ({ ...prev, ...updates }));
+    const next = { ...config, ...updates };
+    setConfig(next);
+    if (isEnabled) onChange(next);
+  };
+
+  const handleToggle = (enabled: boolean) => {
+    setIsEnabled(enabled);
+    onChange(enabled ? config : undefined);
   };
 
   const dummyTask = { id: 'preview', recurringConfig: config, date: startDate || getLocalDateString() };
@@ -34,7 +43,7 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
-          <input type="checkbox" checked={isEnabled} onChange={e => setIsEnabled(e.target.checked)} className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-slate-600" />
+          <input type="checkbox" checked={isEnabled} onChange={e => handleToggle(e.target.checked)} className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-slate-600" />
           <Repeat className="h-3.5 w-3.5" />
           Recurring Task
         </label>
@@ -108,7 +117,13 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
           {config.endType === 'by_date' && (
             <div>
               <label className="mb-1 block text-[10px] font-medium text-slate-600 dark:text-slate-400">End date</label>
-              <input type="date" value={config.endByDate || ''} onChange={e => updateConfig({ endByDate: e.target.value })} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+              <ThemedDateTimeInput
+                type="date"
+                aria-label="Recurrence end date"
+                value={config.endByDate || ''}
+                onChange={e => updateConfig({ endByDate: e.target.value })}
+                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+              />
             </div>
           )}
 

@@ -394,7 +394,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         void saveCustomCurrencySymbol();
                       }
                     }}
-                    placeholder="Type a symbol, e.g. Rs."
+
                     className="min-h-9 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                   />
                   <button
@@ -598,7 +598,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                   await storage.setSingleton('appSettings', appSettings);
                                 }
                               }}
-                              placeholder="#B88648"
+
                               className="h-6 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 font-mono text-[11px] uppercase text-slate-900 dark:text-white"
                             />
                           </div>

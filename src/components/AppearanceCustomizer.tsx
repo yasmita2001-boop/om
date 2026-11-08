@@ -328,7 +328,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                   type="text"
                   value={draft.accentColor}
                   onChange={event => setDraft(current => ({ ...current, accentColor: event.target.value }))}
-                  placeholder="#B88648"
+
                   aria-invalid={!isValidHex(draft.accentColor)}
                   className="h-8 min-w-0 w-24 rounded-md border border-slate-200 bg-slate-50 px-2 font-mono text-xs uppercase text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
@@ -365,7 +365,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                         type="text"
                         value={draft[key]}
                         onChange={event => setDraft(current => ({ ...current, [key]: event.target.value }))}
-                        placeholder={DEFAULT_APPEARANCE[key]}
+
                         aria-label={`Custom ${label.toLowerCase()} HEX`}
                         aria-invalid={!isValidHex(draft[key])}
                         className="h-8 w-[5.5rem] rounded-none border-0 bg-transparent px-1.5 font-mono text-[11px] uppercase text-slate-900 shadow-none focus-visible:outline-none dark:text-white"

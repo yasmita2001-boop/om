@@ -308,8 +308,8 @@ export const InteractiveKeypad: React.FC<InteractiveKeypadProps> = ({
             setErrorMsg(null);
           }}
           onKeyDown={handleKeyDown}
-          placeholder="0"
-          className="calc-display-input w-full bg-transparent border-0 p-0 text-right font-mono text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none focus:ring-0 leading-normal"
+
+          className="calc-display-input w-full bg-transparent border-0 p-0 text-right font-mono text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white focus:outline-none focus:ring-0 leading-normal"
         />
       </div>
 

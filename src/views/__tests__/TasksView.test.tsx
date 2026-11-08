@@ -6,7 +6,8 @@ import { TasksView } from '../TasksView';
 const storageMock = vi.hoisted(() => ({
   getActiveProfileId: vi.fn(() => 'test-profile'),
   getSingleton: vi.fn(async () => ({})),
-  setSingleton: vi.fn(async () => undefined)
+  setSingleton: vi.fn(async () => undefined),
+  delete: vi.fn(async () => undefined)
 }));
 
 vi.mock('../../lib/storage', () => ({
@@ -50,6 +51,67 @@ describe('Tasks view navigation', () => {
     expect(container.querySelector('[aria-label="Tasks, routines and focus submenu"]')).not.toBeNull();
   });
 
+  it('hides the task form and expands the roster until Add Task is selected', async () => {
+    await act(async () => {
+      root.render(
+        <TasksView
+          tasks={[
+            { id: 'task-1', title: 'First task', domain: 'work', priority: 'Medium', done: false, status: 'open', createdAt: 1, updatedAt: 1 }
+          ]}
+          goals={[]}
+          activeWorkAreaSection="tasks-roster"
+          onSelectWorkAreaSection={vi.fn()}
+          onRefresh={vi.fn()}
+          onSuccess={vi.fn()}
+        />
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Close task form"]')!.click();
+    });
+
+    expect(container.querySelector('[data-task-genesis-card]')).toBeNull();
+    expect(container.querySelector('[data-task-roster-card]')?.className).toContain('lg:col-span-12');
+
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent?.includes('Add Task'))!
+        .click();
+    });
+
+    expect(container.querySelector('[data-task-genesis-card]')).not.toBeNull();
+    expect(container.querySelector('[data-task-roster-card]')?.className).toContain('lg:col-span-7');
+  });
+
+  it('hides and reopens the Daily Command Target card', async () => {
+    await act(async () => {
+      root.render(
+        <TasksView
+          tasks={[]}
+          goals={[]}
+          activeWorkAreaSection="tasks-daily"
+          onSelectWorkAreaSection={vi.fn()}
+          onRefresh={vi.fn()}
+          onSuccess={vi.fn()}
+        />
+      );
+    });
+    expect(container.querySelector('#daily-command-progress')).not.toBeNull();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Close daily command target"]')!.click();
+    });
+    expect(container.querySelector('#daily-command-progress')?.closest('.hidden')).not.toBeNull();
+
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent?.includes('Open Daily Command Target'))!
+        .click();
+    });
+    expect(container.querySelector('#daily-command-progress')?.closest('.hidden')).toBeNull();
+  });
+
   it('routes menu selections to the chosen work-area section', async () => {
     const onSelectWorkAreaSection = vi.fn();
     await act(async () => {
@@ -73,6 +135,47 @@ describe('Tasks view navigation', () => {
     await act(async () => dailyTarget.click());
 
     expect(onSelectWorkAreaSection).toHaveBeenCalledWith('tasks-daily');
+  });
+
+  it('deletes multiple selected roster tasks after confirmation', async () => {
+    const onRefresh = vi.fn();
+    const onSuccess = vi.fn();
+    storageMock.delete.mockClear();
+    await act(async () => {
+      root.render(
+        <TasksView
+          tasks={[
+            { id: 'task-1', title: 'First task', domain: 'work', priority: 'Medium', done: false, status: 'open', createdAt: 1, updatedAt: 1 },
+            { id: 'task-2', title: 'Second task', domain: 'work', priority: 'Low', done: false, status: 'open', createdAt: 2, updatedAt: 2 }
+          ]}
+          goals={[]}
+          activeWorkAreaSection="tasks-roster"
+          onSelectWorkAreaSection={vi.fn()}
+          onRefresh={onRefresh}
+          onSuccess={onSuccess}
+        />
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLInputElement>('[aria-label="Select task First task"]')!.click();
+      container.querySelector<HTMLInputElement>('[aria-label="Select task Second task"]')!.click();
+    });
+
+    const deleteSelected = [...container.querySelectorAll('button')]
+      .find(button => button.textContent?.includes('Delete selected (2)'));
+    expect(deleteSelected).toBeDefined();
+    await act(async () => deleteSelected!.click());
+
+    const confirmDelete = [...container.querySelectorAll('button')]
+      .find(button => button.textContent?.includes('Delete 2 Tasks'));
+    expect(confirmDelete).toBeDefined();
+    await act(async () => confirmDelete!.click());
+
+    expect(storageMock.delete).toHaveBeenNthCalledWith(1, 'tasks', 'task-1');
+    expect(storageMock.delete).toHaveBeenNthCalledWith(2, 'tasks', 'task-2');
+    expect(onSuccess).toHaveBeenCalledWith('✓ Deleted 2 selected task(s)');
+    expect(onRefresh).toHaveBeenCalled();
   });
 });
 

@@ -179,6 +179,16 @@ export function adToBs(iso: string): BsDateResult {
   const m = String(iso || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (!m) throw new Error('AD date must be in YYYY-MM-DD format');
   const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  // Date.UTC silently rolls invalid dates over (2026-02-30 -> 2026-03-02),
+  // so rebuild the date and compare before computing the offset.
+  const rebuilt = new Date(Date.UTC(y, mo - 1, d));
+  if (
+    rebuilt.getUTCFullYear() !== y ||
+    rebuilt.getUTCMonth() !== mo - 1 ||
+    rebuilt.getUTCDate() !== d
+  ) {
+    throw new Error('Invalid AD date.');
+  }
   const diff = omDaysInAdDate(y, mo, d) - omDaysInAdDate(1921, 4, 13);
   if (diff < 0) throw new Error('AD date is before the supported 1978 BS calendar range.');
   let rem = diff;

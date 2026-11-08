@@ -216,7 +216,10 @@ class StorageEngine {
 
   public open(): Promise<IDBDatabase> {
     if (typeof indexedDB === 'undefined') {
-      return Promise.reject(new Error('IndexedDB is not supported in this environment.'));
+      return Promise.reject(new Error(
+        'This browser has IndexedDB disabled, so Om-LifeOS cannot save data. ' +
+        'Enable site data/storage (and leave private browsing mode), then reload.'
+      ));
     }
 
     if (this.db) {
@@ -1414,6 +1417,7 @@ class StorageEngine {
       this.getAll<any>('habits', profileId)
     ]);
     const taskIds = new Set(tasks.map(task => task.id));
+    const tasksById = new Map(tasks.map(task => [task.id, task]));
     const peopleIds = new Set(people.map(person => person.id));
     const directLinkedSourceIds: Record<string, Set<string>> = {
       learning: new Set(learningItems.map(item => item.id)),
@@ -1444,6 +1448,17 @@ class StorageEngine {
       ) {
         reminderIdsToRecycle.add(reminder.id);
         continue;
+      }
+      // Keep linked alarms consistent with the task's completion state on load.
+      if (reminder.linkedType === 'task' && reminder.status !== 'done') {
+        const linkedTask = tasksById.get(reminder.linkedId);
+        if (linkedTask && (linkedTask.done || linkedTask.status === 'done')) {
+          await this.put('reminders', {
+            ...reminder,
+            status: 'done',
+            updatedAt: Date.now()
+          });
+        }
       }
       const linkedSourceIds = directLinkedSourceIds[reminder.linkedType];
       if (linkedSourceIds && !linkedSourceIds.has(reminder.linkedId)) {

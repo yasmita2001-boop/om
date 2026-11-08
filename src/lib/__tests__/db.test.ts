@@ -20,7 +20,7 @@ describe('database store metadata', () => {
   it('does not cache a failed open when IndexedDB is unavailable', async () => {
     vi.stubGlobal('indexedDB', undefined);
 
-    await expect(storage.open()).rejects.toThrow('IndexedDB is not supported');
-    await expect(storage.open()).rejects.toThrow('IndexedDB is not supported');
+    await expect(storage.open()).rejects.toThrow('IndexedDB disabled');
+    await expect(storage.open()).rejects.toThrow('IndexedDB disabled');
   });
 });

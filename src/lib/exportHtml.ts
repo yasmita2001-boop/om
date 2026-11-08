@@ -744,7 +744,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
       </div>
     </div>
     <div class="header-actions">
-      <input type="text" id="global-search" class="search-input" placeholder="Search tasks, notes..." oninput="handleSearch(this.value)">
+      <input type="text" id="global-search" class="search-input" aria-label="Search tasks and notes" oninput="handleSearch(this.value)">
       <button type="button" class="btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">${icon('moon')} Theme</button>
       <button type="button" class="btn" onclick="window.print()" title="Print Full Report">${icon('printer')} Print</button>
       <button type="button" class="btn btn-primary" onclick="downloadBackupJson()" title="Download raw JSON snapshot">${icon('save')} Export JSON</button>

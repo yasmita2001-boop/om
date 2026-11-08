@@ -1,6 +1,8 @@
 import { getCurrencySymbol } from './currencyDisplay';
 import { storage } from './storage';
 import { getLocalDateString } from './dateUtils';
+import { calculateNextOccurrence, isValidRecurrenceConfig } from './recurrenceEngine';
+import { getGoalPeriodProgress, type GoalPeriodProgressInput } from './goalPeriodProgress';
 import {
   Goal,
   Task,
@@ -23,7 +25,7 @@ import {
   Meeting,
   SpiritualPractice,
   FocusSession,
-  ReminderItem
+  ReminderItem,
 } from '../types';
 
 export type GoalItemType =
@@ -57,6 +59,10 @@ export interface GoalItemDetail {
   progress: number;
   weightPercent: number; // e.g. 10% if 10 items
   isCompleted: boolean;
+  isAggregate?: boolean;
+  progressWeight?: number;
+  itemCount?: number;
+  completedCount?: number;
 }
 
 export interface GoalCategorySummary {
@@ -71,6 +77,7 @@ export interface GoalProgressBreakdown {
   totalItems: number;
   completedItems: number;
   progressItemCount: number;
+  progressPoints: number;
   totalPercent: number;
   hasLinkedItems: boolean;
   categories: {
@@ -153,7 +160,6 @@ export function createTaskGoalResolver(sources: GoalResolutionSources): (task: T
   const routines = new Map((sources.routines || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
   const skills = new Map((sources.skills || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
   const learning = new Map((sources.learningItems || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
-
   return task => task.goalId ||
       (task.routineId ? routines.get(task.routineId) : undefined) ||
       (task.skillId ? skills.get(task.skillId) : undefined) ||
@@ -163,6 +169,259 @@ export function createTaskGoalResolver(sources: GoalResolutionSources): (task: T
 export function resolveTaskGoalId(task: Task, sources: GoalResolutionSources): string | undefined {
   return createTaskGoalResolver(sources)(task);
 }
+
+interface GoalTaskProgressItem {
+  id: string;
+  title: string;
+  progress: number;
+  isCompleted: boolean;
+  progressWeight?: number;
+  itemCount?: number;
+  completedCount?: number;
+  isAggregate?: boolean;
+}
+
+function getTaskOccurrenceDate(task: Task): string | undefined {
+  const date = task.dueAt || task.date;
+  return date ? date.slice(0, 10) : undefined;
+}
+
+function getTaskSeriesRoot(task: Task, tasksById: Map<string, Task>): Task {
+  let current = task;
+  const visited = new Set<string>();
+  while (current.recurringParentId && !visited.has(current.id)) {
+    visited.add(current.id);
+    const parent = tasksById.get(current.recurringParentId);
+    if (!parent) break;
+    current = parent;
+  }
+  return current;
+}
+
+function getFiniteRecurrenceDates(startDate: string, config: NonNullable<Task['recurringConfig']>): string[] {
+  const firstDate = startDate.slice(0, 10);
+  if (!isValidRecurrenceConfig(config) || config.endType === 'never') return [];
+
+  const scheduleConfig = { ...config, occurrenceCount: 1, lastGeneratedDate: undefined };
+  const dates = [firstDate];
+  let currentDate = firstDate;
+  while (true) {
+    const nextDate = calculateNextOccurrence(currentDate, scheduleConfig);
+    if (!nextDate) break;
+    dates.push(nextDate);
+    currentDate = nextDate;
+    if (scheduleConfig.endType === 'after') {
+      scheduleConfig.occurrenceCount = (scheduleConfig.occurrenceCount || 0) + 1;
+    }
+  }
+  return dates;
+}
+
+function getGoalTaskProgressItems(linkedTasks: Task[], allTasks: Task[]): GoalTaskProgressItem[] {
+  const tasksById = new Map(allTasks.map(task => [task.id, task]));
+  const rootsById = new Map<string, Task>();
+  for (const task of linkedTasks) {
+    const root = getTaskSeriesRoot(task, tasksById);
+    rootsById.set(root.id, root);
+  }
+  const seriesByRootId = new Map<string, { root: Task; tasks: Task[] }>();
+  for (const task of allTasks) {
+    const root = getTaskSeriesRoot(task, tasksById);
+    if (!rootsById.has(root.id)) continue;
+    const series = seriesByRootId.get(root.id) || { root: rootsById.get(root.id)!, tasks: [] };
+    series.tasks.push(task);
+    seriesByRootId.set(root.id, series);
+  }
+
+  const progressItems: GoalTaskProgressItem[] = [];
+  for (const { root, tasks: seriesTasks } of seriesByRootId.values()) {
+    const recurrenceConfig = root.recurringConfig || seriesTasks.find(task => task.recurringConfig)?.recurringConfig;
+    if (!recurrenceConfig) {
+      for (const task of seriesTasks) {
+        const isCompleted = Boolean(task.done || task.status === 'done');
+        progressItems.push({
+          id: task.id,
+          title: task.title,
+          progress: isCompleted ? 100 : task.status === 'in-progress' ? 50 : 0,
+          isCompleted
+        });
+      }
+      continue;
+    }
+
+    const tasksByDate = new Map<string, Task[]>();
+    for (const task of seriesTasks) {
+      const date = getTaskOccurrenceDate(task);
+      if (!date) continue;
+      const sameDateTasks = tasksByDate.get(date) || [];
+      sameDateTasks.push(task);
+      tasksByDate.set(date, sameDateTasks);
+    }
+
+    const startDate = getTaskOccurrenceDate(root) || getTaskOccurrenceDate(seriesTasks[0]);
+    const scheduledDates = recurrenceConfig.endType !== 'never' && startDate
+      ? getFiniteRecurrenceDates(startDate, recurrenceConfig)
+      : [];
+    const occurrenceDates = scheduledDates.length > 0
+      ? scheduledDates
+      : Array.from(tasksByDate.keys()).sort();
+    if (occurrenceDates.length === 0) continue;
+
+    let completedCount = 0;
+    let progressPoints = 0;
+    for (const date of occurrenceDates) {
+      const occurrenceTasks = tasksByDate.get(date) || [];
+      const isCompleted = occurrenceTasks.some(task => task.done || task.status === 'done');
+      const isInProgress = !isCompleted && occurrenceTasks.some(task => task.status === 'in-progress');
+      if (isCompleted) completedCount++;
+      progressPoints += isCompleted ? 100 : isInProgress ? 50 : 0;
+    }
+
+    const occurrenceCount = occurrenceDates.length;
+    progressItems.push({
+      id: root.id,
+      title: `${root.title} (${completedCount}/${occurrenceCount} occurrences)`,
+      progress: progressPoints / occurrenceCount,
+      isCompleted: completedCount === occurrenceCount,
+      progressWeight: occurrenceCount,
+      itemCount: occurrenceCount,
+      completedCount,
+      isAggregate: true
+    });
+  }
+  return progressItems;
+}
+
+function getGoalPeriodInput(goal: Goal, data: GoalRelatedData): GoalPeriodProgressInput {
+  const routines = data.routines || [];
+  const learningItems = data.learningItems || [];
+  const skills = data.skills || [];
+  const tasks = data.tasks.filter(task =>
+    resolveTaskGoalId(task, { routines, skills, learningItems }) === goal.id
+  );
+  const habitResolver = createHabitGoalResolver(routines);
+  return {
+    goal,
+    childGoals: [],
+    tasks,
+    allTasks: data.tasks,
+    milestones: (data.milestones || []).filter(item => item.goalId === goal.id),
+    learningItems: learningItems.filter(item => item.goalId === goal.id),
+    skills: skills.filter(item => item.goalId === goal.id),
+    routines: routines.filter(item => item.goalId === goal.id),
+    habits: (data.habits || []).filter(item => habitResolver(item) === goal.id),
+    habitLogs: data.habitLogs || [],
+    appointments: (data.appointments || []).filter(item => item.goalId === goal.id),
+    meetings: (data.meetings || []).filter(item => item.goalId === goal.id),
+    savingsPlans: (data.savingsPlans || []).filter(item => item.goalId === goal.id),
+    loans: (data.loans || []).filter(item => item.goalId === goal.id),
+    investments: (data.investments || []).filter(item => item.goalId === goal.id),
+    reminders: (data.reminders || []).filter(item => item.linkedType === 'goal' && item.linkedId === goal.id)
+  };
+}
+
+function getGoalPeriodRange(input: GoalPeriodProgressInput): { start: string; end: string } {
+  const goal = input.goal;
+  const taskById = new Map(input.allTasks.map(task => [task.id, task]));
+  const taskSeriesRoots = input.tasks.filter(task =>
+    getTaskSeriesRoot(task, taskById).id === task.id
+  );
+  const start = goal.date?.slice(0, 10) ||
+    (goal.createdAt ? getLocalDateString(new Date(goal.createdAt)) : undefined);
+  const datedItems = [
+    ...input.tasks.map(task => getTaskOccurrenceDate(task)),
+    ...input.tasks.map(task => task.recurringConfig?.endByDate),
+    ...taskSeriesRoots.flatMap(task => {
+      const startDate = getTaskOccurrenceDate(task);
+      if (!startDate || !task.recurringConfig || task.recurringConfig.endType === 'never') return [];
+      const dates = getFiniteRecurrenceDates(startDate, task.recurringConfig);
+      return dates.length > 0 ? [dates[dates.length - 1]] : [];
+    }),
+    ...input.milestones.map(item => item.dueDate),
+    ...input.learningItems.map(item => item.targetDate),
+    ...input.skills.map(item => item.targetDate),
+    ...input.routines.map(item => item.createdAt ? getLocalDateString(new Date(item.createdAt)) : undefined),
+    ...input.habits.map(item => item.createdAt ? getLocalDateString(new Date(item.createdAt)) : undefined),
+    ...input.appointments.map(item => item.date),
+    ...input.meetings.map(item => item.date),
+    ...input.savingsPlans.flatMap(item => [item.startDate, item.maturityDate]),
+    ...input.loans.flatMap(item => [item.startDate, item.firstPaymentDate, item.maturityDate]),
+    ...input.investments.map(item => item.date),
+    ...input.reminders.map(item => item.dueAt)
+  ].filter((date): date is string => Boolean(date)).map(date => date.slice(0, 10));
+  const periodStart = start || datedItems.reduce((earliest, date) => date < earliest ? date : earliest, getLocalDateString());
+  const targetEnd = goal.targetDate?.slice(0, 10);
+  const periodEnd = targetEnd || datedItems.reduce(
+    (latest, date) => date > latest ? date : latest,
+    getLocalDateString()
+  );
+  return { start: periodStart, end: periodEnd < periodStart ? periodStart : periodEnd };
+}
+
+function getSingleLinkedProgressInput(
+  base: GoalPeriodProgressInput,
+  item: Pick<GoalItemDetail, 'id' | 'type'>,
+  data: GoalRelatedData
+): GoalPeriodProgressInput {
+  const single: GoalPeriodProgressInput = {
+    ...base,
+    childGoals: [],
+    tasks: [],
+    milestones: [],
+    learningItems: [],
+    skills: [],
+    routines: [],
+    habits: [],
+    appointments: [],
+    meetings: [],
+    savingsPlans: [],
+    loans: [],
+    investments: [],
+    reminders: []
+  };
+  switch (item.type) {
+    case 'task': {
+      const task = data.tasks.find(candidate => candidate.id === item.id);
+      if (task) single.tasks = [task];
+      break;
+    }
+    case 'milestone':
+      single.milestones = (data.milestones || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'learning':
+      single.learningItems = (data.learningItems || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'skill':
+      single.skills = (data.skills || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'routine':
+      single.routines = (data.routines || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'habit':
+      single.habits = (data.habits || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'appointment':
+      single.appointments = (data.appointments || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'meeting':
+      single.meetings = (data.meetings || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'savingsPlan':
+      single.savingsPlans = (data.savingsPlans || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'loan':
+      single.loans = (data.loans || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'investment':
+      single.investments = (data.investments || []).filter(candidate => candidate.id === item.id);
+      break;
+    case 'reminder':
+      single.reminders = (data.reminders || []).filter(candidate => candidate.id === item.id);
+      break;
+  }
+  return single;
+}
+
 
 export function createHabitGoalResolver(routines: Routine[]): (habit: Habit) => string | undefined {
   const routineGoals = new Map(routines.filter(routine => routine.goalId).map(routine => [routine.id, routine.goalId!]));
@@ -185,8 +444,17 @@ export function computeGoalAggregateBreakdown(
   goalId: string,
   data: GoalRelatedData
 ): GoalProgressBreakdown {
+  return computeGoalAggregateBreakdownInternal(goalId, data, new Set());
+}
+
+function computeGoalAggregateBreakdownInternal(
+  goalId: string,
+  data: GoalRelatedData,
+  visitedGoals: Set<string>
+): GoalProgressBreakdown {
   const goal = data.goals.find(g => g.id === goalId);
   const goalTitle = goal?.title || 'Goal';
+  visitedGoals.add(goalId);
   const today = getLocalDateString();
 
   const milestones = data.milestones || [];
@@ -213,11 +481,19 @@ export function computeGoalAggregateBreakdown(
   const practices = data.practices || [];
   const focusSessions = data.focusSessions || [];
   const reminders = data.reminders || [];
-  const taskGoalId = createTaskGoalResolver({ routines, skills, learningItems: learning });
+  const taskGoalId = createTaskGoalResolver({
+    routines,
+    skills,
+    learningItems: learning
+  });
   const habitGoalId = createHabitGoalResolver(routines);
 
   // Filter linked items
-  const childGoals = data.goals.filter(g => g.parentId === goalId || (g.parentIds && g.parentIds.includes(goalId)));
+  const childGoals = Array.from(new Map(
+    data.goals
+      .filter(g => g.parentId === goalId || g.parentIds?.includes(goalId))
+      .map(child => [child.id, child])
+  ).values());
   const tasks = data.tasks.filter(t => taskGoalId(t) === goalId);
   const linkedMilestones = milestones.filter(m => m.goalId === goalId);
   const linkedHabits = habits.filter(h => habitGoalId(h) === goalId);
@@ -251,11 +527,21 @@ export function computeGoalAggregateBreakdown(
     title: string;
     progress: number;
     isCompleted: boolean;
+    progressWeight?: number;
+    itemCount?: number;
+    completedCount?: number;
+    isAggregate?: boolean;
   }> = [];
 
   // 1. Child Goals
   childGoals.forEach(c => {
-    const prog = Math.max(0, Math.min(100, Math.round(Number(c.progress) || 0)));
+    if (visitedGoals.has(c.id)) return;
+    const childBreakdown = computeGoalAggregateBreakdownInternal(c.id, data, visitedGoals);
+    const hasChildProgressItems = childBreakdown.progressItemCount > 0;
+    const prog = hasChildProgressItems
+      ? childBreakdown.progressPoints / childBreakdown.progressItemCount
+      : Math.max(0, Math.min(100, Number(c.progress) || 0));
+    const progressWeight = hasChildProgressItems ? childBreakdown.progressItemCount : 1;
     const typeLabel =
       c.level === 5 ? 'Atomic Goal' :
       c.level === 4 ? 'Nano Goal' :
@@ -267,21 +553,29 @@ export function computeGoalAggregateBreakdown(
       typeLabel,
       title: c.title,
       progress: prog,
-      isCompleted: prog >= 100
+      isCompleted: childBreakdown.completedItems >= progressWeight,
+      progressWeight,
+      itemCount: hasChildProgressItems ? childBreakdown.totalItems : 1,
+      completedCount: hasChildProgressItems
+        ? childBreakdown.completedItems
+        : prog >= 100 ? 1 : 0,
+      isAggregate: hasChildProgressItems
     });
   });
 
   // 2. Tasks
-  tasks.forEach(t => {
-    const isDone = Boolean(t.done || t.status === 'done');
-    const prog = isDone ? 100 : t.status === 'in-progress' ? 50 : 0;
+  getGoalTaskProgressItems(tasks, data.tasks).forEach(task => {
     rawItems.push({
-      id: t.id,
+      id: task.id,
       type: 'task',
       typeLabel: 'Task',
-      title: t.title,
-      progress: prog,
-      isCompleted: isDone
+      title: task.title,
+      progress: task.progress,
+      isCompleted: task.isCompleted,
+      progressWeight: task.progressWeight,
+      itemCount: task.itemCount,
+      completedCount: task.completedCount,
+      isAggregate: task.isAggregate
     });
   });
 
@@ -304,7 +598,7 @@ export function computeGoalAggregateBreakdown(
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoIso = getLocalDateString(thirtyDaysAgo);
-    const recentLogs = habitLogs.filter(l => l.habitId === h.id && l.date >= thirtyDaysAgoIso);
+    const recentLogs = habitLogs.filter(l => l.habitId === h.id && l.date >= thirtyDaysAgoIso && l.date <= today);
     const uniqueDays = new Set(recentLogs.map(l => l.date)).size;
     const isDoneToday = h.doneDate === today || habitLogs.some(l => l.habitId === h.id && l.date === today);
     const effectiveDays = isDoneToday && uniqueDays === 0 ? 1 : uniqueDays;
@@ -326,7 +620,7 @@ export function computeGoalAggregateBreakdown(
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoIso = getLocalDateString(thirtyDaysAgo);
-    const recentDays = dates.filter(d => d >= thirtyDaysAgoIso).length;
+    const recentDays = dates.filter(d => d >= thirtyDaysAgoIso && d <= today).length;
     const effectiveDays = isDoneToday && recentDays === 0 ? 1 : recentDays;
     const prog = Math.min(100, Math.round((effectiveDays / 30) * 100));
     rawItems.push({
@@ -559,6 +853,40 @@ export function computeGoalAggregateBreakdown(
     });
   });
 
+  const progressGoal = goal || {
+    id: goalId,
+    title: goalTitle,
+    progress: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  const periodInput = getGoalPeriodInput(progressGoal, data);
+  const periodRange = getGoalPeriodRange(periodInput);
+  for (const item of rawItems) {
+    if (item.type === 'goal') continue;
+    const itemProgress = getGoalPeriodProgress(
+      getSingleLinkedProgressInput(periodInput, item as GoalItemDetail, data),
+      periodRange.start,
+      periodRange.end,
+      'lifecycle'
+    );
+    item.progressWeight = itemProgress.total;
+    item.itemCount = itemProgress.total;
+    item.completedCount = itemProgress.completed;
+    item.progress = itemProgress.total > 0
+      ? itemProgress.completed / itemProgress.total * 100
+      : 0;
+    item.isCompleted = itemProgress.total > 0 && itemProgress.completed >= itemProgress.total;
+    item.isAggregate = itemProgress.total > 1;
+    if (item.type === 'routine') {
+      const routine = periodInput.routines.find(candidate => candidate.id === item.id);
+      if (routine) item.title = `${routine.name} (${itemProgress.completed}/${itemProgress.total} occurrences)`;
+    } else if (item.type === 'habit') {
+      const habit = periodInput.habits.find(candidate => candidate.id === item.id);
+      if (habit) item.title = `${habit.name} (${itemProgress.completed}/${itemProgress.total} occurrences)`;
+    }
+  }
+
   // Pure actionable types that legitimately count towards Goal completion rate
   // Excludes informational notes, contacts, interactions, capital assets, transactions, vitals & focus logs
   const actionableTypes = new Set<GoalItemType>([
@@ -577,29 +905,44 @@ export function computeGoalAggregateBreakdown(
     'reminder'
   ]);
 
-  const actionableItems = rawItems.filter(i => actionableTypes.has(i.type));
-  const totalItems = rawItems.length;
-  const weightPerItem = actionableItems.length > 0
-    ? Number((100 / actionableItems.length).toFixed(1))
+  const actionableItems = rawItems.filter(i =>
+    actionableTypes.has(i.type) && i.progressWeight !== 0
+  );
+  const totalItems = rawItems.reduce((sum, item) => sum + (item.itemCount || 1), 0);
+  const actionableWeight = actionableItems.reduce((sum, item) => sum + (item.progressWeight ?? 1), 0);
+  const weightPerItem = actionableWeight > 0
+    ? Number((100 / actionableWeight).toFixed(1))
     : 0;
 
   const items: GoalItemDetail[] = rawItems.map(item => ({
     ...item,
-    weightPercent: actionableTypes.has(item.type) ? weightPerItem : 0
+    weightPercent: actionableTypes.has(item.type)
+      ? Number((weightPerItem * (item.progressWeight ?? 1)).toFixed(1))
+      : 0
   }));
 
-  const completedItems = items.filter(i => i.isCompleted && actionableTypes.has(i.type)).length;
+  const completedItems = items.reduce((sum, item) => {
+    if (!actionableTypes.has(item.type)) return sum;
+    return sum + (item.completedCount ?? (item.isCompleted ? 1 : 0));
+  }, 0);
 
   const calcCategory = (type: GoalItemDetail['type']): GoalCategorySummary => {
     const matched = items.filter(i => i.type === type);
-    const count = matched.length;
-    const completedCount = matched.filter(i => i.isCompleted).length;
-    const avgPercent = count > 0 ? Math.round(matched.reduce((acc, i) => acc + i.progress, 0) / count) : 0;
+    const count = matched.reduce((sum, item) => sum + (item.itemCount || 1), 0);
+    const completedCount = matched.reduce((sum, item) => sum + (item.completedCount ?? (item.isCompleted ? 1 : 0)), 0);
+    const categoryWeight = matched.reduce((sum, item) => sum + (item.progressWeight ?? 1), 0);
+    const avgPercent = categoryWeight > 0
+      ? Math.round(matched.reduce((sum, item) => sum + item.progress * (item.progressWeight ?? 1), 0) / categoryWeight)
+      : 0;
     return { count, completedCount, avgPercent };
   };
 
-  const totalPercent = actionableItems.length > 0
-    ? Math.max(0, Math.min(100, Math.round(actionableItems.reduce((acc, i) => acc + i.progress, 0) / actionableItems.length)))
+  const progressPoints = actionableItems.reduce(
+    (sum, item) => sum + item.progress * (item.progressWeight ?? 1),
+    0
+  );
+  const totalPercent = actionableWeight > 0
+    ? Math.max(0, Math.min(100, Math.round((progressPoints / actionableWeight) * 10) / 10))
     : Math.max(0, Math.min(100, Math.round(Number(goal?.progress) || 0)));
 
   return {
@@ -607,7 +950,8 @@ export function computeGoalAggregateBreakdown(
     goalTitle,
     totalItems,
     completedItems,
-    progressItemCount: actionableItems.length,
+    progressItemCount: actionableWeight,
+    progressPoints,
     totalPercent,
     hasLinkedItems: totalItems > 0,
     categories: {
@@ -638,46 +982,36 @@ export function computeGoalAggregateBreakdown(
 }
 
 /**
- * MASTER AGGREGATE RECALCULATION ENGINE
- * Calculates proportional, real-time aggregate progress across linked item categories
- * linked to a Goal (Tasks, Milestones, Habits, Routines, Learning Tracks, Skills, Notes, Journal,
- * Savings Plans, Loans, Investments, Assets, Liabilities, Transactions, Medical Appointments, Clinical Notes,
- * Meetings, Practices, Focus, Reminders).
- * Recursively rolls up progress through the 5-Tier Hierarchy (Atomic 5 -> Nano 4 -> Micro 3 -> Sub 2 -> Main 1).
+ * Loads every store that can feed goal progress in a single batch. Callers that
+ * recalculate many goals can share one snapshot instead of re-reading all stores
+ * per goal (which made `recalculateAllGoalsProgress` O(N²) on I/O).
  */
-export async function recalculateGoalAggregateProgress(
-  goalId: string,
-  overrides?: RecalcOverrides
-): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
-  if (!goalId) return { updatedGoals: [] };
-
-  const allGoals = await storage.getAll<Goal>('goals');
-  const targetGoal = allGoals.find(g => g.id === goalId);
-  if (!targetGoal) return { updatedGoals: [] };
-
+async function loadGoalRecalcData(): Promise<Required<GoalRelatedData>> {
   const [
-    loadedTasks,
-    loadedMilestones,
-    loadedHabits,
-    loadedHabitLogs,
-    loadedRoutines,
-    loadedLearning,
-    loadedSkills,
-    loadedNotes,
-    loadedJournal,
-    loadedTransactions,
-    loadedLoans,
-    loadedInvestments,
-    loadedSavingsPlans,
-    loadedAssets,
-    loadedLiabilities,
-    loadedAppointments,
-    loadedHealthNotes,
-    loadedMeetings,
-    loadedPractices,
-    loadedFocus,
-    loadedReminders
+    goals,
+    tasks,
+    milestones,
+    habits,
+    habitLogs,
+    routines,
+    learningItems,
+    skills,
+    notes,
+    journal,
+    transactions,
+    loans,
+    investments,
+    savingsPlans,
+    assets,
+    liabilities,
+    appointments,
+    healthNotes,
+    meetings,
+    practices,
+    focusSessions,
+    reminders
   ] = await Promise.all([
+    storage.getAll<Goal>('goals'),
     storage.getAll<Task>('tasks'),
     storage.getAll<Milestone>('milestones'),
     storage.getAll<Habit>('habits'),
@@ -700,6 +1034,108 @@ export async function recalculateGoalAggregateProgress(
     storage.getAll<FocusSession>('focus'),
     storage.getAll<ReminderItem>('reminders')
   ]);
+
+  return {
+    goals,
+    tasks,
+    milestones,
+    habits,
+    habitLogs,
+    routines,
+    learningItems,
+    skills,
+    notes,
+    journal,
+    transactions,
+    loans,
+    investments,
+    savingsPlans,
+    assets,
+    liabilities,
+    appointments,
+    healthNotes,
+    meetings,
+    practices,
+    focusSessions,
+    reminders
+  };
+}
+
+/**
+ * Recomputes one goal from an already-loaded data snapshot and persists it.
+ * The shared `goalMap` lets callers see progress updates made earlier in the
+ * same batch (children must be processed before parents).
+ */
+async function computeAndPersistGoal(
+  goalId: string,
+  goalMap: Map<string, Goal>,
+  data: GoalRelatedData
+): Promise<{ goal: Goal; breakdown: GoalProgressBreakdown } | null> {
+  const current = goalMap.get(goalId);
+  if (!current) return null;
+
+  const breakdown = computeGoalAggregateBreakdown(goalId, {
+    ...data,
+    goals: Array.from(goalMap.values())
+  });
+
+  const manualProgress = Math.max(0, Math.min(100, Math.round(Number(current.manualProgress ?? current.progress) || 0)));
+  const newProgress = breakdown.progressItemCount > 0 ? breakdown.totalPercent : manualProgress;
+  const updated: Goal = {
+    ...current,
+    manualProgress,
+    progress: newProgress,
+    status: newProgress >= 100 ? 'completed' : current.status === 'paused' ? 'paused' : 'active',
+    updatedAt: Date.now()
+  };
+
+  goalMap.set(current.id, updated);
+  await storage.put('goals', updated);
+  return { goal: updated, breakdown };
+}
+
+/**
+ * MASTER AGGREGATE RECALCULATION ENGINE
+ * Calculates proportional, real-time aggregate progress across linked item categories
+ * linked to a Goal (Tasks, Milestones, Habits, Routines, Learning Tracks, Skills, Notes, Journal,
+ * Savings Plans, Loans, Investments, Assets, Liabilities, Transactions, Medical Appointments, Clinical Notes,
+ * Meetings, Practices, Focus, Reminders).
+ * Recursively rolls up progress through the 5-Tier Hierarchy (Atomic 5 -> Nano 4 -> Micro 3 -> Sub 2 -> Main 1).
+ */
+export async function recalculateGoalAggregateProgress(
+  goalId: string,
+  overrides?: RecalcOverrides
+): Promise<{ updatedGoals: Goal[]; targetGoal?: Goal; breakdown?: GoalProgressBreakdown }> {
+  if (!goalId) return { updatedGoals: [] };
+
+  const loaded = await loadGoalRecalcData();
+  const allGoals = loaded.goals;
+  const targetGoal = allGoals.find(g => g.id === goalId);
+  if (!targetGoal) return { updatedGoals: [] };
+
+  const {
+    tasks: loadedTasks,
+    milestones: loadedMilestones,
+    habits: loadedHabits,
+    habitLogs: loadedHabitLogs,
+    routines: loadedRoutines,
+    learningItems: loadedLearning,
+    skills: loadedSkills,
+    notes: loadedNotes,
+    journal: loadedJournal,
+    transactions: loadedTransactions,
+    loans: loadedLoans,
+    investments: loadedInvestments,
+    savingsPlans: loadedSavingsPlans,
+    assets: loadedAssets,
+    liabilities: loadedLiabilities,
+    appointments: loadedAppointments,
+    healthNotes: loadedHealthNotes,
+    meetings: loadedMeetings,
+    practices: loadedPractices,
+    focusSessions: loadedFocus,
+    reminders: loadedReminders
+  } = loaded;
 
   let allTasks = loadedTasks;
   let allMilestones = loadedMilestones;
@@ -829,51 +1265,34 @@ export async function recalculateGoalAggregateProgress(
   const goalMap = new Map<string, Goal>();
   allGoals.forEach(g => goalMap.set(g.id, { ...g }));
 
-  // Helper to recompute and persist a single goal based on goalMap and all linked stores
-  const recomputeSingleGoal = async (currentGoalId: string): Promise<{ goal: Goal; breakdown: GoalProgressBreakdown } | null> => {
-    const current = goalMap.get(currentGoalId);
-    if (!current) return null;
-
-    const currentGoalsArray = Array.from(goalMap.values());
-    const breakdown = computeGoalAggregateBreakdown(currentGoalId, {
-      goals: currentGoalsArray,
-      tasks: allTasks,
-      milestones: allMilestones,
-      habits: allHabits,
-      habitLogs: allHabitLogs,
-      routines: allRoutines,
-      learningItems: allLearning,
-      skills: allSkills,
-      notes: allNotes,
-      journal: allJournal,
-      savingsPlans: loadedSavingsPlans,
-      loans: loadedLoans,
-      investments: loadedInvestments,
-      assets: loadedAssets,
-      liabilities: loadedLiabilities,
-      transactions: loadedTransactions,
-      appointments: allAppointments,
-      healthNotes: loadedHealthNotes,
-      meetings: allMeetings,
-      practices: loadedPractices,
-      focusSessions: loadedFocus,
-      reminders: allReminders
-    });
-
-    const manualProgress = Math.max(0, Math.min(100, Math.round(Number(current.manualProgress ?? current.progress) || 0)));
-    const newProgress = breakdown.progressItemCount > 0 ? breakdown.totalPercent : manualProgress;
-    const updated: Goal = {
-      ...current,
-      manualProgress,
-      progress: newProgress,
-      status: newProgress >= 100 ? 'completed' : current.status === 'paused' ? 'paused' : 'active',
-      updatedAt: Date.now()
-    };
-
-    goalMap.set(current.id, updated);
-    await storage.put('goals', updated);
-    return { goal: updated, breakdown };
+  const snapshot: GoalRelatedData = {
+    goals: allGoals,
+    tasks: allTasks,
+    milestones: allMilestones,
+    habits: allHabits,
+    habitLogs: allHabitLogs,
+    routines: allRoutines,
+    learningItems: allLearning,
+    skills: allSkills,
+    notes: allNotes,
+    journal: allJournal,
+    savingsPlans: loadedSavingsPlans,
+    loans: loadedLoans,
+    investments: loadedInvestments,
+    assets: loadedAssets,
+    liabilities: loadedLiabilities,
+    transactions: loadedTransactions,
+    appointments: allAppointments,
+    healthNotes: loadedHealthNotes,
+    meetings: allMeetings,
+    practices: loadedPractices,
+    focusSessions: loadedFocus,
+    reminders: allReminders
   };
+
+  // Helper to recompute and persist a single goal based on goalMap and all linked stores
+  const recomputeSingleGoal = (currentGoalId: string) =>
+    computeAndPersistGoal(currentGoalId, goalMap, snapshot);
 
   // 1. Recalculate target goal
   const targetResult = await recomputeSingleGoal(goalId);
@@ -1156,7 +1575,9 @@ export async function syncGoalProgressDirect(
  * Used on initial app mount or after bulk imports to ensure 100% accurate aggregate reflection.
  */
 export async function recalculateAllGoalsProgress(): Promise<Goal[]> {
-  const allGoals = await storage.getAll<Goal>('goals');
+  // One shared snapshot for every goal: previously each goal re-read all 22 stores.
+  const data = await loadGoalRecalcData();
+  const allGoals = data.goals;
   if (allGoals.length === 0) return [];
 
   // Derive depth from the parent chain rather than the stored `level`, which can drift when a
@@ -1177,9 +1598,10 @@ export async function recalculateAllGoalsProgress(): Promise<Goal[]> {
   };
 
   const orderedDeepestFirst = [...allGoals].sort((a, b) => depthOf(b) - depthOf(a));
+  const goalMap = new Map<string, Goal>(allGoals.map(g => [g.id, { ...g }]));
 
   for (const g of orderedDeepestFirst) {
-    await recalculateGoalAggregateProgress(g.id);
+    await computeAndPersistGoal(g.id, goalMap, data);
   }
 
   return storage.getAll<Goal>('goals');

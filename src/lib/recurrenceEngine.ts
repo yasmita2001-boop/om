@@ -2,8 +2,10 @@
  * recurrenceEngine.ts - Recurring task engine for Om-LifeOS
  */
 
-import { Task, RecurrenceConfig } from '../types';
-import { generateUUID } from './storage';
+import { Task, RecurrenceConfig, ReminderItem } from '../types';
+import { generateUUID, storage } from './storage';
+
+const recurrenceGenerationsInProgress = new Set<string>();
 
 export function calculateNextOccurrence(currentDate: string, config: RecurrenceConfig): string | null {
   if (!isValidRecurrenceConfig(config)) return null;
@@ -102,9 +104,77 @@ export function generateNextRecurringTask(parentTask: Task): Task | null {
     isRecurringChild: true,
     recurringParentId: parentTask.id,
     recurringConfig: undefined,
+    checklist: parentTask.checklist?.map(item => ({ ...item, id: generateUUID(), done: false })),
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
+}
+
+/**
+ * Applies the side effects of (un)completing a task:
+ * - keeps reminder alarms linked to the task in sync with its done state
+ * - spawns the next occurrence of a recurring task and advances its tracking
+ *
+ * Returns the freshly generated occurrence, if any.
+ */
+export async function applyTaskCompletionEffects(task: Task, completed: boolean): Promise<Task | null> {
+  try {
+    const reminders = await storage.getAll<ReminderItem>('reminders');
+    const linked = reminders.filter(reminder => reminder.linkedType === 'task' && reminder.linkedId === task.id);
+    const targetStatus = completed ? 'done' : 'open';
+    for (const reminder of linked) {
+      if (reminder.status === targetStatus) continue;
+      await storage.put('reminders', {
+        ...reminder,
+        status: targetStatus,
+        ...(completed ? {} : { lastNotifiedAt: undefined }),
+        updatedAt: Date.now()
+      });
+    }
+  } catch (error) {
+    console.warn('Could not sync reminders linked to the task.', error);
+  }
+
+  if (!completed || !task.recurringConfig || recurrenceGenerationsInProgress.has(task.id)) return null;
+
+  recurrenceGenerationsInProgress.add(task.id);
+  try {
+    const allTasks = await storage.getAll<Task>('tasks');
+    const nextTask = generateNextRecurringTask(task);
+    if (!nextTask || !nextTask.date) return null;
+
+    // A rapid or repeated completion must not recreate an occurrence already
+    // generated for this parent and date, even if that occurrence is complete.
+    const existingOccurrence = allTasks.some(
+      candidate =>
+        candidate.id !== task.id &&
+        candidate.recurringParentId === task.id &&
+        (candidate.dueAt || candidate.date) === nextTask.date
+    );
+    if (existingOccurrence) return null;
+
+    // Stable IDs make concurrent completion handlers (including other tabs)
+    // write the same occurrence instead of creating duplicates.
+    nextTask.id = `recurring-occurrence:${encodeURIComponent(task.id)}:${nextTask.date}`;
+    const nextConfig = updateRecurrenceTracking(task, nextTask.date);
+    nextTask.recurringConfig = nextConfig;
+    await storage.put('tasks', nextTask);
+
+    if (nextConfig) {
+      await storage.put('tasks', {
+        ...task,
+        recurringConfig: nextConfig,
+        updatedAt: Date.now()
+      });
+    }
+
+    return nextTask;
+  } catch (error) {
+    console.warn('Could not generate the next recurring task.', error);
+    return null;
+  } finally {
+    recurrenceGenerationsInProgress.delete(task.id);
+  }
 }
 
 export function updateRecurrenceTracking(parentTask: Task, generatedDate: string): RecurrenceConfig | undefined {

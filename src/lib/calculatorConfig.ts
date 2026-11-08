@@ -8,7 +8,6 @@ export interface ToolField {
   min?: string;
   max?: string;
   step?: string;
-  placeholder?: string;
 }
 
 export interface ToolConfig {
@@ -34,7 +33,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'quick',
     description: 'Standard arithmetic calculations',
     fields: [
-      { label: 'Calculation Expression', type: 'text', default: '', placeholder: '0' }
+      { label: 'Calculation Expression', type: 'text', default: '' }
     ],
     calculate: (f1) => String(calculatorEngine.scientific(f1))
   },
@@ -43,7 +42,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'quick',
     description: 'Scientific mathematical calculations',
     fields: [
-      { label: 'Scientific Expression', type: 'text', default: '', placeholder: '0' }
+      { label: 'Scientific Expression', type: 'text', default: '' }
     ],
     calculate: (f1) => String(calculatorEngine.scientific(f1))
   },
@@ -99,7 +98,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
     category: 'quick',
     description: 'Calculate Mean, Median, Sum, Min, and Max from a list of numbers',
     fields: [
-      { label: 'Comma-separated numbers', type: 'text', default: '45, 88, 72, 95, 60, 83', placeholder: 'e.g. 10, 20, 30' }
+      { label: 'Comma-separated numbers', type: 'text', default: '45, 88, 72, 95, 60, 83' }
     ],
     calculate: (f1) => {
       const values = f1.trim().split(/[\s,]+/);

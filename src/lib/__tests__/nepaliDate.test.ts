@@ -34,6 +34,11 @@ describe('BS <-> AD conversion', () => {
     const back = bsToAd(bs.iso);
     expect(back.iso).toBe(iso);
   });
+
+  it('rejects impossible AD dates instead of silently rolling them over', () => {
+    expect(() => adToBs('2026-02-30')).toThrow('Invalid AD date.');
+    expect(() => adToBs('2026-13-01')).toThrow('Invalid AD date.');
+  });
 });
 
 describe('formatting helpers', () => {

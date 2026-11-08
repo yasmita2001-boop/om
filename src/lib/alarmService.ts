@@ -47,6 +47,19 @@ class AlarmManagerService {
     this.listenerCallback = cb;
   }
 
+  // Ask for browser notification permission (must be called from a user gesture).
+  public async requestNotificationPermission(): Promise<NotificationPermission> {
+    try {
+      if (typeof window === 'undefined' || !('Notification' in window)) return 'denied';
+      if (Notification.permission === 'granted' || Notification.permission === 'denied') {
+        return Notification.permission;
+      }
+      return await Notification.requestPermission();
+    } catch {
+      return 'denied';
+    }
+  }
+
   public getActiveTriggered(): TriggeredAlarmData | null {
     return this.activeTriggered;
   }
@@ -142,6 +155,9 @@ class AlarmManagerService {
           body: data.subtitle || `Time: ${data.timeStr}`,
           icon: '/favicon.ico'
         });
+      } else if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        // A trigger is not a user gesture, but this still surfaces the prompt in some browsers.
+        void this.requestNotificationPermission();
       }
     } catch {}
 
@@ -225,13 +241,19 @@ class AlarmManagerService {
     }
   }
 
-  // Background monitor loop: checks every 1.5 seconds
+  // Background monitor loop: checks every 20 seconds (lighter on battery/IO than 1.5 s)
   private startBackgroundMonitor() {
     if (this.checkInterval) clearInterval(this.checkInterval);
 
     this.checkInterval = setInterval(() => {
-      this.evaluateAlarms();
-    }, 1500);
+      void this.evaluateAlarms();
+    }, 20000);
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) void this.evaluateAlarms();
+      });
+    }
   }
 
   private async evaluateAlarms() {
@@ -272,9 +294,14 @@ class AlarmManagerService {
         continue;
       }
 
-      // Check standard schedule
+      // Check standard schedule (with a short catch-up window after tab throttling/sleep)
       const matchesDay = !alarm.days || alarm.days.length === 0 || alarm.days.includes(currentDay);
-      const isDue = alarm.time === currentTimeStr;
+      const [alarmHour, alarmMinute] = String(alarm.time || '').split(':').map(Number);
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const alarmMinutes = alarmHour * 60 + alarmMinute;
+      const isDue = Number.isFinite(alarmMinutes) &&
+        nowMinutes >= alarmMinutes &&
+        nowMinutes - alarmMinutes <= 5;
       const notTriggeredToday = alarm.lastTriggeredDate !== todayStr;
 
       if (matchesDay && isDue && notTriggeredToday) {
@@ -293,11 +320,19 @@ class AlarmManagerService {
 
     // 2. Check Database Reminders with alarms enabled
     try {
-      const reminders = await storage.getAll<ReminderItem>('reminders');
+      const [reminders, tasks] = await Promise.all([
+        storage.getAll<ReminderItem>('reminders'),
+        storage.getAll<{ id: string; done?: boolean; status?: string }>('tasks')
+      ]);
+      const doneTaskIds = new Set(
+        tasks.filter(task => task.done || task.status === 'done').map(task => task.id)
+      );
       for (const rem of reminders) {
         if (rem.status === 'done') continue;
         if (rem.alarmEnabled === false) continue;
         if (!rem.dueAt) continue;
+        // Never ring for a reminder whose linked task is already complete.
+        if (rem.linkedType === 'task' && rem.linkedId && doneTaskIds.has(rem.linkedId)) continue;
 
         // Parse rem.dueAt (format could be "YYYY-MM-DDTHH:mm" or "YYYY-MM-DD HH:mm")
         const dueStr = rem.dueAt.replace(' ', 'T');
@@ -305,10 +340,10 @@ class AlarmManagerService {
 
         if (isNaN(dueDate.getTime())) continue;
 
-        // Check if due within the last 2 minutes and not notified within the last 60 seconds
+        // Check if due within the last 10 minutes and not notified within the last 10 minutes
         const timeDiffMs = nowTimeMs - dueDate.getTime();
-        const justDue = timeDiffMs >= 0 && timeDiffMs < 120000;
-        const recentlyNotified = rem.lastNotifiedAt && (nowTimeMs - rem.lastNotifiedAt < 120000);
+        const justDue = timeDiffMs >= 0 && timeDiffMs < 600000;
+        const recentlyNotified = rem.lastNotifiedAt && (nowTimeMs - rem.lastNotifiedAt < 600000);
 
         if (justDue && !recentlyNotified) {
           const remTimeStr = dueStr.includes('T') ? dueStr.split('T')[1].slice(0, 5) : currentTimeStr;

@@ -307,11 +307,16 @@ export class CalculatorEngine {
     // Replace standalone percentage: 50% -> (50 / 100)
     s = s.replace(/(\d+(?:\.\d+)?)%/g, '($1 / 100)');
 
-    if (!/^[0-9+\-*/%().,\s_a-z^]+$/.test(s)) throw new Error('Invalid characters in mathematical expression');
+    // Implicit multiplication for the constants: 2pi, 2π
+    s = s.replace(/(\d)\s*π/g, '$1*π');
+    s = s.replace(/(\d)\s*pi\b/gi, '$1*pi');
+
+    if (!/^[0-9+\-*/%().,\s_a-z^π]+$/.test(s)) throw new Error('Invalid characters in mathematical expression');
 
     let sanitized = s
       .replace(/\^/g, '**')
-      .replace(/\bpi\b/g, 'Math.PI')
+      .replace(/\bpi\b/gi, 'Math.PI')
+      .replace(/π/g, 'Math.PI')
       .replace(/\be\b/g, 'Math.E')
       .replace(/sqrt\(/g, 'Math.sqrt(')
       .replace(/cbrt\(/g, 'Math.cbrt(')
@@ -321,23 +326,19 @@ export class CalculatorEngine {
       .replace(/exp\(/g, 'Math.exp(')
       .replace(/fact\(/g, 'factFn(');
 
-    if (angleMode === 'rad') {
-      sanitized = sanitized
-        .replace(/sin\(/g, 'Math.sin(')
-        .replace(/cos\(/g, 'Math.cos(')
-        .replace(/tan\(/g, 'Math.tan(')
-        .replace(/asin\(/g, 'Math.asin(')
-        .replace(/acos\(/g, 'Math.acos(')
-        .replace(/atan\(/g, 'Math.atan(');
-    } else {
-      sanitized = sanitized
-        .replace(/sin\(/g, 'Math.sin((Math.PI/180)*')
-        .replace(/cos\(/g, 'Math.cos((Math.PI/180)*')
-        .replace(/tan\(/g, 'Math.tan((Math.PI/180)*')
-        .replace(/asin\(/g, '(180/Math.PI)*Math.asin(')
-        .replace(/acos\(/g, '(180/Math.PI)*Math.acos(')
-        .replace(/atan\(/g, '(180/Math.PI)*Math.atan(');
-    }
+    // Expand scientific notation: 1e3 -> 1000, 2.5e-2 -> 0.025
+    sanitized = sanitized.replace(/(\d+(?:\.\d+)?)[eE]([+-]?\d+)/g, (_match, base: string, exponent: string) =>
+      String(Number(`${base}e${exponent}`))
+    );
+
+    // Trig and inverse-trig in a single pass: replacing `sin(` first would corrupt `asin(`.
+    sanitized = sanitized.replace(/\b(asin|acos|atan|sin|cos|tan)\(/g, (_match, fn: string) => {
+      const isInverse = fn.startsWith('a');
+      if (angleMode === 'rad') return `Math.${fn}(`;
+      return isInverse
+        ? `(180/Math.PI)*Math.${fn}(`
+        : `Math.${fn}((Math.PI/180)*`;
+    });
 
     // Validate identifiers allowed
     const remainingAlpha = sanitized.replace(/Math\.(PI|E|sqrt|cbrt|abs|log10|log|exp|sin|cos|tan|asin|acos|atan)|factFn/g, '');
@@ -795,20 +796,29 @@ export class CalculatorEngine {
   age(birth: any, asOf = new Date()): string {
     const b = dateObj(birth), d = dateObj(asOf);
     if (b > d) return 'Birth date cannot be in the future';
-    let y = d.getFullYear() - b.getFullYear();
-    let m = d.getMonth() - b.getMonth();
-    let day = d.getDate() - b.getDate();
-    if (day < 0) {
-      m--;
-      day += new Date(d.getFullYear(), d.getMonth(), 0).getDate();
-    }
-    if (m < 0) {
-      y--;
-      m += 12;
-    }
+
     const birthDay = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
     const asOfDay = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
     const totalDays = Math.floor((asOfDay - birthDay) / 86400000);
+
+    // Anchor to a "monthiversary" of the birth date, clamping to the last valid
+    // day of each month. This keeps totals exact even around month-end births
+    // (e.g. Jan 31 -> Feb 28/29) instead of borrowing days a single time.
+    const anchorFor = (months: number) => {
+      const year = b.getFullYear() + Math.floor((b.getMonth() + months) / 12);
+      const monthIndex = ((b.getMonth() + months) % 12 + 12) % 12;
+      const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+      return Date.UTC(year, monthIndex, Math.min(b.getDate(), lastDay));
+    };
+
+    let totalMonths = (d.getFullYear() - b.getFullYear()) * 12 + (d.getMonth() - b.getMonth());
+    if (anchorFor(totalMonths) > asOfDay) totalMonths -= 1;
+    totalMonths = Math.max(0, totalMonths);
+
+    const y = Math.floor(totalMonths / 12);
+    const m = totalMonths % 12;
+    const day = Math.max(0, Math.floor((asOfDay - anchorFor(totalMonths)) / 86400000));
+
     return `Age: ${y} years, ${m} months, ${day} days (Total: ${totalDays.toLocaleString()} days lived)`;
   }
 
@@ -1148,7 +1158,7 @@ export class CalculatorEngine {
     const usable = c >= 31 ? Math.max(0, 2 ** (32 - c)) : 2 ** (32 - c) - 2;
     const firstHost = c < 31 ? fmt(net + 1) : fmt(net);
     const lastHost = c < 31 ? fmt(bcast - 1) : fmt(bcast);
-    return `Network: ${fmt(net)}/${c} | Netmask: ${fmt(mask)} | Usable Range: ${firstHost} - ${lastHost} | Usable Hosts: ${usable.toLocaleString()}`;
+    return `Network: ${fmt(net)}/${c} | Netmask: ${fmt(mask)} | Usable Range: ${firstHost} - ${lastHost} | Usable Hosts: ${usable}`;
   }
 }
 

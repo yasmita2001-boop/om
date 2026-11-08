@@ -24,6 +24,12 @@ describe('calculator date calculations', () => {
     const asOf = new Date(2026, 2, 9, 12);
     expect(calculator.age('2026-03-07', asOf)).toContain('(Total: 2 days lived)');
   });
+  it('borrows across month-end birthdays without going negative', () => {
+    const asOf = new Date(2000, 2, 1, 12);
+    const result = calculator.age('2000-01-31', asOf);
+    expect(result).toContain('0 years, 1 months, 1 days');
+    expect(result).toContain('(Total: 30 days lived)');
+  });
   it('rejects discounts above 100 percent', () => {
     expect(calculator.discount(100, 100)).toContain('Final Price: NPR 0.00');
     expect(() => calculator.discount(100, 101)).toThrow('Discount percentage must be from 0 to 100');
@@ -42,5 +48,19 @@ describe('calculator date calculations', () => {
     calculator.timeZoneOffset(0);
     expect(timeFormat).toHaveBeenCalledWith([], expect.objectContaining({ timeZone: 'UTC' }));
     expect(dateFormat).toHaveBeenCalledWith([], expect.objectContaining({ timeZone: 'UTC' }));
+  });
+});
+
+describe('calculator scientific expressions', () => {
+  it('evaluates inverse trig without corrupting the identifier', () => {
+    expect(calculator.scientific('asin(0.5)')).toBeCloseTo(30, 6);
+    expect(calculator.scientific('atan(1)')).toBeCloseTo(45, 6);
+  });
+  it('accepts scientific notation and implicit constants', () => {
+    expect(calculator.scientific('1e3')).toBe(1000);
+    expect(calculator.scientific('2pi')).toBeCloseTo(2 * Math.PI, 6);
+  });
+  it('formats subnet host counts without locale grouping', () => {
+    expect(calculator.ipSubnet('0.0.0.0', 0)).toContain('Usable Hosts: 4294967294');
   });
 });

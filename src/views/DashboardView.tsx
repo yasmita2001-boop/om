@@ -379,6 +379,28 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </button>
       )}
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+        {moduleShortcuts.filter(s => s.module === 'focus').map(renderModuleShortcut)}
+        {quickActionShortcuts.map(item => (
+          <button
+            key={item.type}
+            type="button"
+            onClick={() => {
+              if (item.type === 'finance') onNavigate('finance');
+              else if (item.type === 'task') onNavigate('tasks');
+              else if (item.type === 'goal') onNavigate('goals');
+            }}
+            className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200/60 bg-white p-3 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 dark:border-slate-800/60 dark:bg-slate-900 cursor-pointer"
+          >
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${item.bg}`}>
+              <item.icon className={`h-4 w-4 ${item.fg}`} />
+            </div>
+            <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{item.label}</span>
+          </button>
+        ))}
+        {moduleShortcuts.filter(s => s.module !== 'focus').map(renderModuleShortcut)}
+      </div>
+
       {/* Keep empty modules off the daily view; their full features remain in navigation. */}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         <div className={`space-y-4 ${habits.length > 0 ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
@@ -719,27 +741,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </div>}
       </div>
 
-      <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
-        {moduleShortcuts.filter(s => s.module === 'focus').map(renderModuleShortcut)}
-        {quickActionShortcuts.map(item => (
-          <button
-            key={item.type}
-            type="button"
-            onClick={() => {
-              if (item.type === 'finance') onNavigate('finance');
-              else if (item.type === 'task') onNavigate('tasks');
-              else if (item.type === 'goal') onNavigate('goals');
-            }}
-            className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200/60 bg-white p-3 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 dark:border-slate-800/60 dark:bg-slate-900 cursor-pointer"
-          >
-            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${item.bg}`}>
-              <item.icon className={`h-4 w-4 ${item.fg}`} />
-            </div>
-            <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{item.label}</span>
-          </button>
-        ))}
-        {moduleShortcuts.filter(s => s.module !== 'focus').map(renderModuleShortcut)}
-      </div>
     </div>
   );
 };

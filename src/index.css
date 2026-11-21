@@ -6951,3 +6951,130 @@ html .sanctuary-shell[data-environment="on"]::before {
 .sanctuary-shell:not([data-appearance-preset="private-cosmos"]) .recurrence-selector button[class*="bg-blue-600"] {
   background-color: var(--color-brand, #b88648);
 }
+
+/* Keep decorative icon tiles on one theme color across every module. This is
+   deliberately limited to pale icon containers so status and finance colors
+   continue to communicate their meaning. */
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(div, span, button, a, label)[class*="rounded-"]:has(> svg):is(
+  [class*="bg-blue-50"], [class*="bg-blue-100"], [class*="bg-blue-200"],
+  [class*="bg-sky-50"], [class*="bg-sky-100"], [class*="bg-sky-200"],
+  [class*="bg-cyan-50"], [class*="bg-cyan-100"], [class*="bg-cyan-200"],
+  [class*="bg-teal-50"], [class*="bg-teal-100"], [class*="bg-teal-200"],
+  [class*="bg-purple-50"], [class*="bg-purple-100"], [class*="bg-purple-200"],
+  [class*="bg-violet-50"], [class*="bg-violet-100"], [class*="bg-violet-200"],
+  [class*="bg-pink-50"], [class*="bg-pink-100"], [class*="bg-pink-200"],
+  [class*="bg-fuchsia-50"], [class*="bg-fuchsia-100"], [class*="bg-fuchsia-200"]
+) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 24%, var(--om-line, #d1d5db));
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 13%, var(--om-card, #fff));
+  color: var(--color-brand, #b88648);
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(div, span, button, a, label)[class*="rounded-"]:has(> svg):is(
+  [class*="bg-blue-50"], [class*="bg-blue-100"], [class*="bg-blue-200"],
+  [class*="bg-sky-50"], [class*="bg-sky-100"], [class*="bg-sky-200"],
+  [class*="bg-cyan-50"], [class*="bg-cyan-100"], [class*="bg-cyan-200"],
+  [class*="bg-teal-50"], [class*="bg-teal-100"], [class*="bg-teal-200"],
+  [class*="bg-purple-50"], [class*="bg-purple-100"], [class*="bg-purple-200"],
+  [class*="bg-violet-50"], [class*="bg-violet-100"], [class*="bg-violet-200"],
+  [class*="bg-pink-50"], [class*="bg-pink-100"], [class*="bg-pink-200"],
+  [class*="bg-fuchsia-50"], [class*="bg-fuchsia-100"], [class*="bg-fuchsia-200"]
+) > svg {
+  color: var(--color-brand, #b88648);
+}
+
+/* Blue selected chips and tabs were bypassing coordinated accent colors. */
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(button, a)[class*="bg-blue-600"] {
+  background-color: var(--color-brand, #b88648);
+  color: var(--om-on-accent, #fff);
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(button, a)[class*="text-blue-600"] {
+  color: var(--color-brand, #b88648);
+}
+
+/* Every compact SVG icon tile uses the coordinated theme, even when its old
+   markup used a neutral/white tile with a hard-coded icon color. */
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(div, span)[class*="items-center"][class*="justify-center"][class*="rounded-"]:is(
+  [class*="h-7"][class*="w-7"], [class*="h-8"][class*="w-8"],
+  [class*="h-9"][class*="w-9"], [class*="h-10"][class*="w-10"],
+  [class*="h-11"][class*="w-11"], [class*="h-12"][class*="w-12"]
+):has(> svg) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 24%, var(--om-line, #d1d5db));
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 13%, var(--om-card, #fff));
+  color: var(--color-brand, #b88648);
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(div, span)[class*="items-center"][class*="justify-center"][class*="rounded-"]:is(
+  [class*="h-7"][class*="w-7"], [class*="h-8"][class*="w-8"],
+  [class*="h-9"][class*="w-9"], [class*="h-10"][class*="w-10"],
+  [class*="h-11"][class*="w-11"], [class*="h-12"][class*="w-12"]
+):has(> svg) > svg {
+  color: var(--color-brand, #b88648);
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) .universal-data-manager-card svg {
+  color: var(--color-brand, #b88648);
+}
+
+/* Shared app navigation icons and active tab states must follow each preset's
+   accent, not the old blue/green/purple utility defaults in individual menus. */
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) svg.lucide {
+  color: var(--color-brand, #b88648) !important;
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(button, a)[class*="bg-indigo-600"] svg.lucide,
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(button, a)[class*="bg-blue-600"] svg.lucide,
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(button, a)[class*="bg-emerald-600"] svg.lucide,
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(button, a)[class*="bg-green-600"] svg.lucide,
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(button, a)[class*="bg-rose-600"] svg.lucide,
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(button, a)[class*="bg-red-600"] svg.lucide,
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(button, a)[class*="bg-amber-500"] svg.lucide,
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) button.sanctuary-flat-primary svg.lucide,
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) button.lock-screen__button svg.lucide {
+  color: var(--om-on-accent, #fff) !important;
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(
+  button[aria-current="page"],
+  [role="tab"][aria-selected="true"],
+  button[aria-pressed="true"]
+) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 48%, var(--om-line, #d1d5db));
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 14%, var(--om-card, #fff));
+  color: var(--color-brand, #b88648);
+}
+
+/* Re-theme pale decorative color blocks in all menus (blue, purple, teal,
+   etc.) while retaining green success, amber warning, and red danger states. */
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(div, span, button, a, label, section, article)[class*="rounded-"]:is(
+  [class*="bg-blue-50"], [class*="bg-blue-100"], [class*="bg-blue-200"], [class*="bg-blue-500"],
+  [class*="bg-sky-50"], [class*="bg-sky-100"], [class*="bg-sky-200"],
+  [class*="bg-cyan-50"], [class*="bg-cyan-100"], [class*="bg-cyan-200"], [class*="bg-cyan-500"],
+  [class*="bg-teal-50"], [class*="bg-teal-100"], [class*="bg-teal-200"],
+  [class*="bg-purple-50"], [class*="bg-purple-100"], [class*="bg-purple-200"], [class*="bg-purple-500"],
+  [class*="bg-violet-50"], [class*="bg-violet-100"], [class*="bg-violet-200"],
+  [class*="bg-pink-50"], [class*="bg-pink-100"], [class*="bg-pink-200"],
+  [class*="bg-fuchsia-50"], [class*="bg-fuchsia-100"], [class*="bg-fuchsia-200"]
+) {
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 28%, var(--om-line, #d1d5db)) !important;
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 12%, var(--om-card, #fff)) !important;
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) :is(div, span, button, a, label, section, article)[class*="rounded-"]:is(
+  [class*="bg-blue-50"], [class*="bg-blue-100"], [class*="bg-blue-200"],
+  [class*="bg-sky-50"], [class*="bg-sky-100"], [class*="bg-sky-200"],
+  [class*="bg-cyan-50"], [class*="bg-cyan-100"], [class*="bg-cyan-200"],
+  [class*="bg-teal-50"], [class*="bg-teal-100"], [class*="bg-teal-200"],
+  [class*="bg-purple-50"], [class*="bg-purple-100"], [class*="bg-purple-200"],
+  [class*="bg-violet-50"], [class*="bg-violet-100"], [class*="bg-violet-200"],
+  [class*="bg-pink-50"], [class*="bg-pink-100"], [class*="bg-pink-200"],
+  [class*="bg-fuchsia-50"], [class*="bg-fuchsia-100"], [class*="bg-fuchsia-200"]
+) :is([class*="text-blue-"], [class*="text-sky-"], [class*="text-cyan-"], [class*="text-teal-"], [class*="text-purple-"], [class*="text-violet-"], [class*="text-pink-"], [class*="text-fuchsia-"]) {
+  color: var(--color-brand, #b88648) !important;
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) [class*="bg-blue-500/80"] > div,
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) [class*="bg-purple-500"] {
+  background-color: color-mix(in srgb, var(--color-brand, #b88648) 76%, var(--om-card, #fff)) !important;
+}

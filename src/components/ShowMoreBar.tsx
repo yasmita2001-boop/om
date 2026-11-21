@@ -14,7 +14,7 @@ interface ShowMoreBarProps {
  * use this bar to reveal the next slice on demand.
  */
 export const ShowMoreBar: React.FC<ShowMoreBarProps> = ({ remaining, step, onReveal }) => (
-  <div className="pt-3 pb-1 text-center">
+  <div className="col-span-full pt-3 pb-1 text-center">
     <button
       type="button"
       onClick={onReveal}

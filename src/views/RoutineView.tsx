@@ -3,7 +3,7 @@ import React, { useRef, useState } from 'react';
 import {
   Repeat, Clock, Trash2, CheckCircle2,
   Flame, Check, Bell, Link2, Edit3, X,
-  BellRing, Zap
+  BellRing, Zap, PauseCircle, Power, CheckCheck
 } from 'lucide-react';
 import { Routine, Habit, HabitLog, Goal, Task, TaskPriority, ReminderItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -276,6 +276,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         repeatRule: 'none',
         status: 'open',
         linkedId: taskId,
+        linkedType: 'task',
         alarmEnabled: true,
         ringtone: routineAlarmRingtone,
         createdAt: now,
@@ -325,7 +326,12 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     if (!habitName.trim()) return;
 
     const now = Date.now();
-    const times = Array.from({ length: timesPerDay }).map((_, i) => slotTimes[i] || `${String(8 + i * 2).padStart(2, '0')}:00`);
+    const times = Array.from({ length: timesPerDay }).map((_, i) => {
+      if (slotTimes[i]) return slotTimes[i];
+      // Distribute remaining slots evenly between 06:00–22:00, clamped to valid hours
+      const hour = Math.min(23, Math.round(6 + (i * 16) / Math.max(1, timesPerDay - 1)));
+      return `${String(hour).padStart(2, '0')}:00`;
+    });
     const matchedRoutine = routines.find(r => r.id === linkedRoutineId);
 
     const habitId = generateUUID();
@@ -373,6 +379,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         repeatRule: 'none',
         status: 'open',
         linkedId: taskId,
+        linkedType: 'task',
         alarmEnabled: true,
         ringtone: habitAlarmRingtone,
         createdAt: now,
@@ -431,6 +438,32 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     onRefresh();
   };
 
+  const handleSkipHabit = async (habitId: string) => {
+    const skipKey = `${habitId}|${today}|skip`;
+    const existing = habitLogs.find(l => l.key === skipKey);
+    if (existing) {
+      await storage.delete('habitLogs', existing.id);
+      onSuccess('Skip removed');
+    } else {
+      const newLog: HabitLog = {
+        id: generateUUID(),
+        key: skipKey,
+        habitId,
+        date: today,
+        occurrence: 0,
+        note: 'skipped',
+        createdAt: Date.now()
+      };
+      await storage.put('habitLogs', newLog);
+      onSuccess('Habit skipped for today');
+    }
+    onRefresh();
+  };
+
+  const isHabitSkippedToday = (habitId: string): boolean => {
+    return habitLogs.some(l => l.habitId === habitId && l.date === today && l.note === 'skipped');
+  };
+
   const handleToggleRoutineBlock = async (r: Routine) => {
     const isDone = r.completedDate === today || Boolean(r.completedDates?.includes(today));
     const nextDone = !isDone;
@@ -439,12 +472,17 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     } else {
       soundEngine.play('taskUncheck');
     }
+    // Prune completedDates to last 90 days to prevent unbounded growth
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 90);
+    const cutoffStr = getLocalDateString(cutoffDate);
+    const prunedDates = (r.completedDates || []).filter(date => date >= cutoffStr);
     const updated: Routine = {
       ...r,
       completedDate: nextDone ? today : null,
       completedDates: nextDone
-        ? Array.from(new Set([...(r.completedDates || []), today]))
-        : (r.completedDates || []).filter(date => date !== today),
+        ? Array.from(new Set([...prunedDates, today]))
+        : prunedDates.filter(date => date !== today),
       updatedAt: Date.now()
     };
     await storage.put('routines', updated);
@@ -476,7 +514,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       dueAt: today,
       goalId: r.goalId || goals[0]?.id || '',
       armAlarm: true,
-      ringtone: 'om_namah_shivay',
+      ringtone: getDefaultRingtoneId(),
       alarmTime: r.startTime || '08:00'
     });
   };
@@ -491,7 +529,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       dueAt: today,
       goalId: resolveHabitGoalId(h, routines) || '',
       armAlarm: true,
-      ringtone: 'om_namah_shivay',
+      ringtone: getDefaultRingtoneId(),
       alarmTime: (h.times && h.times[0]) || '09:00'
     });
   };
@@ -551,7 +589,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
       title: `DELAY ALERT: ${title}`,
       subtitle: subtitle || 'Routine block is past scheduled time window!',
       timeStr: 'NOW',
-      ringtone: 'om_namah_shivay'
+      ringtone: getDefaultRingtoneId()
     });
     onSuccess(`Urgent alarm ringing for "${title}"!`);
   };
@@ -624,15 +662,13 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         await storage.delete('routines', deleteTarget.id);
         // Automatically detach habits that were linked to this routine
         const linked = habits.filter(h => h.linkedRoutineId === deleteTarget.id || h.routineId === deleteTarget.id);
-        for (const h of linked) {
-          await storage.put('habits', {
-            ...h,
-            linkedRoutineId: null,
-            routineId: null,
-            linkedRoutineName: null,
-            updatedAt: Date.now()
-          });
-        }
+        await Promise.all(linked.map(h => storage.put('habits', {
+          ...h,
+          linkedRoutineId: null,
+          routineId: null,
+          linkedRoutineName: null,
+          updatedAt: Date.now()
+        })));
         if (targetRoutine?.goalId) {
           await syncGoalProgressFromRoutines(targetRoutine.goalId);
         }
@@ -671,7 +707,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     alarmService.addFocusAlarm({
       time: alarmTime,
       label: routine.name,
-      ringtone: 'om_namah_shivay',
+      ringtone: getDefaultRingtoneId(),
       enabled: true,
       days,
       linkedRoutineId: routine.id,
@@ -683,19 +719,95 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
     onRefresh();
   };
 
-  // Compute streak for a habit
+  // Compute streak for a habit, respecting its frequency.
+  // Daily habits count consecutive logged days.
+  // Weekly habits count consecutive weeks that have at least one log.
+  // Monthly habits count consecutive months with at least one log.
+  // Starts from today/this-period if a log exists, otherwise from the previous period.
   const getStreak = (habitId: string) => {
+    const habit = habits.find(h => h.id === habitId);
+    const freq = habit?.frequency || 'Daily';
+    const now = new Date();
+    const todayStr = getLocalDateString(now);
+
+    if (freq.startsWith('Weekly')) {
+      // Weekly streak: count consecutive weeks with at least one log
+      let streak = 0;
+      const checkDate = new Date(now);
+      // Move to start of current week (Monday)
+      const dayOfWeek = checkDate.getDay();
+      const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      checkDate.setDate(checkDate.getDate() - mondayOffset);
+
+      const hasLogThisWeek = habitLogs.some(l => {
+        if (l.habitId !== habitId) return false;
+        const weekStart = getLocalDateString(checkDate);
+        const weekEndDate = new Date(checkDate);
+        weekEndDate.setDate(weekEndDate.getDate() + 6);
+        const weekEnd = getLocalDateString(weekEndDate);
+        return l.date >= weekStart && l.date <= weekEnd;
+      });
+
+      if (!hasLogThisWeek) {
+        checkDate.setDate(checkDate.getDate() - 7);
+      }
+
+      for (let i = 0; i < 52; i++) {
+        const weekStart = getLocalDateString(checkDate);
+        const weekEndDate = new Date(checkDate);
+        weekEndDate.setDate(weekEndDate.getDate() + 6);
+        const weekEnd = getLocalDateString(weekEndDate);
+        const hasLog = habitLogs.some(l => l.habitId === habitId && l.date >= weekStart && l.date <= weekEnd);
+        if (hasLog) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 7);
+        } else {
+          break;
+        }
+      }
+      return streak;
+    }
+
+    if (freq === 'Monthly') {
+      // Monthly streak: count consecutive months with at least one log
+      let streak = 0;
+      let checkMonth = now.getMonth();
+      let checkYear = now.getFullYear();
+
+      const monthStr = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}`;
+      const currentMonthStr = monthStr(checkYear, checkMonth);
+      const hasLogThisMonth = habitLogs.some(l => l.habitId === habitId && l.date.startsWith(currentMonthStr));
+
+      if (!hasLogThisMonth) {
+        checkMonth--;
+        if (checkMonth < 0) { checkMonth = 11; checkYear--; }
+      }
+
+      for (let i = 0; i < 24; i++) {
+        const ms = monthStr(checkYear, checkMonth);
+        const hasLog = habitLogs.some(l => l.habitId === habitId && l.date.startsWith(ms));
+        if (hasLog) {
+          streak++;
+          checkMonth--;
+          if (checkMonth < 0) { checkMonth = 11; checkYear--; }
+        } else {
+          break;
+        }
+      }
+      return streak;
+    }
+
+    // Daily / Custom: count consecutive logged days (original logic)
     let streak = 0;
-    const checkDate = new Date();
-    // Check backwards from today
-    for (let i = 0; i < 60; i++) {
+    const hasLogToday = habitLogs.some(l => l.habitId === habitId && l.date === todayStr);
+    const checkDate = new Date(now);
+    if (!hasLogToday) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    for (let i = 0; i < 365; i++) {
       const dateStr = getLocalDateString(checkDate);
-      const hasLog = habitLogs.some(l => l.habitId === habitId && l.date === dateStr);
-      if (hasLog) {
+      if (habitLogs.some(l => l.habitId === habitId && l.date === dateStr)) {
         streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else if (i === 0) {
-        // Might not have logged today yet, check yesterday
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
         break;
@@ -801,8 +913,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
                 >
-                  <Zap className="h-3.5 w-3.5 text-amber-300" />
-                  <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3.5 w-3.5" /> Task Genesis</span>
+                  <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3.5 w-3.5 text-amber-300" /> Task Genesis</span>
                 </button>
               </div>
             </div>
@@ -828,6 +939,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               label="routine form"
               onClick={() => {
                 setRoutineFormOpen(false);
+                setEditingRoutine(null);
                 setRoutineMenuSection('routine');
               }}
             />
@@ -1077,7 +1189,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     ) : (
                       routines.map(r => (
                         <option key={r.id} value={r.id}>
-                          <><ThemeIcon name="link" className="h-3.5 w-3.5" /> {r.name} ({r.startTime || r.time} → {r.endTime || 'end'}) · {r.frequency}</>
+                          🔗 {r.name} ({r.startTime || r.time} → {r.endTime || 'end'}) · {r.frequency}
                         </option>
                       ))
                     )}
@@ -1252,16 +1364,51 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
         </div>
 
         <div className="mt-2 space-y-1">
-          {[...routines].sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || '')).map(r => {
+          {(() => {
+            const todayDow = new Date().getDay(); // 0=Sun..6=Sat
+            const DOW_NAMES = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+            const isScheduledToday = (r: { frequency: string }) => {
+              const f = (r.frequency || 'daily').toLowerCase();
+              if (f === 'daily') return true;
+              if (f === 'weekdays') return todayDow >= 1 && todayDow <= 5;
+              if (f === 'weekends') return todayDow === 0 || todayDow === 6;
+              if (DOW_NAMES.includes(f)) return DOW_NAMES.indexOf(f) === todayDow;
+              if (f === 'weekly') return true; // weekly with no day specified shows always
+              return true;
+            };
+            const active = [...routines].filter(r => r.active !== false);
+            const scheduled = active.filter(r => isScheduledToday(r));
+            const offToday = active.filter(r => !isScheduledToday(r));
+            const sorted = [
+              ...scheduled.sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || '')),
+              ...offToday.sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || ''))
+            ];
+            return sorted;
+          })().map((r, _idx, _arr) => {
+            const todayDow = new Date().getDay();
+            const DOW_NAMES = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+            const isScheduledToday = (rt: { frequency: string }) => {
+              const f = (rt.frequency || 'daily').toLowerCase();
+              if (f === 'daily') return true;
+              if (f === 'weekdays') return todayDow >= 1 && todayDow <= 5;
+              if (f === 'weekends') return todayDow === 0 || todayDow === 6;
+              if (DOW_NAMES.includes(f)) return DOW_NAMES.indexOf(f) === todayDow;
+              if (f === 'weekly') return true;
+              return true;
+            };
+            const scheduledToday = isScheduledToday(r);
               const linkedHabits = habits.filter(h => h.linkedRoutineId === r.id || h.routineId === r.id);
-              const doneCount = linkedHabits.filter(h => habitLogs.some(l => l.habitId === h.id && l.date === today)).length;
+              const doneCount = linkedHabits.filter(h => {
+                const logsToday = habitLogs.filter(l => l.habitId === h.id && l.date === today).length;
+                return logsToday >= (h.timesPerDay || 1);
+              }).length;
               const percentDone = linkedHabits.length > 0 ? Math.round((doneCount / linkedHabits.length) * 100) : 0;
 
               return (
                 <div
                   key={r.id}
                   data-routine-history-item
-                  className="dashboard-item-row progressive-row group relative flex min-w-0 flex-col gap-2 rounded-none border-0 p-3 text-sm leading-5 shadow-none transition-colors hover:bg-slate-50/80"
+                  className={`dashboard-item-row progressive-row group relative flex min-w-0 flex-col gap-2 rounded-none border-0 p-3 text-sm leading-5 shadow-none transition-colors hover:bg-slate-50/80 ${!scheduledToday ? 'opacity-50' : ''}`}
                 >
                   <div className="space-y-2">
                     {/* Header info */}
@@ -1271,8 +1418,13 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           {r.startTime || r.time} {r.endTime ? `→ ${r.endTime}` : ''}
                         </span>
                         {computeItemDelay(r).isDelayed && r.completedDate !== today && (
-                          <span className="rounded-none bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white animate-pulse">
+                          <span className="rounded-md bg-rose-600 px-1.5 py-0.5 text-[9px] font-black uppercase text-white animate-pulse">
                             ⚠️ {computeItemDelay(r).label}
+                          </span>
+                        )}
+                        {!scheduledToday && (
+                          <span className="rounded-md bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-500 dark:bg-slate-700 dark:text-slate-400">
+                            Not today
                           </span>
                         )}
                       </div>
@@ -1281,7 +1433,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleTriggerUrgentAlarm(r.name, `Scheduled for ${r.startTime || r.time} — past time!`)}
-                            className="h-6 px-1.5 rounded-none bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold whitespace-nowrap shrink-0"
+                            className="h-6 px-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold whitespace-nowrap shrink-0"
                             title="Ring Urgent Alarm"
                           >
                             <BellRing className="h-3 w-3 animate-bounce" />
@@ -1291,7 +1443,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleToggleRoutineBlock(r)}
-                          className={`flex h-6 shrink-0 items-center gap-1 px-1.5 rounded-none text-[10px] font-bold leading-none transition-colors cursor-pointer ${
+                          className={`flex h-6 shrink-0 items-center gap-1 px-1.5 rounded-lg text-[10px] font-bold leading-none transition-colors cursor-pointer ${
                             r.completedDate === today
                               ? 'bg-emerald-600 text-white'
                               : 'bg-slate-100 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300'
@@ -1305,7 +1457,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleOpenGenesisForRoutine(r)}
-                          className="h-6 rounded-none bg-indigo-50 px-1.5 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
+                          className="h-6 rounded-lg bg-indigo-50 px-1.5 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-400 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
                           title="Task Genesis with Reminder Alarm"
                         >
                           <Zap className="h-3 w-3 text-amber-500" />
@@ -1314,15 +1466,28 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleSetAlarmFromRoutine(r)}
-                          className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 rounded-none hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
+                          className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
                           title="Schedule Zen Bell Alarm for this routine block"
                         >
                           <Bell className="h-3.5 w-3.5" />
                         </button>
                         <button
                           type="button"
+                          onClick={async () => {
+                            const updated: Routine = { ...r, active: !r.active, updatedAt: Date.now() };
+                            await storage.put('routines', updated);
+                            onSuccess(updated.active ? `"${r.name}" activated` : `"${r.name}" paused`);
+                            onRefresh();
+                          }}
+                          className={`p-1 rounded-lg transition-colors cursor-pointer ${r.active !== false ? 'text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40' : 'text-amber-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'}`}
+                          title={r.active !== false ? 'Pause routine' : 'Activate routine'}
+                        >
+                          <Power className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleStartEditRoutine(r)}
-                          className="text-slate-400 hover:text-indigo-600 transition-colors p-1 rounded-none hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
+                          className="text-slate-400 hover:text-indigo-600 transition-colors p-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
                           title="Edit routine block"
                           aria-label={`Edit routine block ${r.name}`}
                         >
@@ -1331,7 +1496,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDeleteRoutine(r)}
-                          className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-none hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
                           title="Delete routine block"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -1375,13 +1540,47 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           <span>Linked Habits ({linkedHabits.length})</span>
                         </span>
                         {linkedHabits.length > 0 && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-none ${
-                            percentDone === 100
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                              : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
-                          }`}>
-                            {doneCount}/{linkedHabits.length} done
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                              percentDone === 100
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                            }`}>
+                              {doneCount}/{linkedHabits.length} done
+                            </span>
+                            {percentDone < 100 && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await Promise.all(linkedHabits.map(async lh => {
+                                      const key = `${lh.id}|${today}|0`;
+                                      const exists = habitLogs.some(l => l.key === key);
+                                      if (!exists) {
+                                        await storage.put('habitLogs', {
+                                          id: generateUUID(),
+                                          key,
+                                          habitId: lh.id,
+                                          date: today,
+                                          occurrence: 0,
+                                          createdAt: Date.now()
+                                        });
+                                      }
+                                    }));
+                                    soundEngine.play('habitComplete');
+                                    onSuccess(`All habits checked for "${r.name}"`);
+                                    onRefresh();
+                                  } catch {
+                                    onSuccess('⚠ Could not log all habits');
+                                  }
+                                }}
+                                className="flex h-5 items-center gap-1 rounded-lg px-1.5 text-[9px] font-bold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/40 cursor-pointer"
+                              >
+                                <CheckCheck className="h-3 w-3" />
+                                <span>All</span>
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
 
@@ -1404,7 +1603,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => handleLogHabit(h.id, 0)}
-                                  className={`h-5.5 px-2 rounded-none text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                                  className={`h-5.5 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                                     isDone
                                       ? 'bg-emerald-600 text-white'
                                       : 'bg-slate-100 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-emerald-950'
@@ -1422,7 +1621,12 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           type="button"
                           onClick={() => {
                             handleSelectRoutineForHabit(r.id);
-                            window.scrollTo({ top: 200, behavior: 'smooth' });
+                            setHabitFormOpen(true);
+                            setHabitMenuSection('routine-habit-genesis');
+                            requestAnimationFrame(() => {
+                              const el = document.querySelector('[data-habit-genesis-card]');
+                              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            });
                           }}
                           className="w-full py-2 px-2.5 rounded-none text-[10px] leading-4 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 text-center transition-colors cursor-pointer"
                         >
@@ -1435,6 +1639,45 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 </div>
               );
             })}
+          {/* Inactive Routines */}
+          {routines.some(r => r.active === false) && (
+            <details className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+              <summary className="cursor-pointer text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                Paused routines ({routines.filter(r => r.active === false).length})
+              </summary>
+              <div className="mt-2 space-y-1 opacity-60">
+                {routines.filter(r => r.active === false).sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || '')).map(r => (
+                  <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg p-2 text-xs text-slate-500 dark:text-slate-400">
+                    <div className="min-w-0">
+                      <span className="font-mono text-[10px] text-slate-400 mr-2">{r.startTime || r.time}</span>
+                      <span className="font-semibold">{r.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await storage.put('routines', { ...r, active: true, updatedAt: Date.now() });
+                          onSuccess(`"${r.name}" activated`);
+                          onRefresh();
+                        }}
+                        className="flex h-6 items-center gap-1 rounded-lg bg-emerald-50 px-2 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 cursor-pointer"
+                      >
+                        <Power className="h-3 w-3" />
+                        <span>Activate</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRoutine(r)}
+                        className="p-1 text-slate-300 hover:text-rose-500 cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       </section>}
       {/* Habit Tracker Table & 7-Day Consistency Grid with Routine Link Badges */}
@@ -1543,25 +1786,30 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     {/* 7-day mini bubbles */}
                     <div className="flex items-center gap-0.5 px-0">
                       {past7Days.map(day => {
-                        const dayLogged = habitLogs.some(l => l.habitId === h.id && l.date === day.iso);
+                        const dayLogCount = habitLogs.filter(l => l.habitId === h.id && l.date === day.iso).length;
+                        const requiredOccurrences = h.timesPerDay || occCount || 1;
+                        const dayFullyDone = dayLogCount >= requiredOccurrences;
+                        const dayPartiallyDone = dayLogCount > 0 && dayLogCount < requiredOccurrences;
                         const isToday = day.iso === today;
                         return (
                           <div
                             key={day.iso}
                             className="flex flex-col items-center gap-0"
-                            title={`${day.iso}: ${dayLogged ? 'Completed' : 'Not logged'}`}
+                            title={`${day.iso}: ${dayFullyDone ? 'Completed' : dayPartiallyDone ? `Partial (${dayLogCount}/${requiredOccurrences})` : 'Not logged'}`}
                           >
                             <span className="text-[8px] font-medium text-slate-400">{day.label}</span>
                             <div
                               className={`h-3.5 w-3.5 rounded-full flex items-center justify-center text-[7px] transition-colors ${
-                                dayLogged
+                                dayFullyDone
                                   ? 'bg-emerald-500 text-white font-bold'
+                                  : dayPartiallyDone
+                                  ? 'bg-amber-400 text-white font-bold'
                                   : isToday
                                   ? 'border border-dashed border-slate-400'
                                   : 'bg-slate-200 dark:bg-slate-700'
                               }`}
                             >
-                              {dayLogged && '✓'}
+                              {dayFullyDone ? '✓' : dayPartiallyDone ? '·' : ''}
                             </div>
                           </div>
                         );
@@ -1570,6 +1818,17 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
 
                     {/* Today's log buttons */}
                     <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1">
+                      {isHabitSkippedToday(h.id) ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSkipHabit(h.id)}
+                          className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-[10px] font-semibold bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400 cursor-pointer"
+                        >
+                          <PauseCircle className="h-3 w-3" />
+                          <span>Skipped · Undo</span>
+                        </button>
+                      ) : (
+                      <>
                       {Array.from({ length: occCount }).map((_, idx) => {
                         const key = `${h.id}|${today}|${idx}`;
                         const isDone = habitLogs.some(l => l.key === key);
@@ -1589,6 +1848,17 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                           </button>
                         );
                       })}
+                      <button
+                        type="button"
+                        onClick={() => handleSkipHabit(h.id)}
+                        className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 text-[10px] font-semibold text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Skip / Rest day"
+                      >
+                        <PauseCircle className="h-3 w-3" />
+                        <span>Skip</span>
+                      </button>
+                      </>
+                      )}
                     <ProgressiveActions label={`More actions for ${h.name}`} className="min-w-0 ml-auto">
                         <div className="inline-flex items-center gap-1">
                           <Link2 className="h-3 w-3 text-slate-400" />
@@ -1669,7 +1939,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               <button
                 type="button"
                 onClick={() => setEditingHabit(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label="Close edit habit form"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1712,7 +1983,7 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                     <option value="">None (Standalone)</option>
                     {routines.map(r => (
                       <option key={r.id} value={r.id}>
-                        <><ThemeIcon name="link" className="h-3.5 w-3.5" /> {r.name} ({r.startTime || r.time})</>
+                        🔗 {r.name} ({r.startTime || r.time})
                       </option>
                     ))}
                   </select>
@@ -1796,6 +2067,32 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
                 </div>
               </div>
 
+              {/* Time Slots Editing */}
+              {(editingHabit.timesPerDay || 1) > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                    Time Slots
+                  </label>
+                  <div className={`grid gap-2 ${(editingHabit.timesPerDay || 1) === 1 ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3'}`}>
+                    {Array.from({ length: Math.min(editingHabit.timesPerDay || 1, 6) }).map((_, idx) => (
+                      <div key={idx}>
+                        <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400">Slot {idx + 1}</label>
+                        <ThemedDateTimeInput
+                          type="time"
+                          value={editingHabit.times?.[idx] || '08:00'}
+                          onChange={e => {
+                            const newTimes = [...(editingHabit.times || [])];
+                            newTimes[idx] = e.target.value;
+                            setEditingHabit({ ...editingHabit, times: newTimes });
+                          }}
+                          className="mt-0.5 h-9 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col gap-2 pt-1">
                 <button
                   type="button"
@@ -1837,7 +2134,8 @@ export const RoutineView: React.FC<RoutineViewProps> = ({
               <button
                 type="button"
                 onClick={() => setGenesisModal(prev => ({ ...prev, isOpen: false }))}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                aria-label="Close task form"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>

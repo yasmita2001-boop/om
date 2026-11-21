@@ -163,7 +163,7 @@ describe('Tasks view navigation', () => {
     });
 
     const deleteSelected = [...container.querySelectorAll('button')]
-      .find(button => button.textContent?.includes('Delete selected (2)'));
+      .find(button => button.textContent?.trim() === 'Delete (2)');
     expect(deleteSelected).toBeDefined();
     await act(async () => deleteSelected!.click());
 

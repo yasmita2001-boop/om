@@ -1,12 +1,13 @@
-import { getCurrencySymbol } from '../lib/currencyDisplay';
+﻿import { getCurrencySymbol } from '../lib/currencyDisplay';
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Target, Plus, Flame, Trash2,
-  Zap, Check, Layers, ChevronDown,
+  Target, Plus, Trash2,
+  Zap, Check, ChevronDown,
   Edit2, ListTree,
   ArrowRight, FolderTree, X,
-  ArrowUp, ArrowDown, Unlink
+  ArrowUp, ArrowDown, Unlink,
+  Search, Download, Undo2, GripVertical, CheckSquare
 } from 'lucide-react';
 import {
   Goal, Milestone, Strategy, KPI, Mission, MentorProfile, FinanceAccount,
@@ -26,7 +27,6 @@ import { EmptyState } from '../components/EmptyState';
 import {
   computeGoalAggregateBreakdown,
   GoalProgressBreakdown,
-  GoalItemType,
   resolveTaskGoalId,
   syncGoalProgressFromMilestones,
   syncGoalProgressDirect,
@@ -35,513 +35,17 @@ import {
   syncGoalProgressFromMeetings,
   recalculateGoalAggregateProgress
 } from '../lib/goalTaskSync';
-import { ThemeIcon, type ThemeIconName } from '../components/ThemeIcon';
 import { getLocalDateString } from '../lib/dateUtils';
+import { GoalLinkedBreakdownWidget } from './goals/GoalLinkedBreakdownWidget';
+import { GoalLevel, MAX_GOAL_LEVEL, sortGoals, computeGoalLevel, getSubtreeHeight } from './goals/goalHelpers';
 
-const goalItemIcons: Record<GoalItemType, ThemeIconName> = {
-  goal: 'mainGoal',
-  task: 'target',
-  milestone: 'target',
-  habit: 'repeat',
-  routine: 'calendar',
-  learning: 'book',
-  skill: 'star',
-  note: 'note',
-  journal: 'journal',
-  savingsPlan: 'savings',
-  loan: 'loan',
-  investment: 'portfolio',
-  asset: 'wallet',
-  liability: 'alert',
-  transaction: 'wallet',
-  appointment: 'calendar',
-  healthNote: 'bottle',
-  meeting: 'user',
-  practice: 'prayer',
-  focusSession: 'focus',
-  reminder: 'bell'
-};
 
-/**
- * Fresh, High-Performance Linked Progress Breakdown Widget
- * Shows clean real-time proportional percentage contribution without clutter.
- */
-function GoalLinkedBreakdownWidget({
-  goal,
-  breakdown,
-  isExpanded,
-  onToggleExpand,
-  onQuickToggleTask,
-  onQuickToggleMilestone,
-  onQuickToggleAppointment,
-  onQuickToggleMeeting,
-  onAdjustManualProgress,
-}: {
-  goal: Goal;
-  breakdown: GoalProgressBreakdown;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
-  onQuickToggleTask?: (taskId: string) => Promise<void>;
-  onQuickToggleMilestone?: (milestoneId: string) => Promise<void>;
-  onQuickToggleAppointment?: (appointmentId: string) => Promise<void>;
-  onQuickToggleMeeting?: (meetingId: string) => Promise<void>;
-  onAdjustManualProgress?: (delta: number) => void;
-}) {
-  const hasItems = breakdown.hasLinkedItems;
-  const hasProgressItems = breakdown.progressItemCount > 0;
-  const displayProgress = hasProgressItems ? breakdown.totalPercent : goal.progress;
-  const averageItemWeight = hasProgressItems
-    ? Number((100 / breakdown.progressItemCount).toFixed(1))
-    : 0;
-  const formatProgressCount = (count: number) => Number(count.toFixed(1)).toString();
-
-  return (
-    <div className="space-y-2">
-      {/* Real-Time Status & Progress Metrics Header */}
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs min-w-0">
-        {/* Left: Progress percentage + contextual stats */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-          <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums shrink-0 whitespace-nowrap">
-            {displayProgress}%
-          </span>
-          <span className="text-slate-300 dark:text-slate-700 shrink-0">·</span>
-          {hasItems ? (
-            <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
-              <span className="hidden sm:inline">
-                {hasProgressItems
-                  ? `${formatProgressCount(breakdown.completedItems)} of ${formatProgressCount(breakdown.progressItemCount)} progress items complete · ${breakdown.totalItems} linked`
-                  : `${breakdown.totalItems} reference links · manual progress`}
-              </span>
-              <span className="sm:hidden">
-                {hasProgressItems
-                  ? `${formatProgressCount(breakdown.completedItems)}/${formatProgressCount(breakdown.progressItemCount)} progress`
-                  : `${breakdown.totalItems} references`}
-              </span>
-            </span>
-          ) : (
-            <span className="text-[11px] sm:text-xs text-slate-400 font-normal shrink-0">
-              Direct Progress
-            </span>
-          )}
-        </div>
-
-        {/* Right: Actions (Manual Stepper or Breakdown Toggle) */}
-        <div className="flex flex-wrap items-center gap-1 shrink-0 ml-auto">
-          {!hasProgressItems && onAdjustManualProgress && (
-            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => onAdjustManualProgress(-10)}
-                className="h-5 w-5 sm:h-6 sm:w-6 rounded border border-slate-200 text-xs font-semibold hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors flex items-center justify-center cursor-pointer"
-                title="Decrease 10%"
-              >
-                -
-              </button>
-              <button
-                type="button"
-                onClick={() => onAdjustManualProgress(10)}
-                className="h-5 w-5 sm:h-6 sm:w-6 rounded border border-slate-200 text-xs font-semibold hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors flex items-center justify-center cursor-pointer"
-                title="Increase 10%"
-              >
-                +
-              </button>
-            </div>
-          )}
-
-          {hasItems && (
-            <button
-              type="button"
-              onClick={onToggleExpand}
-              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs font-medium transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                isExpanded
-                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/80 dark:text-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700/80'
-              }`}
-              title={isExpanded ? 'Hide details' : 'View linked progress breakdown'}
-            >
-              <Layers className="h-3 w-3 shrink-0" />
-              <span>{isExpanded ? 'Hide' : `Linked (${breakdown.totalItems})`}</span>
-              <ChevronDown className={`h-3 w-3 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Progress Bar Track */}
-      <div className="goal-progress-track h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800/90">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ease-out ${
-            displayProgress >= 100
-              ? 'bg-emerald-500'
-              : 'bg-indigo-600 dark:bg-indigo-500'
-          }`}
-          style={{ width: `${Math.max(0, Math.min(100, displayProgress))}%` }}
-        />
-      </div>
-
-      {/* Expanded Linked Breakdown Drawer */}
-      {isExpanded && hasItems && (
-        <div className="mt-3 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 space-y-3 animate-in fade-in duration-150">
-          <div className="flex items-center justify-between border-b border-slate-200/60 pb-2 dark:border-slate-800/60">
-            <div>
-              <h4 className="text-xs font-semibold text-slate-900 dark:text-white">
-                Progress Contribution Breakdown
-              </h4>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                {hasProgressItems
-                  ? `${formatProgressCount(breakdown.progressItemCount)} progress-driving items contribute about ${averageItemWeight}% each. ${formatProgressCount(breakdown.totalItems - breakdown.progressItemCount)} reference links do not change progress.`
-                  : `${breakdown.totalItems} linked reference items are visible here but do not change Goal progress.`}
-              </p>
-            </div>
-            <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-              {hasProgressItems
-                ? `${formatProgressCount(breakdown.completedItems)}/${formatProgressCount(breakdown.progressItemCount)} Progress`
-                : 'Reference only'}
-            </span>
-          </div>
-
-          {/* Category Summary Badges */}
-          <div className="goal-category-badges flex flex-wrap gap-1.5 text-[11px]">
-            {breakdown.categories.tasks?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Tasks: {formatProgressCount(breakdown.categories.tasks.completedCount)}/{formatProgressCount(breakdown.categories.tasks.count)}
-              </span>
-            )}
-            {breakdown.categories.milestones?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Milestones: {formatProgressCount(breakdown.categories.milestones.completedCount)}/{formatProgressCount(breakdown.categories.milestones.count)}
-              </span>
-            )}
-            {breakdown.categories.habits?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Habits: {formatProgressCount(breakdown.categories.habits.completedCount)}/{formatProgressCount(breakdown.categories.habits.count)}
-              </span>
-            )}
-            {breakdown.categories.routines?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Routines: {formatProgressCount(breakdown.categories.routines.completedCount)}/{formatProgressCount(breakdown.categories.routines.count)}
-              </span>
-            )}
-            {breakdown.categories.learning?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Learning: {formatProgressCount(breakdown.categories.learning.completedCount)}/{formatProgressCount(breakdown.categories.learning.count)}
-              </span>
-            )}
-            {breakdown.categories.skills?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Skills: {formatProgressCount(breakdown.categories.skills.completedCount)}/{formatProgressCount(breakdown.categories.skills.count)}
-              </span>
-            )}
-            {breakdown.categories.notes?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Notebooks: {formatProgressCount(breakdown.categories.notes.completedCount)}/{formatProgressCount(breakdown.categories.notes.count)}
-              </span>
-            )}
-            {breakdown.categories.journal?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Journal: {formatProgressCount(breakdown.categories.journal.completedCount)}/{formatProgressCount(breakdown.categories.journal.count)}
-              </span>
-            )}
-            {breakdown.categories.childGoals?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-600 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Sub-Goals: {formatProgressCount(breakdown.categories.childGoals.completedCount)}/{formatProgressCount(breakdown.categories.childGoals.count)}
-              </span>
-            )}
-            {breakdown.categories.savingsPlans?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-emerald-700 shadow-2xs border border-emerald-200/70 dark:bg-slate-800 dark:text-emerald-400 dark:border-emerald-800/60">
-                Savings: {formatProgressCount(breakdown.categories.savingsPlans.completedCount)}/{formatProgressCount(breakdown.categories.savingsPlans.count)}
-              </span>
-            )}
-            {breakdown.categories.loans?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-700 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
-                Loans: {formatProgressCount(breakdown.categories.loans.completedCount)}/{formatProgressCount(breakdown.categories.loans.count)}
-              </span>
-            )}
-            {breakdown.categories.investments?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-blue-700 shadow-2xs border border-blue-200/70 dark:bg-slate-800 dark:text-blue-400 dark:border-blue-800/60">
-                Investments: {formatProgressCount(breakdown.categories.investments.completedCount)}/{formatProgressCount(breakdown.categories.investments.count)}
-              </span>
-            )}
-            {breakdown.categories.assets?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-700 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
-                Assets: {formatProgressCount(breakdown.categories.assets.completedCount)}/{formatProgressCount(breakdown.categories.assets.count)}
-              </span>
-            )}
-            {breakdown.categories.liabilities?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-orange-700 shadow-2xs border border-orange-200/70 dark:bg-slate-800 dark:text-orange-400 dark:border-orange-800/60">
-                Liabilities: {formatProgressCount(breakdown.categories.liabilities.completedCount)}/{formatProgressCount(breakdown.categories.liabilities.count)}
-              </span>
-            )}
-            {breakdown.categories.transactions?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-teal-700 shadow-2xs border border-teal-200/70 dark:bg-slate-800 dark:text-teal-400 dark:border-teal-800/60">
-                Ledger: {formatProgressCount(breakdown.categories.transactions.completedCount)}/{formatProgressCount(breakdown.categories.transactions.count)}
-              </span>
-            )}
-            {breakdown.categories.appointments?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-pink-700 shadow-2xs border border-pink-200/70 dark:bg-slate-800 dark:text-pink-400 dark:border-pink-800/60">
-                Appointments: {formatProgressCount(breakdown.categories.appointments.completedCount)}/{formatProgressCount(breakdown.categories.appointments.count)}
-              </span>
-            )}
-            {breakdown.categories.healthNotes?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-700 shadow-2xs border border-slate-200/70 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                Health Notes: {formatProgressCount(breakdown.categories.healthNotes.completedCount)}/{formatProgressCount(breakdown.categories.healthNotes.count)}
-              </span>
-            )}
-            {breakdown.categories.meetings?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-violet-700 shadow-2xs border border-violet-200/70 dark:bg-slate-800 dark:text-violet-400 dark:border-violet-800/60">
-                Meetings: {formatProgressCount(breakdown.categories.meetings.completedCount)}/{formatProgressCount(breakdown.categories.meetings.count)}
-              </span>
-            )}
-            {breakdown.categories.practices?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-emerald-600 shadow-2xs border border-emerald-200/70 dark:bg-slate-800 dark:text-emerald-400 dark:border-emerald-800/60">
-                Practices: {formatProgressCount(breakdown.categories.practices.completedCount)}/{formatProgressCount(breakdown.categories.practices.count)}
-              </span>
-            )}
-            {breakdown.categories.focusSessions?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-amber-500 shadow-2xs border border-amber-200/70 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-800/60">
-                Focus: {formatProgressCount(breakdown.categories.focusSessions.completedCount)}/{formatProgressCount(breakdown.categories.focusSessions.count)}
-              </span>
-            )}
-            {breakdown.categories.reminders?.count > 0 && (
-              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-rose-500 shadow-2xs border border-rose-200/70 dark:bg-slate-800 dark:text-rose-400 dark:border-rose-800/60">
-                Reminders: {formatProgressCount(breakdown.categories.reminders.completedCount)}/{formatProgressCount(breakdown.categories.reminders.count)}
-              </span>
-            )}
-          </div>
-
-          {/* Itemized List */}
-          <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-            {breakdown.items.map(item => (
-              <div
-                key={`${item.type}-${item.id}`}
-                className="flex items-center justify-between gap-2 rounded-lg border border-slate-200/70 bg-white p-2 text-xs dark:border-slate-800 dark:bg-slate-800/80 transition-colors hover:border-slate-300 dark:hover:border-slate-700"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  {item.type === 'task' && onQuickToggleTask && !item.isAggregate ? (
-                    <button
-                      type="button"
-                      onClick={() => onQuickToggleTask(item.id)}
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
-                        item.isCompleted
-                          ? 'border-emerald-600 bg-emerald-600 text-white'
-                          : 'border-slate-300 bg-white hover:border-indigo-500 dark:border-slate-600 dark:bg-slate-800'
-                      }`}
-                      title={item.isCompleted ? 'Mark Task Incomplete' : 'Complete Task (Instant Reflection)'}
-                    >
-                      {item.isCompleted && '✓'}
-                    </button>
-                  ) : item.type === 'milestone' && onQuickToggleMilestone ? (
-                    <button
-                      type="button"
-                      onClick={() => onQuickToggleMilestone(item.id)}
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
-                        item.isCompleted
-                          ? 'border-emerald-600 bg-emerald-600 text-white'
-                          : 'border-slate-300 bg-white hover:border-indigo-500 dark:border-slate-600 dark:bg-slate-800'
-                      }`}
-                      title={item.isCompleted ? 'Mark Milestone Pending' : 'Reach Milestone (Instant Reflection)'}
-                    >
-                      {item.isCompleted && '✓'}
-                    </button>
-                  ) : item.type === 'appointment' && onQuickToggleAppointment ? (
-                    <button
-                      type="button"
-                      onClick={() => onQuickToggleAppointment(item.id)}
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
-                        item.isCompleted
-                          ? 'border-emerald-600 bg-emerald-600 text-white'
-                          : 'border-slate-300 bg-white hover:border-pink-500 dark:border-slate-600 dark:bg-slate-800'
-                      }`}
-                      title={item.isCompleted ? 'Mark Checkup Scheduled' : 'Mark Checkup Attended (Instant Reflection)'}
-                    >
-                      {item.isCompleted && '✓'}
-                    </button>
-                  ) : item.type === 'meeting' && onQuickToggleMeeting ? (
-                    <button
-                      type="button"
-                      onClick={() => onQuickToggleMeeting(item.id)}
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
-                        item.isCompleted
-                          ? 'border-emerald-600 bg-emerald-600 text-white'
-                          : 'border-slate-300 bg-white hover:border-violet-500 dark:border-slate-600 dark:bg-slate-800'
-                      }`}
-                      title={item.isCompleted ? 'Mark Meeting Scheduled' : 'Mark Meeting Completed (Instant Reflection)'}
-                    >
-                      {item.isCompleted && '✓'}
-                    </button>
-                  ) : (
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-slate-100 text-[10px] text-slate-400 dark:bg-slate-800">
-                      •
-                    </span>
-                  )}
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-slate-400 tracking-wider shrink-0">
-                        <ThemeIcon name={goalItemIcons[item.type]} className="h-3 w-3" />
-                        {item.typeLabel}
-                      </span>
-                      <span className={`truncate font-medium min-w-0 ${item.isCompleted ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>
-                        {item.title}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {item.isAggregate && item.progressWeight
-                      ? `~${averageItemWeight}% each`
-                      : item.weightPercent > 0 ? `~${item.weightPercent}%` : 'Reference'}
-                  </span>
-                  <span className={`font-mono text-[11px] font-semibold rounded px-1.5 py-0.5 ${
-                    item.progress >= 100
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                      : item.progress > 0
-                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
-                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                  }`}>
-                    {Number.isInteger(item.progress) ? item.progress : item.progress.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-type GoalLevel = 1 | 2 | 3 | 4 | 5;
 type GoalsTab = GoalsSection;
 type EditableGoalRecord =
   | { type: 'strategy'; item: Strategy }
   | { type: 'milestone'; item: Milestone }
   | { type: 'kpi'; item: KPI }
   | { type: 'mission'; item: Mission };
-const MAX_GOAL_LEVEL: GoalLevel = 5;
-
-/**
- * Extracts a natural sequence index from a goal title ("01 ...", "1. ...", "1st", "[1]", "Goal 1").
- * Year-like numbers (>= 1000) are ignored so a title such as "Launch MVP 2027" does not silently
- * become an explicit sibling order of 2027.
- */
-const extractGoalSequenceNumber = (title: string): number | null => {
-  if (!title) return null;
-  const normalized = title.trim().replace(/[\u0966-\u096F]/g, d => String(d.charCodeAt(0) - 2406));
-  const rawNumber = extractRawGoalSequenceNumber(normalized);
-  if (rawNumber === null) return null;
-  return rawNumber >= 1 && rawNumber <= 999 ? rawNumber : null;
-};
-
-const extractRawGoalSequenceNumber = (normalized: string): number | null => {
-  const hierarchicalPrefix = normalized.match(/^(?:#|no\.?\s*)?(\d+(?:\.\d+)+)[\.\)\:\-\s]/i);
-  if (hierarchicalPrefix) {
-    const parts = hierarchicalPrefix[1].split('.');
-    const num = parseInt(parts[parts.length - 1], 10);
-    if (!Number.isNaN(num)) return num;
-  }
-
-  // 1. Ordinals at start: "1st", "2nd", "3rd", "4th", "1st.", "1st -"
-  const ordinalMatch = normalized.match(/^(\d+)(?:st|nd|rd|th)\b/i);
-  if (ordinalMatch) {
-    const num = parseInt(ordinalMatch[1], 10);
-    if (!Number.isNaN(num)) return num;
-  }
-
-  // 2. Prefix with brackets or punctuation: "[1]", "(1)", "1.", "1)", "1:", "1-", "#1", "No. 1", "Step 1", "Goal 1"
-  const prefixWordMatch = normalized.match(/^(?:#|no\.?\s*|step\s*|goal\s*|sub\s*goal\s*|part\s*|phase\s*)?\[?\(?(\d+)[\.\)\:\-\]\}\s]/i);
-  if (prefixWordMatch) {
-    const num = parseInt(prefixWordMatch[1], 10);
-    if (!Number.isNaN(num)) return num;
-  }
-
-  // 3. Simple leading number: "1 Physical", "01 Physical", "1"
-  const leadMatch = normalized.match(/^\[?\(?(\d+)\]?\)?(?:\s|$)/);
-  if (leadMatch) {
-    const num = parseInt(leadMatch[1], 10);
-    if (!Number.isNaN(num)) return num;
-  }
-
-  // 4. Roman numerals at start: "I.", "II.", "III.", "IV.", "V."
-  const romanMatch = normalized.match(/^(i|ii|iii|iv|v|vi|vii|viii|ix|x)[\.\)\:\-\s]/i);
-  if (romanMatch) {
-    const romanMap: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
-    const r = romanMatch[1].toLowerCase();
-    if (romanMap[r]) return romanMap[r];
-  }
-
-  // 5. Suffix number at the end of title: "Physical Development 1", "Physical Development - 1"
-  const suffixOrdinalMatch = normalized.match(/(?:^|\s)(\d+)(?:st|nd|rd|th)$/i);
-  if (suffixOrdinalMatch) {
-    const num = parseInt(suffixOrdinalMatch[1], 10);
-    if (!Number.isNaN(num)) return num;
-  }
-
-  const suffixMatch = normalized.match(/(?:^|[\s\-\:\(\[\#])(\d+)\)?\]?$/);
-  if (suffixMatch) {
-    const num = parseInt(suffixMatch[1], 10);
-    if (!Number.isNaN(num)) return num;
-  }
-
-  return null;
-};
-
-// Stable sibling ordering: explicit order, natural title sequence, then creation time.
-const sortGoals = (list: Goal[]) => {
-  return [...list].sort((a, b) => {
-    // Explicit order is also what Move Up / Move Down updates.
-    const ordA = a.order;
-    const ordB = b.order;
-    if (ordA !== undefined && ordB !== undefined && ordA !== null && ordB !== null) {
-      if (ordA !== ordB) return ordA - ordB;
-    } else if (ordA !== undefined && ordA !== null) {
-      return -1;
-    } else if (ordB !== undefined && ordB !== null) {
-      return 1;
-    }
-
-    const numA = extractGoalSequenceNumber(a.title);
-    const numB = extractGoalSequenceNumber(b.title);
-    if (numA !== null && numB !== null && numA !== numB) return numA - numB;
-    if (numA !== null && numB === null) return -1;
-    if (numB !== null && numA === null) return 1;
-
-    return (a.createdAt || 0) - (b.createdAt || 0);
-  });
-};
-
-/** Depth of a goal in the parent chain (1 = Main ... 5 = Atomic). */
-const computeGoalLevel = (goal: Goal, byId: Map<string, Goal>): GoalLevel => {
-  let depth = 1;
-  let currParentId: string | undefined = goal.parentId || undefined;
-  const visited = new Set<string>([goal.id]);
-  while (currParentId && !visited.has(currParentId) && depth < MAX_GOAL_LEVEL) {
-    visited.add(currParentId);
-    const parent = byId.get(currParentId);
-    if (!parent) return 1;
-    depth++;
-    currParentId = parent.parentId || undefined;
-  }
-  if (currParentId && visited.has(currParentId)) return 1;
-  return depth as GoalLevel;
-};
-
-/** Height of a goal's subtree (0 = leaf). Used to keep hierarchies within 5 levels. */
-const getSubtreeHeight = (goalId: string, allGoals: Goal[]): number => {
-  let height = 0;
-  const walk = (parentId: string, depth: number) => {
-    for (const child of allGoals) {
-      if (child.parentId !== parentId) continue;
-      const nextDepth = depth + 1;
-      if (nextDepth > height) height = nextDepth;
-      walk(child.id, nextDepth);
-    }
-  };
-  walk(goalId, 0);
-  return height;
-};
 
 interface GoalsViewProps {
   goals: Goal[];
@@ -686,6 +190,19 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   const [expandedBreakdownGoalIds, setExpandedBreakdownGoalIds] = useState<Record<string, boolean>>({});
   const [levelFilter, setLevelFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+
+  // Text search filter
+  const [searchQuery, setSearchQuery] = useState('');
+  // Status filter (all | active | completed)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('all');
+  // Bulk selection
+  const [selectedGoalIds, setSelectedGoalIds] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  // Undo delete
+  const [undoStack, setUndoStack] = useState<Array<{ goals: Goal[]; label: string; timer: ReturnType<typeof setTimeout> }>>([]);
+  // Drag reorder
+  const [dragSourceId, setDragSourceId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const reportError = (message: string) => setFormError(message);
 
@@ -886,9 +403,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       : eligibleParents[0]?.id || '');
   };
 
-  const getDescendantIds = (goalId: string) => {
+  const editingDescendantIds = useMemo(() => {
+    if (!editingGoal) return new Set<string>();
     const descendants = new Set<string>();
-    const pending = [goalId];
+    const pending = [editingGoal.id];
     while (pending.length > 0) {
       const parentId = pending.pop()!;
       for (const child of goals) {
@@ -899,8 +417,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       }
     }
     return descendants;
-  };
-  const editingDescendantIds = editingGoal ? getDescendantIds(editingGoal.id) : new Set<string>();
+  }, [editingGoal, goals]);
 
   // A level is only reachable when at least one eligible parent exists at level - 1.
   const eligibleParentCountForLevel = (level: GoalLevel): number => {
@@ -937,6 +454,157 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
   const getAtomicGoalsOf = (nanoGoalId: string) => {
     return sortGoals(goals.filter(g => g.parentId === nanoGoalId));
+  };
+
+  /** Collect all descendant IDs of a goal (recursive children). */
+  const getDescendantIds = (goalId: string): string[] => {
+    const result: string[] = [];
+    const walk = (parentId: string) => {
+      for (const child of goals) {
+        if (child.parentId === parentId && !result.includes(child.id)) {
+          result.push(child.id);
+          walk(child.id);
+        }
+      }
+    };
+    walk(goalId);
+    return result;
+  };
+
+  /** Apply search query and status filter to a list of goals. */
+  const filterGoals = (list: Goal[]): Goal[] => {
+    let filtered = list;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter(g => g.title.toLowerCase().includes(q) || g.description?.toLowerCase().includes(q) || g.category?.toLowerCase().includes(q));
+    }
+    if (statusFilter === 'active') {
+      filtered = filtered.filter(g => g.progress < 100 && g.status !== 'completed');
+    } else if (statusFilter === 'completed') {
+      filtered = filtered.filter(g => g.progress >= 100 || g.status === 'completed');
+    }
+    return filtered;
+  };
+
+  /** Check if a goal or any of its descendants match the active filters. */
+  const goalTreeMatchesFilter = (goalId: string): boolean => {
+    const goal = goalsById.get(goalId);
+    if (!goal) return false;
+    if (filterGoals([goal]).length > 0) return true;
+    return goals.filter(g => g.parentId === goalId).some(child => goalTreeMatchesFilter(child.id));
+  };
+
+  // Drag-and-drop handlers for sibling reordering
+  const handleDragStart = (e: React.DragEvent, goalId: string) => {
+    setDragSourceId(goalId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', goalId);
+  };
+  const handleDragOver = (e: React.DragEvent, goalId: string) => {
+    if (!dragSourceId || dragSourceId === goalId) return;
+    const source = goalsById.get(dragSourceId);
+    const target = goalsById.get(goalId);
+    if (!source || !target) return;
+    // Only allow drag within same parent group
+    if ((source.parentId || null) !== (target.parentId || null)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverId(goalId);
+  };
+  const handleDrop = async (e: React.DragEvent, targetGoalId: string) => {
+    e.preventDefault();
+    if (!dragSourceId || dragSourceId === targetGoalId) { setDragSourceId(null); setDragOverId(null); return; }
+    const source = goalsById.get(dragSourceId);
+    const target = goalsById.get(targetGoalId);
+    if (!source || !target || (source.parentId || null) !== (target.parentId || null)) { setDragSourceId(null); setDragOverId(null); return; }
+    const siblings = source.parentId
+      ? goals.filter(g => g.parentId === source.parentId)
+      : goals.filter(g => !g.parentId || !goalsById.has(g.parentId));
+    const sorted = sortGoals(siblings);
+    const sourceIdx = sorted.findIndex(g => g.id === dragSourceId);
+    const targetIdx = sorted.findIndex(g => g.id === targetGoalId);
+    if (sourceIdx === -1 || targetIdx === -1) { setDragSourceId(null); setDragOverId(null); return; }
+    const reordered = [...sorted];
+    const [moved] = reordered.splice(sourceIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    const stamp = Date.now();
+    await storage.bulkPut('goals', reordered.map((g, idx) => ({ ...g, order: idx, updatedAt: stamp })));
+    setDragSourceId(null);
+    setDragOverId(null);
+    onRefresh();
+  };
+  const handleDragEnd = () => { setDragSourceId(null); setDragOverId(null); };
+
+  // Bulk action handlers
+  const toggleBulkSelect = (goalId: string) => {
+    setSelectedGoalIds(prev => {
+      const next = new Set(prev);
+      if (next.has(goalId)) next.delete(goalId); else next.add(goalId);
+      return next;
+    });
+  };
+  const handleBulkDelete = async () => {
+    if (selectedGoalIds.size === 0) return;
+    const toDelete = [...selectedGoalIds];
+    // Snapshot for undo
+    const deletedGoals = goals.filter(g => toDelete.some(id => id === g.id || getDescendantIds(id).includes(g.id)));
+    const allDeleteIds = new Set<string>();
+    for (const id of toDelete) {
+      allDeleteIds.add(id);
+      getDescendantIds(id).forEach(d => allDeleteIds.add(d));
+    }
+    await Promise.all([...allDeleteIds].map(id => storage.delete('goals', id)));
+    const timer = setTimeout(() => {
+      setUndoStack(prev => prev.filter(entry => entry.goals !== deletedGoals));
+    }, 15000);
+    setUndoStack(prev => [...prev, { goals: deletedGoals, label: `${toDelete.length} goals`, timer }]);
+    onSuccess(`Removed ${toDelete.length} selected goal(s) and ${allDeleteIds.size - toDelete.length} descendants`);
+    exitBulkMode();
+    onRefresh();
+  };
+  const exitBulkMode = () => { setBulkMode(false); setSelectedGoalIds(new Set()); };
+
+  // Export goals to JSON
+  const handleExportJSON = () => {
+    const data = goals.map(g => ({
+      title: g.title, level: getGoalLevel(g), category: g.category, progress: g.progress,
+      targetDate: g.targetDate, status: g.status, description: g.description,
+      parent: g.parentId ? goalsById.get(g.parentId)?.title : undefined
+    }));
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'goals-export.json'; a.click();
+    URL.revokeObjectURL(url);
+  };
+  // Export goals to CSV
+  const handleExportCSV = () => {
+    const headers = ['Title', 'Level', 'Category', 'Progress', 'Target Date', 'Status', 'Parent'];
+    const rows = goals.map(g => [
+      `"${(g.title || '').replace(/"/g, '""')}"`,
+      String(getGoalLevel(g)),
+      g.category || '',
+      String(g.progress),
+      g.targetDate || '',
+      g.status || 'active',
+      g.parentId ? `"${(goalsById.get(g.parentId)?.title || '').replace(/"/g, '""')}"` : ''
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'goals-export.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Undo delete: restore goals from undo stack
+  const handleUndoDelete = (index: number) => {
+    const entry = undoStack[index];
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    Promise.all(entry.goals.map(g => storage.put('goals', g))).then(() => {
+      setUndoStack(prev => prev.filter((_, i) => i !== index));
+      onSuccess(`Restored ${entry.goals.length} goal(s)`);
+      onRefresh();
+    }).catch(() => onSuccess('⚠ Restore failed. Try refreshing.'));
   };
 
   const handleMoveGoalOrder = async (targetGoal: Goal, direction: 'up' | 'down') => {
@@ -1084,6 +752,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     if (!goalTitle.trim()) {
       reportError('Enter a goal title before saving.');
       return;
+    }
+
+    // Validate target date is not in the past
+    if (targetDate) {
+      const today = getLocalDateString();
+      if (targetDate < today) {
+        reportError('Target date cannot be in the past. Please choose a future date.');
+        return;
+      }
     }
 
     const now = Date.now();
@@ -1331,6 +1008,19 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     e.preventDefault();
     if (!editingGoal || !editingGoal.title.trim()) return;
 
+    // Warn about past target date but don't block the save — the user may be editing other fields
+    if (editingGoal.targetDate) {
+      const today = getLocalDateString();
+      if (editingGoal.targetDate < today) {
+        // Only block if the date was *just changed* to a past date (not an existing past date)
+        const originalGoal = goals.find(g => g.id === editingGoal.id);
+        if (originalGoal?.targetDate !== editingGoal.targetDate) {
+          reportError('Target date cannot be in the past. Please choose a future date.');
+          return;
+        }
+      }
+    }
+
     const originalGoal = goals.find(g => g.id === editingGoal.id);
     const parentGoal = editingGoal.parentId ? goalsById.get(editingGoal.parentId) : null;
     const newParentId = parentGoal?.id ?? null;
@@ -1406,18 +1096,6 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
     } else {
       onSuccess(nextStatus === 'completed' ? '✓ Milestone reached!' : 'Milestone marked pending');
     }
-    onRefresh();
-  };
-
-  const handleToggleStrategyStatus = async (s: Strategy) => {
-    const nextStatus = s.status === 'executed' ? 'active' : s.status === 'active' ? 'in-progress' : 'executed';
-    const updated: Strategy = {
-      ...s,
-      status: nextStatus,
-      updatedAt: Date.now()
-    };
-    await storage.put('strategies', updated);
-    onSuccess(`Strategy status: ${nextStatus}`);
     onRefresh();
   };
 
@@ -1621,10 +1299,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
       await Promise.all([
         orphanMilestones.length > 0
-          ? storage.bulkPut('milestones', orphanMilestones.map(m => ({ ...m, goalId: '', updatedAt: unlinkStamp })))
+          ? storage.bulkPut('milestones', orphanMilestones.map(m => ({ ...m, goalId: undefined, updatedAt: unlinkStamp })))
           : Promise.resolve(),
         orphanStrategies.length > 0
-          ? storage.bulkPut('strategies', orphanStrategies.map(s => ({ ...s, goalId: '', updatedAt: unlinkStamp })))
+          ? storage.bulkPut('strategies', orphanStrategies.map(s => ({ ...s, goalId: undefined, updatedAt: unlinkStamp })))
           : Promise.resolve(),
         orphanMissions.length > 0
           ? storage.bulkPut('missions', orphanMissions.map(mission => ({ ...mission, goalId: undefined, updatedAt: unlinkStamp })))
@@ -1633,13 +1311,20 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
           ? storage.bulkPut('kpis', orphanKpis.map(k => ({ ...k, goalId: undefined, updatedAt: unlinkStamp })))
           : Promise.resolve(),
         orphanTasks.length > 0
-          ? storage.bulkPut('tasks', orphanTasks.map(t => ({ ...t, goalId: null, updatedAt: unlinkStamp })))
+          ? storage.bulkPut('tasks', orphanTasks.map(t => ({ ...t, goalId: undefined, updatedAt: unlinkStamp })))
           : Promise.resolve()
       ]);
 
-      for (const id of toDeleteIds) {
-        await storage.delete('goals', id);
-      }
+      // Snapshot goals for undo before deletion
+      const deletedGoals = goals.filter(g => toDeleteIds.has(g.id));
+
+      await Promise.all([...toDeleteIds].map(id => storage.delete('goals', id)));
+
+      // Push to undo stack with 15-second timeout
+      const timer = setTimeout(() => {
+        setUndoStack(prev => prev.filter(entry => entry.goals !== deletedGoals));
+      }, 15000);
+      setUndoStack(prev => [...prev, { goals: deletedGoals, label: deleteTarget.name, timer }]);
 
       // If deleted goal had a parent, recalculate parent progress
       const deletedGoal = goals.find(g => g.id === deleteTarget.id);
@@ -1853,71 +1538,30 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
                       Hierarchy Level (5 Branches)
                     </label>
-                    <div className="grid grid-cols-5 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => selectGoalLevel(1)}
-                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                          goalLevel === 1
-                            ? 'text-indigo-700 dark:text-indigo-300'
-                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
-                        }`}
-                        title="Main Goal (Level 1)"
-                      >
-                        Main
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => selectGoalLevel(2)}
-                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                          goalLevel === 2
-                            ? 'text-indigo-700 dark:text-indigo-300'
-                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
-                        }`}
-                        title="Sub Goal (Level 2)"
-                      >
-                        Sub
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => selectGoalLevel(3)}
-                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                          goalLevel === 3
-                            ? 'text-indigo-700 dark:text-indigo-300'
-                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
-                        }`}
-                        title="Micro Goal (Level 3)"
-                      >
-                        Micro
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => selectGoalLevel(4)}
-                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                          goalLevel === 4
-                            ? 'text-indigo-700 dark:text-indigo-300'
-                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
-                        }`}
-                        title="Nano Goal (Level 4)"
-                      >
-                        Nano
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => selectGoalLevel(5)}
-                        className={`border-b-0 border-transparent px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                          goalLevel === 5
-                            ? 'text-indigo-700 dark:text-indigo-300'
-                            : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
-                        }`}
-                        title="Atomic Goal (Level 5)"
-                      >
-                        Atomic
-                      </button>
+                    <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="Hierarchy Level">
+                      {([
+                        [1, 'Main', 'Main Goal (Level 1)'],
+                        [2, 'Sub', 'Sub Goal (Level 2)'],
+                        [3, 'Micro', 'Micro Goal (Level 3)'],
+                        [4, 'Nano', 'Nano Goal (Level 4)'],
+                        [5, 'Atomic', 'Atomic Goal (Level 5)']
+                      ] as const).map(([lvl, label, title]) => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          role="radio"
+                          aria-checked={goalLevel === lvl}
+                          onClick={() => selectGoalLevel(lvl)}
+                          className={`rounded-lg px-1 py-2 text-center text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                            goalLevel === lvl
+                              ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-400 dark:bg-indigo-950/60 dark:text-indigo-300 dark:ring-indigo-500'
+                              : 'text-slate-600 hover:text-indigo-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-indigo-300 dark:hover:bg-slate-800'
+                          }`}
+                          title={title}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -2002,6 +1646,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         <option value="Health">Health & Fitness</option>
                         <option value="Learning">Learning & Mastery</option>
                         <option value="Spiritual">Spiritual / Life Alignment</option>
+                        <option value="Relationships">Relationships</option>
+                        <option value="Creative">Creative</option>
+                        <option value="Social">Social</option>
                       </select>
                     </div>
 
@@ -2052,12 +1699,18 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         <span className="font-mono font-bold">{goalProgress}%</span>
                       </div>
                       <input
+                        id="goal-starting-progress"
                         type="range"
                         min="0"
                         max="100"
                         step="5"
                         value={goalProgress}
                         onChange={e => setGoalProgress(Number(e.target.value))}
+                        aria-label="Starting Progress"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={goalProgress}
+                        aria-valuetext={`${goalProgress}%`}
                         className="mt-1.5 h-2 w-full cursor-pointer accent-indigo-600"
                       />
                     </div>
@@ -2120,13 +1773,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                   {/* Bottom Row: Tree/Flat Toggle + Level Filter Stretched Full Width End-to-End */}
                   <div className="goal-portfolio-controls flex flex-wrap items-center gap-x-5 gap-y-1 w-full">
                     {/* Tree View / Flat View Toggle (4 cols) */}
-                    <div className="flex items-center justify-start gap-2 text-xs">
+                    <div className="flex items-center justify-start gap-2 text-xs" role="radiogroup" aria-label="View mode">
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={goalViewMode === 'tree'}
                         onClick={() => setGoalViewMode('tree')}
-                        className={`flex items-center justify-center px-1.5 py-1.5 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                        className={`flex items-center justify-center rounded-md px-1.5 py-1.5 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalViewMode === 'tree'
-                            ? 'text-indigo-700 dark:text-indigo-300'
+                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
                             : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                         }`}
                       >
@@ -2134,10 +1789,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       </button>
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={goalViewMode === 'flat'}
                         onClick={() => setGoalViewMode('flat')}
-                        className={`flex items-center justify-center px-1.5 py-1.5 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                        className={`flex items-center justify-center rounded-md px-1.5 py-1.5 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                           goalViewMode === 'flat'
-                            ? 'text-indigo-700 dark:text-indigo-300'
+                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
                             : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                         }`}
                       >
@@ -2146,21 +1803,23 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     </div>
 
                     {/* Level Filter: All | Main | Sub | Micro | Nano | Atomic (8 cols) */}
-                    <div className="flex items-center justify-start gap-1 overflow-x-auto text-xs">
+                    <div className="flex items-center justify-start gap-1 overflow-x-auto text-xs" role="radiogroup" aria-label="Filter by level">
                       {(['all', '1', '2', '3', '4', '5'] as const).map(lvl => (
                         <React.Fragment key={lvl}>
                           {lvl !== 'all' && <span aria-hidden="true" className="shrink-0 text-slate-300 dark:text-slate-600">·</span>}
                           <button
                             type="button"
+                            role="radio"
+                            aria-checked={levelFilter === lvl}
                             onClick={() => {
                               setLevelFilter(lvl);
                               // The tree view only renders Level 1 branches, so a deeper filter
                               // would show an empty tree. Switch to the flat list instead.
                               if (lvl !== 'all' && lvl !== '1') setGoalViewMode('flat');
                             }}
-                            className={`shrink-0 px-1 py-1.5 text-[10px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                            className={`shrink-0 rounded-md px-1.5 py-1.5 text-[10px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                               levelFilter === lvl
-                                ? 'text-indigo-700 dark:text-indigo-300'
+                                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
                                 : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
                             }`}
                           >
@@ -2179,7 +1838,114 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         </React.Fragment>
                       ))}
                     </div>
+
+                    {/* Status Filter */}
+                    <div className="flex items-center gap-1 text-xs" role="radiogroup" aria-label="Filter by status">
+                      {(['all', 'active', 'completed'] as const).map(s => (
+                        <button
+                          key={s}
+                          type="button"
+                          role="radio"
+                          aria-checked={statusFilter === s}
+                          onClick={() => setStatusFilter(s)}
+                          className={`shrink-0 rounded-md px-1.5 py-1.5 text-[10px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap capitalize ${
+                            statusFilter === s
+                              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
+                              : 'text-slate-600 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300'
+                          }`}
+                        >
+                          {s === 'all' ? 'All Status' : s}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Action buttons: Bulk Select, Export */}
+                    <div className="flex items-center gap-1 ml-auto">
+                      <button
+                        type="button"
+                        onClick={() => { if (bulkMode) exitBulkMode(); else setBulkMode(true); }}
+                        className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] sm:text-xs font-semibold transition-colors cursor-pointer ${
+                          bulkMode
+                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
+                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                        title="Toggle bulk selection mode"
+                      >
+                        <CheckSquare className="h-3 w-3" />
+                        <span className="hidden sm:inline">{bulkMode ? 'Exit Bulk' : 'Bulk'}</span>
+                      </button>
+                      <ProgressiveActions label="Export goals">
+                        <button
+                          type="button"
+                          onClick={handleExportJSON}
+                          className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md cursor-pointer"
+                        >
+                          <Download className="h-3 w-3" /> Export JSON
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleExportCSV}
+                          className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md cursor-pointer"
+                        >
+                          <Download className="h-3 w-3" /> Export CSV
+                        </button>
+                      </ProgressiveActions>
+                    </div>
                   </div>
+
+                  {/* Search input */}
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Search goals by title, description, or category..."
+                      aria-label="Search goals"
+                      className="h-8 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        aria-label="Clear search"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Bulk actions toolbar */}
+                  {bulkMode && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50/50 px-3 py-2 text-xs dark:border-indigo-800 dark:bg-indigo-950/30">
+                      <span className="font-semibold text-indigo-700 dark:text-indigo-300">
+                        {selectedGoalIds.size} selected
+                      </span>
+                      <button
+                        type="button"
+                        disabled={selectedGoalIds.size === 0}
+                        onClick={handleBulkDelete}
+                        className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-950/60 cursor-pointer"
+                      >
+                        <Trash2 className="h-3 w-3" /> Delete Selected
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedGoalIds(new Set(goals.map(g => g.id))); }}
+                        className="rounded-md px-2 py-1 font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={exitBulkMode}
+                        className="rounded-md px-2 py-1 font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-4 space-y-4">
@@ -2190,9 +1956,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       hint="Register your first Main Goal with the form above - sub-goals, milestones and progress rollups build from there."
                     />
                   ) : goalViewMode === 'tree' ? (
-                    /* 3-TIER HIERARCHY TREE VIEW */
-                    <>
-                    {mainGoals.filter(() => levelFilter === 'all' || levelFilter === '1').length === 0 && (
+                    /* 5-TIER HIERARCHY TREE VIEW */
+                    <div role="tree" aria-label="Goal hierarchy">
+                    {mainGoals.filter(g => (levelFilter === 'all' || levelFilter === '1') && goalTreeMatchesFilter(g.id)).length === 0 && (
                       <EmptyState
                         icon={FolderTree}
                         compact
@@ -2201,7 +1967,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       />
                     )}
                     {mainGoals
-                      .filter(() => levelFilter === 'all' || levelFilter === '1')
+                      .filter(g => (levelFilter === 'all' || levelFilter === '1') && goalTreeMatchesFilter(g.id))
                       .map((mainGoal, mainIndex) => {
                         const childSubGoals = getSubGoalsOf(mainGoal.id);
                         const isMainCollapsed = Boolean(collapsedGoalIds[mainGoal.id]);
@@ -2214,6 +1980,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         return (
                           <div
                             key={mainGoal.id}
+                            role="treeitem"
+                            aria-expanded={childSubGoals.length > 0 ? !isMainCollapsed : undefined}
+                            aria-label={mainGoal.title}
                             className="goal-tree-card goal-tree-card--main group rounded-2xl border border-slate-200/90 bg-white p-2.5 sm:p-5 shadow-xs hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700 transition-all space-y-2.5 sm:space-y-3 min-w-0"
                           >
                             {/* LEVEL 1: MAIN GOAL HEADER */}
@@ -2231,12 +2000,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   <span className="font-medium text-slate-700 dark:text-slate-300 shrink-0 whitespace-nowrap">
                                     {mainGoal.category || 'General'}
                                   </span>
-                                  {mainGoal.targetDate && (
+                                  {mainGoal.targetDate && (() => {
+                                    const isPastTarget = mainGoal.targetDate < todayDate && mainGoal.progress < 100;
+                                    return (
                                     <>
                                       <span className="text-slate-300 dark:text-slate-700 shrink-0">·</span>
-                                      <span className="shrink-0 whitespace-nowrap text-[11px] sm:text-xs">Target {mainGoal.targetDate}</span>
+                                      <span className={`shrink-0 whitespace-nowrap text-[11px] sm:text-xs ${isPastTarget ? 'text-rose-500 font-bold' : ''}`}>
+                                        {isPastTarget ? 'Overdue' : 'Target'} {mainGoal.targetDate}
+                                      </span>
                                     </>
-                                  )}
+                                    );
+                                  })()}
                                   <span className="text-slate-300 dark:text-slate-700 shrink-0">·</span>
                                   <span className="inline-flex items-center gap-1 font-medium shrink-0 whitespace-nowrap">
                                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${mainGoal.progress >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
@@ -2323,6 +2097,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                               <div className="flex flex-wrap items-center justify-between gap-1 pt-2 pb-0.5 border-t border-slate-100 dark:border-slate-800/80 min-w-0">
                                 <button
                                   type="button"
+                                  aria-expanded={!isMainCollapsed}
                                   onClick={() => toggleCollapse(mainGoal.id)}
                                   className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer py-0.5 shrink-0"
                                 >
@@ -2340,7 +2115,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                             {/* LEVEL 2: SUB GOALS CONTAINER */}
                             {!isMainCollapsed && childSubGoals.length > 0 && (
-                              <div className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-2 pt-1 min-w-0">
+                              <div role="group" aria-label="Sub goals" className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-2 pt-1 min-w-0">
                                 {childSubGoals.map((subGoal, subIndex) => {
                                   const childMicroGoals = getMicroGoalsOf(subGoal.id);
                                   const isSubCollapsed = Boolean(collapsedGoalIds[subGoal.id]);
@@ -2349,6 +2124,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   return (
                                     <div
                                       key={subGoal.id}
+                                      role="treeitem"
+                                      aria-expanded={childMicroGoals.length > 0 ? !isSubCollapsed : undefined}
+                                      aria-label={subGoal.title}
                                       className="goal-tree-card goal-tree-card--sub rounded-xl border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2 dark:border-slate-800 dark:bg-slate-800/30 space-y-2 sm:space-y-2.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                     >
                                       {/* Sub Goal Header */}
@@ -2361,12 +2139,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                             <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
                                               Sub Goal
                                             </span>
-                                            {subGoal.targetDate && (
+                                            {subGoal.targetDate && (() => {
+                                              const isPastSub = subGoal.targetDate < todayDate && subGoal.progress < 100;
+                                              return (
                                               <>
                                                 <span className="text-slate-300 dark:text-slate-700 shrink-0">·</span>
-                                                <span className="shrink-0 whitespace-nowrap text-[11px] sm:text-xs">Due {subGoal.targetDate}</span>
+                                                <span className={`shrink-0 whitespace-nowrap text-[11px] sm:text-xs ${isPastSub ? 'text-rose-500 font-bold' : ''}`}>{isPastSub ? 'Overdue' : 'Due'} {subGoal.targetDate}</span>
                                               </>
-                                            )}
+                                              );
+                                            })()}
                                           </div>
 
                                           <div className="flex flex-wrap items-center justify-end gap-1 min-w-0 ml-auto">
@@ -2447,6 +2228,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                         <div className="flex flex-wrap items-center justify-between gap-1 pt-2 pb-0.5 border-t border-slate-200 dark:border-slate-800 min-w-0">
                                           <button
                                             type="button"
+                                            aria-expanded={!isSubCollapsed}
                                             onClick={() => toggleCollapse(subGoal.id)}
                                             className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer py-0.5 shrink-0"
                                           >
@@ -2461,7 +2243,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
 
                                       {/* LEVEL 3: MICRO GOALS CONTAINER */}
                                       {!isSubCollapsed && childMicroGoals.length > 0 && (
-                                        <div className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1.5 sm:space-y-2 pt-1 min-w-0">
+                                        <div role="group" aria-label="Micro goals" className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1.5 sm:space-y-2 pt-1 min-w-0">
 
                                           {childMicroGoals.map((microGoal, microIndex) => {
                                             const microSeqBadge = hierarchySequenceById.get(microGoal.id) || `${subSeqBadge}.${microIndex + 1}`;
@@ -2472,6 +2254,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                             return (
                                               <div
                                                 key={microGoal.id}
+                                                role="treeitem"
+                                                aria-expanded={childNanoGoals.length > 0 ? !isMicroCollapsed : undefined}
+                                                aria-label={microGoal.title}
                                                 className="goal-tree-card goal-tree-card--micro rounded-lg border border-slate-200/80 bg-slate-50/50 p-1.5 sm:p-2 dark:border-slate-800 dark:bg-slate-800/30 space-y-1.5 sm:space-y-2 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                               >
                                                 {/* Micro Goal Header */}
@@ -2484,12 +2269,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                       <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
                                                         Micro Goal
                                                       </span>
-                                                      {microGoal.targetDate && (
+                                                      {microGoal.targetDate && (() => {
+                                                        const isPastMicro = microGoal.targetDate < todayDate && microGoal.progress < 100;
+                                                        return (
                                                         <>
                                                           <span className="text-slate-300 dark:text-slate-700 shrink-0">·</span>
-                                                          <span className="shrink-0 whitespace-nowrap text-[11px] sm:text-xs">Due {microGoal.targetDate}</span>
+                                                          <span className={`shrink-0 whitespace-nowrap text-[11px] sm:text-xs ${isPastMicro ? 'text-rose-500 font-bold' : ''}`}>{isPastMicro ? 'Overdue' : 'Due'} {microGoal.targetDate}</span>
                                                         </>
-                                                      )}
+                                                        );
+                                                      })()}
                                                     </div>
 
                                                     <div className="flex flex-wrap items-center justify-end gap-1 min-w-0 ml-auto">
@@ -2570,6 +2358,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                   <div className="pt-1 border-t border-slate-200 dark:border-slate-800">
                                                     <button
                                                       type="button"
+                                                      aria-expanded={!isMicroCollapsed}
                                                       onClick={() => toggleCollapse(microGoal.id)}
                                                       className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer py-0.5 shrink-0"
                                                     >
@@ -2578,7 +2367,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                     </button>
 
                                                     {!isMicroCollapsed && (
-                                                      <div className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 sm:space-y-1.5 pt-1 min-w-0">
+                                                      <div role="group" aria-label="Nano goals" className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 sm:space-y-1.5 pt-1 min-w-0">
                                                         {childNanoGoals.map((nanoGoal, nanoIndex) => {
                                                           const nanoSeqBadge = hierarchySequenceById.get(nanoGoal.id) || `${microSeqBadge}.${nanoIndex + 1}`;
                                                           const childAtomicGoals = getAtomicGoalsOf(nanoGoal.id);
@@ -2588,6 +2377,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                           return (
                                                             <div
                                                               key={nanoGoal.id}
+                                                              role="treeitem"
+                                                              aria-expanded={childAtomicGoals.length > 0 ? !isNanoCollapsed : undefined}
+                                                              aria-label={nanoGoal.title}
                                                               className="goal-tree-card goal-tree-card--nano rounded-lg border border-slate-200/80 bg-slate-50/50 p-1 sm:p-1.5 dark:border-slate-800 dark:bg-slate-800/30 space-y-1 sm:space-y-1.5 transition-all min-w-0 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700"
                                                             >
                                                               {/* Nano Goal Header */}
@@ -2600,12 +2392,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                     <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0 whitespace-nowrap">
                                                                       Nano Goal
                                                                     </span>
-                                                                    {nanoGoal.targetDate && (
+                                                                    {nanoGoal.targetDate && (() => {
+                                                                      const isPastNano = nanoGoal.targetDate < todayDate && nanoGoal.progress < 100;
+                                                                      return (
                                                                       <>
                                                                         <span className="text-slate-300 dark:text-slate-700 shrink-0">·</span>
-                                                                        <span className="shrink-0 whitespace-nowrap text-[11px] sm:text-xs">Due {nanoGoal.targetDate}</span>
+                                                                        <span className={`shrink-0 whitespace-nowrap text-[11px] sm:text-xs ${isPastNano ? 'text-rose-500 font-bold' : ''}`}>{isPastNano ? 'Overdue' : 'Due'} {nanoGoal.targetDate}</span>
                                                                       </>
-                                                                    )}
+                                                                      );
+                                                                    })()}
                                                                   </div>
 
                                                                   <div className="flex flex-wrap items-center justify-end gap-1 min-w-0 ml-auto">
@@ -2686,6 +2481,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                 <div className="pt-1 border-t border-slate-200 dark:border-slate-800">
                                                                   <button
                                                                     type="button"
+                                                                    aria-expanded={!isNanoCollapsed}
                                                                     onClick={() => toggleCollapse(nanoGoal.id)}
                                                                     className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer py-0.5 shrink-0"
                                                                   >
@@ -2694,7 +2490,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                   </button>
 
                                                                   {!isNanoCollapsed && (
-                                                                    <div className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 pt-1 min-w-0">
+                                                                    <div role="group" aria-label="Atomic goals" className="ml-0 pl-1 sm:ml-0 sm:pl-1 border-l sm:border-l-2 border-slate-200 dark:border-slate-800 space-y-1 pt-1 min-w-0">
                                                                       {childAtomicGoals.map((atomicGoal, atomicIndex) => {
                                                                         const atomicSeqBadge = hierarchySequenceById.get(atomicGoal.id) || `${nanoSeqBadge}.${atomicIndex + 1}`;
                                                                         const atomicBreakdown = getGoalBreakdown(atomicGoal.id);
@@ -2702,6 +2498,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                                                         return (
                                                                           <div
                                                                             key={atomicGoal.id}
+                                                                            role="treeitem"
+                                                                            aria-label={atomicGoal.title}
                                                                             className="goal-tree-card goal-tree-card--atomic group flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 rounded-md border border-slate-200/80 bg-slate-50/50 p-1 sm:p-1.5 text-xs dark:border-slate-800 dark:bg-slate-800/30 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all min-w-0"
                                                                           >
                                                                             <div className="flex items-start sm:items-center gap-2 min-w-0 w-full sm:flex-1">
@@ -2840,20 +2638,20 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                           </div>
                         );
                       })}
-                    </>
+                    </div>
                   ) : (
                     /* FLAT LIST VIEW */
                     <>
-                    {flatHierarchyGoals.filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter).length === 0 && (
+                    {filterGoals(flatHierarchyGoals.filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter)).length === 0 && (
                       <EmptyState
                         icon={ListTree}
                         compact
-                        title="No goals at this level yet"
-                        hint="Pick another level or create one from the form above."
+                        title="No goals match this filter"
+                        hint="Try a different search, level, or status filter."
                       />
                     )}
-                    {flatHierarchyGoals
-                      .filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter)
+                    {filterGoals(flatHierarchyGoals
+                      .filter(g => levelFilter === 'all' || String(getGoalLevel(g)) === levelFilter))
                       .map(g => {
                         const lvl = getGoalLevel(g);
                         const flatSeqBadge = hierarchySequenceById.get(g.id) || '';
@@ -2863,11 +2661,34 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                           <div
                             key={g.id}
                             data-record-id={g.id}
-                            className="rounded-2xl border border-slate-200/80 bg-white p-4.5 shadow-xs transition-all hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 space-y-3"
+                            draggable
+                            onDragStart={e => handleDragStart(e, g.id)}
+                            onDragOver={e => handleDragOver(e, g.id)}
+                            onDrop={e => handleDrop(e, g.id)}
+                            onDragEnd={handleDragEnd}
+                            className={`rounded-2xl border bg-white p-4.5 shadow-xs transition-all hover:border-slate-300 dark:bg-slate-900 dark:hover:border-slate-700 space-y-3 ${
+                              dragOverId === g.id ? 'border-indigo-400 ring-1 ring-indigo-300 dark:border-indigo-500 dark:ring-indigo-600' : 'border-slate-200/80 dark:border-slate-800'
+                            }`}
                           >
                             <div className="space-y-1.5">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                  {bulkMode && (
+                                    <button
+                                      type="button"
+                                      role="checkbox"
+                                      aria-checked={selectedGoalIds.has(g.id)}
+                                      onClick={() => toggleBulkSelect(g.id)}
+                                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px] font-bold transition-all cursor-pointer ${
+                                        selectedGoalIds.has(g.id)
+                                          ? 'border-indigo-600 bg-indigo-600 text-white'
+                                          : 'border-slate-300 bg-white text-transparent hover:border-indigo-500 dark:border-slate-600 dark:bg-slate-800'
+                                      }`}
+                                    >
+                                      ✓
+                                    </button>
+                                  )}
+                                  <GripVertical className="h-3 w-3 shrink-0 text-slate-300 cursor-grab dark:text-slate-600" aria-hidden="true" />
                                   <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0">
                                     {flatSeqBadge}
                                   </span>
@@ -2888,12 +2709,15 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                                   <span className="font-medium text-slate-700 dark:text-slate-300">
                                     {g.category || 'General'}
                                   </span>
-                                  {g.targetDate && (
+                                  {g.targetDate && (() => {
+                                    const isPastFlat = g.targetDate < todayDate && g.progress < 100;
+                                    return (
                                     <>
                                       <span className="text-slate-300 dark:text-slate-700">·</span>
-                                      <span>Target {g.targetDate}</span>
+                                      <span className={isPastFlat ? 'text-rose-500 font-bold' : ''}>{isPastFlat ? 'Overdue' : 'Target'} {g.targetDate}</span>
                                     </>
-                                  )}
+                                    );
+                                  })()}
                                 </div>
 
                                 <ProgressiveActions label={`More actions for ${g.title}`} className="shrink-0 ml-auto">
@@ -3014,7 +2838,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                 </label>
                 <select
                   value={stratStatus}
-                  onChange={e => setStratStatus(e.target.value as any)}
+                  onChange={e => setStratStatus(e.target.value as 'active' | 'in-progress' | 'executed')}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 >
                   <option value="active">Active Execution</option>
@@ -3033,22 +2857,14 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          {strategies.length > 0 && <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          {strategies.length > 0 && (
+          <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
               <span>Operational Strategies ({strategies.length})</span>
-              <span className="text-[10px] text-slate-400 font-normal">Click status pill to cycle</span>
             </h2>
 
             <div className="mt-4 space-y-3">
-              {strategies.length === 0 ? (
-                <EmptyState
-                  icon={Layers}
-                  compact
-                  title="No strategies yet"
-                  hint="Connect a tactic to your strategic goals to map execution."
-                />
-              ) : (
-                [...strategies].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(s => (
+              {[...strategies].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(s => (
                   <div key={s.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 group transition-all hover:border-slate-200 dark:hover:border-slate-700 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
@@ -3058,16 +2874,22 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setEditingRecord({ type: 'strategy', item: s })}
-                          className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
+                          className="sm:opacity-0 sm:group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
                           title="Edit strategy"
                           aria-label={`Edit strategy ${s.title}`}
                         >
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStrategyStatus(s)}
-                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold capitalize cursor-pointer transition-colors ${
+                        <select
+                          value={s.status}
+                          onChange={async e => {
+                            const nextStatus = e.target.value;
+                            await storage.put('strategies', { ...s, status: nextStatus, updatedAt: Date.now() });
+                            onSuccess(`Strategy status: ${nextStatus}`);
+                            onRefresh();
+                          }}
+                          aria-label={`Status for ${s.title}`}
+                          className={`h-6 rounded-full px-2 text-[10px] font-bold cursor-pointer border-none outline-none ${
                             s.status === 'executed'
                               ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
                               : s.status === 'in-progress'
@@ -3075,12 +2897,14 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                               : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
                           }`}
                         >
-                          {s.status}
-                        </button>
+                          <option value="active">Active</option>
+                          <option value="in-progress">In Progress</option>
+                          <option value="executed">Executed</option>
+                        </select>
                         <button
                           type="button"
                           onClick={() => setDeleteTarget({ store: 'strategies', id: s.id, name: s.title })}
-                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
+                          className="sm:opacity-0 sm:group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
                           title="Delete strategy"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -3105,10 +2929,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       </form>
                     </div>
                   </div>
-                ))
-              )}
+                ))}
             </div>
-          </div>}
+          </div>
+          )}
         </div>
       )}
 
@@ -3178,11 +3002,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               Milestones Overview ({milestones.length})
             </h2>
             <div className="mt-4 space-y-2.5">
-              {milestones.length === 0 ? (
-                <EmptyState icon={Layers} compact title="No milestones yet" hint="Milestones break a goal into phased, progress-tracking steps." />
-              ) : (
-                [...milestones].sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
-                  <div key={m.id} className="rounded-2xl border border-slate-100 p-3.5 text-xs dark:border-slate-800 flex justify-between items-center gap-3 group">
+              {[...milestones].sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(m => {
+                  const msOverdue = m.dueDate && m.dueDate < todayDate && (m.progress || 0) < 100 && m.status !== 'completed';
+                  return (
+                  <div key={m.id} className={`rounded-2xl border p-3.5 text-xs group space-y-2 ${msOverdue ? 'border-rose-200 bg-rose-50/30 dark:border-rose-900/60 dark:bg-rose-950/20' : 'border-slate-100 dark:border-slate-800'}`}>
+                    <div className="flex justify-between items-center gap-3">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <button
                         type="button"
@@ -3198,11 +3022,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <div className="min-w-0 flex-1">
                         <div className={`w-full font-bold text-slate-900 dark:text-white leading-snug ${m.status === 'completed' ? 'line-through text-slate-400' : ''}`}>
                           {m.title}
+                          {msOverdue && <span className="ml-1.5 text-[10px] font-bold text-rose-500">OVERDUE</span>}
                         </div>
                         <div className="text-[10px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
                           <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{getGoalTitleById(m.goalId)}</span>
                           <span>·</span>
-                          <span>Due: {m.dueDate || 'Ongoing'}</span>
+                          <span className={msOverdue ? 'text-rose-500 font-semibold' : ''}>Due: {m.dueDate || 'Ongoing'}</span>
                         </div>
                       </div>
                     </div>
@@ -3211,14 +3036,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <span className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-bold ${
                         m.status === 'completed'
                           ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400'
+                          : msOverdue
+                          ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
                           : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400'
                       }`}>
-                        {m.status}
+                        {m.progress || 0}%
                       </span>
                       <button
                         type="button"
                         onClick={() => setEditingRecord({ type: 'milestone', item: m })}
-                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
+                        className="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
                         title="Edit milestone"
                         aria-label={`Edit milestone ${m.title}`}
                       >
@@ -3227,15 +3054,40 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setDeleteTarget({ store: 'milestones', id: m.id, name: m.title })}
-                        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
+                        className="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
                         title="Delete milestone"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                    </div>
+                    {/* Milestone progress bar */}
+                    {m.status !== 'completed' && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 flex-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${msOverdue ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ width: `${Math.max(0, Math.min(100, m.progress || 0))}%` }} />
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={m.progress || 0}
+                          onChange={async e => {
+                            const val = Number(e.target.value);
+                            const updated = { ...m, progress: val, status: val >= 100 ? 'completed' : 'pending', updatedAt: Date.now() };
+                            await storage.put('milestones', updated);
+                            if (m.goalId) await syncGoalProgressFromMilestones(m.goalId, m.id, val, updated.status);
+                            onRefresh();
+                          }}
+                          className="h-1.5 w-20 cursor-pointer accent-indigo-600"
+                          title={`Progress: ${m.progress || 0}%`}
+                        />
+                      </div>
+                    )}
                   </div>
-                ))
-              )}
+                  );
+                })}
             </div>
           </div>}
         </div>
@@ -3333,23 +3185,23 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </h2>
             <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">KPIs show measured performance and history; their readings do not change weighted Goal completion.</p>
             <div className="mt-4 space-y-3">
-              {kpis.length === 0 ? (
-                <EmptyState icon={Target} compact title="No KPIs yet" hint="Register measurable KPIs to track goal success." />
-              ) : (
-                [...kpis].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(k => {
+              {[...kpis].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(k => {
                   const target = Number(k.target) || 1;
                   const current = Number(k.current) || 0;
                   const pct = Math.min(100, (current / target) * 100);
                   return (
                     <div key={k.id} className="w-full rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 group">
                       <div className="flex justify-between items-start gap-2">
-                        <div className="w-full flex-1 font-bold text-slate-900 dark:text-white text-sm leading-snug">
+                        <div className="w-full flex-1 flex items-center gap-2 font-bold text-slate-900 dark:text-white text-sm leading-snug">
+                          <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                            pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                          }`} title={pct >= 75 ? 'On track' : pct >= 50 ? 'At risk' : 'Off track'} />
                           {k.name}
                         </div>
                         <button
                           type="button"
                           onClick={() => setEditingRecord({ type: 'kpi', item: k })}
-                          className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
+                          className="shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
                           title="Edit KPI"
                           aria-label={`Edit KPI ${k.name}`}
                         >
@@ -3358,7 +3210,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setDeleteTarget({ store: 'kpis', id: k.id, name: k.name })}
-                          className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 p-1"
+                          className="shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 text-slate-300 hover:text-rose-500 p-1"
                           title="Delete KPI"
                           aria-label={`Delete KPI ${k.name}`}
                         >
@@ -3374,26 +3226,85 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                           <span className="text-[11px] text-slate-400">/ {k.target} {k.unit}</span>
                         </div>
 
-                        {/* Quick adjustments */}
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleAdjustKPI(k, -1)}
-                            className="h-5 w-5 rounded bg-slate-100 text-[10px] font-bold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
-                          >
-                            -
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAdjustKPI(k, 1)}
-                            className="h-5 w-5 rounded bg-slate-100 text-[10px] font-bold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
-                          >
-                            +
-                          </button>
-                        </div>
+                        {/* Quick adjustments with smart step */}
+                        {(() => {
+                          const step = target >= 1000 ? 100 : target >= 100 ? 10 : 1;
+                          return (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleAdjustKPI(k, -step)}
+                                className="h-6 min-w-[1.5rem] rounded bg-slate-100 px-1 text-[10px] font-bold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                                title={`Decrease by ${step}`}
+                              >
+                                -{step}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAdjustKPI(k, step)}
+                                className="h-6 min-w-[1.5rem] rounded bg-slate-100 px-1 text-[10px] font-bold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                                title={`Increase by ${step}`}
+                              >
+                                +{step}
+                              </button>
+                              <input
+                                key={current}
+                                type="number"
+                                min="0"
+                                defaultValue={current}
+                                onBlur={e => {
+                                  const val = Number(e.target.value);
+                                  if (Number.isFinite(val) && val >= 0 && val !== current) {
+                                    handleAdjustKPI(k, val - current);
+                                  }
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                className="h-6 w-14 rounded border border-slate-200 bg-white px-1 text-center font-mono text-[10px] text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                                title="Type a value directly"
+                              />
+                            </div>
+                          );
+                        })()}
                       </div>
 
-                      <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">History: {(k.history?.length ? k.history : [{ value: Number(k.current) || 0, recordedAt: k.updatedAt || k.createdAt }]).slice(-5).map(reading => `${new Date(reading.recordedAt).toLocaleDateString()} - ${reading.value}`).join('  |  ') || 'No readings yet'}</div>
+                      {/* KPI Sparkline Chart */}
+                      {(() => {
+                        const readings = (k.history?.length ? k.history : [{ value: Number(k.current) || 0, recordedAt: k.updatedAt || k.createdAt }]).slice(-10);
+                        if (readings.length < 2) return <div className="mt-2 text-[10px] text-slate-400">No trend data yet</div>;
+                        const values = readings.map(r => r.value);
+                        const minV = Math.min(...values);
+                        const maxV = Math.max(...values);
+                        const range = maxV - minV || 1;
+                        const w = 120;
+                        const h = 30;
+                        const pad = 2;
+                        const points = values.map((v, i) => {
+                          const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
+                          const y = h - pad - ((v - minV) / range) * (h - 2 * pad);
+                          return `${x},${y}`;
+                        }).join(' ');
+                        const trend = values[values.length - 1] >= values[0];
+                        return (
+                          <div className="mt-2 flex items-end gap-3">
+                            <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0" aria-label={`KPI trend: ${values.join(', ')}`}>
+                              <polyline
+                                points={points}
+                                fill="none"
+                                stroke={trend ? '#22c55e' : '#f43f5e'}
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              {values.map((v, i) => {
+                                const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
+                                const y = h - pad - ((v - minV) / range) * (h - 2 * pad);
+                                return <circle key={i} cx={x} cy={y} r="1.5" fill={i === values.length - 1 ? (trend ? '#22c55e' : '#f43f5e') : '#94a3b8'} />;
+                              })}
+                            </svg>
+                            <span className="text-[10px] text-slate-400">{readings.length} readings</span>
+                          </div>
+                        );
+                      })()}
 
                       {/* Progress bar */}
                       <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -3404,8 +3315,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       </div>
                     </div>
                   );
-                })
-              )}
+                })}
             </div>
           </div>}
         </div>
@@ -3499,15 +3409,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             </FormDisclosure>
           </div>
 
-          {missions.length > 0 && <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          {missions.length > 0 && (
+          <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-3 dark:border-slate-800">
               Active Missions ({missions.length})
             </h2>
             <div className="mt-4 space-y-3">
-              {missions.length === 0 ? (
-                <EmptyState icon={Flame} compact title="No active missions" hint="Declare a mission to give this period a sharpened focus." />
-              ) : (
-                [...missions].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
+              {[...missions].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
                   <div key={m.id} className="rounded-2xl border border-slate-100 p-4 text-xs dark:border-slate-800 group">
                     <div className="flex justify-between items-start">
                       <div>
@@ -3523,7 +3431,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setEditingRecord({ type: 'mission', item: m })}
-                          className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
+                          className="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 text-slate-400 hover:text-indigo-600 transition-all p-1"
                           title="Edit mission"
                           aria-label={`Edit mission ${m.title}`}
                         >
@@ -3532,7 +3440,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setDeleteTarget({ store: 'missions', id: m.id, name: m.title })}
-                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 p-1"
+                          className="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 text-slate-300 hover:text-rose-500 p-1"
                           title="Delete mission"
                           aria-label={`Delete mission ${m.title}`}
                         >
@@ -3551,10 +3459,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                       </div>
                     )}
                   </div>
-                ))
-              )}
+                ))}
             </div>
-          </div>}
+          </div>
+          )}
         </div>
       )}
 
@@ -3588,18 +3496,45 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
             aria-labelledby="edit-goal-title"
             onClick={event => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Edit2 className="h-4 w-4 text-indigo-600" />
-                <span id="edit-goal-title">Edit Goal Details</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setEditingGoal(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X className="h-4 w-4" />
-              </button>
+            <div className="space-y-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Edit2 className="h-4 w-4 text-indigo-600" />
+                  <span id="edit-goal-title">Edit Goal Details</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setEditingGoal(null)}
+                  aria-label="Close edit goal form"
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {/* Breadcrumb navigation */}
+              {(() => {
+                const chain: Goal[] = [];
+                let current = editingGoal;
+                while (current?.parentId) {
+                  const parent = goalsById.get(current.parentId);
+                  if (!parent || chain.some(g => g.id === parent.id)) break;
+                  chain.unshift(parent);
+                  current = parent;
+                }
+                if (chain.length === 0) return null;
+                return (
+                  <nav className="flex flex-wrap items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400" aria-label="Goal breadcrumb">
+                    {chain.map((g, i) => (
+                      <React.Fragment key={g.id}>
+                        {i > 0 && <span className="text-slate-300 dark:text-slate-600">/</span>}
+                        <button type="button" onClick={() => setEditingGoal(g)} className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate max-w-[120px]">{g.title}</button>
+                      </React.Fragment>
+                    ))}
+                    <span className="text-slate-300 dark:text-slate-600">/</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{editingGoal.title}</span>
+                  </nav>
+                );
+              })()}
             </div>
 
             <form onSubmit={handleSaveEditedGoal} className="space-y-3.5">
@@ -3770,7 +3705,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       {editingRecord && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          onMouseDown={event => {
+          onClick={event => {
             if (event.target === event.currentTarget) setEditingRecord(null);
           }}
         >
@@ -4047,6 +3982,26 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               </div>
             </form>
           </section>
+        </div>
+      )}
+
+      {/* Undo Delete Toast Stack */}
+      {undoStack.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2" role="status" aria-live="polite">
+          {undoStack.map((entry, idx) => (
+            <div key={idx} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Deleted &ldquo;{entry.label}&rdquo;
+              </span>
+              <button
+                type="button"
+                onClick={() => handleUndoDelete(idx)}
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-950/70 cursor-pointer"
+              >
+                <Undo2 className="h-3 w-3" /> Undo
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

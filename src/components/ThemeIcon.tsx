@@ -1,5 +1,6 @@
 import {
   AlarmClock,
+  BatteryLow,
   Bell,
   BookOpen,
   Brain,
@@ -7,12 +8,14 @@ import {
   CalendarDays,
   CheckCircle2,
   Circle,
+  CloudRain,
   CreditCard,
   Droplets,
   FileText,
   FlaskConical,
   GitBranch,
   Hand,
+  Heart,
   Link2,
   ListChecks,
   Mic,
@@ -27,6 +30,7 @@ import {
   Smile,
   Sparkles,
   Star,
+  Sun,
   Target,
   TrendingUp,
   TriangleAlert,
@@ -74,7 +78,11 @@ const icons = {
   wallet: Wallet,
   star: Star,
   repeat: Repeat2,
-  zap: Zap
+  zap: Zap,
+  heart: Heart,
+  batteryLow: BatteryLow,
+  cloudRain: CloudRain,
+  sun: Sun
 } satisfies Record<string, LucideIcon>;
 
 export type ThemeIconName = keyof typeof icons;

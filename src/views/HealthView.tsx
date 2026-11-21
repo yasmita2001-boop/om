@@ -1,15 +1,16 @@
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
   Heart, Activity, Droplet, Calendar, Trash2, Compass, Briefcase,
-  Stethoscope, FileText, Edit3, X, CheckCircle2, Circle
+  Stethoscope, FileText, Edit3, X, CheckCircle2, Circle, Loader2, Undo2
 } from 'lucide-react';
-import { GoalTierIcon, ThemeIcon } from '../components/ThemeIcon';
+import { ThemeIcon } from '../components/ThemeIcon';
 import {
   HealthProfile, HealthMeasurement, SleepRecord, WaterRecord,
   NutritionRecord, HealthAppointment, HealthNote, Goal, Person,
   Interaction, ReminderItem, SpiritualPractice, NavModule,
   LearningItem, Skill, Task
+  , MedicationRecord, CycleRecord
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
@@ -22,6 +23,7 @@ import { SpiritualView } from './SpiritualView';
 import { WorkView } from './WorkView';
 import { HeaderDropdown } from '../components/HeaderDropdown';
 import { CardCloseButton } from '../components/CardCloseButton';
+import { ShowMoreBar } from '../components/ShowMoreBar';
 
 interface HealthViewProps {
   initialTab?: HealthTab;
@@ -43,6 +45,7 @@ interface HealthViewProps {
   onNavigate: (module: NavModule) => void;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
+  onError?: (msg: string) => void;
 }
 
 type HealthTab =
@@ -52,8 +55,7 @@ type HealthTab =
   | 'profile'
   | 'people'
   | 'foundation-practices'
-  | 'work-learning'
-  | 'work-skills';
+  | 'work';
 
 export type { HealthTab };
 
@@ -67,6 +69,79 @@ interface EditTarget {
   store: 'healthMeasurements' | 'sleepRecords' | 'waterRecords' | 'nutritionRecords' | 'healthAppointments' | 'healthNotes';
   item: any;
 }
+
+/* ---------- Sparkline mini-chart ---------- */
+const Sparkline = ({ data, color, id }: { data: number[]; color: string; id: string }) => {
+  if (data.length < 2) return null;
+  const w = 120, h = 40, pad = 4;
+  const mn = Math.min(...data), mx = Math.max(...data), rng = mx - mn || 1;
+  const pts = data.map((v, i) => ({
+    x: pad + (i / (data.length - 1)) * (w - 2 * pad),
+    y: h - pad - ((v - mn) / rng) * (h - 2 * pad),
+  }));
+  const polyline = pts.map(p => `${p.x},${p.y}`).join(' ');
+  const area = `${pts[0].x},${h - pad} ${polyline} ${pts[pts.length - 1].x},${h - pad}`;
+  const last = pts[pts.length - 1];
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
+      <defs>
+        <linearGradient id={`spk-${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      <polygon points={area} fill={`url(#spk-${id})`} />
+      <polyline points={polyline} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last.x} cy={last.y} r="2" fill={color} />
+    </svg>
+  );
+};
+
+/* ---------- Water progress ring ---------- */
+const WaterRing = ({ current, goal }: { current: number; goal: number }) => {
+  const pct = Math.min(100, goal > 0 ? Math.round((current / goal) * 100) : 0);
+  const r = 22, cx = 26, cy = 26, c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+  return (
+    <div className="flex items-center gap-3">
+      <svg width="52" height="52" viewBox="0 0 52 52" className="shrink-0 -rotate-90">
+        <circle cx={cx} cy={cy} r={r} fill="none" className="stroke-slate-100 dark:stroke-slate-800" strokeWidth="4" />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#0ea5e9" strokeWidth="4"
+          strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
+          className="transition-all duration-500" />
+      </svg>
+      <div className="min-w-0">
+        <div className="text-sm font-bold tabular-nums text-slate-900 dark:text-white">{current} <span className="text-slate-400 font-medium">/ {goal} ml</span></div>
+        <div className="text-[11px] text-slate-400 font-medium">{pct}% of daily goal</div>
+      </div>
+    </div>
+  );
+};
+
+/* ---------- Date range filter pills ---------- */
+type DateRangeKey = 'week' | 'month' | '3months' | 'all';
+const dateRangeLabels: Record<DateRangeKey, string> = { week: '7 Days', month: '30 Days', '3months': '90 Days', all: 'All' };
+const DateRangePills = ({ value, onChange }: { value: DateRangeKey; onChange: (v: DateRangeKey) => void }) => (
+  <div className="flex items-center gap-1">
+    {(Object.keys(dateRangeLabels) as DateRangeKey[]).map(k => (
+      <button key={k} type="button" onClick={() => onChange(k)}
+        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+          value === k ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+        }`}>
+        {dateRangeLabels[k]}
+      </button>
+    ))}
+  </div>
+);
+
+const getDateCutoff = (range: DateRangeKey): string | null => {
+  if (range === 'all') return null;
+  const d = new Date();
+  if (range === 'week') d.setDate(d.getDate() - 7);
+  else if (range === 'month') d.setMonth(d.getMonth() - 1);
+  else d.setMonth(d.getMonth() - 3);
+  return getLocalDateString(d);
+};
 
 export const HealthView: React.FC<HealthViewProps> = ({
   initialTab,
@@ -87,8 +162,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
   tasks,
   onNavigate,
   onRefresh,
-  onSuccess
+  onSuccess,
+  onError
 }) => {
+  const reportError = onError || ((msg: string) => console.error('[HealthView]', msg));
   const today = getLocalDateString();
   const [activeTab, setActiveTab] = useState<HealthTab>(initialTab ?? 'movement');
   useEffect(() => {
@@ -116,16 +193,84 @@ export const HealthView: React.FC<HealthViewProps> = ({
   const [weight, setWeight] = useState<number | ''>(profile?.weight && profile.weight > 0 ? profile.weight : '');
   const [targetWeight, setTargetWeight] = useState<number | ''>(profile?.targetWeight && profile.targetWeight > 0 ? profile.targetWeight : '');
 
+  // Blood group for profile
+  const [bloodGroup, setBloodGroup] = useState(profile?.bloodGroup || '');
+
+  // Water goal for profile
+  const [waterGoal, setWaterGoal] = useState<number | ''>(profile?.waterGoal && profile.waterGoal > 0 ? profile.waterGoal : '');
+
+  // Loading state
+  const [loading, setLoading] = useState(true);
+
+  // Show-more counts
+  const [visibleWellnessCount, setVisibleWellnessCount] = useState(20);
+  const [visibleMovementCount, setVisibleMovementCount] = useState(20);
+
+  // Date range filters
+  const [movementDateRange, setMovementDateRange] = useState<DateRangeKey>('all');
+  const [wellnessDateRange, setWellnessDateRange] = useState<DateRangeKey>('all');
+
+  // Undo stack
+  const [undoStack, setUndoStack] = useState<Array<{ item: any; storeName: string; label: string; timer: ReturnType<typeof setTimeout> }>>([]);
+
   // Daily log forms
   const [weightLog, setWeightLog] = useState('');
   const [stepsLog, setStepsLog] = useState('');
   const [exerciseLog, setExerciseLog] = useState('');
+  const [exerciseCategory, setExerciseCategory] = useState('Other');
   const [durationLog, setDurationLog] = useState('');
+  const [bpSystolic, setBpSystolic] = useState('');
+  const [bpDiastolic, setBpDiastolic] = useState('');
+  const [heartRateLog, setHeartRateLog] = useState('');
 
   const [sleepHours, setSleepHours] = useState('');
+  const [sleepQuality, setSleepQuality] = useState('');
+  const [sleepBedtime, setSleepBedtime] = useState('');
+  const [sleepWakeTime, setSleepWakeTime] = useState('');
   const [waterMl, setWaterMl] = useState('');
   const [calories, setCalories] = useState('');
+  const [proteinGrams, setProteinGrams] = useState('');
+  const [carbsGrams, setCarbsGrams] = useState('');
+  const [fatGrams, setFatGrams] = useState('');
   const [nutritionNote, setNutritionNote] = useState('');
+  const [medications, setMedications] = useState<MedicationRecord[]>([]);
+  const [medicationName, setMedicationName] = useState('');
+  const [medicationDose, setMedicationDose] = useState('');
+  const [medicationSchedule, setMedicationSchedule] = useState('');
+  const [cycleRecords, setCycleRecords] = useState<CycleRecord[]>([]);
+  const [cycleDate, setCycleDate] = useState(today);
+  const [cycleFlow, setCycleFlow] = useState<CycleRecord['flow']>('medium');
+  const [cycleSymptoms, setCycleSymptoms] = useState('');
+  useEffect(() => {
+    let active = true;
+    void storage.getAll<MedicationRecord>('medications').then(items => { if (active) setMedications(items); }).catch(error => console.warn('Could not load medication records', error));
+    void storage.getAll<CycleRecord>('cycleRecords').then(items => { if (active) setCycleRecords(items.sort((a, b) => b.date.localeCompare(a.date))); }).catch(error => console.warn('Could not load cycle records', error));
+    return () => { active = false; };
+  }, []);
+
+  const saveMedication = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!medicationName.trim()) return;
+    const now = Date.now();
+    const item: MedicationRecord = { id: generateUUID(), name: medicationName.trim(), dose: medicationDose.trim() || undefined, schedule: medicationSchedule.trim() || undefined, startDate: today, createdAt: now, updatedAt: now };
+    try {
+      await storage.put('medications', item);
+      setMedications(current => [item, ...current]);
+      setMedicationName(''); setMedicationDose(''); setMedicationSchedule('');
+      onSuccess('Medication saved');
+    } catch (e) { console.error('[om] Save failed', e); onSuccess('⚠ Could not save medication. Try again.'); }
+  };
+
+  const saveCycleRecord = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const item: CycleRecord = { id: generateUUID(), date: cycleDate, flow: cycleFlow, symptoms: cycleSymptoms.trim() || undefined, createdAt: Date.now() };
+    try {
+      await storage.put('cycleRecords', item);
+      setCycleRecords(current => [item, ...current].sort((a, b) => b.date.localeCompare(a.date)));
+      setCycleSymptoms('');
+      onSuccess('Cycle entry saved');
+    } catch (e) { console.error('[om] Save failed', e); onSuccess('⚠ Could not save cycle entry. Try again.'); }
+  };
 
   // Appointment & note form
   const [apptTitle, setApptTitle] = useState('');
@@ -136,6 +281,22 @@ export const HealthView: React.FC<HealthViewProps> = ({
   // Edit & Delete modal states
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const editDialogRef = useRef<HTMLDivElement>(null);
+  const editDialogTitleId = useId();
+
+  // Mark loading false once data arrives or after a short timeout
+  useEffect(() => {
+    if (measurements.length > 0 || sleepRecords.length > 0 || waterRecords.length > 0 || nutritionRecords.length > 0 || appointments.length > 0 || !loading) {
+      setLoading(false);
+    }
+    const t = setTimeout(() => setLoading(false), 600);
+    return () => clearTimeout(t);
+  }, [measurements, sleepRecords, waterRecords, nutritionRecords, appointments]);
+
+  // Cleanup undo timers on unmount
+  useEffect(() => {
+    return () => { undoStack.forEach(entry => clearTimeout(entry.timer)); };
+  }, []);
 
   // Edit form state
   const [editTitle, setEditTitle] = useState('');
@@ -161,10 +322,45 @@ export const HealthView: React.FC<HealthViewProps> = ({
   const heightValue = typeof height === 'number' ? height : 0;
   const weightValue = typeof weight === 'number' ? weight : 0;
   const hasSavedBmi = hasSavedHeight && hasSavedWeight;
-  const bmi = hasSavedBmi ? (weightValue / ((heightValue / 100) ** 2)).toFixed(1) : 'Not set';
+  const bmi = hasSavedBmi
+    ? (heightValue > 0 ? (weightValue / ((heightValue / 100) ** 2)).toFixed(1) : 'N/A')
+    : 'Not set';
   const bmr = hasSavedBmi && age !== null && age >= 0
     ? Math.round(10 * weightValue + 6.25 * heightValue - 5 * age + (sex === 'female' ? -161 : 5))
     : null;
+
+  // Focus trap for edit modal
+  useEffect(() => {
+    if (!editTarget) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    editDialogRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setEditTarget(null); return; }
+      if (event.key === 'Tab') {
+        const focusable = editDialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => { document.removeEventListener('keydown', handleKeyDown); previousFocus?.focus(); };
+  }, [editTarget]);
+
+  const handleUndoDelete = (index: number) => {
+    const entry = undoStack[index];
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    storage.put(entry.storeName as any, entry.item).then(() => {
+      setUndoStack(prev => prev.filter((_, i) => i !== index));
+      onSuccess(`Restored "${entry.label}"`);
+      onRefresh();
+    });
+  };
 
   const handleOpenEdit = (store: EditTarget['store'], item: any) => {
     setEditTarget({ store, item });
@@ -199,81 +395,83 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
     const { store, item } = editTarget;
     const now = Date.now();
-    if (store === 'healthMeasurements') {
-      const updated: HealthMeasurement = {
-        ...item,
-        date: editDate || today,
-        exercise: editTitle.trim() || undefined,
-        steps: editVal1 ? Number(editVal1) : undefined,
-        duration: editVal2 ? Number(editVal2) : undefined,
-        weight: editSubtitle ? Number(editSubtitle) : undefined,
-        updatedAt: now
-      };
-      await storage.put('healthMeasurements', updated);
-      onSuccess('✓ Measurement record updated');
-    } else if (store === 'sleepRecords') {
-      const updated: SleepRecord = {
-        ...item,
-        date: editDate || today,
-        hours: Number(editVal1) || 0,
-        updatedAt: now
-      };
-      await storage.put('sleepRecords', updated);
-      onSuccess('✓ Sleep log updated');
-    } else if (store === 'waterRecords') {
-      const updated: WaterRecord = {
-        ...item,
-        date: editDate || today,
-        amount: Number(editVal1) || 0,
-        updatedAt: now
-      };
-      await storage.put('waterRecords', updated);
-      onSuccess('✓ Hydration log updated');
-    } else if (store === 'nutritionRecords') {
-      const updated: NutritionRecord = {
-        ...item,
-        date: editDate || today,
-        calories: editVal1 ? Number(editVal1) : undefined,
-        note: editNote.trim() || undefined,
-        updatedAt: now
-      };
-      await storage.put('nutritionRecords', updated);
-      onSuccess('✓ Nutrition log updated');
-    } else if (store === 'healthAppointments') {
-      const updated: HealthAppointment = {
-        ...item,
-        title: editTitle.trim(),
-        doctor: editSubtitle.trim() || undefined,
-        date: editDate || today,
-        goalId: editGoalId || null,
-        updatedAt: now
-      };
-      await storage.put('healthAppointments', updated);
-      onSuccess('✓ Appointment updated');
-    } else if (store === 'healthNotes') {
-      const updated: HealthNote = {
-        ...item,
-        date: editDate || today,
-        text: editNote.trim(),
-        goalId: editGoalId || null,
-        updatedAt: now
-      };
-      await storage.put('healthNotes', updated);
-      onSuccess('✓ Health note updated');
-    }
-
-    if (store === 'healthAppointments' || store === 'healthNotes') {
-      const targetGoalId = editGoalId || null;
-      if (targetGoalId) {
-        await syncGoalProgressFromHealth(targetGoalId);
+    try {
+      if (store === 'healthMeasurements') {
+        const updated: HealthMeasurement = {
+          ...item,
+          date: editDate || today,
+          exercise: editTitle.trim() || undefined,
+          steps: editVal1 ? Number(editVal1) : undefined,
+          duration: editVal2 ? Number(editVal2) : undefined,
+          weight: editSubtitle ? Number(editSubtitle) : undefined,
+          updatedAt: now
+        };
+        await storage.put('healthMeasurements', updated);
+        onSuccess('✓ Measurement record updated');
+      } else if (store === 'sleepRecords') {
+        const updated: SleepRecord = {
+          ...item,
+          date: editDate || today,
+          hours: Number(editVal1) || 0,
+          updatedAt: now
+        };
+        await storage.put('sleepRecords', updated);
+        onSuccess('✓ Sleep log updated');
+      } else if (store === 'waterRecords') {
+        const updated: WaterRecord = {
+          ...item,
+          date: editDate || today,
+          amount: Number(editVal1) || 0,
+          updatedAt: now
+        };
+        await storage.put('waterRecords', updated);
+        onSuccess('✓ Hydration log updated');
+      } else if (store === 'nutritionRecords') {
+        const updated: NutritionRecord = {
+          ...item,
+          date: editDate || today,
+          calories: editVal1 ? Number(editVal1) : undefined,
+          note: editNote.trim() || undefined,
+          updatedAt: now
+        };
+        await storage.put('nutritionRecords', updated);
+        onSuccess('✓ Nutrition log updated');
+      } else if (store === 'healthAppointments') {
+        const updated: HealthAppointment = {
+          ...item,
+          title: editTitle.trim(),
+          doctor: editSubtitle.trim() || undefined,
+          date: editDate || today,
+          goalId: editGoalId || null,
+          updatedAt: now
+        };
+        await storage.put('healthAppointments', updated);
+        onSuccess('✓ Appointment updated');
+      } else if (store === 'healthNotes') {
+        const updated: HealthNote = {
+          ...item,
+          date: editDate || today,
+          text: editNote.trim(),
+          goalId: editGoalId || null,
+          updatedAt: now
+        };
+        await storage.put('healthNotes', updated);
+        onSuccess('✓ Health note updated');
       }
-      if (item.goalId && item.goalId !== targetGoalId) {
-        await syncGoalProgressFromHealth(item.goalId);
-      }
-    }
 
-    setEditTarget(null);
-    onRefresh();
+      if (store === 'healthAppointments' || store === 'healthNotes') {
+        const targetGoalId = editGoalId || null;
+        if (targetGoalId) {
+          await syncGoalProgressFromHealth(targetGoalId);
+        }
+        if (item.goalId && item.goalId !== targetGoalId) {
+          await syncGoalProgressFromHealth(item.goalId);
+        }
+      }
+
+      setEditTarget(null);
+      onRefresh();
+    } catch (e) { console.error('[om] Save failed', e); onSuccess('⚠ Could not save. Please try again.'); }
   };
 
   const handleConfirmDelete = async () => {
@@ -287,11 +485,19 @@ export const HealthView: React.FC<HealthViewProps> = ({
       } else if (linkedGoalId && deleteTarget.store === 'healthAppointments') {
         await syncGoalProgressFromAppointments(linkedGoalId);
       }
+      // Push to undo stack
+      if (itemToDelete) {
+        const timer = setTimeout(() => {
+          setUndoStack(prev => prev.filter(e => e.item?.id !== deleteTarget.id));
+        }, 8000);
+        setUndoStack(prev => [...prev, { item: itemToDelete, storeName: deleteTarget.store, label: deleteTarget.name, timer }]);
+      }
       onSuccess(`✓ ${deleteTarget.name} deleted`);
       setDeleteTarget(null);
       onRefresh();
     } catch (err) {
       console.error('Delete error', err);
+      onSuccess('⚠ Could not delete. Please try again.');
     }
   };
 
@@ -312,26 +518,33 @@ export const HealthView: React.FC<HealthViewProps> = ({
       height: height === '' ? undefined : height,
       weight: weight === '' ? undefined : weight,
       targetWeight: targetWeight === '' ? undefined : targetWeight,
+      bloodGroup: bloodGroup || undefined,
+      waterGoal: waterGoal === '' ? undefined : waterGoal,
       goalId: profile?.goalId || null,
       updatedAt: Date.now()
     };
-    await storage.setSingleton('healthProfile', updated);
-    onSuccess('✓ Health profile updated');
-    onRefresh();
+    try {
+      await storage.setSingleton('healthProfile', updated);
+      onSuccess('✓ Health profile updated');
+      onRefresh();
+    } catch (e) { console.error('[om] Save failed', e); onSuccess('⚠ Could not save profile. Try again.'); }
   };
 
   const handleAddMeasurement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!weightLog && !stepsLog && !exerciseLog.trim() && !durationLog) return;
-    const measurements = [
+    if (!weightLog && !stepsLog && !exerciseLog.trim() && !durationLog && !bpSystolic && !heartRateLog) return;
+    const validations = [
       { value: weightLog, label: 'Weight', max: 500 },
       { value: stepsLog, label: 'Steps', max: 100000 },
-      { value: durationLog, label: 'Duration', max: 1440 }
+      { value: durationLog, label: 'Duration', max: 1440 },
+      { value: bpSystolic, label: 'Systolic BP', max: 300 },
+      { value: bpDiastolic, label: 'Diastolic BP', max: 200 },
+      { value: heartRateLog, label: 'Heart Rate', max: 300 }
     ];
-    const invalidMeasurement = measurements.find(({ value, max }) => value !== ''
+    const invalidMeasurement = validations.find(({ value, max }) => value !== ''
       && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > max));
     if (invalidMeasurement) {
-      onSuccess(`${invalidMeasurement.label} must be between 0 and ${invalidMeasurement.max}.`);
+      reportError(`${invalidMeasurement.label} must be between 0 and ${invalidMeasurement.max}.`);
       return;
     }
     const now = Date.now();
@@ -341,22 +554,32 @@ export const HealthView: React.FC<HealthViewProps> = ({
       weight: weightLog ? Number(weightLog) : undefined,
       steps: stepsLog ? Number(stepsLog) : undefined,
       exercise: exerciseLog.trim() || undefined,
+      exerciseCategory: exerciseLog.trim() ? exerciseCategory : undefined,
       duration: durationLog ? Number(durationLog) : undefined,
+      bloodPressureSystolic: bpSystolic ? Number(bpSystolic) : undefined,
+      bloodPressureDiastolic: bpDiastolic ? Number(bpDiastolic) : undefined,
+      heartRate: heartRateLog ? Number(heartRateLog) : undefined,
       createdAt: now
     };
-    await storage.put('healthMeasurements', m);
-    if (weightLog) {
-      setWeight(Number(weightLog));
-      const p = await storage.getSingleton<HealthProfile>('healthProfile') || {};
-      p.weight = Number(weightLog);
-      await storage.setSingleton('healthProfile', p);
-    }
-    onSuccess('✓ Physical measurement recorded');
-    setWeightLog('');
-    setStepsLog('');
-    setExerciseLog('');
-    setDurationLog('');
-    onRefresh();
+    try {
+      await storage.put('healthMeasurements', m);
+      if (weightLog) {
+        setWeight(Number(weightLog));
+        const p = await storage.getSingleton<HealthProfile>('healthProfile') || {};
+        p.weight = Number(weightLog);
+        await storage.setSingleton('healthProfile', p);
+      }
+      onSuccess(weightLog ? '✓ Measurement recorded (profile weight updated)' : '✓ Physical measurement recorded');
+      setWeightLog('');
+      setStepsLog('');
+      setExerciseLog('');
+      setExerciseCategory('Other');
+      setDurationLog('');
+      setBpSystolic('');
+      setBpDiastolic('');
+      setHeartRateLog('');
+      onRefresh();
+    } catch (e) { console.error('[om] Save failed', e); onSuccess('⚠ Could not save measurement. Try again.'); }
   };
 
   const handleAddWellness = async (e: React.FormEvent) => {
@@ -370,15 +593,19 @@ export const HealthView: React.FC<HealthViewProps> = ({
     const invalidWellness = wellnessValues.find(({ value, max }) => value !== ''
       && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > max));
     if (invalidWellness) {
-      onSuccess(`${invalidWellness.label} must be between 0 and ${invalidWellness.max}.`);
+      reportError(`${invalidWellness.label} must be between 0 and ${invalidWellness.max}.`);
       return;
     }
 
+    try {
     if (sleepHours) {
       const s: SleepRecord = {
         id: generateUUID(),
         date: today,
         hours: Number(sleepHours),
+        quality: sleepQuality || undefined,
+        bedtime: sleepBedtime || undefined,
+        wakeTime: sleepWakeTime || undefined,
         createdAt: now
       };
       await storage.put('sleepRecords', s);
@@ -394,21 +621,35 @@ export const HealthView: React.FC<HealthViewProps> = ({
       await storage.put('waterRecords', w);
     }
 
-    if (calories || nutritionNote) {
+    if (calories || nutritionNote || proteinGrams || carbsGrams || fatGrams) {
       const n: NutritionRecord = {
         id: generateUUID(),
         date: today,
         calories: calories ? Number(calories) : undefined,
+        proteinGrams: proteinGrams ? Number(proteinGrams) : undefined,
+        carbsGrams: carbsGrams ? Number(carbsGrams) : undefined,
+        fatGrams: fatGrams ? Number(fatGrams) : undefined,
         note: nutritionNote.trim() || undefined,
         createdAt: now
       };
       await storage.put('nutritionRecords', n);
     }
+    } catch (e) {
+      console.error('[om] handleAddWellness failed', e);
+      onSuccess('⚠ Could not save wellness data. Please try again.');
+      return;
+    }
 
     onSuccess('✓ Wellness telemetry saved');
     setSleepHours('');
+    setSleepQuality('');
+    setSleepBedtime('');
+    setSleepWakeTime('');
     setWaterMl('');
     setCalories('');
+    setProteinGrams('');
+    setCarbsGrams('');
+    setFatGrams('');
     setNutritionNote('');
     onRefresh();
   };
@@ -427,9 +668,15 @@ export const HealthView: React.FC<HealthViewProps> = ({
       goalId: apptGoalId || undefined,
       createdAt: Date.now()
     };
-    await storage.put('healthAppointments', appt);
-    if (appt.goalId) {
-      await syncGoalProgressFromAppointments(appt.goalId, appt.id, false, 'scheduled');
+    try {
+      await storage.put('healthAppointments', appt);
+      if (appt.goalId) {
+        await syncGoalProgressFromAppointments(appt.goalId, appt.id, false, 'scheduled');
+      }
+    } catch (e) {
+      console.error('[om] handleAddAppointment failed', e);
+      onSuccess('⚠ Could not save appointment. Please try again.');
+      return;
     }
     onSuccess('✓ Doctor appointment scheduled');
     setApptTitle('');
@@ -484,8 +731,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
     ...waterRecords.map(w => ({ type: 'Water', text: `${w.amount} ml`, date: w.date, id: w.id, store: 'waterRecords' as const, raw: w })),
     ...nutritionRecords.map(n => ({ type: 'Nutrition', text: `${n.calories ? `${n.calories} kcal` : ''} ${n.note || ''}`, date: n.date, id: n.id, store: 'nutritionRecords' as const, raw: n }))
   ]
-    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || ((b.raw as any)?.createdAt || 0) - ((a.raw as any)?.createdAt || 0))
-    .slice(0, 40);
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || ((b.raw as any)?.createdAt || 0) - ((a.raw as any)?.createdAt || 0));
 
   const biometricFieldCount = profile
     ? [
@@ -505,8 +751,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
     { id: 'profile', label: 'Biometrics', count: biometricFieldCount, icon: Heart },
     { id: 'people', label: 'People', count: people.length, icon: Heart },
     { id: 'foundation-practices', label: 'Daily Practices', count: practices.length, icon: Compass },
-    { id: 'work-learning', label: 'Learning Tracks', count: learningItems.length, icon: Briefcase },
-    { id: 'work-skills', label: 'Skill Trees', count: skills.length, icon: Briefcase }
+    { id: 'work', label: 'Work', count: learningItems.length + skills.length, icon: Briefcase }
   ];
   const selectedTab = healthTabOptions.find(tab => tab.id === activeTab);
   const selectedTabLabel = selectedTab?.label || 'Life';
@@ -521,9 +766,57 @@ export const HealthView: React.FC<HealthViewProps> = ({
           ? Heart
           : activeTab === 'foundation-practices'
             ? Compass
-          : activeTab === 'work-learning' || activeTab === 'work-skills'
+          : activeTab === 'work'
             ? Briefcase
             : Heart;
+
+  // --- Filtered & sorted lists ---
+  const movementCutoff = getDateCutoff(movementDateRange);
+  const sortedMeasurements = [...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+  const filteredMeasurements = movementCutoff ? sortedMeasurements.filter(m => m.date >= movementCutoff) : sortedMeasurements;
+
+  const wellnessCutoff = getDateCutoff(wellnessDateRange);
+  const filteredWellnessEntries = wellnessCutoff ? wellnessEntries.filter(e => e.date >= wellnessCutoff) : wellnessEntries;
+
+  // --- Today's water progress ---
+  const todayWaterTotal = waterRecords.filter(w => w.date === today).reduce((sum, w) => sum + (w.amount || 0), 0);
+  const effectiveWaterGoal = (typeof waterGoal === 'number' && waterGoal > 0) ? waterGoal : (profile?.waterGoal && profile.waterGoal > 0 ? profile.waterGoal : 2000);
+
+  // --- Sparkline trend data (chronological, last 30) ---
+  const weightTrend = sortedMeasurements.filter(m => m.weight).slice(0, 30).reverse().map(m => m.weight!);
+  const stepsTrend = sortedMeasurements.filter(m => m.steps).slice(0, 30).reverse().map(m => m.steps!);
+  const bpTrend = sortedMeasurements.filter(m => m.bloodPressureSystolic).slice(0, 30).reverse().map(m => m.bloodPressureSystolic!);
+  const sleepTrend = [...sleepRecords].sort((a, b) => (a.date || '').localeCompare(b.date || '')).slice(-30).map(s => s.hours);
+  const waterTrendByDay: Record<string, number> = {};
+  waterRecords.forEach(w => { waterTrendByDay[w.date] = (waterTrendByDay[w.date] || 0) + w.amount; });
+  const waterTrend = Object.entries(waterTrendByDay).sort(([a], [b]) => a.localeCompare(b)).slice(-30).map(([, v]) => v);
+
+  const exportHealthData = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      profile,
+      measurements,
+      sleepRecords,
+      waterRecords,
+      nutritionRecords,
+      appointments,
+      healthNotes
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `om-lifeos-health-${today}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="life-view space-y-4">
@@ -532,6 +825,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl flex items-center gap-2">
             <span>Life</span>
           </h1>
+          <div className="flex items-center gap-2">
+          <button type="button" onClick={exportHealthData} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" title="Export health records">
+            <FileText className="h-4 w-4" /> Export
+          </button>
           <HeaderDropdown
             label={selectedTabLabel}
             menuLabel="Life submenu"
@@ -560,10 +857,21 @@ export const HealthView: React.FC<HealthViewProps> = ({
               </button>
             ))}
           </HeaderDropdown>
+          </div>
         </div>
       </div>
 
-      {isHealthTab && (hasSavedWeight || hasSavedBmi) && (
+      {isHealthTab && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900"><div className="text-[10px] font-semibold uppercase text-slate-400">Steps</div><div className="mt-1 font-mono text-sm font-bold text-slate-800 dark:text-white">{measurements.filter(m => m.date === today).reduce((n, m) => n + (m.steps || 0), 0).toLocaleString()}</div></div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900"><div className="text-[10px] font-semibold uppercase text-slate-400">Water</div><div className="mt-1 font-mono text-sm font-bold text-sky-600">{waterRecords.filter(w => w.date === today).reduce((n, w) => n + w.amount, 0).toLocaleString()} ml</div></div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900"><div className="text-[10px] font-semibold uppercase text-slate-400">Sleep</div><div className="mt-1 font-mono text-sm font-bold text-purple-600">{sleepRecords.filter(s => s.date === today).reduce((n, s) => n + s.hours, 0)} h</div></div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900"><div className="text-[10px] font-semibold uppercase text-slate-400">Calories</div><div className="mt-1 font-mono text-sm font-bold text-amber-600">{nutritionRecords.filter(n => n.date === today).reduce((n, r) => n + (r.calories || 0), 0)} kcal</div></div>
+      </div>}
+
+      {isHealthTab && (hasSavedWeight || hasSavedBmi) && (() => {
+        const latestBp = [...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).find(m => m.bloodPressureSystolic);
+        const latestHr = [...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).find(m => m.heartRate);
+        return (
       <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {hasSavedWeight && <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
           <div className="flex items-center justify-between gap-1 text-slate-500 dark:text-slate-400">
@@ -591,8 +899,35 @@ export const HealthView: React.FC<HealthViewProps> = ({
           </div>
         </div>}
 
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
+          <div className="flex items-center justify-between gap-1 text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider truncate">Blood Pressure</span>
+            <Stethoscope className="h-4 w-4 shrink-0 text-rose-500" />
+          </div>
+          <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums truncate">
+            {latestBp ? `${latestBp.bloodPressureSystolic}/${latestBp.bloodPressureDiastolic}` : '--'}
+          </div>
+          <div className="mt-1 text-xs text-slate-400 font-medium truncate">
+            {latestBp ? `mmHg · ${latestBp.date}` : 'Log a measurement to track'}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-white/[0.08] dark:bg-slate-900 min-w-0">
+          <div className="flex items-center justify-between gap-1 text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider truncate">Heart Rate</span>
+            <Heart className="h-4 w-4 shrink-0 text-pink-500" />
+          </div>
+          <div className="mt-2.5 sm:mt-3 font-mono text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums truncate">
+            {latestHr ? `${latestHr.heartRate}` : '--'}
+          </div>
+          <div className="mt-1 text-xs text-slate-400 font-medium truncate">
+            {latestHr ? `bpm · ${latestHr.date}` : 'Log a measurement to track'}
+          </div>
+        </div>
+
       </div>
-      )}
+        );
+      })()}
 
       {/* Tab: Physical Movement */}
       {activeTab === 'movement' && (
@@ -649,6 +984,14 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   />
                 </div>
                 <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Type</label>
+                  <select value={exerciseCategory} onChange={e => setExerciseCategory(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                    {['Walking', 'Running', 'Cycling', 'Strength', 'Yoga', 'Sports', 'Other'].map(category => <option key={category}>{category}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Duration (Min)</label>
                   <input
                     type="number"
@@ -656,12 +999,47 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     max="1440"
                     value={durationLog}
                     onChange={e => setDurationLog(e.target.value)}
-
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">BP Systolic</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="300"
+                    placeholder="120"
+                    value={bpSystolic}
+                    onChange={e => setBpSystolic(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">BP Diastolic</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="200"
+                    placeholder="80"
+                    value={bpDiastolic}
+                    onChange={e => setBpDiastolic(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Pulse (bpm)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="300"
+                    placeholder="72"
+                    value={heartRateLog}
+                    onChange={e => setHeartRateLog(e.target.value)}
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
-              <button type="submit" disabled={!weightLog && !stepsLog && !exerciseLog.trim() && !durationLog} className="w-full rounded-lg bg-emerald-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="submit" disabled={!weightLog && !stepsLog && !exerciseLog.trim() && !durationLog && !bpSystolic && !heartRateLog} className="w-full rounded-lg bg-emerald-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50">
                 Log Physical Activity
               </button>
             </form>
@@ -674,13 +1052,39 @@ export const HealthView: React.FC<HealthViewProps> = ({
           }`}>
             {measurements.length > 0 ? (
               <>
-                <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                     Movement history
                   </h2>
+                  <DateRangePills value={movementDateRange} onChange={v => { setMovementDateRange(v); setVisibleMovementCount(20); }} />
                 </div>
-                <div className="space-y-2">
-                  {[...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).map(m => (
+
+                {/* Sparklines */}
+                {(weightTrend.length >= 2 || stepsTrend.length >= 2 || bpTrend.length >= 2) && (
+                  <div className="mt-3 mb-1 flex flex-wrap items-center gap-5">
+                    {weightTrend.length >= 2 && (
+                      <div className="flex items-center gap-2">
+                        <Sparkline data={weightTrend} color="#6366f1" id="mv-wt" />
+                        <span className="text-[10px] font-semibold text-slate-400">Weight</span>
+                      </div>
+                    )}
+                    {stepsTrend.length >= 2 && (
+                      <div className="flex items-center gap-2">
+                        <Sparkline data={stepsTrend} color="#10b981" id="mv-st" />
+                        <span className="text-[10px] font-semibold text-slate-400">Steps</span>
+                      </div>
+                    )}
+                    {bpTrend.length >= 2 && (
+                      <div className="flex items-center gap-2">
+                        <Sparkline data={bpTrend} color="#f43f5e" id="mv-bp" />
+                        <span className="text-[10px] font-semibold text-slate-400">BP systolic</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-2 space-y-2">
+                  {filteredMeasurements.slice(0, visibleMovementCount).map(m => (
                   <div key={m.id} className="dashboard-item-row flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-semibold text-slate-900 dark:text-white">{m.exercise || 'Daily Activity'}</div>
@@ -690,6 +1094,8 @@ export const HealthView: React.FC<HealthViewProps> = ({
                       {m.steps && <span>{m.steps.toLocaleString()} steps</span>}
                       {m.weight && <span>{m.weight} kg</span>}
                       {m.duration && <span className="text-indigo-600 dark:text-indigo-400">{m.duration} min</span>}
+                      {m.bloodPressureSystolic && <span className="text-rose-600 dark:text-rose-400">{m.bloodPressureSystolic}/{m.bloodPressureDiastolic} mmHg</span>}
+                      {m.heartRate && <span className="text-pink-600 dark:text-pink-400">{m.heartRate} bpm</span>}
                     </div>
                     <ProgressiveActions label={`More actions for ${m.exercise || 'Activity record'}`} className="shrink-0">
                       <button
@@ -712,6 +1118,13 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   </div>
                   ))}
                 </div>
+                {filteredMeasurements.length > visibleMovementCount && (
+                  <ShowMoreBar
+                    remaining={filteredMeasurements.length - visibleMovementCount}
+                    step={20}
+                    onReveal={() => setVisibleMovementCount(c => c + 20)}
+                  />
+                )}
               </>
             ) : (
               <div className="flex items-center gap-3 text-left">
@@ -783,6 +1196,23 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   />
                 </div>
               </div>
+              {sleepHours && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Sleep Quality</label>
+                    <select value={sleepQuality} onChange={e => setSleepQuality(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                      <option value="">—</option><option value="Excellent">Excellent</option><option value="Good">Good</option><option value="Fair">Fair</option><option value="Poor">Poor</option>
+                    </select>
+                  </div>
+                  <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Bedtime</label><ThemedDateTimeInput type="time" value={sleepBedtime} onChange={e => setSleepBedtime(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+                  <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Wake time</label><ThemedDateTimeInput type="time" value={sleepWakeTime} onChange={e => setSleepWakeTime(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                {[['Protein (g)', proteinGrams, setProteinGrams], ['Carbs (g)', carbsGrams, setCarbsGrams], ['Fat (g)', fatGrams, setFatGrams]].map(([label, value, setter]) => (
+                  <label key={label as string} className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">{label as string}<input type="number" min="0" max="1000" value={value as string} onChange={e => (setter as (value: string) => void)(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></label>
+                ))}
+              </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Nutrition Memo</label>
                 <input
@@ -834,7 +1264,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
 
               <button
                 type="submit"
-                disabled={!sleepHours && !waterMl && !calories && !nutritionNote.trim()}
+                disabled={!sleepHours && !sleepBedtime && !sleepWakeTime && !waterMl && !calories && !proteinGrams && !carbsGrams && !fatGrams && !nutritionNote.trim()}
                 className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Save Wellness Record
@@ -850,11 +1280,25 @@ export const HealthView: React.FC<HealthViewProps> = ({
             }`}>
               {wellnessEntries.length > 0 ? (
                 <>
-                  <h2 className="mb-4 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
-                    Wellness history
-                  </h2>
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">Wellness history</h2>
+                    <DateRangePills value={wellnessDateRange} onChange={v => { setWellnessDateRange(v); setVisibleWellnessCount(20); }} />
+                  </div>
+                  <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl bg-sky-50/70 p-3 dark:bg-sky-950/20">
+                    <WaterRing current={todayWaterTotal} goal={effectiveWaterGoal} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Water today</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{todayWaterTotal.toLocaleString()} / {effectiveWaterGoal.toLocaleString()} ml</p>
+                    </div>
+                  </div>
+                  {(sleepTrend.length >= 2 || waterTrend.length >= 2) && (
+                    <div className="mb-4 flex flex-wrap items-center gap-5">
+                      {sleepTrend.length >= 2 && <div className="flex items-center gap-2"><Sparkline data={sleepTrend} color="#8b5cf6" id="well-sleep" /><span className="text-[10px] font-semibold text-slate-400">Sleep</span></div>}
+                      {waterTrend.length >= 2 && <div className="flex items-center gap-2"><Sparkline data={waterTrend} color="#0ea5e9" id="well-water" /><span className="text-[10px] font-semibold text-slate-400">Water</span></div>}
+                    </div>
+                  )}
                   <div className="mt-4 space-y-2">
-                    {wellnessEntries.map(item => (
+                    {filteredWellnessEntries.slice(0, visibleWellnessCount).map(item => (
                   <div key={item.id} className="dashboard-item-row flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
                     <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
                       <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
@@ -890,6 +1334,9 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   </div>
                   ))}
                   </div>
+                  {filteredWellnessEntries.length > visibleWellnessCount && (
+                    <ShowMoreBar remaining={filteredWellnessEntries.length - visibleWellnessCount} step={20} onReveal={() => setVisibleWellnessCount(c => c + 20)} />
+                  )}
                 </>
               ) : (
                 <div className="flex items-center gap-3 text-left">
@@ -910,6 +1357,26 @@ export const HealthView: React.FC<HealthViewProps> = ({
       {/* Tab: Appointments & Health Notes */}
       {activeTab === 'appointments' && (
         <div className="space-y-6">
+          <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Medication log</h2>
+            <form onSubmit={saveMedication} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
+              <input required value={medicationName} onChange={e => setMedicationName(e.target.value)} placeholder="Medication" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+              <input value={medicationDose} onChange={e => setMedicationDose(e.target.value)} placeholder="Dose" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+              <input value={medicationSchedule} onChange={e => setMedicationSchedule(e.target.value)} placeholder="Schedule" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+              <button type="submit" className="h-10 rounded-lg px-3 text-sm font-semibold">Add medication</button>
+            </form>
+            {medications.length > 0 && <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">{medications.map(item => <div key={item.id} className="flex items-center justify-between gap-3 py-2 text-sm"><span className="font-semibold text-slate-800 dark:text-slate-200">{item.name} <span className="font-normal text-slate-500">{item.dose} {item.schedule}</span></span><button type="button" aria-label={`Delete ${item.name}`} onClick={async () => { try { await storage.delete('medications', item.id); setMedications(items => items.filter(record => record.id !== item.id)); } catch (e) { console.error('[om] delete medication failed', e); } }} className="text-slate-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button></div>)}</div>}
+            <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Cycle tracking</h2>
+              <form onSubmit={saveCycleRecord} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
+                <ThemedDateTimeInput type="date" value={cycleDate} onChange={e => setCycleDate(e.target.value)} className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <select value={cycleFlow} onChange={e => setCycleFlow(e.target.value as CycleRecord['flow'])} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"><option value="light">Light flow</option><option value="medium">Medium flow</option><option value="heavy">Heavy flow</option></select>
+                <input value={cycleSymptoms} onChange={e => setCycleSymptoms(e.target.value)} placeholder="Symptoms or note" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <button type="submit" className="h-10 rounded-lg px-3 text-sm font-semibold">Log cycle</button>
+              </form>
+              {cycleRecords.length > 0 && <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">{cycleRecords.slice(0, 8).map(item => <div key={item.id} className="flex items-center justify-between gap-3 py-2 text-sm"><span className="text-slate-700 dark:text-slate-200">{item.date} · {item.flow || 'flow'} {item.symptoms && <span className="text-slate-500">· {item.symptoms}</span>}</span><button type="button" aria-label="Delete cycle entry" onClick={async () => { try { await storage.delete('cycleRecords', item.id); setCycleRecords(items => items.filter(record => record.id !== item.id)); } catch (e) { console.error('[om] delete cycleRecord failed', e); } }} className="text-slate-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button></div>)}</div>}
+            </div>
+          </section>
           {appointmentFormOpen && <div className={`grid grid-cols-1 items-start gap-4 ${
             appointmentFormOpen === 'both' ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
           }`}>
@@ -1183,9 +1650,27 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     <option value="female">Female</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Blood Group</label>
+                  <select
+                    value={bloodGroup}
+                    onChange={e => setBloodGroup(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="">— Select —</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Height (cm)</label>
                   <input
@@ -1218,11 +1703,24 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Daily water target (ml)</label>
+                  <input
+                    type="number"
+                    min="250"
+                    max="10000"
+                    step="250"
+                    value={waterGoal}
+                    onChange={e => setWaterGoal(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="2000"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
               </div>
 
               <button
                 type="submit"
-                disabled={!hasBiometricProfile && !name.trim() && !dob && height === '' && weight === '' && targetWeight === ''}
+                disabled={!hasBiometricProfile && !name.trim() && !dob && height === '' && weight === '' && targetWeight === '' && waterGoal === ''}
                 className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Save Biometric Profile
@@ -1256,6 +1754,10 @@ export const HealthView: React.FC<HealthViewProps> = ({
               {hasSavedTargetWeight && <div>
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Target weight</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{profile.targetWeight} kg</p>
+              </div>}
+              {profile?.bloodGroup && <div>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Blood group</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{profile.bloodGroup}</p>
               </div>}
             </div>
           </section>
@@ -1299,7 +1801,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
         />
       )}
 
-      {(['work-learning', 'work-skills'] as HealthTab[]).includes(activeTab) && (
+      {activeTab === 'work' && (
         <WorkView
           key={activeTab}
           learningItems={learningItems}
@@ -1308,7 +1810,8 @@ export const HealthView: React.FC<HealthViewProps> = ({
           goals={goals}
           tasks={tasks}
           embedded
-          initialTab={activeTab === 'work-learning' ? 'learning' : 'skills'}
+          showTabsWhenEmbedded
+          initialTab="learning"
           onRefresh={onRefresh}
           onSuccess={onSuccess}
         />
@@ -1318,9 +1821,12 @@ export const HealthView: React.FC<HealthViewProps> = ({
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div
+            ref={editDialogRef}
             className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
             role="dialog"
             aria-modal="true"
+            aria-labelledby={editDialogTitleId}
+            tabIndex={-1}
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
@@ -1328,7 +1834,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                   <Edit3 className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  <h3 id={editDialogTitleId} className="text-sm font-bold text-slate-900 dark:text-white">
                     Edit Health Record
                   </h3>
                 </div>
@@ -1366,7 +1872,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     <option value="">None (Standalone)</option>
                     {goals.map(g => (
                       <option key={g.id} value={g.id}>
-                        <><GoalTierIcon level={g.level} /> {g.title} ({g.progress}%)</>
+                        {g.level === 5 ? '◆' : g.level === 4 ? '◇' : g.level === 3 ? '●' : g.level === 2 ? '○' : '★'} {g.title} ({g.progress}%)
                       </option>
                     ))}
                   </select>
@@ -1545,6 +2051,27 @@ export const HealthView: React.FC<HealthViewProps> = ({
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {/* Undo Delete Toast Stack */}
+      {undoStack.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2" role="status" aria-live="polite">
+          {undoStack.map((entry, idx) => (
+            <div key={idx} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Deleted "{entry.label}"
+              </span>
+              <button
+                type="button"
+                onClick={() => handleUndoDelete(idx)}
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-950/70 cursor-pointer"
+              >
+                <Undo2 className="h-3 w-3" />
+                Undo
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

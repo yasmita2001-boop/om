@@ -2,7 +2,7 @@ import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Calendar, Trash2, Edit3,
-  Copy, Check, Search, Volume2, Target, X, Plus
+  Copy, Check, Search, Volume2, Target, X, Plus, Download
 } from 'lucide-react';
 import { JournalEntry, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -19,6 +19,7 @@ import { LinkModeSelector } from '../components/LinkModeSelector';
 import { ThemeIcon, type ThemeIconName } from '../components/ThemeIcon';
 import { GoalPicker } from '../components/GoalPicker';
 import { NotesJournalSwitcher } from '../components/NotesJournalSwitcher';
+import { buildThemePalettes, resolveTheme, THEME_SWATCH_KEYS } from '../lib/noteThemePalettes';
 
 const JOURNAL_DRAFT_KEY = 'om-journal-draft-v1';
 
@@ -155,7 +156,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
     const matched = goals.find(g => g.id === gId);
     if (matched) {
       if (!title.trim() || goals.some(g => title.includes(g.title))) {
-        setTitle(`Reflection: ${matched.title}`);
+        setTitle(`Journal: ${matched.title}`);
       }
     }
   };
@@ -184,60 +185,18 @@ export const JournalView: React.FC<JournalViewProps> = ({
   };
 
   const moodOptions = [
+    { label: 'Happy', icon: 'calm' },
+    { label: 'Grateful', icon: 'heart' },
+    { label: 'Peaceful', icon: 'sun' },
+    { label: 'Inspired', icon: 'prayer' },
     { label: 'Productive', icon: 'zap' },
-    { label: 'Peaceful', icon: 'calm' },
-    { label: 'Inspired', icon: 'star' },
-    { label: 'Deep Focus', icon: 'focus' },
-    { label: 'Challenged', icon: 'alert' }
+    { label: 'Tired', icon: 'batteryLow' },
+    { label: 'Anxious', icon: 'alert' },
+    { label: 'Sad', icon: 'cloudRain' }
   ];
 
-  const themePalettes: Record<string, { label: string; swatch: string; cardClass: string }> = {
-    slate: {
-      label: 'Default',
-      swatch: '#94a3b8',
-      cardClass: 'bg-white border-slate-200/90 dark:bg-slate-900/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-    },
-    red: {
-      label: 'Ruby Red',
-      swatch: '#ef4444',
-      cardClass: 'bg-red-50/70 border-red-200/80 dark:bg-red-950/20 dark:border-red-800/40 hover:border-red-300 dark:hover:border-red-700/60'
-    },
-    amber: {
-      label: 'Warm Sunrise',
-      swatch: '#fbbf24',
-      cardClass: 'bg-amber-50/70 border-amber-200/80 dark:bg-amber-950/20 dark:border-amber-800/40 hover:border-amber-300 dark:hover:border-amber-700/60'
-    },
-    emerald: {
-      label: 'Verdant Forest',
-      swatch: '#34d399',
-      cardClass: 'bg-emerald-50/70 border-emerald-200/80 dark:bg-emerald-950/20 dark:border-emerald-800/40 hover:border-emerald-300 dark:hover:border-emerald-700/60'
-    },
-    indigo: {
-      label: 'Midnight Indigo',
-      swatch: '#6366f1',
-      cardClass: 'bg-indigo-50/70 border-indigo-200/80 dark:bg-indigo-950/20 dark:border-indigo-800/40 hover:border-indigo-300 dark:hover:border-indigo-700/60'
-    },
-    violet: {
-      label: 'Twilight Violet',
-      swatch: '#a78bfa',
-      cardClass: 'bg-purple-50/70 border-purple-200/80 dark:bg-purple-950/20 dark:border-purple-800/40 hover:border-purple-300 dark:hover:border-purple-700/60'
-    },
-    custom: {
-      label: 'Custom Color',
-      swatch: customColor,
-      cardClass: 'bg-white border-slate-200/90 dark:bg-slate-900/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-    }
-  };
-
-  const getTheme = (colorVal?: string) => {
-    if (!colorVal) return themePalettes.slate;
-    if (colorVal.startsWith('#')) return { ...themePalettes.custom, swatch: colorVal, label: 'Custom Color' };
-    if (themePalettes[colorVal]) return themePalettes[colorVal];
-    if (colorVal.includes('amber') || colorVal.includes('fef9c3')) return themePalettes.amber;
-    if (colorVal.includes('green') || colorVal.includes('f0fdf4')) return themePalettes.emerald;
-    if (colorVal.includes('purple') || colorVal.includes('f5f3ff')) return themePalettes.violet;
-    return themePalettes.slate;
-  };
+  const themePalettes = buildThemePalettes(customColor);
+  const getTheme = (colorVal?: string) => resolveTheme(themePalettes, colorVal);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,7 +214,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
         const oldGoalId = existing.goalId;
         const updated: JournalEntry = {
           ...existing,
-          title: title.trim() || 'Daily Reflection',
+          title: title.trim() || 'Daily Journal',
           text,
           html,
           date,
@@ -272,12 +231,12 @@ export const JournalView: React.FC<JournalViewProps> = ({
         if (oldGoalId && oldGoalId !== effectiveGoalId) {
           await syncGoalProgressFromJournal(oldGoalId);
         }
-        onSuccess(effectiveGoalId ? '✓ Journal reflection updated & linked to Goal' : '✓ Journal reflection updated');
+        onSuccess(effectiveGoalId ? '✓ Journal entry updated & linked to Goal' : '✓ Journal entry updated');
       }
     } else {
       const newEntry: JournalEntry = {
         id: generateUUID(),
-        title: title.trim() || 'Daily Reflection',
+        title: title.trim() || 'Daily Journal',
         text,
         html,
         date,
@@ -292,7 +251,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
       if (effectiveGoalId) {
         await syncGoalProgressFromJournal(effectiveGoalId);
       }
-      onSuccess(effectiveGoalId ? '✓ Journal reflection recorded & linked to Goal' : '✓ Journal reflection recorded');
+      onSuccess(effectiveGoalId ? '✓ Journal entry saved & linked to Goal' : '✓ Journal entry saved');
     }
 
     resetForm(!editingId);
@@ -340,6 +299,17 @@ export const JournalView: React.FC<JournalViewProps> = ({
     }
   };
 
+  const handleExportEntry = (entry: JournalEntry, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const bodyText = entry.text || entry.html?.replace(/<[^>]+>/g, '') || '';
+    const content = `# ${entry.title || 'Journal Entry'}\n\nDate: ${entry.date}\nMood: ${entry.mood || ''}\n\n${bodyText}`;
+    const blob = new Blob([content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `journal-${entry.date}.md`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleDelete = (entry: JournalEntry) => {
     setEntryToDelete(entry);
   };
@@ -348,18 +318,26 @@ export const JournalView: React.FC<JournalViewProps> = ({
     if (!entryToDelete) return;
     try {
       const deletedGoalId = entryToDelete.goalId;
-      await storage.delete('journal', entryToDelete.id);
+      await storage.moveToRecycleBin('journal', entryToDelete.id);
       if (deletedGoalId) {
         await syncGoalProgressFromJournal(deletedGoalId);
       }
-      onSuccess('✓ Journal entry deleted');
+      onSuccess('✓ Journal entry moved to Recycle Bin. You can restore it from Settings > System.');
       setEntryToDelete(null);
+      if (viewingEntry?.id === entryToDelete.id) {
+        setViewingEntry(null);
+      }
+      if (speakingEntryId === entryToDelete.id) {
+        globalTextReader.stop();
+        setSpeakingEntryId(null);
+      }
       if (editingId === entryToDelete.id) {
         resetForm();
       }
       onRefresh();
     } catch (err) {
       console.error('Failed to delete journal entry', err);
+      onSuccess('Journal entry could not be deleted. Please try again.');
     }
   };
 
@@ -408,8 +386,16 @@ export const JournalView: React.FC<JournalViewProps> = ({
         data-record-id={j.id}
         role="button"
         tabIndex={0}
-        aria-label={`Open reflection: ${j.title}`}
-        onClick={() => setViewingEntry(j)}
+        aria-label={`Open journal entry: ${j.title}`}
+        onClick={event => {
+          const selection = window.getSelection();
+          if (
+            selection && !selection.isCollapsed && selection.toString() &&
+            event.currentTarget.contains(selection.anchorNode) &&
+            event.currentTarget.contains(selection.focusNode)
+          ) return;
+          setViewingEntry(j);
+        }}
         onKeyDown={event => {
           if (event.target !== event.currentTarget) return;
           if (event.key === 'Enter' || event.key === ' ') {
@@ -434,7 +420,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
               </span>
               {j.mood && (
                 <span className="inline-flex shrink-0 items-center gap-1 text-slate-500 dark:text-slate-400">
-                  <span>{moodObj?.icon || '•'}</span>
+                  {moodObj ? <ThemeIcon name={moodObj.icon as ThemeIconName} className="h-3 w-3" /> : <span>•</span>}
                   <span>{j.mood}</span>
                 </span>
               )}
@@ -472,7 +458,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                   ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950 animate-pulse'
                   : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
-              title={speakingEntryId === j.id ? "Stop reading" : "Read reflection aloud (Hindi & English)"}
+              title={speakingEntryId === j.id ? "Stop reading" : "Read entry aloud (Hindi & English)"}
             >
               <Volume2 className={`h-3.5 w-3.5 ${speakingEntryId === j.id ? 'animate-bounce' : ''}`} />
             </button>
@@ -489,12 +475,21 @@ export const JournalView: React.FC<JournalViewProps> = ({
             </button>
             <button
               type="button"
+              onClick={event => handleExportEntry(j, event)}
+              className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+              title="Export as Markdown"
+              aria-label="Export journal entry as Markdown"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
               onClick={event => {
                 event.stopPropagation();
                 handleEdit(j);
               }}
               className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
-              title="Edit reflection"
+              title="Edit entry"
             >
               <Edit3 className="h-3.5 w-3.5" />
             </button>
@@ -505,7 +500,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 handleDelete(j);
               }}
               className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-              title="Delete reflection"
+              title="Delete entry"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -519,7 +514,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
-            Notes
+            Journal
           </h1>
         </div>
         <div className="flex w-full justify-end sm:w-auto">
@@ -548,7 +543,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 <Calendar className="h-4 w-4" />
               </span>
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                {editingId ? 'Edit Entry' : 'Record Reflection'}
+                {editingId ? 'Edit Entry' : 'New Entry'}
               </h2>
             </div>
             {editingId && (
@@ -564,7 +559,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsEditorOpen(false)}
-                aria-label="Close reflection editor"
+                aria-label="Close journal editor"
                 className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               >
                 <X className="h-4 w-4" />
@@ -577,7 +572,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                  Reflection Title / Headline
+                  Journal Title / Headline
                 </label>
                 {/* Mode Selector: Link Goal vs Manual */}
                 <LinkModeSelector
@@ -600,11 +595,11 @@ export const JournalView: React.FC<JournalViewProps> = ({
               {journalInputMode === 'link' && (
                 <div className="mb-2.5 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
                   <div className="flex items-center justify-between">
-                    <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                    <label className="block text-xs font-bold text-indigo-700 dark:text-indigo-300">
                       Select Target Goal to Link *
                     </label>
                     {journalGoalId && (
-                      <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
+                      <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                         {goals.find(g => g.id === journalGoalId)?.progress}% Done
                       </span>
                     )}
@@ -617,8 +612,8 @@ export const JournalView: React.FC<JournalViewProps> = ({
                     className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
                   />
                   {journalGoalId && (
-                    <span className="block text-[10px] text-indigo-800 dark:text-indigo-300">
-                      <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Recording this reflection links your philosophical insights directly to this goal's hierarchy!
+                    <span className="block text-xs text-indigo-800 dark:text-indigo-300">
+                      <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Recording this entry links your insights directly to this goal's hierarchy!
                     </span>
                   )}
                 </div>
@@ -669,7 +664,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 Entry Color Theme
               </label>
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                {['slate', 'red', 'amber', 'emerald', 'indigo', 'violet'].map((k) => {
+                {THEME_SWATCH_KEYS.map((k) => {
                   const t = themePalettes[k];
                   const isSelected = colorTheme === k;
                   return (
@@ -745,7 +740,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
               type="submit"
               className="life-form-submit flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 cursor-pointer"
             >
-              {editingId ? 'Update Reflection' : '＋ Save Reflection'}
+              {editingId ? 'Update Entry' : '＋ Save Entry'}
             </button>
           </form>
         </div>}
@@ -755,19 +750,29 @@ export const JournalView: React.FC<JournalViewProps> = ({
           <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                Reflection history
+                Journal history
                 <span className="ml-2 text-xs font-medium text-slate-400">{filteredEntries.length}</span>
               </h2>
-              {!isEditorOpen && !editingId && (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsEditorOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-500/15 dark:text-emerald-300"
+                  onClick={() => setArchiveControlsOpen(prev => !prev)}
+                  className={`inline-flex shrink-0 items-center justify-center rounded-xl border p-2 transition-colors ${archiveControlsOpen ? 'border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'}`}
+                  aria-label="Toggle search and filters"
                 >
-                  <Plus className="h-4 w-4" />
-                  New Reflection
+                  <Search className="h-4 w-4" />
                 </button>
-              )}
+                {!isEditorOpen && !editingId && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditorOpen(true)}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-500/15 dark:text-emerald-300"
+                  >
+                    <Plus className="h-4 w-4" />
+                    New Entry
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div
@@ -836,8 +841,8 @@ export const JournalView: React.FC<JournalViewProps> = ({
           {filteredEntries.length === 0 ? (
             <div className="py-12 text-center text-xs text-slate-400 rounded-2xl border border-dashed border-slate-200 p-6 dark:border-slate-800">
               {journal.length === 0
-                ? 'No reflections recorded yet. Write your first entry to begin your journal.'
-                : 'No journal reflections match your search or filters.'}
+                ? 'No entries recorded yet. Write your first entry to begin your journal.'
+                : 'No journal entries match your search or filters.'}
             </div>
           ) : (
             <div className="grid grid-cols-1 items-start gap-3.5">
@@ -850,7 +855,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
       {viewingEntry && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5"
-          onClick={() => setViewingEntry(null)}
+          onClick={() => { if (speakingEntryId) { globalTextReader.stop(); setSpeakingEntryId(null); } setViewingEntry(null); }}
         >
           <section
             role="dialog"
@@ -862,7 +867,7 @@ export const JournalView: React.FC<JournalViewProps> = ({
             <div className="flex items-start justify-between gap-4 border-b border-black/10 pb-4 dark:border-white/10">
               <div className="min-w-0">
                 <h2 id="journal-entry-title" className="text-lg font-bold text-slate-900 dark:text-white sm:text-xl">
-                  {viewingEntry.title || 'Daily Reflection'}
+                  {viewingEntry.title || 'Daily Journal'}
                 </h2>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
                   <span className="inline-flex items-center gap-1.5">
@@ -883,14 +888,38 @@ export const JournalView: React.FC<JournalViewProps> = ({
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setViewingEntry(null)}
-                aria-label="Close reflection"
-                className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleEdit(viewingEntry)}
+                  aria-label="Edit journal entry"
+                  title="Edit entry"
+                  className="rounded-lg p-2 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-indigo-950/40"
+                >
+                  <Edit3 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = viewingEntry;
+                    setViewingEntry(null);
+                    setEntryToDelete(target);
+                  }}
+                  aria-label="Delete journal entry"
+                  title="Delete entry"
+                  className="rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-300 dark:hover:bg-rose-950/40"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingEntry(null)}
+                  aria-label="Close entry"
+                  className="rounded-lg p-2 text-slate-500 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             <div
@@ -902,6 +931,26 @@ export const JournalView: React.FC<JournalViewProps> = ({
                 <AttachmentViewer attachments={viewingEntry.attachments} />
               </div>
             )}
+            <div className="mt-5 flex items-center gap-2 border-t border-black/10 pt-4 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => handleCopy(viewingEntry)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+                title="Copy entry text"
+              >
+                {copiedId === viewingEntry.id ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>Copy</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportEntry(viewingEntry)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+                title="Export as Markdown"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Export .md</span>
+              </button>
+            </div>
           </section>
         </div>
       )}
@@ -909,13 +958,13 @@ export const JournalView: React.FC<JournalViewProps> = ({
       {/* CONFIRM DELETE JOURNAL MODAL */}
       <ConfirmModal
         isOpen={Boolean(entryToDelete)}
-        title="Delete Reflection?"
+        title="Delete Entry?"
         message={
           entryToDelete
             ? `Are you sure you want to delete "${entryToDelete.title}"?`
             : ''
         }
-        confirmText="Delete Reflection"
+        confirmText="Delete Entry"
         cancelText="Cancel"
         isDanger={true}
         onConfirm={handleConfirmDelete}

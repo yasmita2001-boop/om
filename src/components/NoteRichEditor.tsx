@@ -4,12 +4,24 @@ import {
   List, Palette, Highlighter,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Indent, Outdent, RemoveFormatting, Table as TableIcon,
-  ChevronDown, Plus, Minus, Trash2,
-  Volume2, X, Columns, RotateCcw
+  ChevronDown, Plus, Minus, Trash2, Hash,
+  Volume2, X, Columns,
+  Undo2, Redo2,
+  Sigma, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, PaintBucket, Eraser, Rows3, ImagePlus
 } from 'lucide-react';
 import { sanitizeHtml } from '../lib/sanitizeHtml';
-import { TextReaderController, VoiceLanguage, isSpeechSynthesisSupported } from '../lib/voiceService';
 import { generateUUID, storage } from '../lib/storage';
+import {
+  evaluateTableFormula,
+  formatCellNumber,
+  columnLabel,
+  shiftFormulaReferences,
+  toNumber,
+  numbersFromGrid,
+  statsForValues,
+  type RangeStats
+} from '../lib/tableFormulas';
+import { TextReaderController, VoiceLanguage, isSpeechSynthesisSupported } from '../lib/voiceService';
 
 export interface NoteRichEditorProps {
   initialHtml?: string;
@@ -140,6 +152,7 @@ const escapeHtml = (str: string): string => {
     .replace(/'/g, '&#039;');
 };
 
+
 // Helper: Sanitize & Preserve 100% of genuine rich HTML (Headings, bold, italics, lists, tables, colors, links)
 const sanitizeAndPreserveRichHtml = (rawHtml: string): string => {
   if (!rawHtml) return '';
@@ -193,10 +206,7 @@ const sanitizeAndPreserveRichHtml = (rawHtml: string): string => {
       }
       const pastedFamilyName = style.fontFamily.replace(/["']/g, '').split(',')[0].trim();
       if (pastedFamilyName && isValidFontFamilyName(pastedFamilyName)) {
-        const knownFont = FONT_FAMILIES.find(font =>
-          font.value.toLowerCase() === pastedFamilyName.toLowerCase()
-        );
-        newEl.style.fontFamily = knownFont?.css || fontFamilyCss(pastedFamilyName);
+      newEl.style.fontFamily = fontFamilyCss(pastedFamilyName);
       }
       if (style.backgroundColor && style.backgroundColor !== 'transparent' && style.backgroundColor !== 'inherit') {
         newEl.style.backgroundColor = style.backgroundColor;
@@ -216,10 +226,8 @@ const sanitizeAndPreserveRichHtml = (rawHtml: string): string => {
     }
 
     if (tagName === 'font') {
-      const fontFamily = FONT_FAMILIES.find(font =>
-        font.value.toLowerCase() === (el.getAttribute('face') || '').replace(/["']/g, '').split(',')[0].trim().toLowerCase()
-      );
-      if (fontFamily) newEl.style.fontFamily = fontFamily.css;
+      const pastedFace = (el.getAttribute('face') || '').replace(/["']/g, '').split(',')[0].trim();
+      if (pastedFace && isValidFontFamilyName(pastedFace)) newEl.style.fontFamily = fontFamilyCss(pastedFace);
     }
 
     // Preserve attributes for specific tags
@@ -419,6 +427,8 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const lastRenderedHtmlRef = useRef('');
+  const historyRef = useRef<{ entries: string[]; index: number }>({ entries: [''], index: 0 });
+  const restoringHistoryRef = useRef(false);
 
   // Selection & Table Tracking
   const savedRangeRef = useRef<Range | null>(null);
@@ -427,8 +437,14 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   const lastActiveCellRef = useRef<HTMLTableCellElement | null>(null);
   const [activeTableLocation, setActiveTableLocation] = useState<{ row: number; col: number; totalRows: number; totalCols: number } | null>(null);
 
-  // Active Studio Drawer: 'color' | 'highlight' | 'bullets' | 'table' | null
-  const [activeStudio, setActiveStudio] = useState<'color' | 'highlight' | 'bullets' | 'table' | null>(null);
+  // Active Studio Drawer: related editor tools are grouped into one panel.
+  const [activeStudio, setActiveStudio] = useState<'text' | 'format' | 'color' | 'bullets' | null>(null);
+  const [colorPanelTab, setColorPanelTab] = useState<'text' | 'highlight'>('text');
+  const [listTablePanelTab, setListTablePanelTab] = useState<'bullets' | 'table'>('bullets');
+
+  // Word & character count
+  const [wordCount, setWordCount] = useState(0);
+  const [charCount, setCharCount] = useState(0);
 
   // Custom Colors
   const [customTextColor, setCustomTextColor] = useState('#b88648');
@@ -437,13 +453,27 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   // Bullet / Number Tabs
   const [bulletTab, setBulletTab] = useState<'symbols' | 'numbered'>('symbols');
   const [customBulletInput, setCustomBulletInput] = useState('');
+  const customBulletInputRef = useRef<HTMLInputElement>(null);
+  const [customBulletImage, setCustomBulletImage] = useState('');
+  const [customBulletImageError, setCustomBulletImageError] = useState('');
   const [customNumberPrefix, setCustomNumberPrefix] = useState('Step');
 
   // Table Generator Grid
   const [tableGridHover, setTableGridHover] = useState({ rows: 3, cols: 3 });
   const [tableHasHeader, setTableHasHeader] = useState(true);
+  // Excel-style table toolbox
+  const [tableTab, setTableTab] = useState<'insert' | 'edit' | 'calc' | 'format'>('insert');
+  const [formulaDraft, setFormulaDraft] = useState('');
+  const [tableStats, setTableStats] = useState<RangeStats | null>(null);
+  const [cellNumberFormat, setCellNumberFormat] = useState('');
+  // Live size read-outs for the Format tab (column width / row height).
+  const [cellColumnWidth, setCellColumnWidth] = useState(0);
+  const [cellRowHeight, setCellRowHeight] = useState(0);
+  // Last colour picked from the custom swatch in the Format tab.
+  const [customFillColour, setCustomFillColour] = useState('#fde68a');
+  const [formatMenuOpen, setFormatMenuOpen] = useState(false);
 
-  // Formatting state
+  // Text appearance controls (the controls stay available without visible labels).
   const [activeStyle, setActiveStyle] = useState('p');
   const [activeSize, setActiveSize] = useState('3');
   const [activeFont, setActiveFont] = useState('');
@@ -514,11 +544,17 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   }, [loadCustomFonts]);
 
   useEffect(() => {
-    if (editorRef.current && initialHtml !== lastRenderedHtmlRef.current) {
-      editorRef.current.innerHTML = sanitizeHtml(initialHtml || '');
-      lastRenderedHtmlRef.current = initialHtml || '';
-      setActiveFont('');
+    if (!editorRef.current) return;
+    if (initialHtml !== lastRenderedHtmlRef.current) {
+      const html = sanitizeHtml(initialHtml || '');
+      editorRef.current.innerHTML = html;
+      lastRenderedHtmlRef.current = html;
+      historyRef.current = { entries: [html], index: 0 };
     }
+    // A brand new note must start as a real paragraph, otherwise the first
+    // keystroke becomes a bare text node and every block tool stops working.
+    if (!editorRef.current.firstElementChild || hasStrayRootNodes()) ensureBlockStructure();
+    lastRenderedHtmlRef.current = editorRef.current.innerHTML;
   }, [initialHtml]);
 
   // Robust Selection Storage
@@ -599,11 +635,63 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
 
   const handleEditorInput = useCallback(() => {
     if (!editorRef.current) return;
+    // Dirty DOM (legacy saved values, browser quirks) can leave bare inline nodes
+    // at the root; repair before the value is published to the parent.
+    if (hasStrayRootNodes()) ensureBlockStructure();
+    // Live totals: a number typed anywhere recalculates every formula in the note.
+    recalculateAllTables();
+    // A stored raw number is only trusted while the cell still shows its
+    // formatted form; typing over the cell discards it.
+    editorRef.current.querySelectorAll('td[data-om-numvalue], th[data-om-numvalue]').forEach(element => {
+      const cell = element as HTMLTableCellElement;
+      const stored = toNumber(cell.getAttribute('data-om-numvalue'));
+      const formatted = stored === null ? '' : formatCellNumber(stored, cell.getAttribute('data-om-numfmt') || undefined);
+      if (stored === null || (cell.textContent || '').trim() !== formatted) {
+        cell.removeAttribute('data-om-numvalue');
+      }
+    });
     const html = editorRef.current.innerHTML;
     const text = editorRef.current.innerText || '';
     lastRenderedHtmlRef.current = html;
+    if (!restoringHistoryRef.current) {
+      const history = historyRef.current;
+      if (history.entries[history.index] !== html) {
+        const entries = history.entries.slice(0, history.index + 1);
+        entries.push(html);
+        if (entries.length > 100) entries.shift();
+        historyRef.current = { entries, index: entries.length - 1 };
+      }
+    }
     onChange(html, text);
+    // Update word & character counts
+    const trimmed = text.trim();
+    setCharCount(trimmed.length);
+    setWordCount(trimmed ? trimmed.split(/\s+/).length : 0);
   }, [onChange]);
+
+  const moveEditorHistory = useCallback((direction: -1 | 1) => {
+    const editor = editorRef.current;
+    const history = historyRef.current;
+    const nextIndex = history.index + direction;
+    if (!editor || nextIndex < 0 || nextIndex >= history.entries.length) return;
+
+    history.index = nextIndex;
+    restoringHistoryRef.current = true;
+    try {
+      editor.innerHTML = history.entries[nextIndex];
+      lastRenderedHtmlRef.current = history.entries[nextIndex];
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      savedRangeRef.current = range;
+      handleEditorInput();
+    } finally {
+      restoringHistoryRef.current = false;
+    }
+  }, [handleEditorInput]);
 
   // Insert rich HTML at caret position with proper range management
   const insertHtmlAtCaret = useCallback((html: string) => {
@@ -680,6 +768,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
   const exec = useCallback((cmd: string, val: string | null = null) => {
     isExecutingActionRef.current = true;
     restoreSelection();
+    ensureBlockStructure();
     try {
       document.execCommand('styleWithCSS', false, 'true');
     } catch {}
@@ -689,12 +778,129 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     handleEditorInput();
   }, [restoreSelection, saveSelection, handleEditorInput]);
 
+  // Safety net: mobile keyboards and some IMEs produce a paragraph break
+  // without a usable keydown, so continue the list from beforeinput too.
+  const handleBeforeInput = (e: React.FormEvent<HTMLDivElement>) => {
+    // Safety net for input paths that skip keydown (IME, dictation, paste-as-text).
+    ensureEditableCaret();
+    // Typing over a calculated cell replaces the result, like Excel does.
+    const typedInto = cellFromNode(window.getSelection()?.anchorNode ?? null);
+    if (typedInto?.hasAttribute('data-om-formula')) {
+      typedInto.removeAttribute('data-om-formula');
+      typedInto.removeAttribute('data-om-calc');
+      typedInto.removeAttribute('data-om-err');
+    }
+    if (hasStrayRootNodes()) ensureBlockStructure();
+    const native = e.nativeEvent as InputEvent;
+    if (native.inputType !== 'insertParagraph' || native.isComposing) return;
+    const selection = window.getSelection();
+    if (!selection || !selection.isCollapsed) return;
+    const item = getBulletItem(selection.anchorNode);
+    if (!item) return;
+    e.preventDefault();
+    continueListItem(item);
+    handleEditorInput();
+    saveSelection();
+  };
+
   // Tab key navigation inside table cells
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    ensureEditableCaret();
     if (e.shiftKey && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
       plainTextPasteRef.current = true;
     }
 
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const selection = window.getSelection();
+      const editingCell = cellFromNode(selection?.anchorNode ?? null);
+      const rawCellText = (editingCell?.textContent || '').trim();
+      if (editingCell && rawCellText.startsWith('=')) {
+        e.preventDefault();
+        const table = editingCell.closest('table') as HTMLTableElement | null;
+        editingCell.setAttribute('data-om-formula', rawCellText);
+        editingCell.setAttribute('data-om-calc', '1');
+        editingCell.textContent = '';
+        recalculateTable(table, true);
+        setFormulaDraft(rawCellText);
+        caretTo(editingCell, true);
+        handleEditorInput();
+        saveSelection();
+        detectActiveTable();
+        refreshTableStats();
+        return;
+      }
+      if (selection && selection.isCollapsed) {
+        const item = getBulletItem(selection.anchorNode);
+        if (item) {
+          e.preventDefault();
+          continueListItem(item);
+          handleEditorInput();
+          saveSelection();
+          return;
+        }
+      }
+    }
+    if ((e.key === 'Backspace' || e.key === 'Delete') && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const selection = window.getSelection();
+      const editor = editorRef.current;
+      if (selection && editor && selection.rangeCount > 0 && !selection.isCollapsed) {
+        const range = selection.getRangeAt(0);
+        if (editor.contains(range.commonAncestorContainer)) {
+          const rows = (Array.from(editor.querySelectorAll('[data-om-list]')) as HTMLElement[]).filter(row => {
+            try {
+              return range.intersectsNode(row);
+            } catch {
+              return false;
+            }
+          });
+          const firstRow = rows[0] ?? null;
+          const lastRow = rows[rows.length - 1] ?? null;
+          const parent = firstRow && lastRow && firstRow.parentElement === lastRow.parentElement
+            ? firstRow.parentElement
+            : null;
+          const before = firstRow && parent ? firstRow.previousElementSibling as HTMLElement | null : null;
+          const after = lastRow && parent ? lastRow.nextElementSibling as HTMLElement | null : null;
+
+          // Let the browser delete the selected text itself. Doing it by hand
+          // (range.deleteContents) left markers behind, skipped paragraph
+          // merging and broke undo; we only tidy rows that end up empty.
+          window.setTimeout(() => {
+            const root = editorRef.current;
+            if (!root) return;
+            cleanupEmptiedListRows(parent, before, after);
+            // Chrome can leave a row behind when the selection covered the whole
+            // note, so sweep any list row that no longer holds text.
+            (Array.from(root.querySelectorAll('[data-om-list]')) as HTMLElement[]).forEach(row => {
+              if ((itemTextElement(row).textContent || '').replace(/\u200b/g, '').trim() === '') row.remove();
+            });
+            ensureBlockStructure();
+            const live = window.getSelection();
+            if (!live || live.rangeCount === 0 || !root.contains(live.anchorNode)) {
+              const last = root.lastElementChild as HTMLElement | null;
+              if (last) caretTo(last.hasAttribute('data-om-list') ? itemTextElement(last) : last, true);
+            }
+            handleEditorInput();
+            saveSelection();
+          }, 0);
+          return;
+        }
+      }
+      if (selection && selection.isCollapsed) {
+        const item = getBulletItem(selection.anchorNode);
+        if (item && caretAtStartOfItem(item)) {
+          e.preventDefault();
+          const text = (itemTextElement(item).textContent || '').trim();
+          const paragraph = document.createElement('p');
+          if (text) paragraph.textContent = text;
+          else paragraph.innerHTML = '<br>';
+          item.replaceWith(paragraph);
+          caretTo(paragraph, true);
+          handleEditorInput();
+          saveSelection();
+          return;
+        }
+      }
+    }
     if (e.key === 'Tab') {
       const sel = window.getSelection();
       const node = sel?.anchorNode;
@@ -733,7 +939,13 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     }
 
     if (e.ctrlKey || e.metaKey) {
-      if (e.key === 'b' || e.key === 'B') {
+      if (e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        moveEditorHistory(e.shiftKey ? 1 : -1);
+      } else if (e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        moveEditorHistory(1);
+      } else if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         exec('bold');
       } else if (e.key === 'i' || e.key === 'I') {
@@ -755,6 +967,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     detectActiveTable();
   };
 
+  // =========================================================================
   const handleApplyStyle = (tag: string) => {
     setActiveStyle(tag);
     isExecutingActionRef.current = true;
@@ -769,11 +982,52 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     handleEditorInput();
   };
 
+  // execCommand("fontSize") only understands 1-7 and stores keywords such as
+  // "xx-large", so a "24px" option actually rendered 32px. Map every keyword back
+  // to the px value the menu promises.
+  const FONT_SIZE_PX: Record<string, string> = {
+    'xx-small': '9px',
+    'x-small': '10px',
+    small: '12px',
+    medium: '14px',
+    large: '16px',
+    'x-large': '18px',
+    'xx-large': '24px',
+    'xxx-large': '24px',
+    '-webkit-xxx-large': '24px'
+  };
+
+  const normalizeFontSizeSpans = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.querySelectorAll('span, font').forEach(node => {
+      const element = node as HTMLElement;
+      if (element.tagName === 'FONT') {
+        const legacy: Record<string, string> = {
+          '1': '9px', '2': '12px', '3': '14px', '4': '16px', '5': '18px', '6': '24px', '7': '32px'
+        };
+        const px = legacy[element.getAttribute('size') || ''];
+        if (!px) return;
+        const span = document.createElement('span');
+        span.style.fontSize = px;
+        while (element.firstChild) span.appendChild(element.firstChild);
+        element.replaceWith(span);
+        return;
+      }
+      const px = FONT_SIZE_PX[(element.style.fontSize || '').toLowerCase()];
+      if (px) element.style.fontSize = px;
+    });
+  };
+
   const handleApplySize = (sizeVal: string) => {
     setActiveSize(sizeVal);
     isExecutingActionRef.current = true;
     restoreSelection();
-    document.execCommand('fontSize', false, sizeVal);
+    ensureBlockStructure();
+    try {
+      document.execCommand('fontSize', false, sizeVal);
+    } catch {}
+    normalizeFontSizeSpans();
     isExecutingActionRef.current = false;
     saveSelection();
     handleEditorInput();
@@ -1073,6 +1327,440 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     handleEditorInput();
   };
 
+  // ---- Bullet / numbered item helpers (marker-span based, browser independent) ----
+  const CIRCLED_DIGITS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳'];
+
+  const caretTo = (el: HTMLElement, toEnd: boolean = true) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(!toEnd);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  };
+
+  const listItemMarker = (format: string, prefix: string, index: number): string =>
+    format === 'prefix' ? `${prefix} ${index}:` : (CIRCLED_DIGITS[index - 1] || `(${index})`);
+
+  // The item text lives in its own span. Chrome's execCommand('insertHTML')
+  // silently unwraps inline elements that carry no attributes, so the text can
+  // end up as a bare child node of the block. Never assume the last child is
+  // the text span - repair the shape first, otherwise the marker span gets
+  // treated as the text and Enter would erase the bullet symbol.
+  const itemTextElement = (item: HTMLElement): HTMLElement => {
+    const marker = item.firstElementChild as HTMLElement | null;
+    const last = item.lastElementChild as HTMLElement | null;
+    if (
+      last &&
+      last !== marker &&
+      last.tagName === 'SPAN' &&
+      last.getAttribute('contenteditable') !== 'false'
+    ) {
+      return last;
+    }
+    const existing = item.querySelector('[data-om-text]') as HTMLElement | null;
+    if (existing) return existing;
+    const textEl = document.createElement('span');
+    textEl.setAttribute('data-om-text', '1');
+    Array.from(item.childNodes).forEach(node => {
+      if (node !== marker) textEl.appendChild(node);
+    });
+    item.appendChild(textEl);
+    return textEl;
+  };
+
+  // Resolve a list item: new marker-span format (data-om-list) or the older legacy shape.
+  // Clicking the bullet glyph puts the caret inside the marker span, which is
+  // contenteditable="false" - typing there is ignored, so the editor looks dead.
+  // Same for a caret that lands directly on the flex item instead of its text
+  // span. Pull it back into the editable text before a key is handled.
+  const ensureEditableCaret = () => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection || selection.rangeCount === 0 || !selection.isCollapsed) return;
+
+    const anchor = selection.anchorNode;
+    if (!anchor || !editor.contains(anchor)) return;
+    const anchorEl = anchor.nodeType === 1 ? (anchor as HTMLElement) : anchor.parentElement;
+    if (!anchorEl) return;
+
+    const focusEditable = (host: HTMLElement) => {
+      if (!host.firstChild) host.appendChild(document.createElement('br'));
+      caretTo(host, true);
+    };
+
+    const locked = anchorEl.closest('[contenteditable="false"]') as HTMLElement | null;
+    if (locked) {
+      const item = locked.closest('[data-om-list]') as HTMLElement | null;
+      if (item) {
+        focusEditable(itemTextElement(item));
+      } else {
+        const fallback = editor.lastElementChild as HTMLElement | null;
+        if (fallback) focusEditable(fallback);
+      }
+      return;
+    }
+
+    if (anchor.nodeType === 1 && (anchor as HTMLElement).hasAttribute('data-om-list')) {
+      focusEditable(itemTextElement(anchor as HTMLElement));
+      return;
+    }
+
+    // With unselectable markers Chrome sometimes parks the caret on the editor
+    // root instead of the row, so the next keystroke went to the end of the note.
+    if (anchor === editor) {
+      const row = editor.querySelector('[data-om-list]') as HTMLElement | null;
+      if (row) focusEditable(itemTextElement(row));
+    }
+  };
+
+  const getBulletItem = (node: Node | null): HTMLElement | null => {
+    if (!node) return null;
+    const base: HTMLElement | null = node.nodeType === 1 ? (node as HTMLElement) : node.parentElement;
+    const explicit = base?.closest?.('[data-om-list]') as HTMLElement | null;
+    if (explicit) return explicit;
+    const legacy = base?.closest?.('div') as HTMLElement | null;
+    if (!legacy || legacy.children.length !== 2) return null;
+    const marker = legacy.children[0] as HTMLElement;
+    if (marker.tagName !== 'SPAN') return null;
+    const color = (marker.style.color || '').replace(/\s/g, '').toLowerCase();
+    if (!color.includes('#b88648') && !color.includes('rgb(184,134,72')) return null;
+    const symbol = (marker.textContent || '').trim();
+    return symbol && symbol.length <= 3 ? legacy : null;
+  };
+
+  const nextItemMarker = (item: HTMLElement): string | null => {
+    if ((item.dataset.omList || '') !== 'number') return null;
+    const format = item.dataset.omFormat || 'circled';
+    const prefix = item.dataset.omPrefix || '';
+    let index = 1;
+    let prev = item.previousElementSibling as HTMLElement | null;
+    while (
+      prev &&
+      prev.dataset?.omList === 'number' &&
+      (prev.dataset.omFormat || 'circled') === format &&
+      (prev.dataset.omPrefix || '') === prefix
+    ) {
+      index += 1;
+      prev = prev.previousElementSibling as HTMLElement | null;
+    }
+    return listItemMarker(format, prefix, index + 1);
+  };
+
+  const caretAtStartOfItem = (item: HTMLElement): boolean => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return false;
+    const textEl = itemTextElement(item);
+    const range = selection.getRangeAt(0);
+    if (!textEl.contains(range.startContainer)) return false;
+    const before = range.cloneRange();
+    before.selectNodeContents(textEl);
+    before.setEnd(range.startContainer, range.startOffset);
+    return before.toString() === '';
+  };
+
+  const selectFirstInsertedItem = (selectText: boolean) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const first = editor.querySelector('[data-om-tmp="1"]') as HTMLElement | null;
+    editor.querySelectorAll('[data-om-tmp]').forEach(node => node.removeAttribute('data-om-tmp'));
+    if (!first) return;
+    const textEl = itemTextElement(first);
+    if (!selectText) {
+      caretTo(textEl, true);
+      return;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(textEl);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  };
+
+  // Enter inside a list item continues the exact same style on the next line.
+  // An empty item exits the list (Word / Notion behaviour) so bullets can end.
+  const continueListItem = (item: HTMLElement) => {
+    const textEl = itemTextElement(item);
+    if ((textEl.textContent || '').trim() === '') {
+      const paragraph = document.createElement('p');
+      paragraph.innerHTML = '<br>';
+      item.replaceWith(paragraph);
+      caretTo(paragraph, true);
+      return;
+    }
+
+    const nextMarker = nextItemMarker(item);
+    const clone = item.cloneNode(true) as HTMLElement;
+    clone.removeAttribute('data-om-tmp');
+    if (nextMarker) {
+      const markerEl = clone.firstElementChild as HTMLElement | null;
+      if (markerEl && markerEl.tagName === 'SPAN') {
+        markerEl.textContent = nextMarker;
+        if (clone.dataset.omList === 'number') clone.dataset.omMarker = nextMarker;
+      }
+    }
+    const cloneText = itemTextElement(clone);
+    cloneText.innerHTML = '<br>';
+    item.after(clone);
+    caretTo(cloneText, true);
+  };
+
+  // A selection covering whole list lines should clear those lines completely.
+  // The browser already deletes the selected text; this removes the emptied row
+  // shells between the untouched neighbours and keeps a usable caret.
+  const cleanupEmptiedListRows = (parent: HTMLElement | null, before: HTMLElement | null, after: HTMLElement | null) => {
+    if (!parent || !parent.isConnected) return;
+    const children = Array.from(parent.children) as HTMLElement[];
+    // The browser also deletes the neighbouring blocks when the selection
+    // covers them, so a detached neighbour just means "open ended".
+    const beforeAlive = before && before.isConnected ? before : null;
+    const afterAlive = after && after.isConnected ? after : null;
+    const startIdx = beforeAlive ? children.indexOf(beforeAlive) + 1 : 0;
+    const endIdx = afterAlive ? children.indexOf(afterAlive) : children.length;
+    if (beforeAlive && startIdx === 0) return; // neighbours were replaced: leave as is
+    if (afterAlive && endIdx < 0) return;
+
+    let removed = false;
+    for (let i = endIdx - 1; i >= startIdx; i--) {
+      const row = children[i];
+      if (!row || !row.isConnected) continue;
+      if (!row.hasAttribute('data-om-list')) continue;
+      if ((itemTextElement(row).textContent || '').trim() !== '') continue;
+      row.remove();
+      removed = true;
+    }
+    if (!removed) return;
+
+    const root = editorRef.current;
+    if (!root) return;
+
+    // The caret was inside a removed row: put it back inside an editable span.
+    // Placing it at a flex container offset makes Chrome drop the selection
+    // entirely, which is why typing stopped working after a multi-line delete.
+    const putCaret = (el: HTMLElement, atEnd: boolean) => {
+      const host = el.hasAttribute('data-om-list') ? itemTextElement(el) : el;
+      if (!host.firstChild) host.appendChild(document.createElement('br'));
+      caretTo(host, atEnd);
+    };
+
+    const anchorEl = after && after.isConnected ? after : before && before.isConnected ? before : null;
+    if (anchorEl) {
+      putCaret(anchorEl, anchorEl === before);
+    } else if (!root.firstElementChild) {
+      const paragraph = document.createElement('p');
+      paragraph.innerHTML = '<br>';
+      root.appendChild(paragraph);
+      putCaret(paragraph, true);
+    }
+    if (document.activeElement !== root) root.focus();
+
+    const liveSelection = window.getSelection();
+    if (!liveSelection || liveSelection.rangeCount === 0) {
+      const lastChild = root.lastElementChild as HTMLElement | null;
+      if (lastChild) putCaret(lastChild, true);
+    }
+    handleEditorInput();
+    saveSelection();
+  };  // A new block (list/table) must never be inserted inside an existing item's
+  // text span, otherwise it nests inside the bullet. Move the caret to a fresh
+  // paragraph right after the current item instead.
+  const ensureBlockInsertionPoint = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return;
+    const item = getBulletItem(selection.anchorNode);
+    if (!item) return;
+    const paragraph = document.createElement('p');
+    paragraph.innerHTML = '<br>';
+    item.after(paragraph);
+    caretTo(paragraph, true);
+  };
+
+  // Keep the live DOM valid after block insertion: <p><p>..</p></p> can appear
+  // when a block list is inserted at a caret inside an empty paragraph.
+  const normalizeEditorBlocks = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.querySelectorAll('p').forEach(p => {
+      if (p.parentElement && p.parentElement.tagName === 'P') {
+        p.replaceWith(...Array.from(p.childNodes));
+      }
+    });
+  };
+
+  // An empty contenteditable has no block wrapper, so the first keystroke lands as
+  // a bare text node and Chrome then creates <div> lines. In that state every
+  // block-level tool (heading, quote, code, bullets, table) silently misfires.
+  // This normalises the root into real paragraph blocks and keeps the caret.
+  const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'BLOCKQUOTE', 'PRE', 'UL', 'OL', 'TABLE', 'HR', 'FIGURE']);
+
+  const isRootBlock = (node: Node): boolean => {
+    if (node.nodeType !== 1) return false;
+    const el = node as HTMLElement;
+    if (el.hasAttribute('data-om-list')) return true;
+    if (el.tagName === 'DIV' && el.hasAttribute('data-om-table')) return true;
+    return BLOCK_TAGS.has(el.tagName);
+  };
+
+  const hasStrayRootNodes = (): boolean => {
+    const editor = editorRef.current;
+    if (!editor) return false;
+    return Array.from(editor.childNodes).some(node => {
+      if (node.nodeType === 3) return (node.textContent || '').trim() !== '';
+      if (node.nodeType === 8) return false;
+      return !isRootBlock(node);
+    });
+  };
+
+  const ensureBlockStructure = (): boolean => {
+    const editor = editorRef.current;
+    if (!editor) return false;
+
+    const selection = window.getSelection();
+    const saved =
+      selection && selection.rangeCount > 0 && editor.contains(selection.getRangeAt(0).startContainer)
+        ? selection.getRangeAt(0).cloneRange()
+        : null;
+
+    let changed = false;
+    let pending: Node[] = [];
+
+    const flushPending = () => {
+      if (pending.length === 0) return;
+      const first = pending[0];
+      const paragraph = document.createElement('p');
+      editor.insertBefore(paragraph, first);
+      pending.forEach(node => paragraph.appendChild(node));
+      if (!paragraph.firstChild) paragraph.appendChild(document.createElement('br'));
+      pending = [];
+      changed = true;
+    };
+
+    Array.from(editor.childNodes).forEach(node => {
+      if (node.nodeType === 3) {
+        if ((node.textContent || '').trim() === '' && editor.childNodes.length > 1) {
+          node.parentNode?.removeChild(node);
+          changed = true;
+          return;
+        }
+        pending.push(node);
+        return;
+      }
+      if (node.nodeType !== 1) return;
+
+      const el = node as HTMLElement;
+      if (el.tagName === 'DIV' && !isRootBlock(el)) {
+        flushPending();
+        const paragraph = document.createElement('p');
+        while (el.firstChild) paragraph.appendChild(el.firstChild);
+        if (!paragraph.firstChild) paragraph.appendChild(document.createElement('br'));
+        el.replaceWith(paragraph);
+        changed = true;
+        return;
+      }
+      if (isRootBlock(el)) {
+        flushPending();
+        return;
+      }
+      pending.push(node);
+    });
+    flushPending();
+
+    if (editor.childNodes.length === 0) {
+      const paragraph = document.createElement('p');
+      paragraph.innerHTML = '<br>';
+      editor.appendChild(paragraph);
+      changed = true;
+    }
+
+    if (changed && saved) {
+      try {
+        if (editor.contains(saved.startContainer) && editor.contains(saved.endContainer)) {
+          selection?.removeAllRanges();
+          selection?.addRange(saved);
+          savedRangeRef.current = saved;
+        }
+      } catch {}
+    }
+    return changed;
+  };
+
+  // The block the caret sits in, at the editor root level.
+  const currentRootBlock = (): HTMLElement | null => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    const anchor = selection?.anchorNode;
+    if (!editor || !anchor || !editor.contains(anchor)) return null;
+    let node: Node = anchor;
+    while (node.parentNode && node.parentNode !== editor) node = node.parentNode;
+    return node.nodeType === 1 ? (node as HTMLElement) : null;
+  };
+
+  // Clicking a bullet/number style with the caret on a normal line should turn
+  // that line into an item (Google Docs / Notion behaviour) instead of leaving
+  // the text behind and appending an empty "List item".
+  const makeListItem = (kind: 'bullet' | 'number', symbol: string, contentHtml: string): HTMLElement => {
+    const item = document.createElement('div');
+    item.setAttribute('data-om-list', kind);
+    const isImageMarker = /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(symbol);
+    item.setAttribute('data-om-marker', isImageMarker ? 'custom-image' : symbol);
+    if (kind === 'number') {
+      item.setAttribute('data-om-format', 'circled');
+      item.setAttribute('data-om-prefix', '');
+    }
+    item.setAttribute('style', 'display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;');
+
+    const marker = document.createElement('span');
+    marker.setAttribute('contenteditable', 'false');
+    // A selectable marker poisons the whole selection: Chrome collapses any
+    // range that touches it, so Ctrl+A / drag-select + Backspace deleted
+    // nothing. The glyph is decoration, not text.
+    marker.setAttribute('style', 'color: #b88648; font-weight: bold; flex-shrink: 0; -webkit-user-select: none; user-select: none;');
+    if (isImageMarker) {
+      const image = document.createElement('img');
+      image.src = symbol;
+      image.alt = '';
+      image.width = 18;
+      image.height = 18;
+      image.style.width = '18px';
+      image.style.height = '18px';
+      marker.appendChild(image);
+    } else {
+      marker.textContent = symbol;
+    }
+
+    const textEl = document.createElement('span');
+    textEl.setAttribute('data-om-text', '1');
+    if (contentHtml && contentHtml.trim() && contentHtml.trim() !== '<br>') textEl.innerHTML = contentHtml;
+    else textEl.appendChild(document.createElement('br'));
+
+    item.appendChild(marker);
+    item.appendChild(textEl);
+    return item;
+  };
+
+  const convertCurrentBlockToList = (kind: 'bullet' | 'number', symbol: string): boolean => {
+    const selection = window.getSelection();
+    const block = currentRootBlock();
+    if (!selection || !selection.isCollapsed || !block) return false;
+    if (block.hasAttribute('data-om-list') || block.tagName === 'TABLE' || block.tagName === 'UL' || block.tagName === 'OL') return false;
+    if (!/^(P|DIV|H1|H2|H3|BLOCKQUOTE|PRE)$/.test(block.tagName)) return false;
+
+    const item = makeListItem(kind, symbol, block.innerHTML);
+    block.replaceWith(item);
+    caretTo(itemTextElement(item), true);
+    normalizeEditorBlocks();
+    ensureBlockStructure();
+    return true;
+  };
+
+  const bulletItemHtml = (symbol: string, text: string, extraAttrs: string = ''): string => {
+    const isImageMarker = /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(symbol);
+    const marker = isImageMarker
+      ? `<img src="${escapeHtml(symbol)}" alt="" width="18" height="18"/>`
+      : escapeHtml(symbol);
+    const markerData = isImageMarker ? 'custom-image' : escapeHtml(symbol);
+    return `<div data-om-list="bullet" data-om-marker="${markerData}" data-om-tmp="1"${extraAttrs} style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span contenteditable="false" style="color: #b88648; font-weight: bold; flex-shrink: 0; -webkit-user-select: none; user-select: none;">${marker}</span><span data-om-text="1">${escapeHtml(text)}</span></div>`;
+  };
   // =========================================================================
   // 3. BULLETS & NUMBERING
   // =========================================================================
@@ -1090,28 +1778,46 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
       return;
     }
 
+    if (convertCurrentBlockToList('bullet', symbol)) {
+      isExecutingActionRef.current = false;
+      saveSelection();
+      handleEditorInput();
+      return;
+    }
+
+    ensureBlockInsertionPoint();
+
     const sel = window.getSelection();
     const selectedText = sel ? sel.toString() : '';
     const lines = selectedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const items = lines.length > 0 ? lines : ['List item'];
 
-    let bulletHtml = '';
-    if (lines.length > 0) {
-      bulletHtml = lines.map(line =>
-        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #b88648; font-weight: bold; user-select: none; flex-shrink: 0;">${escapeHtml(symbol)}</span><span>${escapeHtml(line)}</span></div>`
-      ).join('') + '<p><br/></p>';
-    } else {
-      bulletHtml = `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #b88648; font-weight: bold; user-select: none; flex-shrink: 0;">${escapeHtml(symbol)}</span><span>List item</span></div><p><br/></p>`;
-    }
+    // Marker is real text in its own span (plus data-om-list), so Enter keeps the
+    // custom bullet in every browser - CSS string markers are not reliable.
+    const listHtml = items.map(line => bulletItemHtml(symbol, line)).join('') + '<p><br/></p>';
 
     let inserted = false;
     try {
-      inserted = document.execCommand('insertHTML', false, bulletHtml);
+      inserted = document.execCommand('insertHTML', false, listHtml);
     } catch {}
-    if (!inserted) insertHtmlAtCaret(bulletHtml);
+    if (!inserted) insertHtmlAtCaret(listHtml);
+    normalizeEditorBlocks();
+    ensureBlockStructure();
+
+    selectFirstInsertedItem(lines.length === 0);
 
     isExecutingActionRef.current = false;
     saveSelection();
     handleEditorInput();
+  };
+
+  const applyCustomBullet = (rawSymbol = customBulletInput) => {
+    const symbol = customBulletImage || rawSymbol.trim();
+    if (!symbol) return;
+    insertBulletList(symbol);
+    setCustomBulletInput('');
+    setCustomBulletImage('');
+    setCustomBulletImageError('');
   };
 
   const insertNumberedList = (styleType: string, customPrefix?: string) => {
@@ -1128,25 +1834,30 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
       return;
     }
 
+    if (convertCurrentBlockToList('number', customPrefix ? `${customPrefix} 1:` : listItemMarker('circled', '', 1))) {
+      isExecutingActionRef.current = false;
+      saveSelection();
+      handleEditorInput();
+      return;
+    }
+
+    ensureBlockInsertionPoint();
+
     const sel = window.getSelection();
     const selectedText = sel ? sel.toString() : '';
     const lines = selectedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const items = lines.length > 0 ? lines : ['First item'];
 
     let listHtml = '';
-    if (customPrefix) {
-      const items = lines.length > 0 ? lines : ['First item', 'Second item'];
-      listHtml = items.map((line, idx) =>
-        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #b88648; font-weight: 700; user-select: none; flex-shrink: 0;">${escapeHtml(customPrefix)} ${idx + 1}:</span><span>${escapeHtml(line)}</span></div>`
-      ).join('') + '<p><br/></p>';
-    } else if (styleType === 'circled') {
-      const circledDigits = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
-      const items = lines.length > 0 ? lines : ['First item', 'Second item'];
-      listHtml = items.map((line, idx) =>
-        `<div style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span style="color: #b88648; font-weight: bold; user-select: none; flex-shrink: 0;">${circledDigits[idx] || `(${idx + 1})`}</span><span>${escapeHtml(line)}</span></div>`
-      ).join('') + '<p><br/></p>';
+    if (!customPrefix && (styleType === 'a' || styleType === 'A' || styleType === 'i' || styleType === 'I')) {
+      listHtml = `<ol type="${styleType}" style="padding-left: 1.8em;">${items.map(line => `<li>${escapeHtml(line)}</li>`).join('')}</ol><p><br/></p>`;
     } else {
-      const items = lines.length > 0 ? lines : ['First item'];
-      listHtml = `<ol type="${styleType}" style="margin: 6px 0; padding-left: 24px;">${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ol><p><br/></p>`;
+      const format = customPrefix ? 'prefix' : 'circled';
+      const prefix = customPrefix || '';
+      listHtml = items.map((line, idx) => {
+        const marker = listItemMarker(format, prefix, idx + 1);
+        return `<div data-om-list="number" data-om-format="${format}" data-om-prefix="${escapeHtml(prefix)}" data-om-marker="${escapeHtml(marker)}" data-om-tmp="1" style="display: flex; align-items: flex-start; gap: 8px; margin: 4px 0;"><span contenteditable="false" style="color: #b88648; font-weight: 700; flex-shrink: 0; -webkit-user-select: none; user-select: none;">${escapeHtml(marker)}</span><span data-om-text="1">${escapeHtml(line)}</span></div>`;
+      }).join('') + '<p><br/></p>';
     }
 
     let inserted = false;
@@ -1154,25 +1865,32 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
       inserted = document.execCommand('insertHTML', false, listHtml);
     } catch {}
     if (!inserted) insertHtmlAtCaret(listHtml);
+    normalizeEditorBlocks();
+    ensureBlockStructure();
+
+    selectFirstInsertedItem(lines.length === 0);
 
     isExecutingActionRef.current = false;
     saveSelection();
     handleEditorInput();
-  };
-
-  // =========================================================================
+  };  // =========================================================================
   // 4. TABLE CREATION & EDITING
   // =========================================================================
   const insertTable = (rows: number, cols: number, withHeader: boolean = true) => {
     isExecutingActionRef.current = true;
     restoreSelection();
+    // A table is a block: never let it land inside a list item's text span.
+    ensureBlockStructure();
+    ensureBlockInsertionPoint();
 
-    let tableHtml = `<table style="width: 100%; border-collapse: separate; border-spacing: 0; margin: 12px 0; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden;" data-om-table="true">`;
+    // Grid lines, header fill and zebra rows come from index.css so the table
+    // follows the active theme instead of baking in light-only colors.
+    let tableHtml = `<table style="width: 100%; border-collapse: separate; border-spacing: 0; margin: 12px 0;" data-om-table="true">`;
 
     if (withHeader) {
       tableHtml += `<thead><tr>`;
       for (let c = 1; c <= cols; c++) {
-        tableHtml += `<th style="border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; padding: 8px 12px; font-weight: 700; text-align: left; background-color: #f1f5f9; color: #1e293b; font-size: 12px;">Header ${c}</th>`;
+        tableHtml += `<th style="padding: 8px 12px; text-align: left; font-size: 12px;">Header ${c}</th>`;
       }
       tableHtml += `</tr></thead>`;
     }
@@ -1180,10 +1898,9 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     tableHtml += `<tbody>`;
     const numRows = withHeader ? Math.max(1, rows - 1) : rows;
     for (let r = 1; r <= numRows; r++) {
-      const bg = r % 2 === 0 ? 'background-color: #f8fafc;' : 'background-color: #ffffff;';
-      tableHtml += `<tr style="${bg}">`;
+      tableHtml += `<tr>`;
       for (let c = 1; c <= cols; c++) {
-        tableHtml += `<td style="border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; padding: 7px 12px; min-width: 60px; font-size: 12px;">Cell ${r},${c}</td>`;
+        tableHtml += `<td style="padding: 7px 12px; min-width: 60px; font-size: 12px;">Cell ${r},${c}</td>`;
       }
       tableHtml += `</tr>`;
     }
@@ -1194,6 +1911,8 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
       inserted = document.execCommand('insertHTML', false, tableHtml);
     } catch {}
     if (!inserted) insertHtmlAtCaret(tableHtml);
+    normalizeEditorBlocks();
+    ensureBlockStructure();
 
     isExecutingActionRef.current = false;
     saveSelection();
@@ -1219,52 +1938,14 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
 
     const numCols = table.rows[0]?.cells.length || 2;
     const newRow = table.insertRow(insertIndex);
-    newRow.style.backgroundColor = table.rows.length % 2 === 0 ? '#f8fafc' : '#ffffff';
     for (let i = 0; i < numCols; i++) {
       const newCell = newRow.insertCell(i);
-      newCell.style.borderBottom = '1px solid #cbd5e1';
-      newCell.style.borderRight = '1px solid #cbd5e1';
       newCell.style.padding = '7px 12px';
       newCell.style.minWidth = '60px';
       newCell.style.fontSize = '12px';
       newCell.innerText = 'New Data';
     }
     lastActiveCellRef.current = newRow.cells[0];
-    detectActiveTable();
-    handleEditorInput();
-  };
-
-  const addTableColumn = () => {
-    const table = getTargetTable();
-    if (!table) return;
-
-    const targetCell = lastActiveCellRef.current;
-    const colIndex = targetCell ? targetCell.cellIndex + 1 : -1;
-
-    for (let r = 0; r < table.rows.length; r++) {
-      const row = table.rows[r];
-      const isHeader = row.parentElement?.nodeName === 'THEAD' || row.cells[0]?.nodeName === 'TH';
-      const cell = isHeader ? document.createElement('th') : row.insertCell(colIndex);
-      cell.style.borderBottom = '1px solid #cbd5e1';
-      cell.style.borderRight = '1px solid #cbd5e1';
-      cell.style.padding = '7px 12px';
-      cell.style.minWidth = '60px';
-      cell.style.fontSize = '12px';
-      if (isHeader) {
-        cell.style.fontWeight = '700';
-        cell.style.textAlign = 'left';
-        cell.style.backgroundColor = '#f1f5f9';
-        cell.style.color = '#1e293b';
-        cell.innerText = `Header ${row.cells.length + 1}`;
-        if (colIndex === -1 || colIndex >= row.children.length) {
-          row.appendChild(cell);
-        } else {
-          row.insertBefore(cell, row.children[colIndex]);
-        }
-      } else {
-        cell.innerText = 'Data';
-      }
-    }
     detectActiveTable();
     handleEditorInput();
   };
@@ -1281,6 +1962,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
         lastActiveTableRef.current = null;
         lastActiveCellRef.current = null;
       } else {
+        shiftTableReferences(table, 'row', targetRow.rowIndex + 1, -1, targetRow);
         table.deleteRow(targetRow.rowIndex);
       }
       detectActiveTable();
@@ -1300,6 +1982,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
       lastActiveTableRef.current = null;
       lastActiveCellRef.current = null;
     } else {
+      shiftTableReferences(table, 'col', colIndex + 1, -1);
       for (let r = 0; r < table.rows.length; r++) {
         const row = table.rows[r];
         if (row.cells[colIndex]) {
@@ -1320,6 +2003,639 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
       detectActiveTable();
       handleEditorInput();
     }
+  };
+
+  // =========================================================================
+  // 4b. EXCEL-STYLE TABLE ENGINE (formulas, totals, cell formatting)
+  // =========================================================================
+  const cellFromNode = (node: Node | null): HTMLTableCellElement | null => {
+    if (!node) return null;
+    const el = node.nodeType === 1 ? (node as HTMLElement) : node.parentElement;
+    const cell = el?.closest?.('td, th') as HTMLTableCellElement | null;
+    return cell && editorRef.current?.contains(cell) ? cell : null;
+  };
+
+  const activeCell = (): HTMLTableCellElement | null => {
+    const remembered = lastActiveCellRef.current;
+    if (remembered && editorRef.current?.contains(remembered)) return remembered;
+    const selection = window.getSelection();
+    return cellFromNode(selection?.anchorNode ?? null);
+  };
+
+  const tableMatrix = (table: HTMLTableElement): HTMLTableCellElement[][] =>
+    Array.from(table.rows).map(row => Array.from(row.cells) as HTMLTableCellElement[]);
+
+  const tableGrid = (table: HTMLTableElement): string[][] =>
+    tableMatrix(table).map(row => row.map(cell => (cell.textContent || '').trim()));
+
+  const tableFormulaMap = (table: HTMLTableElement): Map<string, string> => {
+    const map = new Map<string, string>();
+    tableMatrix(table).forEach((row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        const formula = cell.getAttribute('data-om-formula');
+        if (formula) map.set(`${rowIndex + 1}:${colIndex + 1}`, formula);
+      });
+    });
+    return map;
+  };
+
+  /** Excel keeps references pointing at the same data after a structural edit. */
+  const shiftTableReferences = (
+    table: HTMLTableElement,
+    axis: 'row' | 'col',
+    at: number,
+    delta: number,
+    skipRow?: HTMLTableRowElement | null
+  ) => {
+    tableMatrix(table).forEach(row => {
+      row.forEach(cell => {
+        if (skipRow && cell.closest('tr') === skipRow) return;
+        const formula = cell.getAttribute('data-om-formula');
+        if (!formula) return;
+        const next = shiftFormulaReferences(formula, axis, at, delta);
+        cell.setAttribute('data-om-formula', next);
+      });
+    });
+  };
+
+  const recalculateTable = (table: HTMLTableElement | null, force = false): boolean => {
+    if (!table) return false;
+    const grid = tableGrid(table);
+    const formulas = tableFormulaMap(table);
+    const selection = window.getSelection();
+    const editingCell = selection && selection.rangeCount > 0 ? cellFromNode(selection.anchorNode) : null;
+    let changed = false;
+
+    tableMatrix(table).forEach((row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        const formula = cell.getAttribute('data-om-formula');
+        if (!formula) return;
+        const result = evaluateTableFormula(formula, {
+          grid,
+          formulas,
+          at: { row: rowIndex + 1, col: colIndex + 1 }
+        });
+        const text = result.error
+          ? result.error
+          : formatCellNumber(result.value ?? 0, cell.getAttribute('data-om-numfmt') || undefined);
+
+        cell.setAttribute('data-om-calc', '1');
+        if (result.error) cell.setAttribute('data-om-err', result.error);
+        else cell.removeAttribute('data-om-err');
+
+        if ((cell.textContent || '') !== text) {
+          cell.textContent = text;
+          changed = true;
+          // Rewriting the cell that holds the caret destroys it, so the caret is
+          // put back at the end of the fresh value.
+          if (!force && editingCell === cell) {
+            const active = document.activeElement;
+            if (active === editorRef.current || editorRef.current?.contains(active)) caretTo(cell, true);
+          }
+        }
+      });
+    });
+    return changed;
+  };
+
+  /**
+   * Notes saved by earlier builds carry light-only table colors (#ffffff rows,
+   * #f1f5f9 headers). Those are stripped so the CSS theme can paint the table
+   * again; user shading (any other color) is left untouched.
+   */
+  const normalizeTableTheme = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const DEFAULTS = new Set(['#ffffff', '#f8fafc', '#eef2ff', 'rgb(255, 255, 255)', 'rgb(248, 250, 252)', 'rgb(238, 242, 255)']);
+    editor.querySelectorAll<HTMLTableRowElement>('table[data-om-table] tr').forEach(row => {
+      if (DEFAULTS.has(row.style.backgroundColor)) row.style.backgroundColor = '';
+    });
+    editor.querySelectorAll<HTMLTableCellElement>('table[data-om-table] th').forEach(cell => {
+      if (DEFAULTS.has(cell.style.backgroundColor)) cell.style.backgroundColor = '';
+      if (cell.style.color === '#1e293b' || cell.style.color === 'rgb(30, 41, 59)') cell.style.color = '';
+    });
+  };
+
+  const recalculateAllTables = (): boolean => {
+    const editor = editorRef.current;
+    if (!editor) return false;
+    let changed = false;
+    editor.querySelectorAll('table').forEach(table => {
+      if (recalculateTable(table as HTMLTableElement)) changed = true;
+    });
+    return changed;
+  };
+
+  const cellsInSelection = (fallback: HTMLTableCellElement): HTMLTableCellElement[] => {
+    const table = fallback.closest('table');
+    if (!table) return [fallback];
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return [fallback];
+    const range = selection.getRangeAt(0);
+    const cells = Array.from(table.querySelectorAll('td, th')) as HTMLTableCellElement[];
+    const touched = cells.filter(cell => {
+      try {
+        return range.intersectsNode(cell);
+      } catch {
+        return false;
+      }
+    });
+    return touched.length > 0 ? touched : [fallback];
+  };
+
+  const refreshTableStats = () => {
+    const cell = activeCell();
+    const table = cell?.closest('table') as HTMLTableElement | null;
+    if (!cell || !table || !cell.parentElement) {
+      setTableStats(null);
+      return;
+    }
+    const rowIndex = (cell.parentElement as HTMLTableRowElement).rowIndex + 1;
+    const colIndex = cell.cellIndex + 1;
+    const grid = tableGrid(table);
+    // Excel's status bar equivalent: the numbers sitting above this cell.
+    const above = grid.slice(0, Math.max(0, rowIndex - 1)).map(line => [line[colIndex - 1] ?? '']);
+    const values = numbersFromGrid(above);
+    setTableStats(values.length > 0 ? statsForValues(values) : null);
+  };
+
+  const styleTableCell = (cell: HTMLTableCellElement, header = false) => {
+    cell.style.padding = header ? '8px 12px' : '7px 12px';
+    cell.style.minWidth = '60px';
+    cell.style.fontSize = '12px';
+    if (header) {
+      cell.style.fontWeight = '700';
+      cell.style.textAlign = 'left';
+    }
+  };
+
+  const commitCellFormula = (raw: string) => {
+    const cell = activeCell();
+    if (!cell) return;
+    const table = cell.closest('table') as HTMLTableElement | null;
+    const value = raw.trim();
+    if (!value) {
+      cell.removeAttribute('data-om-formula');
+      cell.removeAttribute('data-om-calc');
+      cell.textContent = '';
+    } else if (value.startsWith('=')) {
+      cell.setAttribute('data-om-formula', value);
+      cell.textContent = '';
+      recalculateTable(table, true);
+    } else {
+      cell.removeAttribute('data-om-formula');
+      cell.removeAttribute('data-om-calc');
+      cell.textContent = value;
+      recalculateTable(table, true);
+    }
+    setFormulaDraft(value);
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  const insertAggregate = (fn: 'SUM' | 'AVERAGE' | 'COUNT' | 'MIN' | 'MAX') => {
+    const cell = activeCell();
+    if (!cell) return;
+    const table = cell.closest('table') as HTMLTableElement | null;
+    cell.setAttribute('data-om-formula', `=${fn}(ABOVE)`);
+    cell.setAttribute('data-om-calc', '1');
+    cell.textContent = '';
+    recalculateTable(table, true);
+    setFormulaDraft(`=${fn}(ABOVE)`);
+    detectActiveTable();
+    handleEditorInput();
+    refreshTableStats();
+  };
+
+  const insertTableRow = (where: 'above' | 'below') => {
+    const table = getTargetTable();
+    if (!table) return;
+    const cell = activeCell();
+    const row = cell?.closest('tr') as HTMLTableRowElement | null;
+    const reference = row ? row.rowIndex + (where === 'below' ? 1 : 0) : -1;
+    const cols = table.rows[0]?.cells.length || 2;
+    shiftTableReferences(table, 'row', (reference < 0 ? table.rows.length : reference) + 1, 1);
+    const newRow = table.insertRow(reference);
+    for (let index = 0; index < cols; index += 1) {
+      const newCell = newRow.insertCell(index);
+      styleTableCell(newCell);
+      newCell.innerHTML = '<br>';
+    }
+    recalculateTable(table);
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  const insertTableColumn = (where: 'left' | 'right') => {
+    const table = getTargetTable();
+    if (!table) return;
+    const cell = activeCell();
+    const targetIndex = cell ? cell.cellIndex + (where === 'right' ? 1 : 0) : -1;
+    shiftTableReferences(table, 'col', (targetIndex < 0 ? (table.rows[0]?.cells.length || 0) : targetIndex) + 1, 1);
+    Array.from(table.rows).forEach(row => {
+      const isHeader = row.parentElement?.tagName === 'THEAD' || row.cells[0]?.tagName === 'TH';
+      const newCell = document.createElement(isHeader ? 'th' : 'td') as HTMLTableCellElement;
+      styleTableCell(newCell, isHeader);
+      newCell.innerHTML = '<br>';
+      const before = targetIndex < 0 ? null : row.children[targetIndex] ?? null;
+      row.insertBefore(newCell, before);
+    });
+    recalculateTable(table);
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  const addTableTotalRow = () => {
+    const table = getTargetTable();
+    if (!table) return;
+    const cols = table.rows[0]?.cells.length || 1;
+    const totalRow = table.insertRow(-1);
+    totalRow.setAttribute('data-om-total', '1');
+    for (let index = 0; index < cols; index += 1) {
+      const cell = totalRow.insertCell(index);
+      styleTableCell(cell);
+      if (index === 0) {
+        cell.textContent = 'Total';
+      } else {
+        const letter = columnLabel(index + 1);
+        const firstDataRow = table.tHead ? 2 : 1;
+        const lastDataRow = table.rows.length - 1;
+        if (lastDataRow >= firstDataRow) {
+          cell.setAttribute('data-om-formula', `=SUM(${letter}${firstDataRow}:${letter}${lastDataRow})`);
+          cell.setAttribute('data-om-calc', '1');
+        }
+      }
+    }
+    recalculateTable(table, true);
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  const applyTableCellAlign = (align: 'left' | 'center' | 'right') => {
+    const cell = activeCell();
+    if (!cell) return;
+    cellsInSelection(cell).forEach(target => {
+      target.style.textAlign = align;
+    });
+    handleEditorInput();
+  };
+
+  /** Dark fills get light text (and vice versa), so a hand-picked colour stays readable. */
+  const readableTextOnFill = (color: string): string => {
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = color;
+    if (!probe.style.backgroundColor) return '';
+    probe.style.display = 'none';
+    document.body.appendChild(probe);
+    const rgb = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    const match = rgb.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (!match) return '';
+    const luminance = (0.299 * Number(match[1]) + 0.587 * Number(match[2]) + 0.114 * Number(match[3])) / 255;
+    return luminance > 0.6 ? '#0f172a' : '#f8fafc';
+  };
+
+  const shadeTableCells = (color: string) => {
+    const cell = activeCell();
+    if (!cell) return;
+    const textColor = color ? readableTextOnFill(color) : '';
+    cellsInSelection(cell).forEach(target => {
+      target.style.backgroundColor = color || '';
+      target.style.color = textColor;
+    });
+    handleEditorInput();
+  };
+
+  const toggleTableCellBold = () => {
+    const cell = activeCell();
+    if (!cell) return;
+    const targets = cellsInSelection(cell);
+    const shouldBold = cell.style.fontWeight !== '700';
+    targets.forEach(target => {
+      target.style.fontWeight = shouldBold ? '700' : '400';
+    });
+    handleEditorInput();
+  };
+
+  const clearTableCells = () => {
+    const cell = activeCell();
+    if (!cell) return;
+    cellsInSelection(cell).forEach(target => {
+      target.removeAttribute('data-om-formula');
+      target.removeAttribute('data-om-calc');
+      target.removeAttribute('data-om-err');
+      target.innerHTML = '<br>';
+    });
+    recalculateTable(cell.closest('table') as HTMLTableElement | null);
+    handleEditorInput();
+    detectActiveTable();
+  };
+
+  const TABLE_MIN_COLUMN = 40;
+  const TABLE_MAX_COLUMN = 900;
+  const TABLE_MIN_ROW = 24;
+  const TABLE_MAX_ROW = 600;
+
+  // Excel's number formats, with a sample so the menu says what each one does.
+  const TABLE_NUMBER_FORMATS: { value: string; label: string; sample: string }[] = [
+    { value: '', label: 'General', sample: '1234.5' },
+    { value: '0', label: '0', sample: '1235' },
+    { value: '0.0', label: '0.0', sample: '1234.5' },
+    { value: '0.00', label: '0.00', sample: '1234.50' },
+    { value: '#,##0', label: '#,##0', sample: '1,235' },
+    { value: '#,##0.00', label: '#,##0.00', sample: '1,234.50' },
+    { value: '₹#,##0', label: '₹#,##0', sample: '₹1,235' },
+    { value: '₹#,##0.00', label: '₹#,##0.00', sample: '₹1,234.50' },
+    { value: '0%', label: '0%', sample: '1250%' }
+  ];
+  /** Pointer distance (px) that counts as grabbing a cell border. */
+  const TABLE_RESIZE_GRAB = 6;
+
+  const clampColumnWidth = (value: number) =>
+    Math.min(TABLE_MAX_COLUMN, Math.max(TABLE_MIN_COLUMN, Math.round(value)));
+
+  const clampRowHeight = (value: number) =>
+    Math.min(TABLE_MAX_ROW, Math.max(TABLE_MIN_ROW, Math.round(value)));
+
+  /** `null` hands the column back to the browser (content fit / Auto). */
+  const setColumnWidth = (table: HTMLTableElement, index: number, width: number | null) => {
+    Array.from(table.rows).forEach(row => {
+      const target = row.cells[index];
+      if (!target) return;
+      target.style.width = width === null ? '' : `${width}px`;
+      target.style.minWidth = width === null ? '60px' : `${width}px`;
+    });
+  };
+
+  const setRowHeight = (row: HTMLTableRowElement, height: number | null) => {
+    row.style.height = height === null ? '' : `${height}px`;
+    Array.from(row.cells).forEach(cell => {
+      cell.style.height = height === null ? '' : `${height}px`;
+    });
+  };
+
+  /** Columns touched by the caret (or by a multi-cell selection). */
+  const scopedColumnIndexes = (cell: HTMLTableCellElement): number[] =>
+    Array.from(new Set(cellsInSelection(cell).map(target => target.cellIndex))).sort((a, b) => a - b);
+
+  const resizeActiveColumns = (delta: number) => {
+    const cell = activeCell();
+    const table = cell?.closest('table') as HTMLTableElement | null;
+    if (!cell || !table) return;
+    const firstRow = table.rows[0];
+    scopedColumnIndexes(cell).forEach(index => {
+      const probe = firstRow?.cells[index];
+      const current = probe ? (parseFloat(probe.style.width) || probe.offsetWidth || 60) : 60;
+      const next = clampColumnWidth(current + delta);
+      setColumnWidth(table, index, next);
+      setCellColumnWidth(next);
+    });
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  const resetActiveColumnWidth = () => {
+    const cell = activeCell();
+    const table = cell?.closest('table') as HTMLTableElement | null;
+    if (!cell || !table) return;
+    scopedColumnIndexes(cell).forEach(index => setColumnWidth(table, index, null));
+    setCellColumnWidth(0);
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  const resizeActiveRows = (delta: number) => {
+    const cell = activeCell();
+    const table = cell?.closest('table') as HTMLTableElement | null;
+    if (!cell || !table) return;
+    const rows = Array.from(new Set(
+      cellsInSelection(cell).map(target => target.closest('tr') as HTMLTableRowElement | null)
+    )).filter((row): row is HTMLTableRowElement => !!row);
+    rows.forEach(row => {
+      const current = parseFloat(row.style.height) || row.offsetHeight || 28;
+      const next = clampRowHeight(current + delta);
+      setRowHeight(row, next);
+      setCellRowHeight(next);
+    });
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  const resetActiveRowHeight = () => {
+    const cell = activeCell();
+    if (!cell) return;
+    cellsInSelection(cell).forEach(target => {
+      const row = target.closest('tr') as HTMLTableRowElement | null;
+      if (row) setRowHeight(row, null);
+    });
+    setCellRowHeight(0);
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  /* --------------------------- drag to resize --------------------------- */
+  // Excel-style sizing: grab the right edge of a column (or the bottom edge of a
+  // row) and drag. Double-clicking that same edge fits the column/row back to
+  // its content. Both paths write exactly the same inline styles as the Format
+  // tab buttons, so sizes survive a save and reload.
+
+  type TableResizeHit =
+    | { kind: 'column'; table: HTMLTableElement; index: number; size: number }
+    | { kind: 'row'; table: HTMLTableElement; row: HTMLTableRowElement; size: number };
+
+  type TableResizeDrag = {
+    kind: 'column' | 'row';
+    table: HTMLTableElement;
+    index: number;
+    row: HTMLTableRowElement | null;
+    startPos: number;
+    startSize: number;
+    lastSize: number;
+  };
+
+  const tableResizeRef = useRef<TableResizeDrag | null>(null);
+
+  const tableResizeHitAt = (clientX: number, clientY: number, target: EventTarget | null): TableResizeHit | null => {
+    const cell = (target as HTMLElement | null)?.closest?.('td,th') as HTMLTableCellElement | null;
+    if (!cell || !editorRef.current?.contains(cell)) return null;
+    const table = cell.closest('table') as HTMLTableElement | null;
+    if (!table) return null;
+    const rect = cell.getBoundingClientRect();
+    // Column edges win on the bottom-right corner: widening a column is the
+    // more common intent there.
+    if (rect.width > 18 && Math.abs(clientX - rect.right) <= TABLE_RESIZE_GRAB) {
+      return { kind: 'column', table, index: cell.cellIndex, size: rect.width };
+    }
+    if (rect.height > 18 && Math.abs(clientY - rect.bottom) <= TABLE_RESIZE_GRAB) {
+      const row = cell.closest('tr') as HTMLTableRowElement | null;
+      if (!row) return null;
+      return { kind: 'row', table, row, size: row.getBoundingClientRect().height };
+    }
+    return null;
+  };
+
+  const handleTableResizeHover = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (tableResizeRef.current || !editorRef.current) return;
+    const hit = tableResizeHitAt(event.clientX, event.clientY, event.target);
+    const cursor = hit ? (hit.kind === 'column' ? 'col-resize' : 'row-resize') : '';
+    if (editorRef.current.style.cursor !== cursor) editorRef.current.style.cursor = cursor;
+  };
+
+  const handleTableResizeStart = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const hit = tableResizeHitAt(event.clientX, event.clientY, event.target);
+    if (!hit) return;
+    // Stop the browser from starting a text selection or moving the caret.
+    event.preventDefault();
+    event.stopPropagation();
+    tableResizeRef.current = {
+      kind: hit.kind,
+      table: hit.table,
+      index: hit.kind === 'column' ? hit.index : hit.row.rowIndex,
+      row: hit.kind === 'row' ? hit.row : null,
+      startPos: hit.kind === 'column' ? event.clientX : event.clientY,
+      startSize: hit.size,
+      lastSize: Math.round(hit.size)
+    };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = hit.kind === 'column' ? 'col-resize' : 'row-resize';
+  };
+
+  const handleTableResizeDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const hit = tableResizeHitAt(event.clientX, event.clientY, event.target);
+    if (!hit) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (hit.kind === 'column') setColumnWidth(hit.table, hit.index, null);
+    else setRowHeight(hit.row, null);
+    setCellColumnWidth(0);
+    setCellRowHeight(0);
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  useEffect(() => {
+    const onMove = (event: MouseEvent) => {
+      const drag = tableResizeRef.current;
+      if (!drag) return;
+      event.preventDefault();
+      if (drag.kind === 'column') {
+        const next = clampColumnWidth(drag.startSize + (event.clientX - drag.startPos));
+        if (next === drag.lastSize) return;
+        drag.lastSize = next;
+        setColumnWidth(drag.table, drag.index, next);
+        setCellColumnWidth(next);
+        return;
+      }
+      if (!drag.row) return;
+      const next = clampRowHeight(drag.startSize + (event.clientY - drag.startPos));
+      if (next === drag.lastSize) return;
+      drag.lastSize = next;
+      setRowHeight(drag.row, next);
+      setCellRowHeight(next);
+    };
+
+    const onUp = () => {
+      if (!tableResizeRef.current) return;
+      tableResizeRef.current = null;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      if (editorRef.current) editorRef.current.style.cursor = '';
+      detectActiveTable();
+      handleEditorInput();
+    };
+
+    window.addEventListener('mousemove', onMove, true);
+    window.addEventListener('mouseup', onUp, true);
+    window.addEventListener('blur', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove, true);
+      window.removeEventListener('mouseup', onUp, true);
+      window.removeEventListener('blur', onUp);
+    };
+  }, [detectActiveTable, handleEditorInput]);
+  const applyCellNumberFormat = (format: string) => {
+    const cell = activeCell();
+    if (!cell) return;
+    const table = cell.closest('table') as HTMLTableElement | null;
+    cellsInSelection(cell).forEach(target => {
+      if (format) target.setAttribute('data-om-numfmt', format);
+      else target.removeAttribute('data-om-numfmt');
+      if (target.getAttribute('data-om-formula')) return;
+      // Keep the raw number, so switching 1,234.50 -> 1,235 -> 1,234.50 never
+      // loses paise (same trick Excel uses behind the displayed value).
+      const stored = toNumber(target.getAttribute('data-om-numvalue'));
+      const numeric = stored === null ? toNumber(target.textContent) : stored;
+      if (numeric === null) return;
+      target.setAttribute('data-om-numvalue', String(numeric));
+      target.textContent = formatCellNumber(numeric, format || undefined);
+    });
+    setCellNumberFormat(format);
+    recalculateTable(table, true);
+    handleEditorInput();
+  };
+
+  const toggleActiveTableHeader = () => {
+    const table = getTargetTable();
+    if (!table) return;
+    const headerRow = table.rows[0];
+    if (!headerRow) return;
+
+    if (table.tHead) {
+      const row = table.tHead.rows[0];
+      table.tHead.remove();
+      const body = table.tBodies[0] || table.createTBody();
+      body.insertBefore(row, body.firstChild);
+      Array.from(row.cells).forEach(cell => {
+        const replacement = document.createElement('td');
+        replacement.innerHTML = cell.innerHTML;
+        Array.from(cell.attributes).forEach(attribute => {
+          if (attribute.name !== 'style' && attribute.name !== 'data-om-formula') {
+            replacement.setAttribute(attribute.name, attribute.value);
+          }
+        });
+        replacement.style.cssText = cell.style.cssText;
+        replacement.style.backgroundColor = '';
+        replacement.style.fontWeight = '';
+        replacement.style.color = '';
+        cell.replaceWith(replacement);
+      });
+    } else {
+      const thead = table.createTHead();
+      thead.appendChild(headerRow);
+      Array.from(headerRow.cells).forEach(cell => {
+        const replacement = document.createElement('th');
+        replacement.innerHTML = cell.innerHTML;
+        Array.from(cell.attributes).forEach(attribute => {
+          if (attribute.name !== 'style' && attribute.name !== 'data-om-formula') {
+            replacement.setAttribute(attribute.name, attribute.value);
+          }
+        });
+        replacement.style.cssText = cell.style.cssText;
+        replacement.style.backgroundColor = '';
+        replacement.style.color = '';
+        replacement.style.fontWeight = '700';
+        replacement.style.textAlign = 'left';
+        cell.replaceWith(replacement);
+      });
+    }
+    recalculateTable(table);
+    detectActiveTable();
+    handleEditorInput();
+  };
+
+  const toggleTableZebra = () => {
+    const table = getTargetTable();
+    if (!table) return;
+    const enabled = table.getAttribute('data-om-zebra') !== '1';
+    if (enabled) table.setAttribute('data-om-zebra', '1');
+    else table.removeAttribute('data-om-zebra');
+    Array.from(table.tBodies).forEach(body => {
+      Array.from(body.rows).forEach(row => {
+        row.style.backgroundColor = '';
+      });
+    });
+    handleEditorInput();
   };
 
   const toggleEditorReading = () => {
@@ -1347,95 +2663,38 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
     }
   };
 
+  // Saved notes keep their formulas as data-om-formula: recalculate them as soon
+  // as the HTML is mounted so the visible numbers are never stale.
+  useEffect(() => {
+    normalizeTableTheme();
+    recalculateAllTables();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialHtml]);
+
+  // The Calc/Format tabs mirror the cell the caret sits in.
+  useEffect(() => {
+    if (activeStudio !== 'bullets' || listTablePanelTab !== 'table') return;
+    const cell = activeCell();
+    setFormulaDraft(cell?.getAttribute('data-om-formula') || '');
+    setCellNumberFormat(cell?.getAttribute('data-om-numfmt') || '');
+    setCellColumnWidth(cell ? Math.round(cell.offsetWidth) : 0);
+    setCellRowHeight(cell ? Math.round((cell.closest('tr') as HTMLElement | null)?.offsetHeight || 0) : 0);
+    refreshTableStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStudio, listTablePanelTab, activeTableLocation?.row, activeTableLocation?.col, activeTableLocation?.totalRows, activeTableLocation?.totalCols]);
   return (
     <div className={`relative min-w-0 max-w-full rounded-lg border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/80 overflow-hidden ${className}`}>
       {/* ========================================================================= */}
       {/* 1. PRIMARY DOCKED TOOLBAR                                                */}
       {/* ========================================================================= */}
       <div className="journal-reflection-toolbar border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/90 dark:bg-slate-800/60 backdrop-blur-xs px-1.5 py-0.75">
-        <div className="flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
-          {/* Paragraph Style */}
-          <div className="relative shrink-0">
-            <select
-              value={activeStyle}
-              onChange={(e) => handleApplyStyle(e.target.value)}
-              className="toolbar-flat-control h-7.5 pl-2 pr-6 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
-              title="Typography Style"
-            >
-              <option value="p">Paragraph</option>
-              <option value="h1">Heading 1</option>
-              <option value="h2">Heading 2</option>
-              <option value="h3">Heading 3</option>
-              <option value="blockquote">Quote Block</option>
-              <option value="pre">Code Block</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-1.5 top-2.5 h-3 w-3 text-slate-400" />
-          </div>
-
-          {/* Text Size */}
-          <div className="relative shrink-0">
-            <select
-              value={activeSize}
-              onChange={(e) => handleApplySize(e.target.value)}
-              className="toolbar-flat-control h-7.5 pl-2 pr-5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
-              title="Text Size"
-            >
-              <option value="2">12px</option>
-              <option value="3">14px</option>
-              <option value="4">16px</option>
-              <option value="5">18px</option>
-              <option value="6">24px</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-1.5 top-2.5 h-3 w-3 text-slate-400" />
-          </div>
-
-          {/* Font Family */}
-          <div className="relative shrink-0">
-            <select
-              value={activeFont}
-              onChange={(e) => handleApplyFont(e.target.value)}
-              className="toolbar-flat-control h-7.5 w-28 pl-2 pr-5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none"
-              title="Font Family"
-              aria-label="Font Family"
-            >
-              <option value="" disabled>Font</option>
-              {FONT_FAMILIES.map(font => (
-                <option key={font.value} value={font.value}>{font.label}</option>
-              ))}
-              {customFonts.map(font => (
-                <option key={font.id} value={font.familyName}>{font.familyName}</option>
-              ))}
-              {installedFontNames
-                .filter(name =>
-                  !FONT_FAMILIES.some(font => font.value.toLowerCase() === name.toLowerCase()) &&
-                  !customFonts.some(font => font.familyName.toLowerCase() === name.toLowerCase())
-                )
-                .map(name => <option key={`installed-${name}`} value={name}>{name}</option>)}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-1.5 top-2.5 h-3 w-3 text-slate-400" />
-          </div>
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              saveSelection();
-              setIsFontManagerOpen(previous => !previous);
-            }}
-            className={`flex h-7.5 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition-colors cursor-pointer shrink-0 ${
-              isFontManagerOpen
-                ? 'border-indigo-600 bg-indigo-600 text-white'
-                : 'border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-indigo-400 hover:text-indigo-600'
-            }`}
-            title="Add or use a custom font"
-            aria-expanded={isFontManagerOpen}
-          >
-            <Plus className="h-3 w-3" />
-            <span>Fonts</span>
-          </button>
-
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5 shrink-0" />
-
+        <div className="note-toolbar-row flex min-w-0 flex-nowrap items-center gap-0.5 overflow-x-hidden overflow-y-hidden whitespace-nowrap py-0.5">
+          <button type="button" onMouseDown={(e) => { e.preventDefault(); saveSelection(); setActiveStudio(prev => prev === 'text' ? null : 'text'); }} className={`flex h-7.5 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${activeStudio === 'text' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200'}`} title="Text tools" aria-label="Text tools"><Hash className="h-3.5 w-3.5" /><span>Text</span><ChevronDown className="h-2.5 w-2.5" /></button>
           {/* Inline Formats: Bold, Italic, Underline, Strikethrough */}
+          <button type="button" onMouseDown={(e) => { e.preventDefault(); saveSelection(); setActiveStudio(prev => prev === 'format' ? null : 'format'); }} className={`flex h-7.5 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${activeStudio === 'format' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200'}`} title="Text formatting tools">
+            <Bold className="h-3.5 w-3.5" /><span className="hidden sm:inline">Format</span><ChevronDown className="h-2.5 w-2.5" />
+          </button>
+          {false && <>
           <div className="flex items-center gap-0.5 bg-white dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200/80 dark:border-slate-700 shrink-0 shadow-2xs">
             <button
               type="button"
@@ -1472,6 +2731,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           </div>
 
           <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5 shrink-0" />
+          </>}
 
           {/* =================================================================== */}
           {/* 4 CORE LUXURY STUDIO BUTTONS: COLOR, HIGHLIGHT, BULLETS, TABLE      */}
@@ -1483,38 +2743,19 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
             onMouseDown={(e) => {
               e.preventDefault();
               saveSelection();
-              setActiveStudio(prev => prev === 'color' ? null : 'color');
+              if (activeStudio === 'color') setActiveStudio(null);
+              else { setColorPanelTab('text'); setActiveStudio('color'); }
             }}
             className={`flex h-7.5 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold border transition-all cursor-pointer shrink-0 shadow-2xs ${
               activeStudio === 'color'
                 ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
                 : 'bg-white dark:bg-slate-800 border-slate-200/90 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-indigo-400 hover:text-indigo-600'
             }`}
-            title="Text Color Palette Studio"
+            title="Text color and highlight palettes"
           >
             <Palette className={`h-3.5 w-3.5 ${activeStudio === 'color' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} />
-            <span>Color</span>
+            <span className="hidden sm:inline">Color</span>
             <ChevronDown className={`h-2.5 w-2.5 transition-transform ${activeStudio === 'color' ? 'rotate-180 opacity-90' : 'opacity-60'}`} />
-          </button>
-
-          {/* 2. HIGHLIGHT STUDIO TOGGLE */}
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              saveSelection();
-              setActiveStudio(prev => prev === 'highlight' ? null : 'highlight');
-            }}
-            className={`flex h-7.5 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold border transition-all cursor-pointer shrink-0 shadow-2xs ${
-              activeStudio === 'highlight'
-                ? 'bg-amber-500 border-amber-600 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-800 border-slate-200/90 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-amber-400 hover:text-amber-600'
-            }`}
-            title="Pastel Highlighter Studio"
-          >
-            <Highlighter className={`h-3.5 w-3.5 ${activeStudio === 'highlight' ? 'text-white' : 'text-amber-500'}`} />
-            <span>Highlight</span>
-            <ChevronDown className={`h-2.5 w-2.5 transition-transform ${activeStudio === 'highlight' ? 'rotate-180 opacity-90' : 'opacity-60'}`} />
           </button>
 
           {/* 3. BULLETS & NUMBERING TOGGLE */}
@@ -1523,7 +2764,8 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
             onMouseDown={(e) => {
               e.preventDefault();
               saveSelection();
-              setActiveStudio(prev => prev === 'bullets' ? null : 'bullets');
+              if (activeStudio === 'bullets') setActiveStudio(null);
+              else { setListTablePanelTab('bullets'); setActiveStudio('bullets'); }
             }}
             className={`flex h-7.5 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold border transition-all cursor-pointer shrink-0 shadow-2xs ${
               activeStudio === 'bullets'
@@ -1533,31 +2775,11 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
             title="Bullet & Numbering Studio"
           >
             <List className={`h-3.5 w-3.5 ${activeStudio === 'bullets' ? 'text-white' : 'text-violet-600 dark:text-violet-400'}`} />
-            <span>Bullets</span>
+            <span className="hidden sm:inline">Lists &amp; Tables</span>
             <ChevronDown className={`h-2.5 w-2.5 transition-transform ${activeStudio === 'bullets' ? 'rotate-180 opacity-90' : 'opacity-60'}`} />
           </button>
 
-          {/* 4. TABLE STUDIO TOGGLE */}
-          <button
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              saveSelection();
-              detectActiveTable();
-              setActiveStudio(prev => prev === 'table' ? null : 'table');
-            }}
-            className={`flex h-7.5 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold border transition-all cursor-pointer shrink-0 shadow-2xs ${
-              activeStudio === 'table'
-                ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-800 border-slate-200/90 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-400 hover:text-emerald-600'
-            }`}
-            title="Table Generator & Tools"
-          >
-            <TableIcon className={`h-3.5 w-3.5 ${activeStudio === 'table' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
-            <span>Table</span>
-            <ChevronDown className={`h-2.5 w-2.5 transition-transform ${activeStudio === 'table' ? 'rotate-180 opacity-90' : 'opacity-60'}`} />
-          </button>
-
+          {false && <>
           <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5 shrink-0" />
 
           {/* Alignment */}
@@ -1597,7 +2819,9 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           </div>
 
           <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5 shrink-0" />
+          </>}
 
+          {false && <>
           {/* Indent / Clear Formatting */}
           <div className="flex items-center gap-0.5 bg-white dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200/80 dark:border-slate-700 shrink-0 shadow-2xs">
             <button
@@ -1627,6 +2851,30 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           </div>
 
           <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5 shrink-0" />
+          </>}
+
+          {false && <>
+          {/* Undo / Redo */}
+          <div className="flex items-center gap-0.5 bg-white dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200/80 dark:border-slate-700 shrink-0 shadow-2xs">
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); moveEditorHistory(-1); }}
+              className="flex h-6.5 w-6.5 items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200"
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); moveEditorHistory(1); }}
+              className="flex h-6.5 w-6.5 items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer text-slate-700 dark:text-slate-200"
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5 shrink-0" />
 
           {/* Read Aloud button */}
           <button
@@ -1644,6 +2892,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
               {isEditorSpeaking ? 'Reading...' : 'Listen'}
             </span>
           </button>
+          </>}
         </div>
       </div>
 
@@ -1656,7 +2905,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-xs font-bold text-slate-900 dark:text-white">Add or use a font</h3>
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white">Add or use a typeface</h3>
               <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
                 Installed fonts use your exact computer font name. Uploaded fonts stay in this workspace.
               </p>
@@ -1695,7 +2944,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
             <input
               type="file"
               accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
-              aria-label="Choose font file"
+              aria-label="Choose typeface file"
               onChange={(e) => {
                 const selectedFile = e.target.files?.[0] || null;
                 setFontFile(selectedFile);
@@ -1724,7 +2973,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           {customFonts.length > 0 && (
             <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800 pt-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Saved fonts
+                Saved typefaces
               </p>
               {customFonts.map(font => (
                 <div key={font.id} className="flex items-center justify-between gap-2 text-xs">
@@ -1764,36 +3013,65 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
         <div
           onMouseDown={(e) => {
             const target = e.target as HTMLElement;
-            if (!target.closest('input, textarea')) {
+            if (!target.closest('input, textarea, select')) {
               e.preventDefault();
             }
           }}
           className="sanctuary-menu-surface border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 py-2.5 sm:px-4 sm:py-3 shadow-md relative z-20 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150"
         >
+          {activeStudio === 'text' && (
+            <div className="note-text-controls flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden whitespace-nowrap">
+              <select value={activeStyle} onChange={(e) => handleApplyStyle(e.target.value)} className="toolbar-flat-control note-toolbar-compact-control note-text-compact-control note-text-style-control shrink-0 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-sm font-semibold text-slate-900 dark:text-slate-100" aria-label="Paragraph format" title="Paragraph format"><option value="p">Paragraph</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="blockquote">Quote Block</option><option value="pre">Code Block</option></select>
+              <select value={activeSize} onChange={(e) => handleApplySize(e.target.value)} className="toolbar-flat-control note-toolbar-compact-control note-text-compact-control note-text-size-control shrink-0 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-sm font-semibold text-slate-900 dark:text-slate-100" aria-label="Text size" title="Text size"><option value="2">12px</option><option value="3">14px</option><option value="4">16px</option><option value="5">18px</option><option value="6">24px</option></select>
+              <select value={activeFont} onChange={(e) => handleApplyFont(e.target.value)} className="toolbar-flat-control note-toolbar-compact-control note-text-compact-control note-text-family-control shrink-0 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-sm font-semibold text-slate-900 dark:text-slate-100" aria-label="Typeface" title="Typeface"><option value="" disabled>Typeface</option>{FONT_FAMILIES.map(font => <option key={font.value} value={font.value}>{font.label}</option>)}{customFonts.map(font => <option key={font.id} value={font.familyName}>{font.familyName}</option>)}{installedFontNames.filter(name => !FONT_FAMILIES.some(font => font.value.toLowerCase() === name.toLowerCase()) && !customFonts.some(font => font.familyName.toLowerCase() === name.toLowerCase())).map(name => <option key={`installed-${name}`} value={name}>{name}</option>)}</select>
+              <button type="button" onMouseDown={(e) => { e.preventDefault(); saveSelection(); setIsFontManagerOpen(v => !v); }} className={`note-text-compact-button flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${isFontManagerOpen ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`} title="Manage typefaces" aria-label="Manage typefaces"><Plus className="h-3.5 w-3.5" /></button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setActiveStudio(null)} className="note-text-compact-button flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Close text tools"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          )}
+          {activeStudio === 'format' && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([{ label: 'Bold', action: 'bold', icon: <Bold className="h-4 w-4" /> }, { label: 'Italic', action: 'italic', icon: <Italic className="h-4 w-4" /> }, { label: 'Underline', action: 'underline', icon: <Underline className="h-4 w-4" /> }, { label: 'Strike', action: 'strikeThrough', icon: <Strikethrough className="h-4 w-4" /> }]).map(item => (
+                <button key={item.action} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { exec(item.action); setActiveStudio(null); }} className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800" title={item.label}>{item.icon}</button>
+              ))}
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { exec('removeFormat'); setActiveStudio(null); }} className="flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2 text-[11px] hover:bg-rose-50 dark:border-slate-700 dark:hover:bg-rose-950/30" title="Clear formatting"><RemoveFormatting className="h-3.5 w-3.5" />Clear</button>
+              <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
+              {([{ label: 'Align left', action: 'justifyLeft', icon: <AlignLeft className="h-4 w-4" /> }, { label: 'Center', action: 'justifyCenter', icon: <AlignCenter className="h-4 w-4" /> }, { label: 'Align right', action: 'justifyRight', icon: <AlignRight className="h-4 w-4" /> }, { label: 'Justify', action: 'justifyFull', icon: <AlignJustify className="h-4 w-4" /> }, { label: 'Decrease indent', action: 'outdent', icon: <Outdent className="h-4 w-4" /> }, { label: 'Increase indent', action: 'indent', icon: <Indent className="h-4 w-4" /> }]).map(item => (
+                <button key={item.action} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { exec(item.action); setActiveStudio(null); }} className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800" title={item.label}>{item.icon}</button>
+              ))}
+              <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => moveEditorHistory(-1)} className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800" title="Undo (Ctrl+Z)"><Undo2 className="h-4 w-4" /></button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => moveEditorHistory(1)} className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800" title="Redo (Ctrl+Y)"><Redo2 className="h-4 w-4" /></button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={toggleEditorReading} className={`flex h-8 items-center gap-1 rounded-md border px-2 text-[11px] font-semibold ${isEditorSpeaking ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 text-indigo-600 hover:bg-indigo-50 dark:border-slate-700 dark:hover:bg-slate-800'}`} title="Read note aloud"><Volume2 className={`h-3.5 w-3.5 ${isEditorSpeaking ? 'animate-bounce' : ''}`} />{isEditorSpeaking ? 'Reading' : 'Listen'}</button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setActiveStudio(null)} className="ml-auto rounded-md p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Close Format tools"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          )}
+          {activeStudio === 'bullets' && (
+            <div className="flex items-center gap-1 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setListTablePanelTab('bullets')} className={`flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold ${listTablePanelTab === 'bullets' ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+                <List className="h-3 w-3" />Bullets
+              </button>
+              <button type="button" onMouseDown={(e) => { e.preventDefault(); detectActiveTable(); }} onClick={() => setListTablePanelTab('table')} className={`flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold ${listTablePanelTab === 'table' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+                <TableIcon className="h-3 w-3" />Table
+              </button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setActiveStudio(null)} className="ml-auto rounded-md p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Close Lists & Tables"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          )}
+          {activeStudio === 'color' && (
+            <div className="flex items-center gap-1 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setColorPanelTab('text')} className={`flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold ${colorPanelTab === 'text' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+                <Palette className="h-3 w-3" />Text Color
+              </button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setColorPanelTab('highlight')} className={`flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold ${colorPanelTab === 'highlight' ? 'bg-amber-500 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+                <Highlighter className="h-3 w-3" />Highlight
+              </button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setActiveStudio(null)} className="ml-auto rounded-md p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Close Color tools"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          )}
           {/* ===================================================================== */}
           {/* STUDIO 1: TEXT COLOR PALETTE                                         */}
           {/* ===================================================================== */}
-          {activeStudio === 'color' && (
+          {activeStudio === 'color' && colorPanelTab === 'text' && (
             <div className="space-y-2.5">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <div className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                    <Palette className="h-3 w-3" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">Text Color</span>
-                  <span className="text-[10px] text-slate-400 hidden sm:inline">• Click tone or hex</span>
-                </div>
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setActiveStudio(null)}
-                  className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 cursor-pointer"
-                  title="Close Color Studio"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
               {/* Unified Continuous Color Palette Strip */}
               <div className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60">
                 {FLAT_TEXT_COLORS.map((c) => (
@@ -1813,53 +3091,21 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                     {c.value === 'inherit' && 'Auto'}
                   </button>
                 ))}
-              </div>
-
-              {/* Custom Hex Bar - Compact single row */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                    Custom:
-                  </span>
-                  <label className="relative flex items-center justify-center cursor-pointer">
-                    <input
-                      type="color"
-                      value={customTextColor}
-                      onChange={(e) => setCustomTextColor(e.target.value)}
-                      className="h-6 w-6 rounded-md border-0 p-0 cursor-pointer overflow-hidden opacity-0 absolute inset-0"
-                      title="Pick custom color"
-                    />
-                    <span
-                      className="h-6 w-6 rounded-md border border-slate-300 dark:border-slate-600 shadow-2xs block transition-transform hover:scale-110"
-                      style={{ backgroundColor: customTextColor }}
-                    />
-                  </label>
+                <label className="relative flex h-6.5 w-6.5 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-300 dark:border-slate-600 shadow-2xs transition-transform hover:scale-110 cursor-pointer" title="Choose a custom text color">
                   <input
-                    type="text"
+                    type="color"
                     value={customTextColor}
-                    onChange={(e) => setCustomTextColor(e.target.value)}
-
-                    className="h-6 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 font-mono text-[11px] uppercase text-slate-900 dark:text-white"
+                    onChange={(e) => {
+                      const color = e.target.value;
+                      setCustomTextColor(color);
+                      applyTextColor(color);
+                    }}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label="Choose custom text color"
                   />
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => applyTextColor(customTextColor)}
-                    className="h-6 px-2.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-[11px] font-semibold text-white shadow-2xs transition-colors cursor-pointer"
-                  >
-                    Apply
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => applyTextColor('inherit')}
-                  className="flex items-center gap-1 h-6 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 shadow-2xs transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="h-2.5 w-2.5 text-slate-400" />
-                  <span>Reset to Auto</span>
-                </button>
+                  <span className="pointer-events-none absolute inset-0" style={{ background: 'conic-gradient(#f87171, #fbbf24, #34d399, #60a5fa, #a78bfa, #f87171)' }} />
+                  <Palette className="pointer-events-none relative z-10 h-3.5 w-3.5 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
+                </label>
               </div>
             </div>
           )}
@@ -1867,27 +3113,8 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           {/* ===================================================================== */}
           {/* STUDIO 2: PASTEL HIGHLIGHTER                                         */}
           {/* ===================================================================== */}
-          {activeStudio === 'highlight' && (
+          {activeStudio === 'color' && colorPanelTab === 'highlight' && (
             <div className="space-y-2.5">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <div className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
-                    <Highlighter className="h-3 w-3" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">Text Highlighter</span>
-                  <span className="text-[10px] text-slate-400 hidden sm:inline">• Select marker</span>
-                </div>
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setActiveStudio(null)}
-                  className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 cursor-pointer"
-                  title="Close Highlighter Studio"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
               {/* Compact Pastel Highlighter Chips */}
               <div className="flex flex-wrap items-center gap-1.5">
                 {HIGHLIGHT_COLORS.map((h) => (
@@ -1909,51 +3136,30 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                     </span>
                   </button>
                 ))}
-              </div>
-
-              {/* Custom Highlight & Clear Row */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                    Custom:
-                  </span>
-                  <label className="relative flex items-center justify-center cursor-pointer">
-                    <input
-                      type="color"
-                      value={customHighlightColor}
-                      onChange={(e) => setCustomHighlightColor(e.target.value)}
-                      className="h-6 w-6 rounded-md border-0 p-0 cursor-pointer overflow-hidden opacity-0 absolute inset-0"
-                      title="Pick custom highlight color"
-                    />
-                    <span
-                      className="h-6 w-6 rounded-md border border-slate-300 dark:border-slate-600 shadow-2xs block transition-transform hover:scale-110"
-                      style={{ backgroundColor: customHighlightColor }}
-                    />
-                  </label>
+                <label className="relative flex h-6.5 w-6.5 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-300 dark:border-slate-600 shadow-2xs transition-transform hover:scale-110 cursor-pointer" title="Choose a custom highlight color">
                   <input
-                    type="text"
+                    type="color"
                     value={customHighlightColor}
-                    onChange={(e) => setCustomHighlightColor(e.target.value)}
-                    className="h-6 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 font-mono text-[11px] uppercase text-slate-900 dark:text-white"
+                    onChange={(e) => {
+                      const color = e.target.value;
+                      setCustomHighlightColor(color);
+                      applyHighlight(color);
+                    }}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label="Choose custom highlight color"
                   />
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => applyHighlight(customHighlightColor)}
-                    className="h-6 px-2.5 rounded-md bg-amber-500 hover:bg-amber-600 text-[11px] font-semibold text-white shadow-2xs transition-colors cursor-pointer"
-                  >
-                    Highlight
-                  </button>
-                </div>
-
+                  <span className="pointer-events-none absolute inset-0" style={{ background: 'conic-gradient(#f87171, #fbbf24, #34d399, #60a5fa, #a78bfa, #f87171)' }} />
+                  <Palette className="pointer-events-none relative z-10 h-3.5 w-3.5 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
+                </label>
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => applyHighlight('transparent')}
-                  className="flex items-center gap-1 h-6 px-2 rounded-md border border-rose-200 dark:border-rose-900/60 bg-rose-50/60 dark:bg-slate-800 text-[11px] font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-100 shadow-2xs transition-colors cursor-pointer"
+                  className="flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-lg border border-rose-200 dark:border-rose-900/60 bg-white/80 dark:bg-slate-900/80 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                  title="Clear highlight"
+                  aria-label="Clear highlight"
                 >
-                  <X className="h-3 w-3" />
-                  <span>Clear Highlight</span>
+                  <Eraser className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
@@ -1962,14 +3168,14 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           {/* ===================================================================== */}
           {/* STUDIO 3: BULLETS & NUMBERING                                        */}
           {/* ===================================================================== */}
-          {activeStudio === 'bullets' && (
+          {activeStudio === 'bullets' && listTablePanelTab === 'bullets' && (
             <div className="space-y-2.5">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
                 <div className="flex items-center gap-2">
                   <div className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-50 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400">
                     <List className="h-3 w-3" />
                   </div>
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">Bullets & Numbering</span>
+                  
                 </div>
 
                 <div className="flex items-center gap-1.5">
@@ -2033,33 +3239,72 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                         </span>
                       </button>
                     ))}
-                  </div>
-
-                  {/* Custom Bullet Symbol / Emoji Row */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[11px]">
-                    <span className="text-slate-500 dark:text-slate-400 font-medium">
-                      Custom Emoji / Bullet:
-                    </span>
+                    <span className="ml-1 text-slate-500 dark:text-slate-400 font-medium">Custom</span>
                     <input
+                      ref={customBulletInputRef}
                       type="text"
-                      maxLength={6}
-
+                      aria-label="Custom bullet or emoji"
+                      placeholder="Emoji"
                       value={customBulletInput}
-                      onChange={(e) => setCustomBulletInput(e.target.value)}
-                      className="h-6 w-28 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-xs text-slate-900 dark:text-white"
+                      onChange={(e) => { setCustomBulletInput(e.target.value); setCustomBulletImage(''); setCustomBulletImageError(''); }}
+                      onInput={(e) => { setCustomBulletInput(e.currentTarget.value); setCustomBulletImage(''); setCustomBulletImageError(''); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          applyCustomBullet(e.currentTarget.value);
+                        }
+                      }}
+                      className="note-toolbar-compact-control note-toolbar-mini-control h-6 w-16 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-xs text-slate-900 dark:text-white"
                     />
+                    <label className="relative flex h-6.5 w-6.5 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-violet-600 hover:bg-violet-50 dark:hover:bg-slate-800 cursor-pointer" title="Choose an image from this computer">
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/gif,image/webp"
+                        aria-label="Choose custom bullet image"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.currentTarget.files?.[0];
+                          if (!file) return;
+                          setCustomBulletImageError('');
+                          if (!/^image\/(?:png|jpeg|gif|webp)$/i.test(file.type)) {
+                            setCustomBulletImageError('Choose PNG, JPG, GIF or WebP.');
+                            e.currentTarget.value = '';
+                            return;
+                          }
+                          if (file.size > 1024 * 1024) {
+                            setCustomBulletImageError('Image must be 1 MB or smaller.');
+                            e.currentTarget.value = '';
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            const result = typeof reader.result === 'string' ? reader.result : '';
+                            if (!/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(result)) {
+                              setCustomBulletImageError('Could not read that image.');
+                              return;
+                            }
+                            setCustomBulletInput('');
+                            setCustomBulletImage(result);
+                          };
+                          reader.onerror = () => setCustomBulletImageError('Could not read that image.');
+                          reader.readAsDataURL(file);
+                          e.currentTarget.value = '';
+                        }}
+                      />
+                      {customBulletImage
+                        ? <img src={customBulletImage} alt="" className="h-full w-full object-contain" />
+                        : <ImagePlus className="h-3.5 w-3.5" />}
+                    </label>
                     <button
                       type="button"
-                      disabled={!customBulletInput.trim()}
+                      aria-disabled={!customBulletInput.trim() && !customBulletImage}
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        insertBulletList(customBulletInput.trim());
-                        setCustomBulletInput('');
-                      }}
-                      className="h-6 px-2 rounded-md bg-violet-600 hover:bg-violet-700 text-[11px] font-semibold text-white shadow-2xs disabled:opacity-40 cursor-pointer"
+                      onClick={() => applyCustomBullet(customBulletInputRef.current?.value || customBulletInput)}
+                      className={`h-6 px-2 rounded-md bg-violet-600 hover:bg-violet-700 text-[11px] font-semibold text-white shadow-2xs cursor-pointer ${customBulletInput.trim() || customBulletImage ? '' : 'opacity-40'}`}
                     >
                       Insert
                     </button>
+                    {customBulletImageError && <span className="text-[10px] text-rose-600 dark:text-rose-400">{customBulletImageError}</span>}
                   </div>
                 </div>
               ) : (
@@ -2094,13 +3339,13 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
 
                       value={customNumberPrefix}
                       onChange={(e) => setCustomNumberPrefix(e.target.value)}
-                      className="h-6 w-28 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-xs text-slate-900 dark:text-white"
+                      className="note-toolbar-compact-control h-8 w-28 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-xs text-slate-900 dark:text-white"
                     />
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertNumberedList('1', customNumberPrefix)}
-                      className="h-6 px-2 rounded-md bg-violet-600 hover:bg-violet-700 text-[11px] font-semibold text-white shadow-2xs cursor-pointer"
+                      className="h-8 px-2 rounded-md bg-violet-600 hover:bg-violet-700 text-[11px] font-semibold text-white shadow-2xs cursor-pointer"
                     >
                       Insert ({customNumberPrefix} 1, 2...)
                     </button>
@@ -2113,7 +3358,7 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
           {/* ===================================================================== */}
           {/* STUDIO 4: TABLE STUDIO & ACTIVE GRID                                 */}
           {/* ===================================================================== */}
-          {activeStudio === 'table' && (
+          {activeStudio === 'bullets' && listTablePanelTab === 'table' && (
             <div className="space-y-2.5">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -2122,12 +3367,12 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                   </div>
                   <span className="text-xs font-bold text-slate-900 dark:text-white">Table Studio</span>
                   {activeTableLocation ? (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[9px] font-semibold border border-emerald-200/80 dark:border-emerald-800/60">
-                      Row {activeTableLocation.row}/{activeTableLocation.totalRows} · Col {activeTableLocation.col}/{activeTableLocation.totalCols}
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold border border-emerald-200/80 dark:border-emerald-800/60 font-mono">
+                      {columnLabel(activeTableLocation.col)}{activeTableLocation.row} · {activeTableLocation.totalRows}×{activeTableLocation.totalCols}
                     </span>
                   ) : (
                     <span className="text-[10px] text-slate-400 hidden sm:inline">
-                      • Click cell in table to edit
+                      • Click a cell to edit
                     </span>
                   )}
                 </div>
@@ -2142,131 +3387,170 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 items-start">
-                {/* Panel 1: Create & Insert Table */}
-                <div className="p-2.5 rounded-lg border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                      <Plus className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
-                      <span>Create Grid</span>
-                    </span>
-                    <span className="font-mono text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/60">
-                      {tableGridHover.rows} × {tableGridHover.cols}
-                    </span>
-                  </div>
+              {/* Excel-style tabs */}
+              <div className="flex items-center gap-0.5 rounded-lg bg-slate-100/90 dark:bg-slate-800/70 p-0.5">
+                {[
+                  { id: 'insert' as const, label: 'Insert', icon: Plus },
+                  { id: 'edit' as const, label: 'Edit', icon: Columns },
+                  { id: 'calc' as const, label: 'Calc', icon: Sigma },
+                  { id: 'format' as const, label: 'Format', icon: PaintBucket }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setTableTab(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                      tableTab === tab.id
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-2xs'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <tab.icon className="h-3 w-3" />
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
+              </div>
 
-                  <div className="flex items-center justify-between gap-2">
-                    {/* 6x6 Smooth Interactive Grid */}
-                    <div className="flex flex-col gap-0.5 items-start">
-                      {[1, 2, 3, 4, 5, 6].map((r) => (
-                        <div key={r} className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5, 6].map((c) => {
-                            const isHovered = r <= tableGridHover.rows && c <= tableGridHover.cols;
-                            return (
-                              <div
-                                key={c}
-                                onMouseEnter={() => setTableGridHover({ rows: r, cols: c })}
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => insertTable(r, c, tableHasHeader)}
-                                className={`h-3.5 w-3.5 rounded-xs transition-all cursor-pointer ${
-                                  isHovered
-                                    ? 'bg-indigo-600 border border-indigo-700 shadow-2xs'
-                                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-400'
-                                }`}
-                                title={`${r} × ${c} table`}
-                              />
-                            );
-                          })}
-                        </div>
-                      ))}
+              {/* ---------------- INSERT ---------------- */}
+              {tableTab === 'insert' && (
+                <div className="grid grid-cols-1 gap-2.5 items-start">
+                  <div className="p-2.5 rounded-lg border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                        <Plus className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                        <span>Create Grid</span>
+                      </span>
+                      <span className="font-mono text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/60">
+                        {tableGridHover.rows} × {tableGridHover.cols}
+                      </span>
                     </div>
 
-                    {/* Quick Presets */}
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[9px] text-slate-400 uppercase font-semibold">Quick:</span>
-                      <div className="grid grid-cols-2 gap-1">
-                        {[
-                          { r: 2, c: 2, label: '2×2' },
-                          { r: 3, c: 3, label: '3×3' },
-                          { r: 4, c: 4, label: '4×4' },
-                          { r: 5, c: 3, label: '5×3' }
-                        ].map(p => (
-                          <button
-                            key={p.label}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setTableGridHover({ rows: p.r, cols: p.c });
-                              insertTable(p.r, p.c, tableHasHeader);
-                            }}
-                            className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:bg-white dark:hover:bg-slate-700 text-[10px] font-mono text-slate-700 dark:text-slate-300 transition-colors cursor-pointer text-center"
-                            title={`Insert ${p.label} table`}
-                          >
-                            {p.label}
-                          </button>
+                    <div className="flex items-center justify-start gap-6">
+                      <div className="flex flex-col gap-0.5 items-start">
+                        {[1, 2, 3, 4, 5, 6].map((r) => (
+                          <div key={r} className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5, 6].map((c) => {
+                              const isHovered = r <= tableGridHover.rows && c <= tableGridHover.cols;
+                              return (
+                                <div
+                                  key={c}
+                                  onMouseEnter={() => setTableGridHover({ rows: r, cols: c })}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => insertTable(r, c, tableHasHeader)}
+                                  className={`h-3.5 w-3.5 rounded-xs transition-all cursor-pointer ${
+                                    isHovered
+                                      ? 'bg-indigo-600 border border-indigo-700 shadow-2xs'
+                                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-400'
+                                  }`}
+                                  title={`${r} × ${c} table`}
+                                />
+                              );
+                            })}
+                          </div>
                         ))}
                       </div>
+
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[9px] text-slate-400 uppercase font-semibold">Quick:</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          {[
+                            { r: 2, c: 2, label: '2×2' },
+                            { r: 3, c: 3, label: '3×3' },
+                            { r: 4, c: 4, label: '4×4' },
+                            { r: 5, c: 3, label: '5×3' }
+                          ].map(p => (
+                            <button
+                              key={p.label}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setTableGridHover({ rows: p.r, cols: p.c });
+                                insertTable(p.r, p.c, tableHasHeader);
+                              }}
+                              className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:bg-white dark:hover:bg-slate-700 text-[10px] font-mono text-slate-700 dark:text-slate-300 transition-colors cursor-pointer text-center"
+                              title={`Insert ${p.label} table`}
+                            >
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                      <label className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={tableHasHeader}
+                          onChange={(e) => setTableHasHeader(e.target.checked)}
+                          className="rounded text-indigo-600 focus:ring-indigo-500 h-3 w-3 cursor-pointer"
+                        />
+                        <span>Header row</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => insertTable(tableGridHover.rows, tableGridHover.cols, tableHasHeader)}
+                        className="rounded-md bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs transition-colors cursor-pointer"
+                      >
+                        Insert Table
+                      </button>
                     </div>
                   </div>
 
-                  {/* Header Row checkbox & Insert Button */}
-                  <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
-                    <label className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={tableHasHeader}
-                        onChange={(e) => setTableHasHeader(e.target.checked)}
-                        className="rounded text-indigo-600 focus:ring-indigo-500 h-3 w-3 cursor-pointer"
-                      />
-                      <span>Header row</span>
-                    </label>
-
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => insertTable(tableGridHover.rows, tableGridHover.cols, tableHasHeader)}
-                      className="rounded-md bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs transition-colors cursor-pointer"
-                    >
-                      Insert Table
-                    </button>
-                  </div>
                 </div>
+              )}
 
-                {/* Panel 2: Table Modification Controls */}
+              {/* ---------------- EDIT ---------------- */}
+              {tableTab === 'edit' && (
                 <div className="p-2.5 rounded-lg border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                      <Columns className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
-                      <span>Edit Active Table</span>
-                    </span>
-                    <span className="text-[9px] text-slate-400">
-                      Shortcut: <kbd className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700">Tab</kbd>
-                    </span>
-                  </div>
+                  {!activeTableLocation && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">Click inside a table cell to enable these actions.</p>
+                  )}
 
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={addTableRow}
+                      onClick={() => insertTableRow('above')}
                       className="flex items-center justify-center gap-1 py-1 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer shadow-2xs"
-                      title="Insert row below active cell"
+                      title="Insert a row above the active cell"
                     >
-                      <Plus className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
-                      <span>Add Row</span>
+                      <ArrowUp className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                      <span>Row above</span>
                     </button>
-
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={addTableColumn}
+                      onClick={() => insertTableRow('below')}
                       className="flex items-center justify-center gap-1 py-1 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer shadow-2xs"
-                      title="Insert column to the right"
+                      title="Insert a row below the active cell"
                     >
-                      <Plus className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
-                      <span>Add Col</span>
+                      <ArrowDown className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                      <span>Row below</span>
                     </button>
-
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => insertTableColumn('left')}
+                      className="flex items-center justify-center gap-1 py-1 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer shadow-2xs"
+                      title="Insert a column to the left"
+                    >
+                      <ArrowLeft className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                      <span>Col left</span>
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => insertTableColumn('right')}
+                      className="flex items-center justify-center gap-1 py-1 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer shadow-2xs"
+                      title="Insert a column to the right"
+                    >
+                      <ArrowRight className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                      <span>Col right</span>
+                    </button>
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
@@ -2275,9 +3559,8 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                       title="Delete current row"
                     >
                       <Minus className="h-3 w-3 text-rose-500" />
-                      <span>Delete Row</span>
+                      <span>Delete row</span>
                     </button>
-
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
@@ -2286,7 +3569,40 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                       title="Delete current column"
                     >
                       <Minus className="h-3 w-3 text-rose-500" />
-                      <span>Delete Col</span>
+                      <span>Delete col</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={toggleActiveTableHeader}
+                      className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors cursor-pointer shadow-2xs"
+                      title="Toggle the header row"
+                    >
+                      <TableIcon className="h-3 w-3 text-slate-500" />
+                      <span>Header</span>
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={toggleTableZebra}
+                      className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors cursor-pointer shadow-2xs"
+                      title="Toggle zebra striping"
+                    >
+                      <Rows3 className="h-3 w-3 text-slate-500" />
+                      <span>Zebra</span>
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={clearTableCells}
+                      className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors cursor-pointer shadow-2xs"
+                      title="Clear contents of the selected cells"
+                    >
+                      <Eraser className="h-3 w-3 text-slate-500" />
+                      <span>Clear</span>
                     </button>
                   </div>
 
@@ -2299,11 +3615,308 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
                       title="Remove entire table"
                     >
                       <Trash2 className="h-3 w-3" />
-                      <span>Delete Entire Table</span>
+                      <span>Delete entire table</span>
                     </button>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* ---------------- CALC ---------------- */}
+              {tableTab === 'calc' && (
+                <div className="p-2.5 rounded-lg border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 space-y-2">
+                  <div className="flex items-center gap-1">
+                    <span className="shrink-0 font-mono text-[10px] font-bold text-slate-400">fx</span>
+                    <input
+                      value={formulaDraft}
+                      onChange={(e) => setFormulaDraft(e.target.value)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          commitCellFormula(formulaDraft);
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setFormulaDraft(activeCell()?.getAttribute('data-om-formula') || '');
+                        }
+                      }}
+                      placeholder="=SUM(B2:B9) or =B2*C2"
+                      spellCheck={false}
+                      className="note-toolbar-compact-control min-w-0 flex-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-800 dark:text-slate-100 focus:border-indigo-400 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => commitCellFormula(formulaDraft)}
+                      className="note-toolbar-compact-control shrink-0 rounded-md bg-indigo-600 hover:bg-indigo-700 px-2 py-1 text-[11px] font-semibold text-white transition-colors cursor-pointer"
+                      title="Apply to the active cell"
+                    >
+                      Apply
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {([
+                      { fn: 'SUM' as const, label: 'Σ Sum' },
+                      { fn: 'AVERAGE' as const, label: 'Avg' },
+                      { fn: 'COUNT' as const, label: 'Count' },
+                      { fn: 'MIN' as const, label: 'Min' },
+                      { fn: 'MAX' as const, label: 'Max' }
+                    ]).map(item => (
+                      <button
+                        key={item.fn}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => insertAggregate(item.fn)}
+                        className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer shadow-2xs"
+                        title={`=${item.fn}(ABOVE) in the active cell`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={addTableTotalRow}
+                      className="flex items-center gap-1 rounded-md border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/80 dark:bg-emerald-950/30 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                      title="Append a totals row with SUM formulas"
+                    >
+                      <Sigma className="h-3 w-3" />
+                      <span>Total row</span>
+                    </button>
+                    <span className="font-mono text-[10px] text-slate-400">
+                      {activeTableLocation ? `${columnLabel(activeTableLocation.col)}${activeTableLocation.row}` : '—'}
+                    </span>
+                  </div>
+
+                  {tableStats ? (
+                    <div className="grid grid-cols-5 gap-1 rounded-md border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 p-1">
+                      {[
+                        { label: 'Σ', value: formatCellNumber(tableStats.sum) },
+                        { label: 'Avg', value: tableStats.average === null ? '—' : formatCellNumber(tableStats.average) },
+                        { label: 'Count', value: String(tableStats.count) },
+                        { label: 'Min', value: tableStats.min === null ? '—' : formatCellNumber(tableStats.min) },
+                        { label: 'Max', value: tableStats.max === null ? '—' : formatCellNumber(tableStats.max) }
+                      ].map(chip => (
+                        <div key={chip.label} className="flex flex-col items-center leading-tight">
+                          <span className="text-[9px] uppercase tracking-wide text-slate-400">{chip.label}</span>
+                          <span className="font-mono text-[10px] font-semibold text-slate-800 dark:text-slate-100 truncate max-w-full">{chip.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                      Select a cell to see live totals for the numbers above it.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* ---------------- FORMAT ---------------- */}
+              {tableTab === 'format' && (
+                <div className="p-2.5 rounded-lg border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 space-y-2">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1">
+                      {([
+                        { align: 'left' as const, label: 'Left' },
+                        { align: 'center' as const, label: 'Center' },
+                        { align: 'right' as const, label: 'Right' }
+                      ]).map(item => (
+                        <button
+                          key={item.align}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => applyTableCellAlign(item.align)}
+                          className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer shadow-2xs"
+                          title={`Align ${item.align}`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={toggleTableCellBold}
+                        className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-bold text-slate-700 dark:text-slate-200 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer shadow-2xs"
+                        title="Bold the selected cells"
+                      >
+                        B
+                      </button>
+                    </div>
+                    <div className="relative shrink-0">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setFormatMenuOpen(open => !open)}
+                        className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer shadow-2xs"
+                        title="Number format for the selected cells"
+                      >
+                        <Hash className="h-3 w-3 text-slate-400 dark:text-slate-500" />
+                        <span>{TABLE_NUMBER_FORMATS.find(option => option.value === cellNumberFormat)?.label || 'Custom'}</span>
+                        <ChevronDown className={`h-2.5 w-2.5 transition-transform ${formatMenuOpen ? 'rotate-180' : 'opacity-60'}`} />
+                      </button>
+                      {formatMenuOpen && (
+                        <>
+                          <div className="fixed inset-0 z-30" onClick={() => setFormatMenuOpen(false)} />
+                          <div className="absolute right-0 top-full z-40 mt-1 w-40 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-1 shadow-xl">
+                            {TABLE_NUMBER_FORMATS.map(option => (
+                              <button
+                                key={option.value || 'general'}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  applyCellNumberFormat(option.value);
+                                  setFormatMenuOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between gap-2 px-2 py-1 text-[10px] transition-colors cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 ${
+                                  option.value === cellNumberFormat
+                                    ? 'font-bold text-indigo-600 dark:text-indigo-400'
+                                    : 'text-slate-700 dark:text-slate-200'
+                                }`}
+                                title={`Show numbers like ${option.sample}`}
+                              >
+                                <span>{option.label}</span>
+                                <span className="font-mono text-slate-400 dark:text-slate-500">{option.sample}</span>
+                              </button>
+                            ))}
+                            <div className="mt-1 border-t border-slate-100 dark:border-slate-800 px-2 pt-1 text-[9px] text-slate-400 dark:text-slate-500">
+                              Numbers only
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      <Columns className="h-3 w-3" />
+                      <span>Column width</span>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => resizeActiveColumns(-20)}
+                        className="h-5 w-5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer"
+                        title="Narrower by 20px"
+                      >
+                        −
+                      </button>
+                      <span className="w-11 text-center font-mono text-[10px] text-slate-600 dark:text-slate-300">
+                        {cellColumnWidth > 0 ? `${cellColumnWidth}px` : 'auto'}
+                      </span>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => resizeActiveColumns(20)}
+                        className="h-5 w-5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer"
+                        title="Wider by 20px"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={resetActiveColumnWidth}
+                        className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-colors cursor-pointer"
+                        title="Fit the column to its content"
+                      >
+                        Auto
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      <Rows3 className="h-3 w-3" />
+                      <span>Row height</span>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => resizeActiveRows(-8)}
+                        className="h-5 w-5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer"
+                        title="Shorter by 8px"
+                      >
+                        −
+                      </button>
+                      <span className="w-11 text-center font-mono text-[10px] text-slate-600 dark:text-slate-300">
+                        {cellRowHeight > 0 ? `${cellRowHeight}px` : 'auto'}
+                      </span>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => resizeActiveRows(8)}
+                        className="h-5 w-5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 transition-colors cursor-pointer"
+                        title="Taller by 8px"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={resetActiveRowHeight}
+                        className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-colors cursor-pointer"
+                        title="Fit the row to its content"
+                      >
+                        Auto
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      <PaintBucket className="h-3 w-3" />
+                      <span>Fill</span>
+                    </span>
+                    {['#fef9c3', '#dcfce7', '#dbeafe', '#fee2e2', '#ede9fe'].map(color => (
+                      <button
+                        key={color}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => shadeTableCells(color)}
+                        className="h-4 w-4 rounded border border-slate-300 dark:border-slate-600 cursor-pointer hover:scale-110 transition-transform"
+                        style={{ backgroundColor: color }}
+                        title={color}
+                      />
+                    ))}
+                    <label
+                      className="relative h-4 w-4 rounded border border-slate-300 dark:border-slate-600 cursor-pointer hover:scale-110 transition-transform overflow-hidden"
+                      title={`Custom fill colour (${customFillColour})`}
+                      style={{ background: 'conic-gradient(#f87171, #fbbf24, #34d399, #60a5fa, #a78bfa, #f87171)' }}
+                    >
+                      <input
+                        type="color"
+                        defaultValue={customFillColour}
+                        onInput={(e) => {
+                          const value = (e.target as HTMLInputElement).value;
+                          setCustomFillColour(value);
+                          shadeTableCells(value);
+                        }}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        aria-label="Custom fill colour"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => shadeTableCells('')}
+                      className="ml-auto rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-colors cursor-pointer"
+                      title="Remove fill"
+                    >
+                      None
+                    </button>
+                  </div>
+
+
+                  {!activeTableLocation && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">Click inside a table cell to format it.</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2355,21 +3968,52 @@ export const NoteRichEditor: React.FC<NoteRichEditorProps> = ({
       <div
         ref={editorRef}
         contentEditable
+        role="textbox"
+        aria-label="Note content"
+        aria-multiline="true"
         onInput={handleEditorInput}
         onPaste={handlePaste}
+        onBeforeInput={handleBeforeInput}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
-        onMouseUp={() => { saveSelection(); detectActiveTable(); }}
+        onMouseDown={handleTableResizeStart}
+        onMouseMove={handleTableResizeHover}
+        onDoubleClick={handleTableResizeDoubleClick}
+        onMouseLeave={() => {
+          if (!tableResizeRef.current && editorRef.current) editorRef.current.style.cursor = '';
+        }}
+        onMouseUp={(e) => {
+          // Markers are not selectable, so Chrome no longer parks the caret in
+          // them. Clicking the glyph (or the gap beside it) must still start
+          // editing that list row instead of jumping to the end of the note.
+          const target = e.target as HTMLElement | null;
+          const row = target?.closest?.('[data-om-list]') as HTMLElement | null;
+          const selection = window.getSelection();
+          const onLockedPart = !!target && (target === row || !!target.closest('[contenteditable="false"]'));
+          if (row && onLockedPart && selection && (selection.rangeCount === 0 || selection.isCollapsed)) {
+            caretTo(itemTextElement(row), false);
+          }
+          ensureEditableCaret();
+          saveSelection();
+          detectActiveTable();
+        }}
         onSelect={() => { saveSelection(); detectActiveTable(); }}
         onTouchEnd={() => { saveSelection(); detectActiveTable(); }}
-        onBlur={() => { handleEditorInput(); saveSelection(); }}
-        className={`p-2.5 sm:p-3 text-[12.5px] sm:text-sm text-slate-800 dark:text-slate-100 focus:outline-none overflow-y-auto leading-relaxed om-rich-rendered ${minHeight} ${maxHeight}
+        onBlur={() => { ensureBlockStructure(); handleEditorInput(); saveSelection(); }}
+        className={`select-text p-2.5 sm:p-3 text-[12.5px] sm:text-sm text-slate-800 dark:text-slate-100 focus:outline-none overflow-y-auto leading-relaxed om-rich-rendered ${minHeight} ${maxHeight}
           [&_h1]:text-xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:my-1.5 [&_h1]:text-slate-950 dark:[&_h1]:text-white
           [&_h2]:text-lg [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:my-1 [&_h2]:text-slate-900 dark:[&_h2]:text-slate-100
           [&_h3]:text-base [&_h3]:font-bold [&_h3]:my-1 [&_h3]:text-slate-800 dark:[&_h3]:text-slate-200
           [&_p]:my-1 [&_p]:leading-relaxed`}
 
+        style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
       />
+
+      {/* Word & Character Count */}
+      <div className="flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800/80 px-3 py-1 text-[10px] text-slate-400 dark:text-slate-500 select-none">
+        <span>{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
+        <span>{charCount} {charCount === 1 ? 'char' : 'chars'}</span>
+      </div>
     </div>
   );
 };

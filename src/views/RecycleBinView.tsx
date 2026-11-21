@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Trash2, RotateCcw, Search, Eye, ChevronDown, ChevronUp
+  Trash2, RotateCcw, Search, Eye, ChevronDown, ChevronUp, ArrowUpDown
 } from 'lucide-react';
 import { storage, cleanOrphanedCacheAndTrash } from '../lib/storage';
 import { RecycleBinItem } from '../types';
@@ -29,6 +29,7 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
   const [selectedModule, setSelectedModule] = useState<string>('ALL');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name' | 'module'>('newest');
 
   // Confirmation modal states
   const [itemToPurge, setItemToPurge] = useState<RecycleBinItem | null>(null);
@@ -93,17 +94,69 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
     });
   }, [items, selectedModule, searchQuery]);
 
+  const sortedItems = useMemo(() => {
+    const sorted = [...filteredItems];
+    switch (sortBy) {
+      case 'oldest':
+        sorted.sort((a, b) => a.deletedAt - b.deletedAt);
+        break;
+      case 'name':
+        sorted.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'module':
+        sorted.sort((a, b) => (a.moduleLabel || '').localeCompare(b.moduleLabel || ''));
+        break;
+      case 'newest':
+      default:
+        sorted.sort((a, b) => b.deletedAt - a.deletedAt);
+        break;
+    }
+    return sorted;
+  }, [filteredItems, sortBy]);
+
+  const storageSizeEstimate = useMemo(() => {
+    if (items.length === 0) return '';
+    let totalBytes = 0;
+    for (const item of items) {
+      try { totalBytes += new Blob([JSON.stringify(item)]).size; } catch { totalBytes += JSON.stringify(item).length * 2; }
+    }
+    if (totalBytes < 1024) return `${totalBytes} B`;
+    if (totalBytes < 1024 * 1024) return `${(totalBytes / 1024).toFixed(1)} KB`;
+    return `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`;
+  }, [items]);
+
   const handleRestoreItem = async (item: RecycleBinItem) => {
     setIsProcessing(true);
     try {
       const ok = await storage.restoreFromRecycleBin(item.id);
-      if (ok) {
-        onSuccess(`✓ Restored "${item.title}" back to ${item.moduleLabel || 'original module'}`);
-        await loadRecycleBin();
-        onRefresh();
-      } else {
+      if (!ok) {
         onError?.('Could not restore item.');
+        return;
       }
+
+      let relatedCount = 0;
+      // Cascade restore: when restoring a Person, also restore their linked Interactions & Reminders
+      if (item.storeName === 'people') {
+        const personId = item.recordId;
+        const binItems = await storage.getRecycleBinItems(
+          item.profileId || profileId || storage.getActiveProfileId()
+        );
+        for (const binItem of binItems) {
+          const isLinkedInteraction =
+            binItem.storeName === 'interactions' && binItem.data?.personId === personId;
+          const isLinkedReminder =
+            binItem.storeName === 'reminders' && binItem.data?.linkedType === 'contact' && binItem.data?.linkedId === personId;
+          if (isLinkedInteraction || isLinkedReminder) {
+            const restored = await storage.restoreFromRecycleBin(binItem.id);
+            if (restored) relatedCount++;
+          }
+        }
+      }
+
+      const extra = relatedCount > 0 ? ` + ${relatedCount} related item(s)` : '';
+      onSuccess(`✓ Restored "${item.title}"${extra} back to ${item.moduleLabel || 'original module'}`);
+      await loadRecycleBin();
+      onRefresh();
     } catch (err: any) {
       onError?.(`Restore failed: ${err.message}`);
     } finally {
@@ -115,12 +168,11 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
     if (selectedIds.size === 0) return;
     setIsProcessing(true);
     try {
-      let restored = 0;
-      for (const id of Array.from(selectedIds)) {
-        const ok = await storage.restoreFromRecycleBin(id);
-        if (!ok) throw new Error(`Could not restore item ${id}. ${restored} earlier item(s) were already restored.`);
-        restored++;
-      }
+      const ids = Array.from(selectedIds);
+      const results = await Promise.all(ids.map(id => storage.restoreFromRecycleBin(id)));
+      const failedIndex = results.indexOf(false);
+      if (failedIndex !== -1) throw new Error(`Could not restore item ${ids[failedIndex]}.`);
+      const restored = results.length;
       setSelectedIds(new Set());
       onSuccess(`✓ Restored ${restored} item(s) to their original modules`);
       await loadRecycleBin();
@@ -162,12 +214,11 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
     if (selectedIds.size === 0) return;
     setIsProcessing(true);
     try {
-      let purged = 0;
-      for (const id of Array.from(selectedIds)) {
-        const deleted = await storage.permanentlyDeleteFromRecycleBin(id);
-        if (!deleted) throw new Error(`Could not permanently delete item ${id}. ${purged} earlier item(s) were already deleted.`);
-        purged++;
-      }
+      const ids = Array.from(selectedIds);
+      const results = await Promise.all(ids.map(id => storage.permanentlyDeleteFromRecycleBin(id)));
+      const failedIndex = results.indexOf(false);
+      if (failedIndex !== -1) throw new Error(`Could not permanently delete item ${ids[failedIndex]}.`);
+      const purged = results.length;
       setSelectedIds(new Set());
       const driveSync = await syncToGoogleDriveAfterPermanentDelete();
       if (driveSync.syncedToDrive) {
@@ -239,18 +290,18 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
   };
 
   const toggleSelectAllFiltered = () => {
-    if (filteredItems.length === 0) return;
-    const allSelected = filteredItems.every(i => selectedIds.has(i.id));
+    if (sortedItems.length === 0) return;
+    const allSelected = sortedItems.every(i => selectedIds.has(i.id));
     if (allSelected) {
       setSelectedIds(prev => {
         const next = new Set(prev);
-        filteredItems.forEach(i => next.delete(i.id));
+        sortedItems.forEach(i => next.delete(i.id));
         return next;
       });
     } else {
       setSelectedIds(prev => {
         const next = new Set(prev);
-        filteredItems.forEach(i => next.add(i.id));
+        sortedItems.forEach(i => next.add(i.id));
         return next;
       });
     }
@@ -315,6 +366,9 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
             <div className="flex items-center gap-1.5 px-2.5 py-1 text-[11px]">
               <span className="text-slate-500 dark:text-slate-400 font-medium">In Bin</span>
               <span className="font-bold text-slate-900 dark:text-white tabular-nums">{items.length}</span>
+              {storageSizeEstimate && (
+                <span className="text-slate-400 dark:text-slate-500 font-medium">· {storageSizeEstimate}</span>
+              )}
             </div>
 
             {items.length > 0 && (
@@ -345,6 +399,21 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
                   aria-label="Search deleted records"
                   className="h-8.5 w-full rounded-lg border border-amber-200 bg-amber-50/40 pl-9 pr-3 text-xs text-slate-900 focus:border-amber-500 focus:outline-none dark:border-amber-900/60 dark:bg-slate-800 dark:text-white"
                 />
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                <select
+                  aria-label="Sort deleted items"
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                  className="h-8.5 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  <option value="newest">Newest Deleted</option>
+                  <option value="oldest">Oldest Deleted</option>
+                  <option value="name">Name A-Z</option>
+                  <option value="module">Module</option>
+                </select>
               </div>
 
               {selectedIds.size > 0 && (
@@ -405,11 +474,11 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
         )}
 
         {/* Content Body: Records List or Compact Empty State */}
-        <div className="p-4 sm:p-5">
+        <div className={sortedItems.length === 0 ? 'p-3' : 'p-4 sm:p-5'}>
           {loading ? (
             <div className="py-6 text-center text-xs text-slate-400">Loading Recycle Bin...</div>
-          ) : filteredItems.length === 0 ? (
-            <div className="py-5 sm:py-6 px-4 text-center space-y-1.5 max-w-sm mx-auto">
+          ) : sortedItems.length === 0 ? (
+            <div className="py-2 px-4 text-center space-y-1.5 max-w-sm mx-auto">
               <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
                 <Trash2 className="h-4.5 w-4.5 stroke-[1.75]" />
               </div>
@@ -428,19 +497,19 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={filteredItems.length > 0 && filteredItems.every(i => selectedIds.has(i.id))}
+                    checked={sortedItems.length > 0 && sortedItems.every(i => selectedIds.has(i.id))}
                     onChange={toggleSelectAllFiltered}
                     className="h-4 w-4 rounded accent-indigo-600 cursor-pointer"
                   />
-                  <span>Select All ({filteredItems.length})</span>
+                  <span>Select All ({sortedItems.length})</span>
                 </label>
                 <span className="text-[11px] text-slate-400">
-                  Showing {filteredItems.length} of {items.length} item(s)
+                  Showing {sortedItems.length} of {items.length} item(s)
                 </span>
               </div>
 
               <div className="space-y-2.5">
-                {filteredItems.map(item => {
+                {sortedItems.map(item => {
                   const isSelected = selectedIds.has(item.id);
                   const isExpanded = expandedItemId === item.id;
                   return (

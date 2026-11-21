@@ -65,7 +65,7 @@ export const GoalsSectionSwitcher: React.FC<GoalsSectionSwitcherProps> = ({
               closeMenu();
             }}
             className={`flex w-full min-w-0 items-center gap-2 border-b-2 px-2 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-200 ${
-              isActive ? 'border-amber-300' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'
+              isActive ? 'border-indigo-400 dark:border-indigo-500' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <Icon className="h-4 w-4 shrink-0" />

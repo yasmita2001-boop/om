@@ -1,11 +1,14 @@
 import { getCurrencySymbol } from '../lib/currencyDisplay';
 import { ThemedDateTimeInput } from './ThemedDateTimeInput';
 import React, { useState } from 'react';
-import { X, CheckSquare, FileText, BookOpen, DollarSign, Target, Bell, User, Volume2 } from 'lucide-react';
+import {
+  X, CheckSquare, FileText, BookOpen, DollarSign, Target, Bell, User, Volume2,
+  Repeat, Clock, Heart, Briefcase, GraduationCap, Zap
+} from 'lucide-react';
 import { storage, generateUUID } from '../lib/storage';
 import { getLocalDateString } from '../lib/dateUtils';
 import { plainTextToHtml } from '../lib/sanitizeHtml';
-import { Task, Note, JournalEntry, FinanceTransaction, FinanceAccount, Goal, ReminderItem, Person } from '../types';
+import { Task, TaskDomain, Note, JournalEntry, FinanceTransaction, FinanceAccount, Goal, ReminderItem, Person } from '../types';
 import { AttachmentUploader, StoredAttachmentMeta } from './AttachmentUploader';
 import { alarmAudio, BUILTIN_RINGTONES } from '../lib/alarmAudio';
 import { ThemeIcon } from './ThemeIcon';
@@ -30,9 +33,11 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
   const [details, setDetails] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
+  const [domain, setDomain] = useState<TaskDomain>('personal');
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const [date, setDate] = useState(() => getLocalDateString());
   const [taskHasDueDate, setTaskHasDueDate] = useState(false);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [reminderTime, setReminderTime] = useState(() => {
     const d = new Date(Date.now() + 30 * 60 * 1000);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -51,6 +56,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
       setDetails('');
       setAmount('');
       setCategory('');
+      setDomain('personal');
       setPriority('Medium');
       setDate(getLocalDateString());
       setTaskHasDueDate(false);
@@ -80,6 +86,32 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const loadCategories = async () => {
+      let opts: string[] = [];
+      if (activeType === 'expense') {
+        const txns = await storage.getAll<any>('finance');
+        const cats = new Set(txns.map((t: any) => t.category).filter(Boolean));
+        opts = [...cats].sort();
+      } else if (activeType === 'note') {
+        const notes = await storage.getAll<any>('notes');
+        const cats = new Set(notes.map((n: any) => n.category).filter(Boolean));
+        opts = [...cats].sort();
+      } else if (activeType === 'health') {
+        opts = ['General', 'Medication', 'Symptoms', 'Diet', 'Exercise', 'Mental Health', 'Sleep', 'Vitals'];
+      } else if (activeType === 'habit') {
+        opts = ['Health', 'Fitness', 'Mindfulness', 'Productivity', 'Learning', 'Social', 'Finance'];
+      } else if (activeType === 'person') {
+        opts = ['Friend', 'Family', 'Colleague', 'Client', 'Mentor', 'Neighbor'];
+      }
+      if (!cancelled) setCategoryOptions(opts);
+    };
+    loadCategories();
+    return () => { cancelled = true; };
+  }, [isOpen, activeType]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -94,7 +126,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           id: generateUUID(),
           title: title.trim(),
           description: details.trim() || undefined,
-          domain: 'personal',
+          domain,
           priority,
           ...(taskHasDueDate && date ? { dueAt: date, date } : {}),
           done: false,
@@ -118,7 +150,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           updatedAt: now
         };
         await storage.put('notes', newNote);
-        onSuccess('Note captured successfully');
+        onSuccess('Memo captured successfully');
       } else if (activeType === 'journal') {
         const serializedAttachments = attachments.map(a => JSON.stringify(a));
         const newJournal: JournalEntry = {
@@ -185,7 +217,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
           id: generateUUID(),
           title: title.trim(),
           progress: 0,
-          date,
+          targetDate: date,
           status: 'active',
           createdAt: now,
           updatedAt: now
@@ -217,6 +249,73 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
         };
         await storage.put('people', newPerson);
         onSuccess('Contact saved');
+      } else if (activeType === 'habit') {
+        await storage.put('habits', {
+          id: generateUUID(),
+          name: title.trim(),
+          frequency: 'Daily',
+          timesPerDay: 1,
+          category: category.trim() || 'General',
+          date,
+          createdAt: now,
+          updatedAt: now
+        });
+        onSuccess('Habit captured');
+      } else if (activeType === 'routine') {
+        await storage.put('routines', {
+          id: generateUUID(),
+          name: title.trim(),
+          description: details.trim() || '',
+          date,
+          createdAt: now
+        });
+        onSuccess('Routine captured');
+      } else if (activeType === 'health') {
+        await storage.put('healthNotes', {
+          id: generateUUID(),
+          title: title.trim(),
+          body: details.trim(),
+          category: category.trim() || 'General',
+          date,
+          createdAt: now,
+          updatedAt: now
+        });
+        onSuccess('Health log captured');
+      } else if (activeType === 'meeting') {
+        await storage.put('meetings', {
+          id: generateUUID(),
+          title: title.trim(),
+          agenda: details.trim() || '',
+          date,
+          createdAt: now,
+          updatedAt: now
+        });
+        onSuccess('Meeting captured');
+      } else if (activeType === 'learning') {
+        await storage.put('learningItems', {
+          id: generateUUID(),
+          title: title.trim(),
+          topic: category.trim() || '',
+          note: details.trim() || '',
+          date,
+          createdAt: now,
+          updatedAt: now
+        });
+        onSuccess('Learning item captured');
+      } else if (activeType === 'focus') {
+        await storage.put('focus', {
+          id: generateUUID(),
+          label: title.trim(),
+          note: details.trim() || '',
+          date,
+          durationSeconds: 0,
+          minutes: 0,
+          startedAt: now,
+          endedAt: now,
+          createdAt: now,
+          updatedAt: now
+        });
+        onSuccess('Focus session captured');
       }
 
       reloadAll();
@@ -232,23 +331,29 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
 
   const types = [
     { id: 'task', label: 'Task', icon: <CheckSquare className="h-3.5 w-3.5" /> },
-    { id: 'note', label: 'Note', icon: <FileText className="h-3.5 w-3.5" /> },
+    { id: 'note', label: 'Memo', icon: <FileText className="h-3.5 w-3.5" /> },
     { id: 'journal', label: 'Journal', icon: <BookOpen className="h-3.5 w-3.5" /> },
     { id: 'expense', label: 'Expense', icon: <DollarSign className="h-3.5 w-3.5" /> },
     { id: 'goal', label: 'Goal', icon: <Target className="h-3.5 w-3.5" /> },
     { id: 'reminder', label: 'Reminder', icon: <Bell className="h-3.5 w-3.5" /> },
+    { id: 'habit', label: 'Habit', icon: <Repeat className="h-3.5 w-3.5" /> },
+    { id: 'routine', label: 'Routine', icon: <Clock className="h-3.5 w-3.5" /> },
+    { id: 'health', label: 'Health', icon: <Heart className="h-3.5 w-3.5" /> },
+    { id: 'meeting', label: 'Meeting', icon: <Briefcase className="h-3.5 w-3.5" /> },
+    { id: 'learning', label: 'Learning', icon: <GraduationCap className="h-3.5 w-3.5" /> },
+    { id: 'focus', label: 'Focus', icon: <Zap className="h-3.5 w-3.5" /> },
     { id: 'person', label: 'Person', icon: <User className="h-3.5 w-3.5" /> }
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+    <div role="dialog" aria-modal="true" aria-labelledby="qc-modal-title" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in fade-in zoom-in-95">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 font-bold">
               ＋
             </span>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Quick Capture</h2>
+            <h2 id="qc-modal-title" className="text-sm font-bold text-slate-900 dark:text-white">Quick Capture</h2>
           </div>
           <button
             type="button"
@@ -324,11 +429,14 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                   </label>
                   <input
                     type="text"
+                    list="qc-category-opts-expense"
                     value={category}
                     onChange={e => setCategory(e.target.value)}
-
                     className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
+                  <datalist id="qc-category-opts-expense">
+                    {categoryOptions.map(c => <option key={c} value={c} />)}
+                  </datalist>
                 </div>
               </div>
 
@@ -362,9 +470,9 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                   onChange={e => setTaskHasDueDate(e.target.checked)}
                   className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
-                <span>Set a due date <span className="text-slate-400">· leave unchecked to add this task to Inbox</span></span>
+                <span>Due date</span>
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                     Priority
@@ -374,9 +482,27 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                     onChange={e => setPriority(e.target.value as any)}
                     className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   >
-                    <option value="High">High Priority</option>
-                    <option value="Medium">Medium Priority</option>
-                    <option value="Low">Low Priority</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                    Domain
+                  </label>
+                  <select
+                    value={domain}
+                    onChange={e => setDomain(e.target.value as TaskDomain)}
+                    className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="work">Work</option>
+                    <option value="health">Health</option>
+                    <option value="finance">Finance</option>
+                    <option value="spiritual">Spiritual</option>
+                    <option value="social">Social</option>
+                    <option value="learning">Learning</option>
                   </select>
                 </div>
                 {taskHasDueDate && (
@@ -434,7 +560,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
                     onChange={e => setAlarmEnabled(e.target.checked)}
                     className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span className="inline-flex items-center gap-1"><ThemeIcon name="alarm" className="h-3 w-3" /> Ring Audio Alarm on Time</span>
+                  <span className="inline-flex items-center gap-1"><ThemeIcon name="alarm" className="h-3 w-3" /> Alarm</span>
                 </label>
 
                 {alarmEnabled && (
@@ -469,6 +595,24 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
             </div>
           )}
 
+          {['note', 'habit', 'health', 'person', 'learning'].includes(activeType) && (
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                {activeType === 'person' ? 'Relationship' : activeType === 'learning' ? 'Topic' : 'Category'}
+              </label>
+              <input
+                type="text"
+                list="qc-category-opts-general"
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+              <datalist id="qc-category-opts-general">
+                {categoryOptions.map(c => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+          )}
+
           <div>
             <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
               Details / Notes
@@ -477,7 +621,6 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
               rows={3}
               value={details}
               onChange={e => setDetails(e.target.value)}
-
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
             />
           </div>
@@ -502,7 +645,7 @@ export const QuickCaptureModal: React.FC<QuickCaptureModalProps> = ({
             </button>
             <button
               type="submit"
-              className="rounded-lg bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 active:scale-98"
+              className="rounded-lg bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 active:scale-95"
             >
               Capture Now
             </button>

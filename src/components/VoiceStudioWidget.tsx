@@ -429,6 +429,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                       className="h-10 rounded-xl border border-line bg-card px-3 text-sm text-ink disabled:opacity-60"
                     >
                       <option value="hi-IN">Hindi</option>
+                      <option value="ne-NP">नेपाली (Nepali)</option>
                       <option value="en-IN">English (India)</option>
                       <option value="en-US">English (US)</option>
                     </select>
@@ -569,6 +570,7 @@ export const VoiceStudioWidget: React.FC<VoiceStudioWidgetProps> = ({
                     >
                       <option value="auto">Auto Detect (Hindi / English)</option>
                       <option value="hi-IN">हिन्दी Voice (Native Hindi)</option>
+                      <option value="ne-NP">नेपाली Voice (Nepali)</option>
                       <option value="en-IN">Indian English (Hinglish)</option>
                       <option value="en-US">Global English</option>
                     </select>

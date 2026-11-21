@@ -13,7 +13,8 @@ export type NavModule =
   | 'people'
   | 'spiritual'
   | 'things'
-  | 'settings';
+  | 'settings'
+  | 'recycleBin';
 
 export type TaskDomain = 'personal' | 'work' | 'health' | 'finance' | 'spiritual' | 'social' | 'learning';
 export type TaskPriority = 'High' | 'Medium' | 'Low';
@@ -28,6 +29,10 @@ export interface RecurrenceConfig {
   endByDate?: string;
   weekDays?: number[];
   monthDay?: number;
+  /** Skip weekends (Sat/Sun) when frequency is 'daily'. */
+  weekdaysOnly?: boolean;
+  /** Use the last calendar day of each month when frequency is 'monthly'. */
+  lastDayOfMonth?: boolean;
   occurrenceCount?: number;
   lastGeneratedDate?: string;
 }
@@ -51,6 +56,7 @@ export interface Task {
   skillId?: string | null;
   routineId?: string | null;
   habitId?: string | null;
+  projectId?: string | null;
   goalId?: string | null;
   strategyId?: string | null;
   missionId?: string | null;
@@ -380,6 +386,7 @@ export interface FinanceTransaction {
   fileData?: string;
   fileSize?: string;
   fileType?: string;
+  blobId?: string;
   attachments?: string[];
   ledgerOnly?: boolean;
   createdAt: number;
@@ -618,6 +625,7 @@ export interface HealthProfile {
   weight?: number;
   targetWeight?: number;
   bloodGroup?: string;
+  waterGoal?: number;
   goalId?: string | null;
   updatedAt?: number;
 }
@@ -628,7 +636,11 @@ export interface HealthMeasurement {
   weight?: number;
   steps?: number;
   exercise?: string;
+  exerciseCategory?: string;
   duration?: number;
+  bloodPressureSystolic?: number;
+  bloodPressureDiastolic?: number;
+  heartRate?: number;
   createdAt: number;
 }
 
@@ -637,6 +649,8 @@ export interface SleepRecord {
   date: string;
   hours: number;
   quality?: string;
+  bedtime?: string;
+  wakeTime?: string;
   createdAt: number;
 }
 
@@ -651,6 +665,9 @@ export interface NutritionRecord {
   id: string;
   date: string;
   calories?: number;
+  proteinGrams?: number;
+  carbsGrams?: number;
+  fatGrams?: number;
   note?: string;
   createdAt: number;
 }
@@ -675,15 +692,59 @@ export interface HealthNote {
   createdAt: number;
 }
 
+export interface MedicationRecord {
+  id: string;
+  name: string;
+  dose?: string;
+  schedule?: string;
+  startDate: string;
+  endDate?: string;
+  note?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export interface CycleRecord {
+  id: string;
+  date: string;
+  flow?: 'light' | 'medium' | 'heavy';
+  symptoms?: string;
+  createdAt: number;
+}
+
 export interface LearningItem {
   id: string;
   title: string;
   type: string;
   progress: number;
   targetDate?: string;
+  resourceUrl?: string;
+  notes?: string;
+  studyMinutes?: number;
+  subtopics?: string[];
   goalId?: string | null;
   createdAt: number;
   updatedAt?: number;
+}
+
+export interface WorkProject {
+  id: string;
+  name: string;
+  description?: string;
+  goalId?: string | null;
+  due?: string;
+  progress?: number;
+  status?: string;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface Commitment {
+  id: string;
+  title: string;
+  amount?: number;
+  dueDate?: string;
+  status?: string;
 }
 
 export interface Meeting {
@@ -705,8 +766,14 @@ export interface Person {
   name: string;
   relationship?: string;
   contact?: string;
+  emails?: string[];
+  phones?: string[];
+  address?: string;
+  socialLinks?: string[];
   importantDate?: string;
   note?: string;
+  tags?: string[];
+  avatar?: string;
   createdAt: number;
   updatedAt?: number;
 }
@@ -722,9 +789,14 @@ export interface Interaction {
 export interface SpiritualPractice {
   id: string;
   name: string;
+  category?: 'Meditation' | 'Prayer' | 'Gratitude' | 'Breathing' | 'Other';
   frequency: string;
   linkedHabitId?: string;
   goalId?: string | null;
+  streak?: number;
+  lastPracticedDate?: string;
+  practiceLog?: string[];
+  practiceSessions?: Array<{ date: string; durationMinutes: number; note?: string }>;
   createdAt: number;
   updatedAt: number;
 }
@@ -734,12 +806,16 @@ export interface ThingItem {
   name: string;
   category: string;
   value: number;
+  purchaseDate?: string;
+  tags?: string[];
   note?: string;
   goalId?: string;
+  linkedWarrantyIds?: string[];
   fileName?: string;
   fileData?: string;
   fileSize?: string;
   fileType?: string;
+  blobId?: string;
   attachments?: string[];
   createdAt: number;
   updatedAt?: number;
@@ -757,6 +833,7 @@ export interface DocumentItem {
   fileData?: string;
   fileSize?: string;
   fileType?: string;
+  blobId?: string;
   attachments?: string[];
   createdAt: number;
   updatedAt?: number;
@@ -768,10 +845,12 @@ export interface WarrantyItem {
   expiry?: string;
   note?: string;
   goalId?: string;
+  linkedThingId?: string;
   fileName?: string;
   fileData?: string;
   fileSize?: string;
   fileType?: string;
+  blobId?: string;
   attachments?: string[];
   createdAt: number;
   updatedAt?: number;
@@ -788,6 +867,7 @@ export interface ReceiptItem {
   fileData?: string;
   fileSize?: string;
   fileType?: string;
+  blobId?: string;
   attachments?: string[];
   linkedTransactionId?: string | null;
   createdAt: number;
@@ -805,6 +885,7 @@ export interface CertificateItem {
   fileData?: string;
   fileSize?: string;
   fileType?: string;
+  blobId?: string;
   attachments?: string[];
   createdAt: number;
   updatedAt?: number;
@@ -814,7 +895,7 @@ export interface ReminderItem {
   id: string;
   title: string;
   dueAt: string;
-  repeatRule: 'none' | 'daily' | 'weekly' | 'monthly';
+  repeatRule: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
   status: 'open' | 'done';
   linkedType?: string | null;
   linkedId?: string | null;
@@ -849,6 +930,9 @@ export interface Skill {
   goalId?: string | null;
   targetDate?: string;
   note?: string;
+  certificateUrl?: string;
+  certificateBlobId?: string;
+  certificateFileName?: string;
   createdAt?: number;
   updatedAt?: number;
 }
@@ -863,6 +947,7 @@ export interface ImportantRecordItem {
   fileData?: string;
   fileSize?: string;
   fileType?: string;
+  blobId?: string;
   attachments?: string[];
   createdAt?: number;
   updatedAt?: number;
@@ -891,11 +976,17 @@ export interface AppState {
     provider?: 'local' | 'google';
     avatarUrl?: string;
   };
-  themeMode: 'light' | 'dark' | 'system';
+  themeMode: 'light' | 'dark' | 'system' | 'schedule';
   accentColor: string;
   currencySymbol?: import('./lib/currencyDisplay').CurrencySymbol;
   appearance?: import('./lib/appearance').AppearancePreferences;
   notificationsEnabled: boolean;
+  quietHoursStart?: string;
+  quietHoursEnd?: string;
+  attachmentEncryption?: { enabled: true; salt: string; verifier: string };
+  locale?: 'en' | 'hi' | 'ne';
+  dateFormat?: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
+  timeFormat?: '12h' | '24h';
   storageEstimate?: {
     usage: number;
     quota: number;

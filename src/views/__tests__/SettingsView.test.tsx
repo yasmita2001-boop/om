@@ -16,6 +16,7 @@ vi.mock('../../lib/storage', () => ({
     getSingleton: vi.fn(async () => ({ profileId: 'profile' })),
     setSingleton: vi.fn(),
     getAll: vi.fn(async () => []),
+    isAttachmentEncryptionUnlocked: vi.fn(() => false),
     put: vi.fn()
   },
   purgeAllDefaultDataPermanently: vi.fn(),
@@ -46,8 +47,6 @@ const props: SettingsProps = {
   onRefresh: vi.fn(),
   onSuccess: vi.fn(),
   onError: vi.fn(),
-  theme: 'light',
-  onToggleTheme: vi.fn(),
   appearance: DEFAULT_APPEARANCE,
   onApplyAppearance: vi.fn(async () => undefined),
   wallpaperVideoMuted: false,
@@ -80,30 +79,31 @@ describe('Settings card layouts', () => {
 
     const systemGrid = container.querySelector('.settings-system-grid')!;
     const cards = [...systemGrid.querySelectorAll('.settings-card')];
-    expect(cards).toHaveLength(1);
+    expect(cards.length).toBeGreaterThan(1);
     for (const card of cards) {
       expect(card.className).toContain('rounded-2xl');
       expect(card.className).toContain('bg-white');
       expect(card.className).toContain('shadow-card');
       expect(card.className).not.toContain('border-dashed');
     }
-    expect(cards[0].querySelector('h2')?.textContent).toBe('Storage Usage');
-    expect(cards[0].querySelector('[aria-label="Currency display symbol"]')).not.toBeNull();
-    expect(cards[0].textContent).toContain('Currency display symbol');
-    expect(cards[0].querySelector('[aria-label="Currency display symbol"]')?.className).toContain('settings-flat-select');
+    const storageCard = cards.find(card => card.querySelector('h2')?.textContent === 'Storage Usage');
+    expect(storageCard).toBeDefined();
+    expect(storageCard?.querySelector('[aria-label="Currency display symbol"]')).not.toBeNull();
+    expect(storageCard?.textContent).toContain('Currency display symbol');
+    expect(storageCard?.querySelector('[aria-label="Currency display symbol"]')?.className).toContain('settings-flat-select');
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Settings submenu"]')!.click());
     const sectionOptions = [...container.querySelectorAll<HTMLButtonElement>('[data-settings-section]')];
     expect(sectionOptions.map(option => option.textContent?.trim())).toEqual([
-      'System & Appearance',
+      'System',
       'Data & Backups',
-      'Appearance'
+      'Coordinated themes'
     ]);
     await act(async () => sectionOptions[2].click());
 
     expect(container.querySelector('[data-testid="appearance-customizer"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="appearance-customizer"]')?.parentElement?.className).toContain('md:col-span-2');
-    expect(container.querySelector<HTMLButtonElement>('[aria-label="Settings submenu"]')?.textContent).toContain('Appearance');
+    expect(container.querySelector<HTMLButtonElement>('[aria-label="Settings submenu"]')?.textContent).toContain('Coordinated themes');
   });
 
   it('keeps backup and maintenance cards in their separate Settings tab', async () => {
@@ -111,9 +111,9 @@ describe('Settings card layouts', () => {
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Settings submenu"]')!.click());
     expect([...container.querySelectorAll<HTMLButtonElement>('[data-settings-section]')].map(option => option.textContent?.trim())).toEqual([
-      'System & Appearance',
+      'System',
       'Data & Backups',
-      'Appearance'
+      'Coordinated themes'
     ]);
     await act(async () => container.querySelector<HTMLButtonElement>('[data-settings-section="exports"]')!.click());
 

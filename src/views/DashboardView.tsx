@@ -1,9 +1,10 @@
 import { getCurrencySymbol } from '../lib/currencyDisplay';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  CheckSquare, Target, Repeat, DollarSign,
+  CheckSquare, Target, Repeat, DollarSign, Check,
   ArrowUpRight, ArrowDownRight,
-  Bell, ArrowRight
+  Bell, ArrowRight, BookOpen, BookHeart,
+  Timer, Heart, Archive
 } from 'lucide-react';
 import {
   Task, Goal, Habit, HabitLog, FinanceTransaction,
@@ -29,11 +30,56 @@ interface DashboardViewProps {
   investmentActivities?: InvestmentActivity[];
   savingsPlans?: SavingsPlan[];
   reminders?: ReminderItem[];
+  loading?: boolean;
   onNavigate: (module: NavModule) => void;
   onToggleTask: (id: string) => void;
   onLogHabit: (habitId: string, occurrence?: number | 'all') => void;
   onOpenQuickCapture: (type?: string) => void;
 }
+
+const SkeletonPulse: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div className={`animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700 ${className}`} />
+);
+
+const DashboardSkeleton: React.FC = () => (
+  <div className="dashboard-view space-y-4">
+    <SkeletonPulse className="h-20 w-full rounded-2xl" />
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+      <div className="space-y-4 lg:col-span-7">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <SkeletonPulse className="h-8 w-8 rounded-xl" />
+            <SkeletonPulse className="h-5 w-28" />
+          </div>
+          <div className="mt-3 space-y-2">
+            {[1, 2, 3].map(i => <SkeletonPulse key={i} className="h-16 w-full rounded-xl" />)}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <SkeletonPulse className="h-8 w-8 rounded-xl" />
+            <SkeletonPulse className="h-5 w-20" />
+          </div>
+          <div className="mt-3 space-y-3">
+            {[1, 2].map(i => <SkeletonPulse key={i} className="h-10 w-full" />)}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-4 lg:col-span-5">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <SkeletonPulse className="h-8 w-8 rounded-xl" />
+            <SkeletonPulse className="h-5 w-20" />
+          </div>
+          <div className="mt-3 space-y-2">
+            {[1, 2, 3].map(i => <SkeletonPulse key={i} className="h-14 w-full rounded-xl" />)}
+          </div>
+        </div>
+        <SkeletonPulse className="h-48 w-full rounded-2xl" />
+      </div>
+    </div>
+  </div>
+);
 
 const calculateFinances = (finance: FinanceTransaction[]) => {
   let income = 0;
@@ -83,6 +129,7 @@ const getFinanceOutflowAmount = (transaction: FinanceTransaction) => {
     transaction.type === 'savings' ||
     transaction.type === 'repayment' ||
     transaction.type === 'loanGiven' ||
+    transaction.type === 'transfer' ||
     (transaction.type === 'adjustment' && transaction.adjustmentDirection !== 'credit')
   ) return amount;
   return 0;
@@ -91,13 +138,16 @@ const getFinanceOutflowAmount = (transaction: FinanceTransaction) => {
 const getFinanceInflowAmount = (transaction: FinanceTransaction) => {
   if (transaction.ledgerOnly) return 0;
   const amount = Math.max(0, Number(transaction.amount) || 0);
+  if (transaction.type === 'loanReceipt') {
+    return (Number(transaction.principal) || 0) + (Number(transaction.interest) || 0);
+  }
   if (
     transaction.type === 'income' ||
     transaction.type === 'loan' ||
-    transaction.type === 'loanReceipt' ||
     transaction.type === 'savingsWithdrawal' ||
     (transaction.type === 'adjustment' && transaction.adjustmentDirection === 'credit')
   ) return amount;
+  if (transaction.type === 'transfer') return amount;
   return 0;
 };
 
@@ -139,6 +189,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   investmentActivities = [],
   savingsPlans = [],
   reminders = [],
+  loading = false,
   onNavigate,
   onToggleTask,
   onLogHabit,
@@ -147,8 +198,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 60_000);
-    return () => window.clearInterval(timer);
+    const scheduleAtMidnight = () => {
+      const tomorrow = new Date();
+      tomorrow.setHours(24, 0, 0, 0);
+      const ms = tomorrow.getTime() - Date.now();
+      // Guard against negative/zero from clock drift; floor at 1 s
+      return window.setTimeout(() => {
+        setNow(new Date());
+        timerId = scheduleAtMidnight();
+      }, Math.max(ms, 1_000));
+    };
+    let timerId = scheduleAtMidnight();
+    return () => window.clearTimeout(timerId);
   }, []);
 
   const today = getLocalDateString(now);
@@ -157,10 +218,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     () => getDashboardTaskGroups(tasks, today),
     [tasks, today]
   );
-  const dashboardTasks = [...overdue, ...dueToday].slice(0, 5);
+  const maxOverdueShown = 5;
+  const shownOverdue = overdue.slice(0, maxOverdueShown);
+  const hiddenOverdueCount = overdue.length - shownOverdue.length;
   const upcomingTasks = upcoming;
   const inboxTasks = inbox;
-  const hasTaskContent = dashboardTasks.length > 0 || inboxTasks.length > 0 || upcomingTasks.length > 0;
+  const hasTaskContent = dueToday.length > 0 || overdue.length > 0 || inboxTasks.length > 0 || upcomingTasks.length > 0;
   const activeGoals = goals.filter(goal => !goal.status || goal.status === 'active');
   const financialPosition = getFinancialPosition({
     accounts,
@@ -191,29 +254,29 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         date: dateKey,
         label: date.toLocaleDateString(undefined, { weekday: 'short' }),
         isFuture: dateKey > today,
-        income: 0,
+        inflow: 0,
         spending: 0
       };
     });
-    const amountsByDate = new Map(days.map(day => [day.date, { income: 0, spending: 0 }]));
+    const amountsByDate = new Map(days.map(day => [day.date, { inflow: 0, spending: 0 }]));
     finance.forEach(transaction => {
       if (transaction.date > today) return;
       const amounts = amountsByDate.get(transaction.date);
       if (!amounts) return;
-      amounts.income += getFinanceInflowAmount(transaction);
+      amounts.inflow += getFinanceInflowAmount(transaction);
       amounts.spending += getFinanceOutflowAmount(transaction);
     });
     return days.map(day => ({
       ...day,
-      ...(amountsByDate.get(day.date) || { income: 0, spending: 0 })
+      ...(amountsByDate.get(day.date) || { inflow: 0, spending: 0 })
     }));
   }, [finance, now, today]);
-  const weeklyFinanceMax = Math.max(...weeklyFinance.flatMap(day => [day.income, day.spending]), 0);
-  const weeklyIncomeTotal = weeklyFinance.reduce((sum, day) => sum + day.income, 0);
+  const weeklyFinanceMax = Math.max(...weeklyFinance.flatMap(day => [day.inflow, day.spending]), 0);
+  const weeklyInflowTotal = weeklyFinance.reduce((sum, day) => sum + day.inflow, 0);
   const weeklySpendingTotal = weeklyFinance.reduce((sum, day) => sum + day.spending, 0);
   const formatCompactAmount = (amount: number) => amount === 0
     ? '–'
-    : new Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 1 }).format(amount);
+    : new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(amount);
 
   const todayHabitLogs = useMemo(() => getTodayHabitLogs(habitLogs, today), [habitLogs, today]);
   const habitProgress = useMemo(
@@ -221,6 +284,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     [habits, todayHabitLogs]
   );
   const activeReminders = useMemo(() => getActiveReminders(reminders), [reminders]);
+
+  if (loading) return <DashboardSkeleton />;
 
   const renderTaskRow = (task: Task) => {
     const taskDay = (task.dueAt || task.date || '').slice(0, 10);
@@ -234,10 +299,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex items-center gap-3.5 min-w-0">
           <button
             type="button"
+            role="checkbox"
+            aria-checked={task.done}
             onClick={() => onToggleTask(task.id)}
-            aria-label={`Mark ${task.title} as complete`}
-            className="dashboard-task-toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-300 transition-all hover:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600"
-          />
+            aria-label={`Mark ${task.title} as ${task.done ? 'incomplete' : 'complete'}`}
+            className={`dashboard-task-toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all hover:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${task.done ? 'border-indigo-500 bg-indigo-600 dark:border-indigo-500' : 'border-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 dark:border-slate-600'}`}
+          >
+            {task.done && <Check className="h-4 w-4 text-white" />}
+          </button>
           <div className="min-w-0">
             <div className="dashboard-item-title truncate text-sm font-semibold text-slate-900 dark:text-white">
               {task.title}
@@ -261,6 +330,34 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     );
   };
 
+  const moduleShortcuts: { module: NavModule; icon: React.FC<{ className?: string }>; label: string; bg: string; fg: string }[] = [
+    { module: 'notes', icon: BookOpen, label: 'Notes', bg: 'bg-sky-50 dark:bg-sky-950/60', fg: 'text-sky-600 dark:text-sky-400' },
+    { module: 'journal', icon: BookHeart, label: 'Journal', bg: 'bg-pink-50 dark:bg-pink-950/60', fg: 'text-pink-600 dark:text-pink-400' },
+    { module: 'focus', icon: Timer, label: 'Capture', bg: 'bg-orange-50 dark:bg-orange-950/60', fg: 'text-orange-600 dark:text-orange-400' },
+    { module: 'health', icon: Heart, label: 'Life', bg: 'bg-rose-50 dark:bg-rose-950/60', fg: 'text-rose-600 dark:text-rose-400' },
+    { module: 'things', icon: Archive, label: 'Vault', bg: 'bg-stone-50 dark:bg-stone-950/60', fg: 'text-stone-600 dark:text-stone-400' },
+  ];
+
+  const quickActionShortcuts = [
+    { label: 'Set a goal', type: 'goal' as const, icon: Target, bg: 'bg-emerald-50 dark:bg-emerald-950/60', fg: 'text-emerald-600 dark:text-emerald-400' },
+    { label: 'Add a task', type: 'task' as const, icon: CheckSquare, bg: 'bg-amber-50 dark:bg-amber-950/60', fg: 'text-amber-600 dark:text-amber-400' },
+    { label: 'Track finances', type: 'finance' as const, icon: DollarSign, bg: 'bg-teal-50 dark:bg-teal-950/60', fg: 'text-teal-600 dark:text-teal-400' },
+  ];
+
+  const renderModuleShortcut = (s: typeof moduleShortcuts[number]) => (
+    <button
+      key={s.module}
+      type="button"
+      onClick={() => s.module === 'focus' ? onOpenQuickCapture('focus') : onNavigate(s.module)}
+      className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200/60 bg-white p-3 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 dark:border-slate-800/60 dark:bg-slate-900 cursor-pointer"
+    >
+      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${s.bg}`}>
+        <s.icon className={`h-4 w-4 ${s.fg}`} />
+      </div>
+      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{s.label}</span>
+    </button>
+  );
+
   return (
     <div className="dashboard-view space-y-4">
       {(accounts.length > 0 || assets.length > 0 || liabilities.length > 0 ||
@@ -268,17 +365,17 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <button
           type="button"
           onClick={() => onNavigate('finance')}
-          className="dashboard-panel flex w-full items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-card transition hover:border-indigo-300 dark:border-slate-800/80 dark:bg-slate-900 dark:hover:border-indigo-700"
+          className="dashboard-panel flex w-full items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-card transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-indigo-300 dark:border-slate-800/80 dark:bg-slate-900 dark:hover:border-indigo-700"
         >
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Estimated net worth</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Estimated net worth</div>
             <div className="mt-1 text-xl font-black tabular-nums text-slate-900 dark:text-white">
-              {getCurrencySymbol()} {financialPosition.netWorth.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              {getCurrencySymbol()} {financialPosition.netWorth.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </div>
           </div>
-          <div className="text-right text-[11px] text-slate-400">
-            <div>Assets {getCurrencySymbol()} {financialPosition.totalAssets.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
-            <div>Debt {getCurrencySymbol()} {financialPosition.totalLiabilities.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+          <div className="text-right text-xs text-slate-400">
+            <div>Assets {getCurrencySymbol()} {financialPosition.totalAssets.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+            <div>Debt {getCurrencySymbol()} {financialPosition.totalLiabilities.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
           </div>
         </button>
       )}
@@ -286,7 +383,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         <div className={`space-y-4 ${habits.length > 0 ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
         {hasTaskContent ? (
-        <section className="dashboard-panel flex flex-col rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        <section className="dashboard-panel flex flex-col rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="dashboard-section-icon flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -296,7 +393,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
                   Today's plan
                 </h2>
-                <span className="text-[11px] text-slate-400 font-medium">
+                <span className="text-xs text-slate-400 font-medium">
                   {dueToday.length} due today · {overdue.length} overdue
                 </span>
               </div>
@@ -312,9 +409,31 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="mt-3 space-y-2">
-            {dashboardTasks.length === 0
+            {dueToday.length === 0 && overdue.length === 0
               ? <p className="text-sm text-slate-500 dark:text-slate-400">No tasks due today.</p>
-              : dashboardTasks.map(renderTaskRow)}
+              : <>
+                  {dueToday.map(renderTaskRow)}
+                  {shownOverdue.length > 0 && (dueToday.length > 0 ? (
+                    <div className="border-t border-slate-100 pt-2 dark:border-slate-800">
+                      <h3 className="mb-2 text-xs font-bold text-rose-600 dark:text-rose-400">Overdue · {overdue.length}</h3>
+                      <div className="space-y-2">{shownOverdue.map(renderTaskRow)}</div>
+                      {hiddenOverdueCount > 0 && (
+                        <button type="button" onClick={() => onNavigate('tasks')} className="mt-2 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 cursor-pointer">
+                          +{hiddenOverdueCount} more overdue
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {shownOverdue.map(renderTaskRow)}
+                      {hiddenOverdueCount > 0 && (
+                        <button type="button" onClick={() => onNavigate('tasks')} className="mt-1 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 cursor-pointer">
+                          +{hiddenOverdueCount} more overdue
+                        </button>
+                      )}
+                    </>
+                  ))}
+                </>}
           </div>
           {inboxTasks.length > 0 && <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -351,29 +470,46 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
         )}
-        {activeGoals.length > 0 && <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        {activeGoals.length > 0 && <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="dashboard-section-icon flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400"><Target className="h-4.5 w-4.5" /></div>
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">Goals</h2>
             </div>
-            <button type="button" onClick={() => onNavigate('goals')} className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 flex items-center gap-1 cursor-pointer">Goals <ArrowRight className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => onNavigate('goals')} className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 flex items-center gap-1 cursor-pointer">View all <ArrowRight className="h-3.5 w-3.5" /></button>
           </div>
           <div className="mt-3 space-y-3">
-            {activeGoals.slice(0, 4).map(goal => (
+            {activeGoals.slice(0, 4).map(goal => {
+              const deadline = goal.targetDate?.slice(0, 10);
+              const daysUntilDeadline = deadline
+                ? Math.ceil((new Date(deadline).getTime() - new Date(today).getTime()) / 86_400_000)
+                : null;
+              const isOverdue = daysUntilDeadline !== null && daysUntilDeadline < 0;
+              const isUrgent = daysUntilDeadline !== null && daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
+              return (
               <div key={goal.id} className="dashboard-goal-row space-y-1.5">
                 <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="dashboard-item-title font-semibold text-slate-900 dark:text-white truncate pr-2">{goal.title}</span>
+                  <span className="dashboard-item-title font-semibold text-slate-900 dark:text-white truncate pr-2">
+                    {goal.title}
+                    {isOverdue && <span className="ml-1.5 text-[10px] font-bold text-rose-500">OVERDUE</span>}
+                    {isUrgent && <span className="ml-1.5 text-[10px] font-bold text-amber-500">{daysUntilDeadline === 0 ? 'DUE TODAY' : `${daysUntilDeadline}d left`}</span>}
+                  </span>
                   <span className="font-mono text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{Math.round(Number(goal.progress) || 0)}%</span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-600 transition-all duration-300" style={{ width: `${Math.max(0, Math.min(100, Number(goal.progress) || 0))}%` }} />
+                  <div className={`h-full rounded-full transition-all duration-300 ${isOverdue ? 'bg-gradient-to-r from-rose-500 to-rose-600' : 'bg-gradient-to-r from-indigo-500 to-indigo-600'}`} style={{ width: `${Math.max(0, Math.min(100, Number(goal.progress) || 0))}%` }} />
                 </div>
+                {deadline && (
+                  <div className={`text-[10px] ${isOverdue ? 'text-rose-500' : isUrgent ? 'text-amber-500' : 'text-slate-400'}`}>
+                    Target: {deadline}
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </section>}
-        {activeReminders.length > 0 && <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        {activeReminders.length > 0 && <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="dashboard-section-icon flex h-8 w-8 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400"><Bell className="h-4.5 w-4.5" /></div>
@@ -386,16 +522,29 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               const isAlarm = rem.alarmEnabled !== false;
               const timePart = rem.dueAt && rem.dueAt.includes('T') ? rem.dueAt.split('T')[1].slice(0, 5) : '';
               const datePart = rem.dueAt && rem.dueAt.includes('T') ? rem.dueAt.split('T')[0] : (rem.dueAt || '');
-              return               <div key={rem.id} className="dashboard-item-row flex items-center justify-between rounded-xl border border-slate-100 p-3 text-sm dark:border-slate-800/60 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all">
+              const linkedModule: NavModule | null =
+                rem.linkedType === 'task' ? 'tasks'
+                : rem.linkedType === 'goal' ? 'goals'
+                : rem.linkedType === 'habit' ? 'routine'
+                : rem.linkedType === 'finance' ? 'finance'
+                : null;
+              const rowClass = `dashboard-item-row flex w-full items-center justify-between rounded-xl border border-slate-100 p-3 text-sm dark:border-slate-800/60 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all text-left${linkedModule ? ' cursor-pointer' : ''}`;
+              const rowContent = <>
                 <div className="flex items-center gap-2.5 truncate pr-2">
                   <ThemeIcon name={isAlarm ? 'alarm' : 'target'} className="h-4 w-4" />
                   <div className="truncate">
                     <span className="dashboard-item-title font-semibold text-slate-900 dark:text-white block truncate">{rem.title}</span>
-                    <span className="dashboard-item-meta text-xs text-slate-400">{datePart} {timePart && `at ${timePart}`}</span>
+                    <span className="dashboard-item-meta text-xs text-slate-400">
+                      {datePart} {timePart && `at ${timePart}`}
+                      {linkedModule && <span className="ml-1.5 text-indigo-500 dark:text-indigo-400">→ {rem.linkedType}</span>}
+                    </span>
                   </div>
                 </div>
                 {isAlarm && <span className="dashboard-status-label shrink-0 text-xs font-semibold text-indigo-600 dark:text-indigo-400">Alarm Active</span>}
-              </div>;
+              </>;
+              return linkedModule
+                ? <button key={rem.id} type="button" onClick={() => onNavigate(linkedModule)} className={rowClass}>{rowContent}</button>
+                : <div key={rem.id} className={rowClass}>{rowContent}</div>;
             })}
           </div>
         </section>}
@@ -403,7 +552,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
         {(habits.length > 0 || finance.length > 0) && <div className={`space-y-4 ${habits.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'}`}>
         {habits.length > 0 &&
-        <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="dashboard-section-icon flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
@@ -418,7 +567,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               onClick={() => onNavigate('routine')}
               className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 flex items-center gap-1 cursor-pointer"
             >
-              <span>Habits</span>
+              <span>View all</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -434,7 +583,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 return (
                   <div
                     key={habit.id}
-                    className="dashboard-item-row flex items-center justify-between rounded-xl border border-slate-100 p-3 dark:border-slate-800/60"
+                    className="dashboard-item-row flex items-center justify-between rounded-xl border border-slate-100 p-3 transition-all hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
                   >
                     <div>
                       <div className="dashboard-item-title text-sm font-semibold text-slate-900 dark:text-white">{habit.name}</div>
@@ -446,7 +595,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onLogHabit(habit.id, nextOccurrence)}
-                      className={`dashboard-flat-action px-0 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                      className={`dashboard-flat-action rounded-lg px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                         isDone
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
                           : 'bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800 dark:text-slate-300'
@@ -457,9 +606,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
                 );
               })}
+              {habits.length > 5 && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('routine')}
+                  className="mt-1 w-full text-center text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 cursor-pointer py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                >
+                  +{habits.length - 5} more habits
+                </button>
+              )}
           </div>
         </section>}
-        {finance.length > 0 && <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
+        {finance.length > 0 && <section className="dashboard-panel rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="dashboard-section-icon flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
@@ -473,37 +631,39 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
 
-          <div className="dashboard-weekly-chart mt-4" role="group" aria-label="Weekly income and outflow chart">
+          <div className="dashboard-weekly-chart mt-4" role="group" aria-label="Weekly inflow and outflow chart">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Income & outflow · this week</span>
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Inflow & outflow · this week</span>
               <span className="text-[10px] text-slate-400">{weeklyFinance[0].date.slice(5)} – {weeklyFinance[6].date.slice(5)}</span>
             </div>
             <div className="mb-2 flex items-center gap-4 text-[10px] text-slate-400">
-              <span className="flex items-center gap-1.5"><span className="dashboard-weekly-legend dashboard-weekly-legend-income" />Income</span>
+              <span className="flex items-center gap-1.5"><span className="dashboard-weekly-legend dashboard-weekly-legend-income" />Inflow</span>
               <span className="flex items-center gap-1.5"><span className="dashboard-weekly-legend dashboard-weekly-legend-spending" />Outflow</span>
             </div>
-            <div className="grid grid-cols-7 items-end gap-2">
+            <div className="-mx-1 overflow-x-auto px-1">
+            <div className="grid min-w-[320px] grid-cols-7 items-end gap-1.5 sm:gap-2">
               {weeklyFinance.map(day => {
-                const incomeHeight = !day.isFuture && weeklyFinanceMax > 0 ? Math.round((day.income / weeklyFinanceMax) * 44) : 0;
+                const inflowHeight = !day.isFuture && weeklyFinanceMax > 0 ? Math.round((day.inflow / weeklyFinanceMax) * 44) : 0;
                 const spendingHeight = !day.isFuture && weeklyFinanceMax > 0 ? Math.round((day.spending / weeklyFinanceMax) * 44) : 0;
                 return (
-                  <div key={day.date} className={`dashboard-weekly-day flex min-w-0 flex-col items-center justify-end gap-1.5${day.isFuture ? ' is-future' : ''}`} title={day.isFuture ? `${day.label}, ${day.date}: upcoming; no actuals yet` : `${day.label}, ${day.date} — Income: ${getCurrencySymbol()} ${day.income.toLocaleString('en-IN')}; Outflow: ${getCurrencySymbol()} ${day.spending.toLocaleString('en-IN')}`} aria-label={day.isFuture ? `${day.label}: upcoming` : `${day.label}: income ${getCurrencySymbol()} ${day.income.toLocaleString('en-IN')}, outflow ${getCurrencySymbol()} ${day.spending.toLocaleString('en-IN')}`}>
+                  <div key={day.date} className={`dashboard-weekly-day flex min-w-0 flex-col items-center justify-end gap-1.5${day.isFuture ? ' is-future' : ''}`} title={day.isFuture ? `${day.label}, ${day.date}: upcoming; no actuals yet` : `${day.label}, ${day.date} — Inflow: ${getCurrencySymbol()} ${day.inflow.toLocaleString()}; Outflow: ${getCurrencySymbol()} ${day.spending.toLocaleString()}`} aria-label={day.isFuture ? `${day.label}: upcoming` : `${day.label}: inflow ${getCurrencySymbol()} ${day.inflow.toLocaleString()}, outflow ${getCurrencySymbol()} ${day.spending.toLocaleString()}`}>
                     <div className="flex h-11 w-full items-end justify-center gap-1">
-                      <div className="dashboard-weekly-bar dashboard-weekly-bar-income" style={{ height: `${incomeHeight}px` }} />
+                      <div className="dashboard-weekly-bar dashboard-weekly-bar-income" style={{ height: `${inflowHeight}px` }} />
                       <div className="dashboard-weekly-bar dashboard-weekly-bar-spending" style={{ height: `${spendingHeight}px` }} />
                     </div>
                     <span className="text-[10px] leading-none text-slate-400">{day.label}</span>
                     <span className="dashboard-weekly-day-values">
-                      <span className="income">{day.isFuture ? '–' : formatCompactAmount(day.income)}</span>
+                      <span className="income">{day.isFuture ? '–' : formatCompactAmount(day.inflow)}</span>
                       <span className="outflow">{day.isFuture ? '–' : formatCompactAmount(day.spending)}</span>
                     </span>
                   </div>
                 );
               })}
             </div>
+            </div>
             <div className="dashboard-weekly-totals mt-3 grid grid-cols-2 gap-3 border-t border-slate-200/60 pt-2 dark:border-slate-700/60">
-              <div><span className="dashboard-weekly-total-label">Income</span><strong>{getCurrencySymbol()} {weeklyIncomeTotal.toLocaleString('en-IN')}</strong></div>
-              <div><span className="dashboard-weekly-total-label">Outflow</span><strong>{getCurrencySymbol()} {weeklySpendingTotal.toLocaleString('en-IN')}</strong></div>
+              <div><span className="dashboard-weekly-total-label">Inflow</span><strong>{getCurrencySymbol()} {weeklyInflowTotal.toLocaleString()}</strong></div>
+              <div><span className="dashboard-weekly-total-label">Outflow</span><strong>{getCurrencySymbol()} {weeklySpendingTotal.toLocaleString()}</strong></div>
             </div>
           </div>
 
@@ -516,7 +676,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
                 <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
                   <span className="whitespace-nowrap">{getCurrencySymbol()}</span>{' '}
-                  <span className="whitespace-nowrap tabular-nums">{totalInflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                  <span className="whitespace-nowrap tabular-nums">{totalInflow.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                 </div>
               </div>
               <div className="min-w-0 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
@@ -526,7 +686,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
                 <div className="mt-1 font-mono text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
                   <span className="whitespace-nowrap">{getCurrencySymbol()}</span>{' '}
-                  <span className="whitespace-nowrap tabular-nums">{totalOutflow.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                  <span className="whitespace-nowrap tabular-nums">{totalOutflow.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                 </div>
               </div>
             </div>
@@ -534,9 +694,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <p className="mt-3 text-xs text-slate-400">No money activity recorded this month.</p>
           )}
 
-          {finance.length > 0 && <div className="mt-4 space-y-2">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Recent activity</div>
-            {[...finance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3).map(tx => {
+          {monthFinance.length > 0 && <div className="mt-4 space-y-2">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Recent activity</div>
+            {[...monthFinance].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3).map(tx => {
               const isInflow = tx.type === 'income' || tx.type === 'loan' || tx.type === 'loanReceipt' ||
                 tx.type === 'savingsWithdrawal' ||
                 (tx.type === 'adjustment' && tx.adjustmentDirection === 'credit');
@@ -549,7 +709,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     {tx.note && <span className="ml-1.5 text-slate-400">({tx.note})</span>}
                   </div>
                   <span className={`shrink-0 font-mono font-bold tabular-nums ${isLedgerOnly ? 'text-slate-500' : isInflow ? (tx.type === 'loan' ? 'text-teal-600 dark:text-teal-400' : 'text-emerald-600') : 'text-slate-900 dark:text-white'}`}>
-                    {isLedgerOnly ? '' : isInflow ? '+' : isTransfer ? '⇄ ' : '-'}{getCurrencySymbol()} {Number(tx.amount || 0).toLocaleString('en-IN')}
+                    {isLedgerOnly ? '' : isInflow ? '+' : isTransfer ? '⇄ ' : '-'}{getCurrencySymbol()} {Number(tx.amount || 0).toLocaleString()}
                   </span>
                 </div>
               );
@@ -559,6 +719,27 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </div>}
       </div>
 
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+        {moduleShortcuts.filter(s => s.module === 'focus').map(renderModuleShortcut)}
+        {quickActionShortcuts.map(item => (
+          <button
+            key={item.type}
+            type="button"
+            onClick={() => {
+              if (item.type === 'finance') onNavigate('finance');
+              else if (item.type === 'task') onNavigate('tasks');
+              else if (item.type === 'goal') onNavigate('goals');
+            }}
+            className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200/60 bg-white p-3 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 dark:border-slate-800/60 dark:bg-slate-900 cursor-pointer"
+          >
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${item.bg}`}>
+              <item.icon className={`h-4 w-4 ${item.fg}`} />
+            </div>
+            <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{item.label}</span>
+          </button>
+        ))}
+        {moduleShortcuts.filter(s => s.module !== 'focus').map(renderModuleShortcut)}
+      </div>
     </div>
   );
 };

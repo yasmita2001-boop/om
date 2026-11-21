@@ -30,7 +30,7 @@ export const NotesJournalSwitcher: React.FC<NotesJournalSwitcherProps> = ({
   return (
     <HeaderDropdown
       label={isNotes ? 'Memo' : isJournal ? 'Daily Journal' : 'Calculator'}
-      menuLabel="Memo submenu"
+      menuLabel="Memo & Journal"
       icon={<SelectedIcon className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />}
     >
       {closeMenu => (

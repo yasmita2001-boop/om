@@ -4,6 +4,7 @@ import App from './App.tsx';
 import {GlobalErrorBoundary} from './components/GlobalErrorBoundary.tsx';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
+import { ensureLocaleLoaded, getLocale, installDOMLocalization } from './lib/i18n';
 
 // Register the PWA service worker after the first paint so it never competes
 // with startup work. Guarded: unsupported/blocked browsers must still open the app.
@@ -92,14 +93,22 @@ if (typeof indexedDB === 'undefined') {
   document.getElementById('app-initial-lock-screen')?.remove();
   root.render(<StorageUnavailableScreen />);
 } else {
-  root.render(
-    <StrictMode>
-      <>
-        <GlobalErrorBoundary>
-          <App />
-        </GlobalErrorBoundary>
-        <InitialLockScreenHandoff />
-      </>
-    </StrictMode>,
-  );
+  void ensureLocaleLoaded(getLocale())
+    .catch(error => {
+      console.error('Could not load the selected language. Falling back to English.', error);
+      return ensureLocaleLoaded('en');
+    })
+    .then(() => {
+      installDOMLocalization(document);
+      root.render(
+        <StrictMode>
+          <>
+            <GlobalErrorBoundary>
+              <App />
+            </GlobalErrorBoundary>
+            <InitialLockScreenHandoff />
+          </>
+        </StrictMode>,
+      );
+    });
 }

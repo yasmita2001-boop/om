@@ -1,4 +1,3 @@
-import { getCurrencySymbol } from '../lib/currencyDisplay';
 import { ThemedDateTimeInput } from './ThemedDateTimeInput';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
@@ -1875,27 +1874,27 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
               <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Linked Income</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {getCurrencySymbol()} {transactions.filter(t => t.goalId && t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
+                  ₹{transactions.filter(t => t.goalId && t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
                 </div>
               </div>
 
               <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400">Linked Expenses</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-rose-600 dark:text-rose-400">
-                  {getCurrencySymbol()} {transactions.filter(t => t.goalId && t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
+                  ₹{transactions.filter(t => t.goalId && t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
                 </div>
               </div>
 
               <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments</span>
                 <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-blue-600 dark:text-blue-400">
-                  {getCurrencySymbol()} {investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
+                  ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
                 </div>
               </div>
             </div>
           )}
 
-          <div className="overflow-hidden">
+          <div className="overflow-hidden rounded-2xl border border-[var(--om-line)] bg-card shadow-sm">
             {/* Header Bar */}
             <div className="flex flex-col justify-between gap-2 border-b border-[var(--om-line)] bg-card-soft px-4 py-2.5 text-xs text-ink-soft sm:flex-row sm:items-center">
               <div className="flex items-center gap-2 min-w-0">
@@ -1922,7 +1921,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             </div>
 
             {/* Granularity Switcher & Period Controls */}
-            <div className={`flex flex-col justify-between gap-2 border-b border-[var(--om-line)] bg-card-soft px-4 py-2 sm:flex-row sm:items-center ${activeStream === 'finance' ? '' : 'timeline-table-preceding'}`}>
+            <div className="flex flex-col justify-between gap-2 border-b border-[var(--om-line)] bg-card-soft px-4 py-2 sm:flex-row sm:items-center">
               <div className="timeline-granularity-tabs flex w-full max-w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:flex-1">
                 {([
                   ['single_day', 'Day'],
@@ -1985,7 +1984,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
 
             {/* Quick Financial KPIs bar when in Finance stream */}
             {activeStream === 'finance' && (
-              <div className="timeline-table-preceding grid grid-cols-2 gap-2 border-b border-[var(--om-line)] p-2.5 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 border-b border-[var(--om-line)] p-2.5 sm:grid-cols-4">
                 <div className="rounded-xl border border-[var(--om-line)] bg-card-soft p-2">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-ink-muted">Tracked Goals</span>
                   <div className="font-mono text-base font-extrabold text-ink">
@@ -1995,19 +1994,19 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                 <div className="rounded-xl border border-[var(--om-line)] bg-card-soft p-2">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Savings Target</span>
                   <div className="font-mono text-base font-extrabold text-emerald-700 dark:text-emerald-400">
-                    {getCurrencySymbol()} {savingsPlans.reduce((s, sp) => s + (Number(sp.targetAmount) || 0), 0).toLocaleString('en-IN')}
+                    ₹{savingsPlans.reduce((s, sp) => s + (Number(sp.targetAmount) || 0), 0).toLocaleString('en-IN')}
                   </div>
                 </div>
                 <div className="rounded-xl border border-[var(--om-line)] bg-card-soft p-2">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400">Active Debt / Loans</span>
                   <div className="font-mono text-base font-extrabold text-rose-700 dark:text-rose-400">
-                    {getCurrencySymbol()} {loans.reduce((s, l) => s + (Number((l as any).principal ?? (l as any).amount) || 0), 0).toLocaleString('en-IN')}
+                    ₹{loans.reduce((s, l) => s + (Number((l as any).principal ?? (l as any).amount) || 0), 0).toLocaleString('en-IN')}
                   </div>
                 </div>
                 <div className="rounded-xl border border-[var(--om-line)] bg-card-soft p-2">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Investments Val</span>
                   <div className="font-mono text-base font-extrabold text-amber-700 dark:text-amber-300">
-                    {getCurrencySymbol()} {investments.reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
+                    ₹{investments.reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
@@ -2017,11 +2016,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <div className="overflow-x-auto no-scrollbar">
               <div className="min-w-[720px] sm:min-w-[850px]">
                 <div className="flex border-b border-[var(--om-line)] bg-card-soft text-center text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                  <div className={`timeline-workstream-heading ${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} sticky left-0 z-30 shrink-0 border-r border-[var(--om-line)] bg-card-soft p-2 pl-3 text-left font-semibold text-slate-700 transition-all dark:text-slate-300 sm:pl-4`}>
+                  <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} sticky left-0 z-30 shrink-0 border-r border-[var(--om-line)] bg-card-soft p-2 pl-3 text-left font-semibold text-slate-700 transition-all dark:text-slate-300 sm:pl-4`}>
                     {isMobileCompactView ? 'WORKSTREAM' : 'PROJECT WORKSTREAM'}
                   </div>
                   <div
-                    className="timeline-column-headings grid flex-1"
+                    className="grid flex-1"
                     style={{ gridTemplateColumns: `repeat(${timelineData.cols.length}, minmax(0, 1fr))` }}
                   >
                     {timelineData.cols.map(c => (
@@ -2033,16 +2032,13 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                             setTimelineOffset((c as any).offsetFromToday);
                           }
                         }}
-                        className={`p-1.5 transition-colors ${
+                        className={`border-l border-[var(--om-line)] p-1.5 transition-colors ${
                           timelineGranularity === 'daily' ? 'cursor-pointer hover:bg-amber-100/70 dark:hover:bg-amber-950/40' : ''
                         } ${
                           c.isToday
-                            ? 'timeline-day-column--today font-black'
+                            ? 'bg-[#b88648] font-black text-white dark:bg-[#9b713b]'
                             : 'bg-card-soft text-slate-500 dark:text-slate-400'
                         }`}
-                        style={c.isToday ? {
-                          color: 'var(--color-brand)'
-                        } : undefined}
                         title={timelineGranularity === 'daily' ? `Click to open Single Day focus for ${c.dateStr}` : undefined}
                       >
                         <div className="truncate">{c.label}</div>
@@ -2263,8 +2259,8 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                     {activeStream === 'finance' ? (
                                       <span className="font-mono text-white px-1.5 py-0.5 rounded bg-emerald-600 shadow-xs flex items-center gap-1 text-[9px]">
                                         <span>Portfolio:</span>
-                                        <span>{getCurrencySymbol()} {goalSavings.reduce((s, sp) => s + (Number(sp.currentAmount) || 0), 0).toLocaleString('en-IN')} saved</span>
-                                        {goalLoans.length > 0 && <span className="opacity-90">· {getCurrencySymbol()} {goalLoans.reduce((s, l) => s + (Number((l as any).outstanding) || 0), 0).toLocaleString('en-IN')} debt</span>}
+                                        <span>₹{goalSavings.reduce((s, sp) => s + (Number(sp.currentAmount) || 0), 0).toLocaleString('en-IN')} saved</span>
+                                        {goalLoans.length > 0 && <span className="opacity-90">· ₹{goalLoans.reduce((s, l) => s + (Number((l as any).outstanding) || 0), 0).toLocaleString('en-IN')} debt</span>}
                                       </span>
                                     ) : periodGoalRate !== null ? (
                                       <span className="font-mono text-white px-1.5 py-0.5 rounded bg-emerald-600 shadow-xs flex items-center gap-1 text-[9px]">
@@ -2559,7 +2555,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                     <div className={`${isMobileCompactView ? 'w-[140px]' : 'w-[260px] sm:w-[280px]'} shrink-0 pl-6 pr-2 flex items-center justify-between sticky left-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border-r border-slate-200/80 dark:border-slate-800/80`}>
                                       <div className="flex items-center gap-1.5 truncate">
                                         <Repeat className="h-3 w-3 text-amber-500 shrink-0" />
-                                        <span className={`truncate ${isDelayed ? 'font-bold text-indigo-700 dark:text-indigo-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                                        <span className={`truncate ${isDelayed ? 'font-bold text-rose-700 dark:text-rose-300' : 'text-slate-700 dark:text-slate-300'}`}>
                                           {rt.name}
                                         </span>
                                       </div>
@@ -2901,14 +2897,14 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                               : 'border-emerald-300 bg-emerald-50/90 dark:border-emerald-800 dark:bg-emerald-950/40'
                                           }`}
                                           style={{ left: `${spSpan.leftPct}%`, width: `${Math.max(6, spSpan.widthPct)}%` }}
-                                          title={`Savings Plan: ${sp.name}\nTarget: ${getCurrencySymbol()} ${(sp.targetAmount || 0).toLocaleString('en-IN')}\nCurrent: ${getCurrencySymbol()} ${(sp.currentAmount || 0).toLocaleString('en-IN')} (${prog}%)\nTime Horizon: ${spStart} → ${spTarget}\nStatus: ${isDelayed ? 'Behind Schedule' : prog >= 100 ? 'Target Reached' : 'On Track'}`}
+                                          title={`Savings Plan: ${sp.name}\nTarget: ₹${(sp.targetAmount || 0).toLocaleString('en-IN')}\nCurrent: ₹${(sp.currentAmount || 0).toLocaleString('en-IN')} (${prog}%)\nTime Horizon: ${spStart} → ${spTarget}\nStatus: ${isDelayed ? 'Behind Schedule' : prog >= 100 ? 'Target Reached' : 'On Track'}`}
                                         >
                                           <div
                                             className={`h-full rounded-md transition-all ${isDelayed ? 'bg-rose-500' : 'bg-emerald-500'}`}
                                             style={{ width: `${prog}%` }}
                                           />
                                           <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 dark:text-slate-100 truncate pr-1">
-                                            {getCurrencySymbol()} {(sp.currentAmount || 0).toLocaleString('en-IN')} / {getCurrencySymbol()} {(sp.targetAmount || 0).toLocaleString('en-IN')} ({prog}%)
+                                            ₹{(sp.currentAmount || 0).toLocaleString('en-IN')} / ₹{(sp.targetAmount || 0).toLocaleString('en-IN')} ({prog}%)
                                           </span>
                                         </div>
                                       ) : (
@@ -2958,11 +2954,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                               : 'border-rose-300 bg-rose-50/90 dark:border-rose-800 dark:bg-rose-950/40'
                                           }`}
                                           style={{ left: `${loanSpan.leftPct}%`, width: `${Math.max(6, loanSpan.widthPct)}%` }}
-                                          title={`Loan: ${(loan as any).lender || loan.name}\nPrincipal: ${getCurrencySymbol()} ${loanPrincipal.toLocaleString('en-IN')}\nPaid: ${getCurrencySymbol()} ${loanPaid.toLocaleString('en-IN')} (${prog}%)\nOutstanding: ${getCurrencySymbol()} ${loanOutstanding.toLocaleString('en-IN')}\nTenure: ${loanStart} → ${loanTarget}\nStatus: ${isPaid ? 'Cleared' : isDelayed ? 'Payment Overdue' : 'Active Repayment'}`}
+                                          title={`Loan: ${(loan as any).lender || loan.name}\nPrincipal: ₹${loanPrincipal.toLocaleString('en-IN')}\nPaid: ₹${loanPaid.toLocaleString('en-IN')} (${prog}%)\nOutstanding: ₹${loanOutstanding.toLocaleString('en-IN')}\nTenure: ${loanStart} → ${loanTarget}\nStatus: ${isPaid ? 'Cleared' : isDelayed ? 'Payment Overdue' : 'Active Repayment'}`}
                                         >
                                           <div className={`h-full rounded-md transition-all ${isPaid ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${prog}%` }} />
                                           <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 dark:text-slate-100 truncate pr-1">
-                                            {getCurrencySymbol()} {loanPaid.toLocaleString('en-IN')} / {getCurrencySymbol()} {loanPrincipal.toLocaleString('en-IN')} ({prog}%)
+                                            ₹{loanPaid.toLocaleString('en-IN')} / ₹{loanPrincipal.toLocaleString('en-IN')} ({prog}%)
                                           </span>
                                         </div>
                                       ) : (
@@ -2998,7 +2994,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                         </span>
                                       </div>
                                       <span className="text-[10px] font-mono font-bold text-blue-600 shrink-0 ml-1">
-                                        {getCurrencySymbol()} {currentVal.toLocaleString('en-IN')}
+                                        ₹{currentVal.toLocaleString('en-IN')}
                                       </span>
                                     </div>
 
@@ -3007,11 +3003,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                         <div
                                           className="absolute top-1/2 -translate-y-1/2 h-5 rounded-lg border border-blue-300 bg-blue-50/90 dark:border-blue-800 dark:bg-blue-950/40 overflow-hidden flex items-center z-10 shadow-2xs"
                                           style={{ left: `${invSpan.leftPct}%`, width: `${Math.max(6, invSpan.widthPct)}%` }}
-                                          title={`Investment: ${inv.name}\nInvested: ${getCurrencySymbol()} ${initialAmt.toLocaleString('en-IN')}\nCurrent Value: ${getCurrencySymbol()} ${currentVal.toLocaleString('en-IN')} (${invGain >= 0 ? `+${getCurrencySymbol()} ${invGain.toLocaleString('en-IN')} (+${invGainPct}%)` : `-${getCurrencySymbol()} ${Math.abs(invGain).toLocaleString('en-IN')} (${invGainPct}%)`})\nHorizon: ${invStart} → ${invTarget}`}
+                                          title={`Investment: ${inv.name}\nInvested: ₹${initialAmt.toLocaleString('en-IN')}\nCurrent Value: ₹${currentVal.toLocaleString('en-IN')} (${invGain >= 0 ? `+₹${invGain.toLocaleString('en-IN')} (+${invGainPct}%)` : `-₹${Math.abs(invGain).toLocaleString('en-IN')} (${invGainPct}%)`})\nHorizon: ${invStart} → ${invTarget}`}
                                         >
                                           <div className="h-full rounded-md bg-blue-500/80 transition-all" style={{ width: `${Math.min(100, valProg)}%` }} />
                                           <span className="absolute left-1.5 text-[9px] font-bold text-blue-950 dark:text-blue-100 truncate pr-1">
-                                            {inv.name} · {getCurrencySymbol()} {currentVal.toLocaleString('en-IN')} {invGainPct !== 0 ? `(${invGainPct >= 0 ? '+' : ''}${invGainPct}%)` : ''}
+                                            {inv.name} · ₹{currentVal.toLocaleString('en-IN')} {invGainPct !== 0 ? `(${invGainPct >= 0 ? '+' : ''}${invGainPct}%)` : ''}
                                           </span>
                                         </div>
                                       ) : (
@@ -3231,11 +3227,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                         : 'border-emerald-300 bg-emerald-50/90 dark:border-emerald-800 dark:bg-emerald-950/40'
                                     }`}
                                     style={{ left: `${spSpan.leftPct}%`, width: `${Math.max(6, spSpan.widthPct)}%` }}
-                                    title={`Savings Plan: ${sp.name}\nTarget: ${getCurrencySymbol()} ${(sp.targetAmount || 0).toLocaleString('en-IN')}\nCurrent: ${getCurrencySymbol()} ${(sp.currentAmount || 0).toLocaleString('en-IN')} (${prog}%)\nTime Horizon: ${spStart} → ${spTarget}\nStatus: ${isDelayed ? 'Behind Schedule' : prog >= 100 ? 'Target Reached' : 'On Track'}`}
+                                    title={`Savings Plan: ${sp.name}\nTarget: ₹${(sp.targetAmount || 0).toLocaleString('en-IN')}\nCurrent: ₹${(sp.currentAmount || 0).toLocaleString('en-IN')} (${prog}%)\nTime Horizon: ${spStart} → ${spTarget}\nStatus: ${isDelayed ? 'Behind Schedule' : prog >= 100 ? 'Target Reached' : 'On Track'}`}
                                   >
                                     <div className={`h-full rounded-md transition-all ${isDelayed ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${prog}%` }} />
                                     <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 dark:text-slate-100 truncate pr-1">
-                                      {getCurrencySymbol()} {(sp.currentAmount || 0).toLocaleString('en-IN')} / {getCurrencySymbol()} {(sp.targetAmount || 0).toLocaleString('en-IN')} ({prog}%)
+                                      ₹{(sp.currentAmount || 0).toLocaleString('en-IN')} / ₹{(sp.targetAmount || 0).toLocaleString('en-IN')} ({prog}%)
                                     </span>
                                   </div>
                                 ) : (
@@ -3279,11 +3275,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                         : 'border-rose-300 bg-rose-50/90 dark:border-rose-800 dark:bg-rose-950/40'
                                     }`}
                                     style={{ left: `${loanSpan.leftPct}%`, width: `${Math.max(6, loanSpan.widthPct)}%` }}
-                                    title={`Loan: ${(loan as any).lender || loan.name}\nPrincipal: ${getCurrencySymbol()} ${loanPrincipal.toLocaleString('en-IN')}\nPaid: ${getCurrencySymbol()} ${loanPaid.toLocaleString('en-IN')} (${prog}%)\nOutstanding: ${getCurrencySymbol()} ${loanOutstanding.toLocaleString('en-IN')}\nTenure: ${loanStart} → ${loanTarget}\nStatus: ${isPaid ? 'Cleared' : isDelayed ? 'Payment Overdue' : 'Active Repayment'}`}
+                                    title={`Loan: ${(loan as any).lender || loan.name}\nPrincipal: ₹${loanPrincipal.toLocaleString('en-IN')}\nPaid: ₹${loanPaid.toLocaleString('en-IN')} (${prog}%)\nOutstanding: ₹${loanOutstanding.toLocaleString('en-IN')}\nTenure: ${loanStart} → ${loanTarget}\nStatus: ${isPaid ? 'Cleared' : isDelayed ? 'Payment Overdue' : 'Active Repayment'}`}
                                   >
                                     <div className={`h-full rounded-md transition-all ${isPaid ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${prog}%` }} />
                                     <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 dark:text-slate-100 truncate pr-1">
-                                      {getCurrencySymbol()} {loanPaid.toLocaleString('en-IN')} / {getCurrencySymbol()} {loanPrincipal.toLocaleString('en-IN')} ({prog}%)
+                                      ₹{loanPaid.toLocaleString('en-IN')} / ₹{loanPrincipal.toLocaleString('en-IN')} ({prog}%)
                                     </span>
                                   </div>
                                 ) : (
@@ -3314,7 +3310,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                   </span>
                                 </div>
                                 <span className="text-[10px] font-mono font-bold text-blue-600 shrink-0 ml-1">
-                                  {getCurrencySymbol()} {currentVal.toLocaleString('en-IN')}
+                                  ₹{currentVal.toLocaleString('en-IN')}
                                 </span>
                               </div>
                               <div className="flex-1 relative h-6 flex items-center min-w-0">
@@ -3322,11 +3318,11 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                                   <div
                                     className="absolute top-1/2 -translate-y-1/2 h-5 rounded-lg border border-blue-300 bg-blue-50/90 dark:border-blue-800 dark:bg-blue-950/40 overflow-hidden flex items-center z-10 shadow-2xs"
                                     style={{ left: `${invSpan.leftPct}%`, width: `${Math.max(6, invSpan.widthPct)}%` }}
-                                    title={`Investment: ${inv.name}\nInvested: ${getCurrencySymbol()} ${initialAmt.toLocaleString('en-IN')}\nCurrent Value: ${getCurrencySymbol()} ${currentVal.toLocaleString('en-IN')} (${invGain >= 0 ? `+${getCurrencySymbol()} ${invGain.toLocaleString('en-IN')} (+${invGainPct}%)` : `-${getCurrencySymbol()} ${Math.abs(invGain).toLocaleString('en-IN')} (${invGainPct}%)`})\nHorizon: ${invStart} → ${invTarget}`}
+                                    title={`Investment: ${inv.name}\nInvested: ₹${initialAmt.toLocaleString('en-IN')}\nCurrent Value: ₹${currentVal.toLocaleString('en-IN')} (${invGain >= 0 ? `+₹${invGain.toLocaleString('en-IN')} (+${invGainPct}%)` : `-₹${Math.abs(invGain).toLocaleString('en-IN')} (${invGainPct}%)`})\nHorizon: ${invStart} → ${invTarget}`}
                                   >
                                     <div className="h-full rounded-md bg-blue-500/80 transition-all" style={{ width: `${Math.min(100, valProg)}%` }} />
                                     <span className="absolute left-1.5 text-[9px] font-bold text-blue-950 dark:text-blue-100 truncate pr-1">
-                                      {inv.name} · {getCurrencySymbol()} {currentVal.toLocaleString('en-IN')} {invGainPct !== 0 ? `(${invGainPct >= 0 ? '+' : ''}${invGainPct}%)` : ''}
+                                      {inv.name} · ₹{currentVal.toLocaleString('en-IN')} {invGainPct !== 0 ? `(${invGainPct >= 0 ? '+' : ''}${invGainPct}%)` : ''}
                                     </span>
                                   </div>
                                 ) : (
@@ -3571,7 +3567,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                               <TrendingUp className="h-3.5 w-3.5 text-blue-600 shrink-0" />
                               <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate"><ThemeIcon name="portfolio" className="h-3.5 w-3.5" /> {inv.name}</span>
                             </div>
-                            <span className="text-[10px] font-bold text-blue-600 font-mono shrink-0 ml-1">{getCurrencySymbol()} {(inv.currentVal || 0).toLocaleString('en-IN')}</span>
+                            <span className="text-[10px] font-bold text-blue-600 font-mono shrink-0 ml-1">₹{(inv.currentVal || 0).toLocaleString('en-IN')}</span>
                           </div>
                         ))}
                       </div>
@@ -3677,7 +3673,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                         <TrendingUp className="h-3.5 w-3.5 text-blue-600 shrink-0" />
                         <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-200 truncate"><ThemeIcon name="portfolio" className="h-3.5 w-3.5" /> {inv.name}</span>
                       </div>
-                      <span className="text-[10px] font-bold text-blue-600 font-mono shrink-0 ml-1">{getCurrencySymbol()} {(inv.currentVal || 0).toLocaleString('en-IN')}</span>
+                      <span className="text-[10px] font-bold text-blue-600 font-mono shrink-0 ml-1">₹{(inv.currentVal || 0).toLocaleString('en-IN')}</span>
                     </div>
                   ))}
                 </div>
@@ -3884,7 +3880,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                       <span className="text-xs font-bold text-rose-600 shrink-0">Target: {sp.targetDate}</span>
                     </div>
                     <div className="text-xs text-slate-600 dark:text-slate-300">
-                      Progress: {getCurrencySymbol()} {(sp.currentAmount || 0).toLocaleString('en-IN')} / {getCurrencySymbol()} {(sp.targetAmount || 0).toLocaleString('en-IN')} ({sp.progress}%)
+                      Progress: ₹{(sp.currentAmount || 0).toLocaleString('en-IN')} / ₹{(sp.targetAmount || 0).toLocaleString('en-IN')} ({sp.progress}%)
                     </div>
                     <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 dark:border-slate-800">
                       <button
@@ -3916,7 +3912,7 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                       <span className="text-xs font-bold text-rose-600 shrink-0">Due: {loan.targetDate}</span>
                     </div>
                     <div className="text-xs text-slate-600 dark:text-slate-300">
-                      Paid: {getCurrencySymbol()} {(loan.paid || 0).toLocaleString('en-IN')} / {getCurrencySymbol()} {(loan.principal || 0).toLocaleString('en-IN')} ({loan.progress}% · Outstanding: {getCurrencySymbol()} {(loan.outstanding || 0).toLocaleString('en-IN')})
+                      Paid: ₹{(loan.paid || 0).toLocaleString('en-IN')} / ₹{(loan.principal || 0).toLocaleString('en-IN')} ({loan.progress}% · Outstanding: ₹{(loan.outstanding || 0).toLocaleString('en-IN')})
                     </div>
                     <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 dark:border-slate-800">
                       <button
@@ -3948,21 +3944,21 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
             <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Linked Income</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                {getCurrencySymbol()} {transactions.filter(t => t.goalId && t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
+                ₹{transactions.filter(t => t.goalId && t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
               </div>
             </div>
 
             <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400">Linked Expenses</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-rose-600 dark:text-rose-400">
-                {getCurrencySymbol()} {transactions.filter(t => t.goalId && t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
+                ₹{transactions.filter(t => t.goalId && t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0).toLocaleString('en-IN')}
               </div>
             </div>
 
             <div className="rounded-xl border-2 border-dashed border-slate-200 p-3.5 dark:border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">Investments</span>
               <div className="mt-1 font-mono text-xl sm:text-2xl font-extrabold text-blue-600 dark:text-blue-400">
-                {getCurrencySymbol()} {investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
+                ₹{investments.filter(i => i.goalId).reduce((s, i) => s + (Number(i.currentValue ?? i.amount) || 0), 0).toLocaleString('en-IN')}
               </div>
             </div>
           </div>
@@ -3989,25 +3985,25 @@ export const ProjectTimelinePlan: React.FC<ProjectTimelinePlanProps> = ({
                     <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/80">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Net Flow</div>
                       <div className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                        {getCurrencySymbol()} {metrics.netCashFlow.toLocaleString('en-IN')}
+                        ₹{metrics.netCashFlow.toLocaleString('en-IN')}
                       </div>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/80">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Investments</div>
                       <div className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                        {getCurrencySymbol()} {metrics.investmentsTotal.toLocaleString('en-IN')}
+                        ₹{metrics.investmentsTotal.toLocaleString('en-IN')}
                       </div>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/80">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Total Debt</div>
                       <div className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                        {getCurrencySymbol()} {metrics.totalDebt.toLocaleString('en-IN')}
+                        ₹{metrics.totalDebt.toLocaleString('en-IN')}
                       </div>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/80">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Savings Target</div>
                       <div className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                        {getCurrencySymbol()} {metrics.savingsTotal.toLocaleString('en-IN')}
+                        ₹{metrics.savingsTotal.toLocaleString('en-IN')}
                       </div>
                     </div>
                   </div>

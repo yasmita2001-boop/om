@@ -2,14 +2,14 @@ import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   CheckSquare, Trash2, Target, CheckCircle2,
-  Circle, Edit3, Check, ChevronDown, Filter,
+  Circle, Edit3, Check, ChevronDown, Filter, Search,
   Download, Save,
   Volume2, Bell, BellRing, AlertTriangle, X
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import {
   Task, TaskDomain, TaskPriority, DailyPlanner, Goal,
-  LearningItem, Skill, Routine, Habit, HabitLog, ReminderItem, Strategy, Mission,
+  LearningItem, Skill, Routine, ReminderItem, Strategy, Mission,
   RecurrenceConfig
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -19,7 +19,7 @@ import { RecurrenceSelector } from '../components/RecurrenceSelector';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { globalTextReader } from '../lib/voiceService';
 import { alarmService } from '../lib/alarmService';
-import { BUILTIN_RINGTONES } from '../lib/alarmAudio';
+import { BUILTIN_RINGTONES, getDefaultRingtoneId } from '../lib/alarmAudio';
 import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { ThemeIcon } from '../components/ThemeIcon';
@@ -38,8 +38,6 @@ interface TasksViewProps {
   learningItems?: LearningItem[];
   skills?: Skill[];
   routines?: Routine[];
-  habits?: Habit[];
-  habitLogs?: HabitLog[];
   reminders?: ReminderItem[];
   activeWorkAreaSection: WorkAreaSection;
   onSelectWorkAreaSection: (section: WorkAreaSection) => void;
@@ -87,21 +85,21 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   // Progressive rendering: very long rosters choke scroll/input latency.
   const [quickCustomTime, setQuickCustomTime] = useState('18:00');
-  const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('om_namah_shivay');
+  const [quickAlarmRingtone, setQuickAlarmRingtone] = useState(() => getDefaultRingtoneId());
 
   // Task Genesis Creation Alarm options in Task Roster
   const [armTaskGenesisAlarm, setArmTaskGenesisAlarm] = useState(false);
   const [taskGenesisAlarmTime, setTaskGenesisAlarmTime] = useState('09:00');
-  const [taskGenesisRingtone, setTaskGenesisRingtone] = useState('om_namah_shivay');
+  const [taskGenesisRingtone, setTaskGenesisRingtone] = useState(() => getDefaultRingtoneId());
 
   const handleTriggerUrgentAlarm = (taskTitle: string, subtitle?: string) => {
     alarmService.triggerAlarm({
       id: generateUUID(),
       type: 'reminder',
-      title: `DELAY ALERT: ${taskTitle}`,
-      subtitle: subtitle || 'Overdue action unit! Urgent execution required.',
+      title: `Overdue: ${taskTitle}`,
+      subtitle: subtitle || 'Overdue — take action',
       timeStr: 'NOW',
-      ringtone: 'om_namah_shivay'
+      ringtone: getDefaultRingtoneId()
     });
     onSuccess(`Urgent alarm ringing for "${taskTitle}"!`);
   };
@@ -144,15 +142,32 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   // Task Roster filters
-  const [filterTab, setFilterTab] = useState<'all' | 'today' | 'high' | 'work' | 'personal' | 'done'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'today' | 'high' | 'work' | 'personal' | 'done'>(() => {
+    try { return (localStorage.getItem('om_tasks_filter') as 'all' | 'today' | 'high' | 'work' | 'personal' | 'done') || 'all'; } catch { return 'all'; }
+  });
+  const [taskSearchQuery, setTaskSearchQuery] = useState('');
   const taskFilterMenuRef = useRef<HTMLDetailsElement>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [taskFormOpen, setTaskFormOpen] = useState(true);
+  const [taskFormOpen, setTaskFormOpenRaw] = useState<boolean>(() => {
+    try { return localStorage.getItem('om_tasks_form_open') !== 'false'; } catch { return true; }
+  });
+  const setTaskFormOpen = (val: boolean) => {
+    setTaskFormOpenRaw(val);
+    try { localStorage.setItem('om_tasks_form_open', String(val)); } catch {}
+  };
   const [dailyTargetOpen, setDailyTargetOpen] = useState(true);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkCompleting, setIsBulkCompleting] = useState(false);
+  const [sortBy, setSortByRaw] = useState<'default' | 'priority' | 'dueDate' | 'name' | 'created' | 'domain'>(() => {
+    try { return (localStorage.getItem('om_tasks_sort') as 'default' | 'priority' | 'dueDate' | 'name' | 'created' | 'domain') || 'default'; } catch { return 'default'; }
+  });
+  const setSortBy = (val: 'default' | 'priority' | 'dueDate' | 'name' | 'created' | 'domain') => {
+    setSortByRaw(val);
+    try { localStorage.setItem('om_tasks_sort', val); } catch {}
+  };
 
   // New/Edit task form state
   const [title, setTitle] = useState('');
@@ -295,6 +310,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [eveningReview, setEveningReview] = useState(dailyPlanner?.reflection?.join('\n') || '');
   const [savedTargetsArchive, setSavedTargetsArchive] = useState<SavedTargetRecord[]>([]);
   const [editingSavedTargetId, setEditingSavedTargetId] = useState<string | null>(null);
+  const [historyShowCount, setHistoryShowCount] = useState(15);
 
   // Synchronize Daily Planner state whenever dailyPlanner prop updates from storage
   useEffect(() => {
@@ -307,20 +323,35 @@ export const TasksView: React.FC<TasksViewProps> = ({
     }
   }, [dailyPlanner]);
 
-  // Load Saved Target Files & Records from local storage
+  // Load Saved Target Files & Records from IndexedDB (with localStorage migration)
   useEffect(() => {
-    try {
-      const key = `om-saved-command-targets:${storage.getActiveProfileId()}`;
-      const legacy = storage.getActiveProfileId() === 'om-master-profile'
-        ? localStorage.getItem('om-saved-command-targets')
-        : null;
-      const stored = localStorage.getItem(key) || legacy;
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setSavedTargetsArchive(Array.isArray(parsed) ? parsed : []);
-        if (legacy && !localStorage.getItem(key)) localStorage.setItem(key, legacy);
+    const load = async () => {
+      try {
+        const existing = await storage.getSingleton<SavedTargetRecord[]>('savedCommandTargets');
+        if (existing && Array.isArray(existing)) {
+          setSavedTargetsArchive(existing);
+          return;
+        }
+        // One-time migration from legacy localStorage
+        const legacyKey = `om-saved-command-targets:${storage.getActiveProfileId()}`;
+        const legacyFallback = storage.getActiveProfileId() === 'om-master-profile'
+          ? localStorage.getItem('om-saved-command-targets')
+          : null;
+        const stored = localStorage.getItem(legacyKey) || legacyFallback;
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const records = Array.isArray(parsed) ? parsed : [];
+          setSavedTargetsArchive(records);
+          await storage.setSingleton('savedCommandTargets', records);
+          // Clean up legacy keys after successful migration
+          try { localStorage.removeItem(legacyKey); } catch {}
+          try { localStorage.removeItem('om-saved-command-targets'); } catch {}
+        }
+      } catch (error) {
+        console.warn('Could not load saved command targets:', error);
       }
-    } catch {}
+    };
+    void load();
   }, []);
 
   const handleCreateOrUpdateTask = async (e: React.FormEvent) => {
@@ -557,9 +588,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
     setIsBulkDeleteOpen(false);
 
     try {
-      for (const linkedGoalId of linkedGoalIds) {
-        await syncGoalProgressFromTasks(linkedGoalId);
-      }
+      await Promise.all([...linkedGoalIds].map(id => syncGoalProgressFromTasks(id)));
     } catch (error) {
       console.error('Selected tasks were deleted, but linked goal progress could not be refreshed', error);
       onSuccess(`Deleted ${deletedIds.size} task(s), but linked goal progress could not be refreshed.`);
@@ -601,10 +630,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
           }
         : record);
       try {
-        localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updatedArchive));
+        await storage.setSingleton('savedCommandTargets', updatedArchive);
       } catch (error) {
-        console.error('Unable to update saved command target', error);
-        onSuccess('Unable to update the saved target. Check browser storage and try again.');
+        console.warn('Unable to update saved command target:', error);
+        onSuccess('Unable to update the saved target. Please try again.');
         return;
       }
       setSavedTargetsArchive(updatedArchive);
@@ -643,11 +672,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
       raw: updatedPlanner
     };
 
-    const updatedArchive = [newRecord, ...savedTargetsArchive.filter(r => r.date !== today || r.target !== plannerTarget)].slice(0, 30);
+    const updatedArchive = [newRecord, ...savedTargetsArchive.filter(r => r.date !== today || r.target !== plannerTarget)].slice(0, 100);
     try {
-      localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updatedArchive));
+      await storage.setSingleton('savedCommandTargets', updatedArchive);
     } catch (error) {
-      console.error('Unable to save command target archive record', error);
+      console.warn('Unable to save command target archive record:', error);
       onSuccess('Daily target saved, but its archive record could not be stored.');
       onRefresh();
       return;
@@ -767,10 +796,15 @@ export const TasksView: React.FC<TasksViewProps> = ({
     const currentPoints = dailyPlanner?.points || [];
     const newPoints = currentPoints.map(p => (p.id === pointId ? { ...p, done: !p.done } : p));
 
+    // Auto-calculate progress from checkpoints
+    const autoProgress = newPoints.length > 0
+      ? Math.round((newPoints.filter(p => p.done).length / newPoints.length) * 100)
+      : plannerProgress;
+
     const updatedPlanner: DailyPlanner = {
       date: today,
       target: plannerTarget,
-      progress: plannerProgress,
+      progress: autoProgress,
       points: newPoints,
       wins: dailyPlanner?.wins || [],
       reflection: dailyPlanner?.reflection || [],
@@ -779,6 +813,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
     appSettings.dailyPlanner = updatedPlanner;
     await storage.setSingleton('appSettings', appSettings);
+    setPlannerProgress(autoProgress);
     onRefresh();
   };
 
@@ -837,7 +872,34 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const priorityWeight: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
 
   const sortedTasks = [...tasks].sort((a, b) => {
+    // Done tasks always last
     if (a.done !== b.done) return a.done ? 1 : -1;
+
+    if (sortBy === 'priority') {
+      const pA = priorityWeight[a.priority] || 0;
+      const pB = priorityWeight[b.priority] || 0;
+      if (pA !== pB) return pB - pA;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    }
+    if (sortBy === 'dueDate') {
+      if (a.dueAt && b.dueAt) return a.dueAt.localeCompare(b.dueAt);
+      if (a.dueAt && !b.dueAt) return -1;
+      if (!a.dueAt && b.dueAt) return 1;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    }
+    if (sortBy === 'name') {
+      return a.title.localeCompare(b.title);
+    }
+    if (sortBy === 'created') {
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    }
+    if (sortBy === 'domain') {
+      const cmp = a.domain.localeCompare(b.domain);
+      if (cmp !== 0) return cmp;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    }
+
+    // Default sort: due date → priority → created
     if (a.dueAt && b.dueAt) {
       const diff = a.dueAt.localeCompare(b.dueAt);
       if (diff !== 0) return diff;
@@ -852,12 +914,19 @@ export const TasksView: React.FC<TasksViewProps> = ({
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
 
+  const searchLower = taskSearchQuery.trim().toLowerCase();
   const filteredTasks = sortedTasks.filter(t => {
     if (filterTab === 'today' && (t.dueAt !== today || t.done)) return false;
     if (filterTab === 'high' && (t.priority !== 'High' || t.done)) return false;
     if (filterTab === 'work' && (t.domain !== 'work' || t.done)) return false;
     if (filterTab === 'personal' && (t.domain !== 'personal' || t.done)) return false;
     if (filterTab === 'done' && !t.done) return false;
+    if (searchLower
+        && !t.title.toLowerCase().includes(searchLower)
+        && !(t.description || '').toLowerCase().includes(searchLower)
+        && !t.domain.toLowerCase().includes(searchLower)
+        && !(t.checklist || []).some(item => item.text.toLowerCase().includes(searchLower))
+    ) return false;
     if (filterTab === 'all' && t.done) return true;
     return true;
   });
@@ -900,11 +969,19 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 <span>Delayed Tasks Detected (⚠️ {overdueTasks.length})</span>
               </div>
               <h4 className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
-                {overdueTasks.length} task{overdueTasks.length > 1 ? 's are' : ' is'} past target deadline: "{overdueTasks[0]?.title}"
+                {overdueTasks.length} task{overdueTasks.length > 1 ? 's' : ''} past deadline
               </h4>
-              <p className="text-xs text-slate-600 dark:text-slate-300">
-                Trigger an urgent audio alarm or update task schedule in the Roster.
-              </p>
+              <div className="mt-1 space-y-0.5">
+                {overdueTasks.slice(0, 3).map(t => (
+                  <div key={t.id} className="text-xs text-slate-700 dark:text-slate-300 truncate max-w-xs">
+                    <span className="font-semibold">{t.title}</span>
+                    <span className="ml-1 text-slate-400">due {t.dueAt}</span>
+                  </div>
+                ))}
+                {overdueTasks.length > 3 && (
+                  <span className="text-[10px] text-slate-500">+{overdueTasks.length - 3} more</span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -980,7 +1057,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     ariaLabel="Task goal link mode"
                     options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
                     onChange={mode => mode === 'link' ? switchToLinkMode() : switchToManualMode()}
-                    className="task-genesis-mode-toggle"
+                    className="goal-link-mode-toggle"
                   />
                 </div>
 
@@ -997,7 +1074,6 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       value={goalId}
                       onChange={handleSelectGoalForTask}
 
-                      flatFilters
                       className="task-genesis-field h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                     />
 
@@ -1073,7 +1149,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3">
                 <div className="min-w-0">
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Due Date
@@ -1086,24 +1162,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                   />
                 </div>
 
-                <div className="min-w-0">
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Link to Strategic Goal
-                  </label>
-                  <div className="relative mt-1">
-                    <select
-                      value={goalId}
-                      onChange={e => handleSelectGoalForTask(e.target.value)}
-                      className="task-genesis-field h-10 w-full min-w-0 appearance-none rounded-lg border border-slate-200 bg-slate-50/50 px-3 pr-9 text-left text-sm text-ellipsis text-slate-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    >
-                      <option value="">None (Independent)</option>
-                      {goals.map(g => (
-                        <option key={g.id} value={g.id}>{g.title}</option>
-                      ))}
-                    </select>
-                    <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  </div>
-                </div>
+
               </div>
 
               <RecurrenceSelector
@@ -1202,7 +1261,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           )}
 
           {/* Task Filter Tabs & All Tasks List */}
-          {tasks.length > 0 && <section id="task-roster-card" data-task-roster-card className={`${taskFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-lg border border-slate-200/80 bg-white p-5 shadow-none dark:border-slate-800/80 dark:bg-slate-900`}>
+          {tasks.length > 0 && <section id="task-roster-card" data-task-roster-card className={`${taskFormOpen ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900`}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
             <div className="flex min-w-0 items-center gap-2">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -1240,15 +1299,85 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </button>
               )}
               {selectedTaskIds.size > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setIsBulkDeleteOpen(true)}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-rose-200 px-2.5 text-[11px] font-semibold text-rose-600 transition-colors hover:bg-rose-50 dark:border-rose-900/70 dark:text-rose-300 dark:hover:bg-rose-950/40"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete selected ({selectedTaskIds.size})
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={isBulkCompleting}
+                    onClick={async () => {
+                      setIsBulkCompleting(true);
+                      const selected = tasks.filter(t => selectedTaskIds.has(t.id) && !t.done);
+                      const goalIds = new Set<string>();
+                      try {
+                        await Promise.all(selected.map(async task => {
+                          const updated: Task = { ...task, done: true, status: 'done', updatedAt: Date.now() };
+                          await storage.put('tasks', updated);
+                          await applyTaskCompletionEffects(updated, true);
+                          const gId = resolveTaskGoalId(task, { routines, skills, learningItems });
+                          if (gId) goalIds.add(gId);
+                        }));
+                        await Promise.all([...goalIds].map(id => syncGoalProgressFromTasks(id)));
+                        setSelectedTaskIds(new Set());
+                        onSuccess(`Completed ${selected.length} task(s)`);
+                        onRefresh();
+                      } catch {
+                        onSuccess('⚠ Could not complete some tasks');
+                      } finally {
+                        setIsBulkCompleting(false);
+                      }
+                    }}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-emerald-200 px-2.5 text-[11px] font-semibold text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/70 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    Done ({selectedTaskIds.size})
+                  </button>
+                  <select
+                    onChange={async e => {
+                      const newPriority = e.target.value as TaskPriority;
+                      if (!newPriority) return;
+                      const selected = tasks.filter(t => selectedTaskIds.has(t.id));
+                      try {
+                        await Promise.all(selected.map(task =>
+                          storage.put('tasks', { ...task, priority: newPriority, updatedAt: Date.now() })
+                        ));
+                        setSelectedTaskIds(new Set());
+                        onSuccess(`Changed priority to ${newPriority} for ${selected.length} task(s)`);
+                        onRefresh();
+                      } catch {
+                        onSuccess('⚠ Could not update priority for some tasks');
+                      }
+                      e.target.value = '';
+                    }}
+                    defaultValue=""
+                    className="h-7 rounded-lg border border-amber-200 bg-transparent px-1.5 text-[11px] font-semibold text-amber-700 dark:border-amber-900/70 dark:text-amber-300 cursor-pointer"
+                  >
+                    <option value="" disabled>Priority</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkDeleteOpen(true)}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-rose-200 px-2.5 text-[11px] font-semibold text-rose-600 transition-colors hover:bg-rose-50 dark:border-rose-900/70 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete ({selectedTaskIds.size})
+                  </button>
+                </div>
               )}
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                aria-label="Sort tasks by"
+                className="h-5 shrink-0 appearance-none rounded-none border-0 bg-transparent px-1 text-xs font-semibold text-slate-700 shadow-none focus:outline-none dark:text-slate-200 cursor-pointer"
+              >
+                <option value="default">Sort: Default</option>
+                <option value="priority">Sort: Priority</option>
+                <option value="dueDate">Sort: Due Date</option>
+                <option value="name">Sort: Name A-Z</option>
+                <option value="created">Sort: Created</option>
+                <option value="domain">Sort: Domain</option>
+              </select>
               <details ref={taskFilterMenuRef} className="relative shrink-0">
                 <summary className="flex h-5 cursor-pointer list-none items-center gap-2 rounded-none border-0 bg-transparent px-2.5 text-xs font-semibold text-slate-700 shadow-none hover:bg-slate-50 dark:bg-transparent dark:text-slate-200 dark:hover:bg-slate-800/40">
                   <Filter className="h-3.5 w-3.5" />
@@ -1268,7 +1397,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       key={tab.id}
                       type="button"
                       onClick={() => {
-                        setFilterTab(tab.id as typeof filterTab);
+                        const newFilter = tab.id as typeof filterTab;
+                        setFilterTab(newFilter);
+                        try { localStorage.setItem('om_tasks_filter', newFilter); } catch {}
                         setSelectedTaskIds(new Set());
                         if (taskFilterMenuRef.current) taskFilterMenuRef.current.open = false;
                       }}
@@ -1287,6 +1418,28 @@ export const TasksView: React.FC<TasksViewProps> = ({
             </div>
             </div>
 
+            {/* Task Search */}
+            <div className="relative mt-3 mb-2">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={taskSearchQuery}
+                onChange={e => setTaskSearchQuery(e.target.value)}
+                placeholder="Search tasks…"
+                className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-amber-300 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-amber-700"
+              />
+              {taskSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setTaskSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
             {/* Tasks List */}
             <div className="space-y-2">
               {filteredTasks.length === 0 ? (
@@ -1295,7 +1448,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     icon={CheckSquare}
                     compact
                     title="No tasks in this view"
-                    hint="Create a task with Quick Capture or clear the active filters."
+                    hint="Add a task or clear filters"
                   />
                 </div>
               ) : (
@@ -1370,8 +1523,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
+                        role="checkbox"
+                        aria-checked={task.done}
                         onClick={() => handleToggleTask(task)}
-                        aria-label={task.done ? `Mark ${task.title} as not done` : `Mark ${task.title} as done`}
+                        aria-label={task.done ? `Mark ${task.title} as incomplete` : `Mark ${task.title} as complete`}
                         title={task.done ? 'Mark incomplete' : 'Mark complete'}
                         className={`flex h-5 w-5 items-center justify-center rounded-lg border transition-all cursor-pointer ${
                           task.done
@@ -1388,7 +1543,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                           type="button"
                           onClick={() => handleTriggerUrgentAlarm(task.title, 'Task is overdue beyond scheduled date!')}
                           className="h-7 px-2 rounded-lg bg-rose-600 text-white hover:bg-rose-500 cursor-pointer flex items-center gap-1 text-[10px] font-bold shadow-2xs"
-                          title="Ring Urgent Alarm Now"
+                          title="Urgent alarm"
                         >
                           <BellRing className="h-3 w-3 animate-bounce" />
                           <span>Alarm</span>
@@ -1484,7 +1639,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     />
                   </div>
 
-                  {/* Progress Slider */}
+                  {/* Progress Slider — auto-calculates from checkpoints when they exist */}
                   <div>
                     <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300">
                       <label htmlFor="daily-command-progress">
@@ -1494,6 +1649,21 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         {plannerProgress}%
                       </span>
                     </div>
+                    {(() => {
+                      const pts = dailyPlanner?.points || [];
+                      const autoProgress = pts.length > 0
+                        ? Math.round((pts.filter(p => p.done).length / pts.length) * 100)
+                        : null;
+                      return autoProgress !== null && autoProgress !== plannerProgress ? (
+                        <button
+                          type="button"
+                          onClick={() => setPlannerProgress(autoProgress)}
+                          className="mt-1 text-[10px] font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-400 cursor-pointer"
+                        >
+                          Sync from checkpoints ({autoProgress}%)
+                        </button>
+                      ) : null;
+                    })()}
                     <div className="mt-2 px-1">
                       <input
                         id="daily-command-progress"
@@ -1534,6 +1704,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                     value={pointText}
                     onChange={e => setPointText(e.target.value)}
                     onKeyDown={handleAddPlannerPoint}
+                    placeholder="Type checkpoint, press Enter to add"
                     className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 transition focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/15 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
 
@@ -1683,7 +1854,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </div>
 
                 <div className="mt-2 max-h-[500px] space-y-2 overflow-y-auto">
-                  {savedTargetsArchive.map(rec => (
+                  {savedTargetsArchive.slice(0, historyShowCount).map(rec => (
                     <div
                       key={rec.id}
                       className="dashboard-item-row group flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
@@ -1720,15 +1891,15 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             const updated = savedTargetsArchive.filter(r => r.id !== rec.id);
                             try {
-                              localStorage.setItem(`om-saved-command-targets:${storage.getActiveProfileId()}`, JSON.stringify(updated));
+                              await storage.setSingleton('savedCommandTargets', updated);
                               setSavedTargetsArchive(updated);
                               if (editingSavedTargetId === rec.id) setEditingSavedTargetId(null);
                             } catch (error) {
-                              console.error('Unable to remove saved command target', error);
-                              onSuccess('Unable to remove the saved target. Check browser storage and try again.');
+                              console.warn('Unable to remove saved command target:', error);
+                              onSuccess('Unable to remove the saved target. Please try again.');
                             }
                           }}
                           className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-950/40"
@@ -1740,6 +1911,15 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       </div>
                     </div>
                   ))}
+                  {savedTargetsArchive.length > historyShowCount && (
+                    <button
+                      type="button"
+                      onClick={() => setHistoryShowCount(c => c + 15)}
+                      className="w-full rounded-lg py-2 text-xs font-semibold text-slate-500 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    >
+                      Load more ({savedTargetsArchive.length - historyShowCount} remaining)
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1795,7 +1975,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
               <button
                 type="button"
                 onClick={() => setQuickAlarmItem(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                aria-label="Close alarm dialog"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>

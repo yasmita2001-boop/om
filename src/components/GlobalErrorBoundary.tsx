@@ -1,5 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ShieldAlert, Copy, Download, Check } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -9,6 +9,7 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  copied: boolean;
 }
 
 export class GlobalErrorBoundary extends Component<Props, State> {
@@ -17,7 +18,8 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     this.state = {
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
+      copied: false
     };
   }
 
@@ -25,7 +27,8 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     return {
       hasError: true,
       error,
-      errorInfo: null
+      errorInfo: null,
+      copied: false
     };
   }
 
@@ -36,6 +39,36 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       errorInfo
     });
   }
+
+  private getErrorReport = (): string => {
+    const { error, errorInfo } = this.state;
+    return [
+      `OM LifeOS Error Report`,
+      `Timestamp: ${new Date().toISOString()}`,
+      `URL: ${window.location.href}`,
+      `UserAgent: ${navigator.userAgent}`,
+      `\nError: ${error?.message || String(error)}`,
+      error?.stack ? `\nStack:\n${error.stack}` : '',
+      errorInfo?.componentStack ? `\nComponent Stack:${errorInfo.componentStack}` : ''
+    ].filter(Boolean).join('\n');
+  };
+
+  private handleCopyError = (): void => {
+    navigator.clipboard.writeText(this.getErrorReport()).then(() => {
+      this.setState({ copied: true });
+      setTimeout(() => this.setState({ copied: false }), 2000);
+    });
+  };
+
+  private handleDownloadReport = (): void => {
+    const blob = new Blob([this.getErrorReport()], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `om-error-report-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   private handleReload = (): void => {
     if (typeof window !== 'undefined') {
@@ -78,6 +111,22 @@ export class GlobalErrorBoundary extends Component<Props, State> {
 
             {/* Action Buttons */}
             <div className="pt-2 flex flex-col sm:flex-row gap-3 items-center justify-center">
+              <button
+                type="button"
+                onClick={this.handleCopyError}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border border-slate-700 hover:bg-slate-800 px-4 py-3 text-xs sm:text-sm font-bold text-slate-300 transition-all cursor-pointer"
+              >
+                {this.state.copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                <span>{this.state.copied ? 'Copied!' : 'Copy Error'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={this.handleDownloadReport}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border border-slate-700 hover:bg-slate-800 px-4 py-3 text-xs sm:text-sm font-bold text-slate-300 transition-all cursor-pointer"
+              >
+                <Download className="h-4 w-4" />
+                <span>Download Report</span>
+              </button>
               <button
                 type="button"
                 onClick={this.handleReload}

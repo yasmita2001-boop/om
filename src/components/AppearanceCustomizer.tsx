@@ -65,7 +65,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
   }, [value]);
 
   useEffect(() => {
-    applyAppearance(draft);
+    if (!draft.accentColor || isValidHex(draft.accentColor)) applyAppearance(draft);
   }, [draft]);
 
   useEffect(() => () => {
@@ -318,7 +318,7 @@ export const AppearanceCustomizer: React.FC<AppearanceCustomizerProps> = ({
                 </label>
                 <input
                   type="color"
-                  value={isValidHex(draft.accentColor) ? draft.accentColor : '#b88648'}
+                  value={isValidHex(draft.accentColor) ? draft.accentColor : '#e5c777'}
                   onChange={event => updateDraft({ accentColor: event.target.value })}
                   aria-label="Choose custom accent color"
                   className="h-8 w-8 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0"

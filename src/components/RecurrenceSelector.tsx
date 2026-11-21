@@ -54,7 +54,10 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="mb-1 block text-[10px] font-medium text-slate-600 dark:text-slate-400">Frequency</label>
-              <select value={config.frequency} onChange={e => updateConfig({ frequency: e.target.value as RecurrenceFrequency })} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+              <select value={config.frequency} onChange={e => {
+                const freq = e.target.value as RecurrenceFrequency;
+                updateConfig({ frequency: freq, weekdaysOnly: undefined, lastDayOfMonth: undefined });
+              }} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
@@ -63,12 +66,12 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
             </div>
             <div>
               <label className="mb-1 block text-[10px] font-medium text-slate-600 dark:text-slate-400">Every</label>
-              <div className="flex gap-1">
+              <div className="flex min-w-0 items-center gap-1">
                 <input type="number" min="1" max="365" value={config.interval} onChange={e => {
                   const parsed = Number.parseInt(e.target.value, 10);
                   updateConfig({ interval: Number.isFinite(parsed) ? Math.min(365, Math.max(1, parsed)) : 1 });
-                }} className="h-8 w-16 rounded-lg border border-slate-200 bg-white px-2 text-center text-xs text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
-                <span className="flex h-8 items-center rounded-lg border border-slate-200 bg-slate-100 px-2 text-xs text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                }} className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-center text-xs text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                <span className="flex h-[3.125rem] min-w-0 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-slate-100 px-2 text-xs text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-400">
                   {config.frequency === 'daily' ? 'day(s)' : config.frequency === 'weekly' ? 'week(s)' : config.frequency === 'monthly' ? 'month(s)' : 'year(s)'}
                 </span>
               </div>
@@ -93,6 +96,20 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
                 })}
               </div>
             </div>
+          )}
+
+          {config.frequency === 'daily' && (
+            <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={!!config.weekdaysOnly} onChange={e => updateConfig({ weekdaysOnly: e.target.checked || undefined })} className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-slate-600" />
+              Weekdays only (skip Sat &amp; Sun)
+            </label>
+          )}
+
+          {config.frequency === 'monthly' && (
+            <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={!!config.lastDayOfMonth} onChange={e => updateConfig({ lastDayOfMonth: e.target.checked || undefined })} className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-slate-600" />
+              Last day of month
+            </label>
           )}
 
           <div>

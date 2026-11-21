@@ -44,8 +44,8 @@ export const LinkModeSelector: React.FC<LinkModeSelectorProps> = ({
       >
         {Icon && <Icon aria-hidden="true" className="h-3 w-3 shrink-0" />}
         <span>{selectedOption.label}</span>
-        <span aria-hidden="true" className="relative h-4 w-7 shrink-0 rounded-full bg-slate-300 transition-colors dark:bg-slate-700">
-          <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${selectedIndex === 0 ? 'translate-x-3' : 'translate-x-0'}`} />
+        <span aria-hidden="true" className="goal-link-mode-track relative block h-4 w-7 shrink-0 overflow-hidden rounded-full bg-slate-300 transition-colors dark:bg-slate-700">
+          <span className={`goal-link-mode-knob absolute left-0.5 top-0.5 block h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${selectedIndex === 0 ? 'translate-x-3' : 'translate-x-0'}`} />
         </span>
       </button>
     );

@@ -14,6 +14,7 @@ const storageMocks = vi.hoisted(() => ({
 
 vi.mock('../../lib/storage', () => ({
   storage: {
+    getAll: vi.fn(async () => []),
     put: storageMocks.put,
     delete: storageMocks.delete
   },
@@ -108,7 +109,7 @@ describe('People card', () => {
     expect(entries).toContain('2026-11-04"Reviewed plan"');
   });
 
-  it('keeps only the memo, attendees, and goal fields with person details in one form', async () => {
+  it('shows the person fields separately from touchpoint and meeting fields', async () => {
     const person: Person = {
       id: 'person-1',
       name: 'Alex',
@@ -140,21 +141,18 @@ describe('People card', () => {
     expect(container.querySelector('[aria-label="People actions"]')).toBeNull();
     expect(formCard?.querySelectorAll('form')).toHaveLength(1);
     expect(formCard?.querySelectorAll('button[type="submit"]')).toHaveLength(1);
-    const fullNameLabel = [...(formCard?.querySelectorAll('label') || [])].find(label => label.textContent === 'Full Name');
-    const goalModeToggle = formCard?.querySelector('[role="switch"][aria-label="Full Name mode"]');
-    expect(fullNameLabel?.parentElement?.contains(goalModeToggle ?? null) ?? false).toBe(true);
-    expect(formCard?.textContent).toContain('Add Important Person');
-    expect(goalModeToggle?.textContent).toContain('Manual');
-    expect(formCard?.textContent).toContain('Attendees');
-    expect(formCard?.textContent).toContain('Interaction Memo');
-    expect(formCard?.textContent).not.toContain('Meetings (');
+    expect(formCard?.textContent).toContain('Add Contact');
+    expect(formCard?.textContent).toContain('Full Name');
+    expect(formCard?.textContent).not.toContain('Attendees');
+    expect(formCard?.textContent).not.toContain('Interaction Memo');
+    expect([...formCard!.querySelectorAll('button')].map(button => button.textContent?.trim()).filter(Boolean)).toEqual([
+      'Contact', 'Touchpoint', 'Meeting', 'Save Contact'
+    ]);
     expect(container.textContent).toContain('Alex');
-    expect(formCard?.textContent).not.toContain('Agenda / Topic');
-    expect(formCard?.textContent).not.toContain('Related Person');
-    expect(formCard?.querySelector('textarea[aria-label="Interaction memo"]') ?? null).not.toBeNull();
+    expect(formCard?.querySelector('textarea[aria-label="Interaction memo"]') ?? null).toBeNull();
   });
 
-  it('saves the contact, memo, and meeting together from the single submit button', async () => {
+  it('saves a contact and a goal-linked meeting through their respective form modes', async () => {
     const goal: Goal = {
       id: 'goal-1',
       title: 'Launch initiative',
@@ -165,7 +163,6 @@ describe('People card', () => {
     };
     vi.mocked(generateUUID)
       .mockReturnValueOnce('new-person')
-      .mockReturnValueOnce('new-interaction')
       .mockReturnValueOnce('new-meeting');
 
     await act(async () => root.render(
@@ -181,7 +178,12 @@ describe('People card', () => {
     ));
 
     const updateValue = (element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) => {
-      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value')?.set;
+      const prototype = element instanceof HTMLInputElement
+        ? HTMLInputElement.prototype
+        : element instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLSelectElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
       setter?.call(element, value);
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -189,13 +191,20 @@ describe('People card', () => {
 
     await act(async () => {
       updateValue(container.querySelector('input[aria-label="Full name"]')!, 'Sam');
-      updateValue(container.querySelector('textarea[aria-label="Interaction memo"]')!, 'Discussed the launch');
-      updateValue(container.querySelector('input[aria-label="Attendees"]')!, 'Sam, team');
-      container.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Full Name mode"]')!.click();
     });
 
     await act(async () => {
-      updateValue(container.querySelector('select[aria-label="Choose a goal"]')!, 'goal-1');
+      container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    });
+    expect(vi.mocked(storage.put).mock.calls.map(([store]) => store)).toEqual(['people']);
+
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === 'Meeting')!.click();
+    });
+
+    await act(async () => {
+      updateValue(container.querySelector('input[aria-label="Attendees"]')!, 'Sam, team');
+      container.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Meeting Title mode"]')!.click();
     });
 
     await act(async () => {
@@ -203,16 +212,13 @@ describe('People card', () => {
     });
 
     const savedStores = vi.mocked(storage.put).mock.calls.map(([store]) => store);
-    expect(savedStores).toEqual(['people', 'interactions', 'meetings']);
+    expect(savedStores).toEqual(['people', 'meetings']);
     const savedPerson = vi.mocked(storage.put).mock.calls[0][1] as Person;
-    const savedInteraction = vi.mocked(storage.put).mock.calls[1][1] as Interaction;
-    const savedMeeting = vi.mocked(storage.put).mock.calls[2][1] as Meeting;
+    const savedMeeting = vi.mocked(storage.put).mock.calls[1][1] as Meeting;
     expect(vi.mocked(storage.put).mock.calls.filter(([store]) => store === 'people')).toHaveLength(1);
-    expect(savedInteraction.personId).toBe(savedPerson.id);
     expect(savedPerson.id).toBe('new-person');
     expect(savedMeeting.goalId).toBe('goal-1');
-    expect(savedMeeting.personId).toBe(savedPerson.id);
-    expect(savedMeeting.title).toBe('Sam meeting');
+    expect(savedMeeting.title).toBe('Contact meeting');
     expect(savedMeeting.people).toBe('Sam, team');
   });
 });

@@ -1,8 +1,8 @@
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  BookOpen, Trash2, Award, Edit3, X,
-  Target, BellRing, Bell, Zap
+  BookOpen, Trash2, Award, Edit3, X, Clock,
+  Target, BellRing, Bell, Zap, Undo2
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import {
@@ -35,6 +35,7 @@ interface WorkViewProps {
   tasks?: Task[];
   reminders?: ReminderItem[];
   embedded?: boolean;
+  showTabsWhenEmbedded?: boolean;
   initialTab?: WorkTab;
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
@@ -54,11 +55,40 @@ interface EditTarget {
   item: any;
 }
 
+const SkillRadarChart: React.FC<{ skills: Skill[] }> = ({ skills }) => {
+  const shown = skills.slice(0, 8);
+  if (shown.length < 3) return null;
+  const center = 120;
+  const radius = 72;
+  const angleAt = (index: number) => -Math.PI / 2 + (Math.PI * 2 * index) / shown.length;
+  const point = (index: number, scale: number) => {
+    const angle = angleAt(index);
+    return `${center + Math.cos(angle) * radius * scale},${center + Math.sin(angle) * radius * scale}`;
+  };
+  const score = (skill: Skill) => Math.max(0, Math.min(100, skill.progress ?? (skill.level === 'Mastery' ? 100 : skill.level === 'Advanced' ? 75 : skill.level === 'Intermediate' ? 50 : 25))) / 100;
+  const skillPoints = shown.map((skill, index) => point(index, score(skill))).join(' ');
+  return (
+    <div className="mb-4 flex justify-center rounded-xl border border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-950/30">
+      <svg viewBox="0 0 240 240" className="h-56 w-full max-w-64" role="img" aria-label="Skill mastery radar chart">
+        {[0.25, 0.5, 0.75, 1].map(scale => <polygon key={scale} points={shown.map((_, index) => point(index, scale)).join(' ')} fill="none" stroke="currentColor" strokeOpacity="0.14" />)}
+        {shown.map((skill, index) => <line key={skill.id} x1={center} y1={center} x2={point(index, 1).split(',')[0]} y2={point(index, 1).split(',')[1]} stroke="currentColor" strokeOpacity="0.18" />)}
+        <polygon points={skillPoints} fill="rgb(99 102 241 / 0.22)" stroke="rgb(99 102 241)" strokeWidth="2" />
+        {shown.map((skill, index) => {
+          const [x, y] = point(index, 1.18).split(',').map(Number);
+          return <text key={skill.id} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="fill-slate-500 text-[8px] dark:fill-slate-400">{skill.name.slice(0, 12)}</text>;
+        })}
+      </svg>
+    </div>
+  );
+};
+
 export const WorkView: React.FC<WorkViewProps> = ({
   learningItems,
   skills = [],
   goals = [],
+  reminders = [],
   embedded = false,
+  showTabsWhenEmbedded = false,
   initialTab = 'learning',
   onRefresh,
   onSuccess
@@ -85,7 +115,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
     title: '',
     priority: 'High',
     dueAt: today,
-    goalId: goals[0]?.id || '',
+    goalId: '',
     armAlarm: true,
     ringtone: 'om_namah_shivay',
     alarmTime: '09:00'
@@ -96,6 +126,9 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [learnType, setLearnType] = useState('Course');
   const [learnProgress, setLearnProgress] = useState(0);
   const [learnTargetDate, setLearnTargetDate] = useState('');
+  const [learnResourceUrl, setLearnResourceUrl] = useState('');
+  const [learnNotes, setLearnNotes] = useState('');
+  const [learnSubtopics, setLearnSubtopics] = useState('');
   const [learnInputMode, setLearnInputMode] = useState<'manual' | 'link'>('manual');
   const [learnGoalId, setLearnGoalId] = useState<string>('');
   const [learnArmGenesis, setLearnArmGenesis] = useState(false);
@@ -105,6 +138,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
 
   // New Item Forms: Skills
   const [skillName, setSkillName] = useState('');
+  const [skillCertificateUrl, setSkillCertificateUrl] = useState('');
+  const [skillCertificateFile, setSkillCertificateFile] = useState<File | null>(null);
   const [skillLevel, setSkillLevel] = useState('Intermediate');
   const [targetLevel, setTargetLevel] = useState('Mastery');
   const [skillTargetDate, setSkillTargetDate] = useState('');
@@ -123,19 +158,59 @@ export const WorkView: React.FC<WorkViewProps> = ({
     due?: string;
   } | null>(null);
   const [alarmPresetChoice, setAlarmPresetChoice] = useState<'5m' | '15m' | '30m' | '1h' | 'tonight' | 'tomorrow' | 'custom'>('15m');
-  const quickCustomDate = today;
-  const quickCustomTime = '18:00';
+  const [quickCustomDate, setQuickCustomDate] = useState(today);
+  const [quickCustomTime, setQuickCustomTime] = useState('18:00');
   const [quickAlarmRingtone, setQuickAlarmRingtone] = useState('om_namah_shivay');
+
+  // Undo stack
+  const [undoStack, setUndoStack] = useState<Array<{ item: any; storeName: string; label: string; timer: ReturnType<typeof setTimeout> }>>([]);
+  useEffect(() => {
+    return () => { undoStack.forEach(e => clearTimeout(e.timer)); };
+  }, []);
+
+  // Edit modal focus trap refs
+  const editModalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Edit & Delete modal states
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+
+  // Focus trap for edit modal
+  useEffect(() => {
+    if (!editTarget) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setTimeout(() => editModalRef.current?.focus(), 50);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setEditTarget(null); return; }
+      if (e.key === 'Tab') {
+        const focusable = editModalRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, [editTarget]);
 
   // Edit form internal fields
   const [editTitle, setEditTitle] = useState('');
   const [editSubtitle, setEditSubtitle] = useState('');
   const [editNumber, setEditNumber] = useState<number>(0);
   const [editExtra, setEditExtra] = useState('');
+  const [editResourceUrl, setEditResourceUrl] = useState('');
+  const [editLearningNotes, setEditLearningNotes] = useState('');
+  const [editLearningSubtopics, setEditLearningSubtopics] = useState('');
+  const [editCertificateUrl, setEditCertificateUrl] = useState('');
+  const [editCertificateFile, setEditCertificateFile] = useState<File | null>(null);
   const [editGoalId, setEditGoalId] = useState<string>('');
 
   const handleSelectGoalForLearning = (gId: string) => {
@@ -167,10 +242,18 @@ export const WorkView: React.FC<WorkViewProps> = ({
       setEditTitle(item.title || '');
       setEditSubtitle(item.type || 'Course');
       setEditNumber(item.progress || 0);
+      setEditResourceUrl(item.resourceUrl || '');
+      setEditLearningNotes(item.notes || '');
+      setEditLearningSubtopics((item.subtopics || []).join(', '));
     } else if (type === 'skill') {
       setEditTitle(item.name || '');
       setEditSubtitle(item.level || 'Intermediate');
       setEditExtra(item.targetLevel || 'Mastery');
+      setEditCertificateUrl(item.certificateUrl || '');
+      setEditCertificateFile(null);
+      const lvl = item.level || 'Intermediate';
+      const defaultProg = lvl === 'Mastery' ? 100 : lvl === 'Advanced' ? 75 : lvl === 'Intermediate' ? 50 : 25;
+      setEditNumber(item.progress ?? defaultProg);
     }
   };
 
@@ -189,6 +272,9 @@ export const WorkView: React.FC<WorkViewProps> = ({
         title: editTitle.trim(),
         type: editSubtitle.trim() || 'Course',
         progress: prog,
+        resourceUrl: editResourceUrl.trim() || undefined,
+        notes: editLearningNotes.trim() || undefined,
+        subtopics: editLearningSubtopics.split(',').map(topic => topic.trim()).filter(Boolean),
         goalId: editGoalId || null,
         updatedAt: now
       };
@@ -204,13 +290,21 @@ export const WorkView: React.FC<WorkViewProps> = ({
     } else if (type === 'skill') {
       const oldGoalId = item.goalId;
       const lvl = editSubtitle.trim() || 'Intermediate';
+      const prog = Math.max(0, Math.min(100, Number(editNumber) || 0));
+      const certificateBlobId = editCertificateFile ? await storage.saveBlob(editCertificateFile) : item.certificateBlobId;
+      if (editCertificateFile && item.certificateBlobId && item.certificateBlobId !== certificateBlobId) {
+        void storage.delete('attachmentBlobs', item.certificateBlobId).catch(() => {});
+      }
       const updated: Skill = {
         ...item,
         name: editTitle.trim(),
         level: lvl,
         targetLevel: editExtra.trim() || 'Mastery',
+        certificateUrl: editCertificateUrl.trim() || undefined,
+        certificateBlobId,
+        certificateFileName: editCertificateFile?.name || item.certificateFileName,
         goalId: editGoalId || null,
-        progress: lvl === 'Mastery' ? 100 : lvl === 'Advanced' ? 75 : lvl === 'Intermediate' ? 50 : 25
+        progress: prog
       };
       await storage.put('skills', updated);
       onSuccess('✓ Skill item updated');
@@ -227,14 +321,28 @@ export const WorkView: React.FC<WorkViewProps> = ({
     onRefresh();
   };
 
+  const handleUndoDelete = (index: number) => {
+    const entry = undoStack[index];
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    storage.put(entry.storeName, entry.item).then(() => {
+      setUndoStack(prev => prev.filter((_, i) => i !== index));
+      onSuccess(`Restored "${entry.label}"`);
+      onRefresh();
+    });
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     try {
+      let deletedItem: any = null;
       let linkedGoalId: string | null = null;
       if (deleteTarget.store === 'learningItems') {
-        linkedGoalId = learningItems.find(l => l.id === deleteTarget.id)?.goalId || null;
+        deletedItem = learningItems.find(l => l.id === deleteTarget.id);
+        linkedGoalId = deletedItem?.goalId || null;
       } else if (deleteTarget.store === 'skills') {
-        linkedGoalId = skills.find(s => s.id === deleteTarget.id)?.goalId || null;
+        deletedItem = skills.find(s => s.id === deleteTarget.id);
+        linkedGoalId = deletedItem?.goalId || null;
       }
 
       await storage.delete(deleteTarget.store, deleteTarget.id);
@@ -242,6 +350,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
       if (linkedGoalId) {
         if (deleteTarget.store === 'learningItems') await syncGoalProgressFromLearning(linkedGoalId);
         else if (deleteTarget.store === 'skills') await syncGoalProgressFromSkills(linkedGoalId);
+      }
+
+      if (deletedItem) {
+        const timer = setTimeout(() => {
+          setUndoStack(prev => prev.filter(e => e.item.id !== deletedItem.id));
+        }, 8000);
+        setUndoStack(prev => [...prev, { item: deletedItem, storeName: deleteTarget.store, label: deleteTarget.name, timer }]);
       }
 
       onSuccess(`✓ ${deleteTarget.name} deleted`);
@@ -260,7 +375,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       title: `Study Session: ${item.title}`,
       priority: 'Medium',
       dueAt: today,
-      goalId: item.goalId || goals[0]?.id || '',
+      goalId: '',
       armAlarm: true,
       ringtone: 'om_namah_shivay',
       alarmTime: '10:00'
@@ -275,7 +390,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       title: `Practice & Drill: ${s.name}`,
       priority: 'Medium',
       dueAt: today,
-      goalId: s.goalId || goals[0]?.id || '',
+      goalId: '',
       armAlarm: true,
       ringtone: 'om_namah_shivay',
       alarmTime: '18:00'
@@ -355,6 +470,9 @@ export const WorkView: React.FC<WorkViewProps> = ({
       type: learnType,
       progress: prog,
       targetDate: learnTargetDate || undefined,
+      resourceUrl: learnResourceUrl.trim() || undefined,
+      notes: learnNotes.trim() || undefined,
+      subtopics: learnSubtopics.split(',').map(topic => topic.trim()).filter(Boolean),
       goalId: learnGoalId || null,
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -407,6 +525,9 @@ export const WorkView: React.FC<WorkViewProps> = ({
     setLearnTitle('');
     setLearnProgress(0);
     setLearnTargetDate('');
+    setLearnResourceUrl('');
+    setLearnNotes('');
+    setLearnSubtopics('');
     setLearnGoalId('');
     setLearnArmGenesis(false);
     onRefresh();
@@ -437,12 +558,32 @@ export const WorkView: React.FC<WorkViewProps> = ({
     onRefresh();
   };
 
+  const handleLogStudyTime = async (item: LearningItem) => {
+    const updated = { ...item, studyMinutes: (item.studyMinutes || 0) + 15, updatedAt: Date.now() };
+    await storage.put('learningItems', updated);
+    onSuccess('15 study minutes logged');
+    onRefresh();
+  };
+
+  const openSkillCertificate = async (skill: Skill) => {
+    if (skill.certificateBlobId) {
+      const saved = await storage.getBlob(skill.certificateBlobId);
+      if (!saved) { console.warn('Skill certificate blob is missing:', skill.certificateBlobId); return; }
+      const url = URL.createObjectURL(saved.data);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      return;
+    }
+    if (skill.certificateUrl) window.open(skill.certificateUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const handleAddSkill = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!skillName.trim()) return;
 
     const skillId = generateUUID();
     const prog = skillLevel === 'Mastery' ? 100 : skillLevel === 'Advanced' ? 75 : skillLevel === 'Intermediate' ? 50 : 25;
+    const certificateBlobId = skillCertificateFile ? await storage.saveBlob(skillCertificateFile) : undefined;
     const s: Skill = {
       id: skillId,
       name: skillName.trim(),
@@ -450,6 +591,9 @@ export const WorkView: React.FC<WorkViewProps> = ({
       targetLevel,
       progress: prog,
       targetDate: skillTargetDate || undefined,
+      certificateUrl: skillCertificateUrl.trim() || undefined,
+      certificateBlobId,
+      certificateFileName: skillCertificateFile?.name,
       goalId: skillGoalId || null,
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -501,6 +645,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
     onSuccess(skillArmGenesis ? '✓ Skill Tree & Practice Task Genesis with Alarm deployed!' : (skillGoalId ? '✓ Skill registered & linked to Goal' : '✓ Skill tree item registered'));
     setSkillName('');
     setSkillTargetDate('');
+    setSkillCertificateUrl('');
+    setSkillCertificateFile(null);
     setSkillGoalId('');
     setSkillArmGenesis(false);
     onRefresh();
@@ -532,9 +678,10 @@ export const WorkView: React.FC<WorkViewProps> = ({
     }
 
     await alarmService.requestNotificationPermission();
+    const linkedType = quickAlarmItem.type; // 'learning' | 'skill'
     const existingReminders = await storage.getAll<ReminderItem>('reminders');
     const currentReminder = existingReminders.find(
-      reminder => reminder.linkedType === 'task' && reminder.linkedId === quickAlarmItem.id && reminder.status !== 'done'
+      reminder => reminder.linkedType === linkedType && reminder.linkedId === quickAlarmItem.id && reminder.status !== 'done'
     );
     await storage.put('reminders', {
       ...(currentReminder || { id: generateUUID(), createdAt: Date.now() }),
@@ -543,7 +690,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       repeatRule: 'none',
       status: 'open',
       linkedId: quickAlarmItem.id,
-      linkedType: 'task',
+      linkedType,
       alarmEnabled: true,
       ringtone: quickAlarmRingtone,
       lastNotifiedAt: undefined,
@@ -596,7 +743,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       </div>}
 
       {/* Learning and skill overview */}
-      {!embedded && <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2">
+      <div className="metric-summary-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Learning Tracks</span>
@@ -624,13 +771,18 @@ export const WorkView: React.FC<WorkViewProps> = ({
         </div>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900 transition-all hover:border-slate-300 dark:hover:border-slate-700 min-w-0">
-  
-  
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider truncate">Reminders</span>
+            <BellRing className="h-4 w-4 text-rose-500 shrink-0" />
+          </div>
+          <div className="mt-2.5 font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white tabular-nums truncate">
+            {reminders.filter(r => r.status !== 'done').length}
+          </div>
           <div className="mt-1 text-[11px] text-slate-400 font-medium truncate">
             Agendas & syncs
           </div>
         </div>
-      </div>}
+      </div>
 
       {/* Delay Alert Banner in WorkView */}
       {!embedded && (() => {
@@ -676,8 +828,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 cursor-pointer"
                 >
-                  <Zap className="h-3.5 w-3.5 text-amber-300" />
-                  <span className="inline-flex items-center gap-1"><ThemeIcon name="zap" className="h-3.5 w-3.5" /> Task Genesis</span>
+                  <ThemeIcon name="zap" className="h-3.5 w-3.5 text-amber-300" />
+                  <span>Task Genesis</span>
                 </button>
               </div>
             </div>
@@ -687,7 +839,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
       })()}
 
       {/* Tabs (Full Width Responsive Slide Tab) */}
-      {!embedded && <><div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
+      {(!embedded || showTabsWhenEmbedded) && <><div className="w-full pb-2 border-b border-slate-200 dark:border-slate-800">
         <SlideTabs
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as any)}
@@ -819,6 +971,18 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
                 />
               </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Resource link</label>
+                  <input type="url" value={learnResourceUrl} onChange={e => setLearnResourceUrl(e.target.value)} placeholder="https://…" className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Notes</label>
+                  <input value={learnNotes} onChange={e => setLearnNotes(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                </div>
+              </div>
+              <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Subtopics</label><input value={learnSubtopics} onChange={e => setLearnSubtopics(e.target.value)} placeholder="Comma-separated topics" className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
 
               {/* Task Genesis deployment with Alarm toggle on Creation */}
               <div className="space-y-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/20">
@@ -952,6 +1116,12 @@ export const WorkView: React.FC<WorkViewProps> = ({
                         </ProgressiveActions>
                       </div>
 
+                      {(l.notes || l.resourceUrl) && <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                        {l.notes && <span className="min-w-0 flex-1 truncate">{l.notes}</span>}
+                        {l.resourceUrl && <a href={l.resourceUrl} target="_blank" rel="noreferrer" className="shrink-0 font-semibold text-indigo-600 hover:underline dark:text-indigo-400">Open resource</a>}
+                      </div>}
+                      {(l.subtopics || []).length > 0 && <div className="flex flex-wrap gap-1">{l.subtopics!.map(topic => <span key={topic} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">{topic}</span>)}</div>}
+
                       <div className="w-full font-bold text-slate-900 dark:text-white text-sm leading-snug">
                         {l.title}
                       </div>
@@ -967,8 +1137,9 @@ export const WorkView: React.FC<WorkViewProps> = ({
                       )}
 
                       <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-                        <span>{l.type}</span>
+                        <span>{l.type}{l.studyMinutes ? ` · ${Math.floor(l.studyMinutes / 60)}h ${l.studyMinutes % 60}m` : ''}</span>
                         <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => void handleLogStudyTime(l)} className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300" title="Log 15 study minutes"><Clock className="h-3 w-3" />+15m</button>
                           <button
                             type="button"
                             onClick={() => handleUpdateLearningProgress(l, -10)}
@@ -1131,6 +1302,10 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
                 />
               </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Certificate link</label><input type="url" value={skillCertificateUrl} onChange={e => setSkillCertificateUrl(e.target.value)} placeholder="https://…" className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+                <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Certificate file</label><input type="file" accept="application/pdf,image/*" onChange={e => setSkillCertificateFile(e.target.files?.[0] || null)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2 py-1.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" /></div>
+              </div>
 
               {/* Task Genesis deployment with Alarm toggle on Creation */}
               <div className="space-y-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/20">
@@ -1183,6 +1358,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
             <h2 className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-sm font-bold text-slate-900 dark:border-slate-800 dark:text-white">
               Acquired Competencies ({skills.length})
             </h2>
+            <SkillRadarChart skills={skills} />
             <div className="adaptive-card-grid mt-4 gap-3">
               {skills.length === 0 ? (
                 <div className="col-span-full"><EmptyState icon={Award} compact title="No competencies recorded" hint="Rate skills to reveal your capability map." /></div>
@@ -1270,6 +1446,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                         <div className="text-[11px] text-slate-400">
                           Current: <span className="font-semibold text-purple-600 dark:text-purple-400">{s.level || 'Intermediate'}</span> · Target: {s.targetLevel || 'Mastery'}
                         </div>
+                        {(s.certificateUrl || s.certificateBlobId) && <button type="button" onClick={() => void openSkillCertificate(s)} className="inline-flex text-[11px] font-semibold text-indigo-600 hover:underline dark:text-indigo-400">{s.certificateFileName || 'Open certificate'}</button>}
 
                         {/* Full-Width LINKED GOAL BADGE */}
                         {linkedGoal && (
@@ -1280,6 +1457,19 @@ export const WorkView: React.FC<WorkViewProps> = ({
                             </span>
                           </div>
                         )}
+                        {/* Skill progress bar */}
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                            <span>Progress</span>
+                            <span className="font-mono font-bold text-purple-600 dark:text-purple-400">{s.progress || 0}%</span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-purple-500 transition-all duration-300"
+                              style={{ width: `${s.progress || 0}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       {/* QUICK LEVEL BUTTONS */}
@@ -1293,14 +1483,14 @@ export const WorkView: React.FC<WorkViewProps> = ({
                                 key={lvl}
                                 type="button"
                                 onClick={() => handleUpdateSkillLevel(s, lvl)}
-                                className={`border-b-0 border-transparent py-1 text-[9px] font-bold transition-colors cursor-pointer truncate ${
+                                className={`rounded-md px-1 py-1 text-[9px] font-bold transition-colors cursor-pointer truncate ${
                                   isCurrent
-                                    ? 'text-amber-700 dark:text-amber-300'
-                                    : 'text-amber-800 hover:border-amber-500 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
+                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                                    : 'text-amber-800 hover:bg-amber-50 hover:text-amber-950 dark:text-amber-400 dark:hover:bg-amber-950/30 dark:hover:text-amber-200'
                                 }`}
-                                title={`Set level to ${lvl}`}
+                                title={lvl}
                               >
-                                {lvl.slice(0, 5)}
+                                {lvl === 'Novice' ? 'Nov' : lvl === 'Intermediate' ? 'Int' : lvl === 'Advanced' ? 'Adv' : 'Max'}
                               </button>
                             );
                           })}
@@ -1319,9 +1509,11 @@ export const WorkView: React.FC<WorkViewProps> = ({
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div
+            ref={editModalRef}
             className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
             role="dialog"
             aria-modal="true"
+            tabIndex={-1}
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
@@ -1383,58 +1575,82 @@ export const WorkView: React.FC<WorkViewProps> = ({
               </div>
 
               {editTarget.type === 'learning' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Type</label>
-                    <input
-                      type="text"
-                      value={editSubtitle}
-                      onChange={e => setEditSubtitle(e.target.value)}
-                      className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Type</label>
+                      <input type="text" value={editSubtitle} onChange={e => setEditSubtitle(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Progress (%)</label>
+                      <input type="number" min="0" max="100" value={editNumber} onChange={e => setEditNumber(Number(e.target.value))} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Resource link</label><input type="url" value={editResourceUrl} onChange={e => setEditResourceUrl(e.target.value)} placeholder="https://…" className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+                    <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Notes</label><input value={editLearningNotes} onChange={e => setEditLearningNotes(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+                  </div>
+                  <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Subtopics</label><input value={editLearningSubtopics} onChange={e => setEditLearningSubtopics(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+                </>
+              )}
+
+              {editTarget.type === 'skill' && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Current Level</label>
+                      <select
+                        value={editSubtitle}
+                        onChange={e => {
+                          const lvl = e.target.value;
+                          setEditSubtitle(lvl);
+                          const defaultProg = lvl === 'Mastery' ? 100 : lvl === 'Advanced' ? 75 : lvl === 'Intermediate' ? 50 : 25;
+                          setEditNumber(defaultProg);
+                        }}
+                        className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+                      >
+                        <option value="Novice">Novice</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                        <option value="Mastery">Mastery</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Level</label>
+                      <select
+                        value={editExtra}
+                        onChange={e => setEditExtra(e.target.value)}
+                        className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
+                      >
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                        <option value="Mastery">Mastery</option>
+                      </select>
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Progress (%)</label>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                      Progress ({editNumber}%)
+                    </label>
                     <input
-                      type="number"
+                      type="range"
                       min="0"
                       max="100"
                       value={editNumber}
                       onChange={e => setEditNumber(Number(e.target.value))}
-                      className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      className="mt-1 w-full accent-indigo-600 cursor-pointer"
                     />
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
+                      <span>0%</span>
+                      <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{editNumber}%</span>
+                      <span>100%</span>
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {editTarget.type === 'skill' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Current Level</label>
-                    <select
-                      value={editSubtitle}
-                      onChange={e => setEditSubtitle(e.target.value)}
-                      className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
-                    >
-                      <option value="Novice">Novice</option>
-                      <option value="Intermediate">Intermediate</option>
-                      <option value="Advanced">Advanced</option>
-                      <option value="Mastery">Mastery</option>
-                    </select>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Certificate link</label><input type="url" value={editCertificateUrl} onChange={e => setEditCertificateUrl(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+                    <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Replace certificate</label><input type="file" accept="application/pdf,image/*" onChange={e => setEditCertificateFile(e.target.files?.[0] || null)} className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-1 py-1 text-[10px] dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Target Level</label>
-                    <select
-                      value={editExtra}
-                      onChange={e => setEditExtra(e.target.value)}
-                      className="mt-1 h-8 w-full rounded-lg border border-slate-200 px-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
-                    >
-                      <option value="Intermediate">Intermediate</option>
-                      <option value="Advanced">Advanced</option>
-                      <option value="Mastery">Mastery</option>
-                    </select>
-                  </div>
-                </div>
+                </>
               )}
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
@@ -1472,6 +1688,27 @@ export const WorkView: React.FC<WorkViewProps> = ({
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {/* Undo Delete Toast Stack */}
+      {undoStack.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2" role="status" aria-live="polite">
+          {undoStack.map((entry, idx) => (
+            <div key={entry.item.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Deleted "{entry.label}"
+              </span>
+              <button
+                type="button"
+                onClick={() => handleUndoDelete(idx)}
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-950/70 cursor-pointer"
+              >
+                <Undo2 className="h-3 w-3" />
+                Undo
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* TASK GENESIS MODAL WITH AUDIO ALARM SCHEDULING */}
       {genesisModal.isOpen && (
@@ -1673,7 +1910,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     { id: '30m', label: 'In 30 Mins' },
                     { id: '1h', label: 'In 1 Hour' },
                     { id: 'tonight', label: 'Tonight 8 PM' },
-                    { id: 'tomorrow', label: 'Tomorrow 9 AM' }
+                    { id: 'tomorrow', label: 'Tomorrow 9 AM' },
+                    { id: 'custom', label: 'Custom…' }
                   ].map(p => (
                     <button
                       key={p.id}
@@ -1689,6 +1927,22 @@ export const WorkView: React.FC<WorkViewProps> = ({
                     </button>
                   ))}
                 </div>
+                {alarmPresetChoice === 'custom' && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <ThemedDateTimeInput
+                      type="date"
+                      value={quickCustomDate}
+                      onChange={e => setQuickCustomDate(e.target.value)}
+                      className="h-9 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                    <ThemedDateTimeInput
+                      type="time"
+                      value={quickCustomTime}
+                      onChange={e => setQuickCustomTime(e.target.value)}
+                      className="h-9 w-28 rounded-xl border border-slate-200 bg-white px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Download, Database, Trash2,
-  Palette, ChevronDown, RefreshCw,
-  Volume2
+  Palette, RefreshCw, DollarSign,
+  Volume2, Globe, Bell, Clock, Keyboard, ChevronDown, ChevronUp, Shield
 } from 'lucide-react';
 import {
   storage,
@@ -13,18 +13,35 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { UniversalDataManagerCard } from '../components/UniversalDataManagerCard';
 import { RecycleBinView } from './RecycleBinView';
 import { soundEngine } from '../lib/soundEngine';
-import { applyAccent, rememberAccentChoice, resolveSavedAccent } from '../lib/accentTheme';
 import { AppearanceCustomizer } from '../components/AppearanceCustomizer';
 import { AppearancePreferences } from '../lib/appearance';
 import { formatBytes } from '../lib/thumbnailService';
-import { ThemeIcon } from '../components/ThemeIcon';
 import { HeaderDropdown } from '../components/HeaderDropdown';
 import { CURRENCY_SYMBOLS, getCurrencySymbol, isCurrencySymbol } from '../lib/currencyDisplay';
+import { changeLocale, type Locale } from '../lib/i18n';
+import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
+
+const LOCALE_OPTIONS = [
+  { value: 'en' as const, label: 'English' },
+  { value: 'hi' as const, label: 'हिन्दी' },
+  { value: 'ne' as const, label: 'नेपाली' },
+];
+
+const DATE_FORMAT_OPTIONS = [
+  { value: 'DD/MM/YYYY' as const, label: 'DD/MM/YYYY' },
+  { value: 'MM/DD/YYYY' as const, label: 'MM/DD/YYYY' },
+  { value: 'YYYY-MM-DD' as const, label: 'YYYY-MM-DD' },
+];
+
+const KEYBOARD_SHORTCUTS = [
+  { keys: 'Ctrl + K', action: 'Global Search' },
+  { keys: 'Ctrl + /', action: 'Quick Capture' },
+];
 
 const settingsSections = [
-  { id: 'system', label: 'System & Appearance', icon: Palette },
+  { id: 'system', label: 'System', icon: Database },
   { id: 'exports', label: 'Data & Backups', icon: Download },
-  { id: 'appearance', label: 'Appearance', icon: Palette }
+  { id: 'appearance', label: 'Coordinated themes', icon: Palette }
 ] as const;
 
 interface SettingsViewProps {
@@ -32,8 +49,6 @@ interface SettingsViewProps {
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
   onError: (msg: string) => void;
-  theme: 'light' | 'dark';
-  onToggleTheme: () => void;
   appearance: AppearancePreferences;
   onApplyAppearance: (value: AppearancePreferences) => Promise<void>;
   wallpaperVideoMuted: boolean;
@@ -45,8 +60,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onRefresh,
   onSuccess,
   onError,
-  theme,
-  onToggleTheme,
   appearance,
   onApplyAppearance,
   wallpaperVideoMuted,
@@ -71,8 +84,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     issues: number;
     repaired: number;
   } | null>(null);
-  const [accentColor, setAccentColor] = useState<string>(resolveSavedAccent(settings?.accentColor || '#b88648'));
-  const [isAccentDropdownOpen, setIsAccentDropdownOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => soundEngine.isSoundEnabled());
   const [hapticEnabled, setHapticEnabled] = useState(() => soundEngine.isHapticEnabled());
   const [soundVolume, setSoundVolume] = useState(() => Math.round(soundEngine.getVolume() * 100));
@@ -84,14 +95,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isCustomCurrencySelected, setIsCustomCurrencySelected] = useState(() =>
     Boolean(settings?.currencySymbol && !CURRENCY_SYMBOLS.includes(settings.currencySymbol as typeof CURRENCY_SYMBOLS[number]))
   );
+  const [shortcutsExpanded, setShortcutsExpanded] = useState(false);
+  const [attachmentPassphrase, setAttachmentPassphrase] = useState('');
+  const [isUpdatingAttachmentEncryption, setIsUpdatingAttachmentEncryption] = useState(false);
+  const [isAttachmentEncryptionUnlocked, setIsAttachmentEncryptionUnlocked] = useState(storage.isAttachmentEncryptionUnlocked());
   const selectedSettingsSection = settingsSections.find(section => section.id === activeTab) ?? settingsSections[0];
   const SelectedSettingsSectionIcon = selectedSettingsSection.icon;
-
-  useEffect(() => {
-    if (settings?.accentColor) {
-      setAccentColor(resolveSavedAccent(settings.accentColor));
-    }
-  }, [settings?.accentColor]);
 
   useEffect(() => {
     const isCustom = Boolean(settings?.currencySymbol
@@ -100,7 +109,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsCustomCurrencySelected(isCustom);
   }, [settings?.currencySymbol]);
 
+  useEffect(() => {
+    const handleEncryptionState = (event: Event) => {
+      const detail = (event as CustomEvent<{ unlocked: boolean }>).detail;
+      setIsAttachmentEncryptionUnlocked(Boolean(detail?.unlocked));
+    };
+    window.addEventListener('om-attachment-encryption-state', handleEncryptionState);
+    return () => window.removeEventListener('om-attachment-encryption-state', handleEncryptionState);
+  }, []);
+
   const profileId = settings?.profileId || storage.getActiveProfileId();
+  const updateLocale = async (locale: Locale) => {
+    try {
+      const appSettings = await storage.getSingleton<AppState>('appSettings') || settings;
+      if (!appSettings) throw new Error('App settings are unavailable.');
+      await storage.setSingleton('appSettings', { ...appSettings, locale }, profileId);
+      changeLocale(locale);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Could not save language setting.');
+    }
+  };
   const saveCustomCurrencySymbol = async () => {
     const currencySymbol = customCurrencySymbol.trim();
     if (!isCurrencySymbol(currencySymbol)) {
@@ -116,6 +144,47 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       onError(error instanceof Error ? error.message : 'Could not save the currency display symbol.');
     }
   };
+  const updateAppSetting = async (patch: Partial<AppState>) => {
+    try {
+      const appSettings = await storage.getSingleton<AppState>('appSettings') || settings;
+      if (!appSettings) throw new Error('App settings are unavailable.');
+      await storage.setSingleton('appSettings', { ...appSettings, ...patch }, profileId);
+      onRefresh();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Could not save setting.');
+    }
+  };
+
+  const updateAttachmentEncryption = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!attachmentPassphrase) return;
+    setIsUpdatingAttachmentEncryption(true);
+    try {
+      if (settings?.attachmentEncryption?.enabled) {
+        await storage.unlockAttachmentEncryption(attachmentPassphrase);
+        setIsAttachmentEncryptionUnlocked(true);
+        onSuccess('Encrypted attachments unlocked.');
+      } else {
+        await storage.enableAttachmentEncryption(attachmentPassphrase);
+        setIsAttachmentEncryptionUnlocked(true);
+        onSuccess('Vault attachments are encrypted.');
+        await onRefresh();
+      }
+      setAttachmentPassphrase('');
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Could not update attachment encryption.');
+    } finally {
+      setIsUpdatingAttachmentEncryption(false);
+    }
+  };
+
+  const lockAttachmentEncryption = () => {
+    storage.lockAttachmentEncryption();
+    setIsAttachmentEncryptionUnlocked(false);
+    setAttachmentPassphrase('');
+    onSuccess('Vault attachments locked.');
+  };
+
   const loadStorageStats = useCallback(async () => {
     setIsLoadingStorageStats(true);
     try {
@@ -254,10 +323,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </HeaderDropdown>
       </div>
 
-      {/* Tab: System & Appearance */}
       {activeTab !== 'exports' && (
         <div className="settings-system-grid grid min-w-0 items-start gap-4 md:grid-cols-2">
-          {/* Left Column: Appearance & Theme + Storage Health & Quota (6 cols) */}
           {activeTab === 'appearance' && (
             <div className="w-full md:col-span-2">
               <AppearanceCustomizer
@@ -272,8 +339,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
           <div className={activeTab === 'system' ? 'space-y-4' : 'hidden'}>
           <section className="settings-card rounded-2xl border border-slate-200/80 bg-white p-4 text-slate-900 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <div className="flex items-center gap-2">
                   <Database className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white">Storage Usage</h2>
@@ -284,7 +350,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     disabled={isAuditing}
                     onClick={handleRunIntegrityAudit}
                     className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer disabled:opacity-50"
-                    title="Check task goals and finance account links"
+                    title="Integrity audit"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
                     <span>Run Integrity Audit</span>
@@ -294,60 +360,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     disabled={isLoadingStorageStats}
                     onClick={() => void loadStorageStats()}
                     className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer disabled:opacity-50"
-                    title="Refresh storage statistics"
+                    title="Refresh"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isLoadingStorageStats ? 'animate-spin' : ''}`} />
                     <span>Refresh</span>
                   </button>
                 </div>
               </div>
-              <div className="mt-2 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
+              <div className="mt-2 flex items-center justify-between text-xs">
                 <div className="min-w-0">
-                  <div className="text-slate-500 dark:text-slate-400">Profile data</div>
-                  <div className="mt-0.5 text-base font-bold text-slate-900 dark:text-white">
-                    {isLoadingStorageStats ? 'Calculating…' : storageStatsError ? 'Unavailable' : formatBytes(storageStats.profileUsage)}
-                  </div>
-                  {integrityAuditResult && (
-                    <div
-                      className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
-                        integrityAuditResult.issues > integrityAuditResult.repaired
-                          ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200'
-                          : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'
-                      }`}
-                      role="status"
-                    >
-                      Last audit: {integrityAuditResult.checked.toLocaleString()} records checked; {integrityAuditResult.issues.toLocaleString()} issues found; {integrityAuditResult.repaired.toLocaleString()} repaired.
-                    </div>
-                  )}
+                  <span className="text-slate-500 dark:text-slate-400">Profile </span>
+                  <span className="font-bold text-slate-900 dark:text-white">{isLoadingStorageStats ? '…' : storageStatsError ? 'N/A' : formatBytes(storageStats.profileUsage)}</span>
                 </div>
                 <div className="min-w-0">
-                  <div className="text-slate-500 dark:text-slate-400">Browser used</div>
-                  <div className="mt-0.5 text-base font-bold text-slate-900 dark:text-white">
-                    {storageStats.available ? `${formatBytes(storageStats.usage)} used` : 'Usage unavailable'}
-                  </div>
-                  <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                    {storageStats.quota > 0
-                      ? `${formatBytes(storageStats.quota)} quota · ${storageStats.percent.toFixed(2)}% used`
-                      : 'Browser quota unavailable'}
-                  </div>
+                  <span className="text-slate-500 dark:text-slate-400">Browser </span>
+                  <span className="font-bold text-slate-900 dark:text-white">{storageStats.available ? `${formatBytes(storageStats.usage)} / ${storageStats.quota > 0 ? formatBytes(storageStats.quota) : '?'}` : 'N/A'}</span>
                 </div>
               </div>
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-amber-100/70 dark:bg-amber-950/50">
+              <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-amber-100/70 dark:bg-amber-950/50">
                 <div
                   className={`h-full ${storageStats.level === 'critical' ? 'bg-rose-500' : storageStats.level === 'warning' ? 'bg-amber-500' : 'bg-amber-600 dark:bg-amber-400'}`}
                   style={{ width: `${Math.min(100, Math.max(storageStats.quota > 0 ? 0.5 : 0, storageStats.percent))}%` }}
                 />
               </div>
+              {integrityAuditResult && (
+                <div className={`mt-1.5 rounded-lg border px-2 py-1 text-[11px] ${integrityAuditResult.issues > integrityAuditResult.repaired ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200' : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'}`} role="status">
+                  {integrityAuditResult.checked.toLocaleString()} checked · {integrityAuditResult.issues.toLocaleString()} issues · {integrityAuditResult.repaired.toLocaleString()} fixed
+                </div>
+              )}
               {storageStatsError && (
-                <p role="status" className="mt-2 text-[11px] text-rose-600 dark:text-rose-400">
-                  Storage stats error: {storageStatsError}
+                <p role="status" className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                  {storageStatsError}
                 </p>
               )}
-            </div>
             <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
               <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-                <Palette className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
+                <DollarSign className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
                 Currency display symbol
               </h2>
               <select
@@ -408,272 +457,131 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               )}
             </div>
           </section>
-          </div>
-            <div className="hidden flex-1 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-6 flex-col h-full">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                  <Palette className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">Appearance & Theme</h2>
-                </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-[140px]">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">Color Mode</div>
-                </div>
-              <div className="flex gap-3 text-xs shrink-0">
-                <button
-                  type="button"
-                  onClick={theme === 'dark' ? onToggleTheme : undefined}
-                  className={`border-b-0 border-transparent px-2 py-1 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                    theme === 'light' ? 'text-indigo-700 dark:text-indigo-300' : 'text-indigo-800 hover:border-indigo-500 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
-                  }`}
-                >
-                  ☀ Light
-                </button>
-                <button
-                  type="button"
-                  onClick={theme === 'light' ? onToggleTheme : undefined}
-                  className={`border-b-0 border-transparent px-2 py-1 font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                    theme === 'dark' ? 'text-indigo-700 dark:text-indigo-300' : 'text-indigo-800 hover:border-indigo-500 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
-                  }`}
-                >
-                  ☾ Dark
-                </button>
+          {/* Language + Date & Time Format — single card */}
+          <section className="settings-card rounded-2xl border border-slate-200/80 bg-white p-4 text-slate-900 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Language & Format</h2>
+              </div>
+              <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
+                {LOCALE_OPTIONS.find(o => o.value === (settings?.locale || 'en'))?.label || 'English'}
+              </span>
             </div>
-
-            {/* Accent Theme Colors Dropdown */}
-            <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
-              {(() => {
-                const ACCENT_PRESETS = [
-                  { name: 'Sanctuary Amber', hex: '#b88648' },
-                  { name: 'Indigo', hex: '#6366f1' },
-                  { name: 'Cobalt', hex: '#2563eb' },
-                  { name: 'Sky', hex: '#0284c7' },
-                  { name: 'Cyan', hex: '#06b6d4' },
-                  { name: 'Teal', hex: '#0d9488' },
-                  { name: 'Emerald', hex: '#10b981' },
-                  { name: 'Forest', hex: '#15803d' },
-                  { name: 'Lime', hex: '#84cc16' },
-                  { name: 'Amber', hex: '#f59e0b' },
-                  { name: 'Orange', hex: '#f97316' },
-                  { name: 'Crimson', hex: '#e11d48' },
-                  { name: 'Rose', hex: '#f43f5e' },
-                  { name: 'Fuchsia', hex: '#d946ef' },
-                  { name: 'Purple', hex: '#a855f7' },
-                  { name: 'Violet', hex: '#8b5cf6' },
-                  { name: 'Slate', hex: '#475569' }
-                ];
-                const activePreset = ACCENT_PRESETS.find(
-                  p => p.hex.toLowerCase() === accentColor.toLowerCase()
-                );
-
-                return (
-                  <>
-                    <div className="flex items-center justify-between gap-2.5 sm:gap-3">
-                      <div className="shrink-0">
-                        <div className="text-xs font-bold text-slate-900 dark:text-white shrink-0">Accent Theme Highlight</div>
-                      </div>
-
-                      <div className="shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setIsAccentDropdownOpen(prev => !prev)}
-                          className="flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200 cursor-pointer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                        >
-                          <span
-                            className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full border border-white/40 shadow-2xs shrink-0"
-                            style={{ backgroundColor: accentColor }}
-                          />
-                          <span>{activePreset ? activePreset.name : 'Custom'}</span>
-                          <span
-                            className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold text-white hidden xs:inline-block sm:inline-block"
-                            style={{ backgroundColor: accentColor }}
-                          >
-                            {accentColor.toUpperCase()}
-                          </span>
-                          <ChevronDown
-                            className={`h-3.5 w-3.5 text-indigo-700 dark:text-indigo-300 transition-transform duration-150 ${
-                              isAccentDropdownOpen ? 'rotate-180' : ''
-                            }`}
-                          />
-                        </button>
-
-                        {isAccentDropdownOpen && (
-                          <div
-                            className="fixed inset-0 z-40"
-                            onClick={() => setIsAccentDropdownOpen(false)}
-                          />
-                        )}
-                      </div>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Language</label>
+                <select
+                  aria-label="Language"
+                  value={settings?.locale || 'en'}
+                  onChange={e => void updateLocale(e.target.value as Locale)}
+                  className="settings-flat-select mt-1 h-9 w-full rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-sm font-semibold text-slate-900 dark:border-slate-700 dark:text-white"
+                >
+                  {LOCALE_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Date Format</label>
+                <select
+                  aria-label="Date format"
+                  value={settings?.dateFormat || 'DD/MM/YYYY'}
+                  onChange={e => void updateAppSetting({ dateFormat: e.target.value as AppState['dateFormat'] })}
+                  className="settings-flat-select mt-1 h-9 w-full rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-sm font-semibold text-slate-900 dark:border-slate-700 dark:text-white"
+                >
+                  {DATE_FORMAT_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Time Format</label>
+                <select
+                  aria-label="Time format"
+                  value={settings?.timeFormat || '12h'}
+                  onChange={e => void updateAppSetting({ timeFormat: e.target.value as AppState['timeFormat'] })}
+                  className="settings-flat-select mt-1 h-9 w-full rounded-none border-0 border-b border-slate-300 bg-transparent px-2 text-sm font-semibold text-slate-900 dark:border-slate-700 dark:text-white"
+                >
+                  <option value="12h">12-hour</option>
+                  <option value="24h">24-hour</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShortcutsExpanded(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Keyboard className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">Keyboard Shortcuts</h2>
+                </div>
+                {shortcutsExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-slate-400" />
+                )}
+              </button>
+              {shortcutsExpanded && (
+                <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+                  {KEYBOARD_SHORTCUTS.map(shortcut => (
+                    <div key={shortcut.keys} className="flex items-center justify-between gap-3 py-1">
+                      <span className="text-xs text-slate-600 dark:text-slate-300">{shortcut.action}</span>
+                      <kbd className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-mono font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        {shortcut.keys}
+                      </kbd>
                     </div>
-
-                    {isAccentDropdownOpen && (
-                      <div className="sanctuary-menu-surface relative z-50 mt-3 w-full sm:w-80 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 space-y-3 animate-in fade-in zoom-in-95 duration-150">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
-                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                            Select Accent Theme
-                          </span>
-                          <span
-                            className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-2xs"
-                            style={{ backgroundColor: accentColor }}
-                          >
-                            {accentColor.toUpperCase()}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-60 overflow-y-auto pr-0.5">
-                          {ACCENT_PRESETS.map(acc => {
-                            const isSelected = accentColor.toLowerCase() === acc.hex.toLowerCase();
-                            return (
-                              <button
-                                key={acc.name}
-                                type="button"
-                                onClick={async () => {
-                                  setAccentColor(acc.hex);
-                                  rememberAccentChoice(true);
-                                  applyAccent(acc.hex);
-                                  const appSettings = await storage.getSingleton<any>('appSettings') || {};
-                                  appSettings.accentColor = acc.hex;
-                                  await storage.setSingleton('appSettings', appSettings);
-                                  onSuccess(`${acc.name} theme accent applied`);
-                                  setIsAccentDropdownOpen(false);
-                                  onRefresh();
-                                }}
-                                className={`group flex min-w-0 items-center gap-1 rounded-xl px-1.5 py-1 text-left transition-colors cursor-pointer border ${
-                                  isSelected
-                                    ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/40'
-                                    : 'border-transparent hover:border-indigo-300 hover:bg-indigo-50/60 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/20'
-                                }`}
-                                title={`${acc.name} (${acc.hex})`}
-                              >
-                                <span
-                                  className="h-4 w-4 rounded-full shrink-0 flex items-center justify-center text-white text-[9px] font-bold shadow-2xs"
-                                  style={{ backgroundColor: acc.hex }}
-                                >
-                                  {isSelected ? '✓' : ''}
-                                </span>
-                                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                                  {acc.name}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Custom:</span>
-                            <label className="relative flex items-center justify-center cursor-pointer">
-                              <input
-                                type="color"
-                                value={accentColor.startsWith('#') ? accentColor : '#b88648'}
-                                onChange={async (e) => {
-                                  const newHex = e.target.value;
-                                  setAccentColor(newHex);
-                                  rememberAccentChoice(true);
-                                  applyAccent(newHex);
-                                  const appSettings = await storage.getSingleton<any>('appSettings') || {};
-                                  appSettings.accentColor = newHex;
-                                  await storage.setSingleton('appSettings', appSettings);
-                                }}
-                                className="h-6 w-6 rounded-lg border-0 p-0 cursor-pointer overflow-hidden opacity-0 absolute inset-0"
-                                title="Choose custom hex color"
-                              />
-                              <span
-                                className="h-6 w-6 rounded-lg border border-slate-300 dark:border-slate-600 shadow-2xs block transition-transform hover:scale-110"
-                                style={{ backgroundColor: accentColor }}
-                              />
-                            </label>
-                            <input
-                              type="text"
-                              value={accentColor}
-                              onChange={async (e) => {
-                                const newHex = e.target.value;
-                                setAccentColor(newHex);
-                                if (/^#[0-9A-Fa-f]{6}$/.test(newHex)) {
-                                  rememberAccentChoice(true);
-                                  applyAccent(newHex);
-                                  const appSettings = await storage.getSingleton<any>('appSettings') || {};
-                                  appSettings.accentColor = newHex;
-                                  await storage.setSingleton('appSettings', appSettings);
-                                }
-                              }}
-
-                              className="h-6 w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 font-mono text-[11px] uppercase text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const defaultHex = '#b88648';
-                              setAccentColor(defaultHex);
-                              rememberAccentChoice(false);
-                              applyAccent(defaultHex);
-                              const appSettings = await storage.getSingleton<any>('appSettings') || {};
-                              appSettings.accentColor = defaultHex;
-                              await storage.setSingleton('appSettings', appSettings);
-                              onSuccess('Default Sanctuary Amber accent restored');
-                              setIsAccentDropdownOpen(false);
-                              onRefresh();
-                            }}
-                            className="text-[11px] text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-medium cursor-pointer whitespace-nowrap"
-                          >
-                            Reset Default
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+                  ))}
+                </div>
+              )}
             </div>
-            </div>
-            </div>
-            </div>
+          </section>
 
-      {/* Tactile Sound & Micro-Interactions Card (6 cols) */}
-      <div className={activeTab === 'system' ? 'w-full min-w-0' : 'hidden'}>
-        <div className="flex flex-col space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+          </div>
+      <div className={activeTab === 'system' ? 'w-full min-w-0 space-y-4' : 'hidden'}>
+        <section className="settings-card rounded-2xl border border-slate-200/80 bg-white p-4 text-slate-900 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
               <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <div className="flex items-center gap-2 min-w-0">
                   <Volume2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                    Tactile Audio & Haptics
+                    Sound & Haptics
                   </h2>
                 </div>
               </div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {/* Sound Effects Toggle */}
-                  <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-2">
+              <div className="mt-2 space-y-2">
+                <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                  <div className="flex min-w-0 items-center justify-between gap-2 px-1 py-1">
                     <div className="text-[11px] font-bold leading-tight text-slate-900 dark:text-white">
-                      Auditory Micro-Clicks
+                      Sound Effects
                     </div>
                     <button
                       type="button"
                       role="switch"
-                      aria-label="Auditory Micro-Clicks"
+                      aria-label="Sound Effects"
                       aria-checked={soundEnabled}
                       onClick={() => {
                         const next = !soundEnabled;
                         setSoundEnabled(next);
                         soundEngine.setSoundEnabled(next);
-                        if (next) onSuccess('Auditory feedback enabled');
+                        if (next) onSuccess('Sound enabled');
                       }}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-start overflow-hidden rounded-full border-0 p-0 transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
                         soundEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
                       }`}
+                      style={{ position: 'relative', display: 'inline-flex', width: 36, height: 20, padding: 0, border: 0, borderRadius: 9999, overflow: 'hidden', backgroundColor: soundEnabled ? '#4f46e5' : '#64748b', backgroundImage: 'none', isolation: 'isolate' }}
                     >
                       <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                          soundEnabled ? 'translate-x-5' : 'translate-x-0'
-                        }`}
+                        className="pointer-events-none"
+                        style={{ position: 'absolute', left: 2, top: 2, display: 'block', width: 16, height: 16, borderRadius: 9999, background: '#fff', zIndex: 10, pointerEvents: 'none', transform: `translateX(${soundEnabled ? '16px' : '0px'})`, transition: 'transform 200ms ease-in-out', boxShadow: '0 1px 3px rgba(0,0,0,.35)' }}
                       />
                     </button>
                   </div>
 
-                  {/* Haptic Feedback Toggle */}
-                  <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-2">
+                  {soundEngine.isHapticSupported() && (
+                  <div className="flex min-w-0 items-center justify-between gap-2 px-1 py-1">
                     <div className="min-w-0">
                       <div className="text-[11px] font-bold leading-tight text-slate-900 dark:text-white">
                         Haptic Vibration
@@ -690,25 +598,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         soundEngine.setHapticEnabled(next);
                         if (next) onSuccess('Haptic feedback enabled');
                       }}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-start overflow-hidden rounded-full border-0 p-0 transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
                         hapticEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
                       }`}
+                      style={{ position: 'relative', display: 'inline-flex', width: 36, height: 20, padding: 0, border: 0, borderRadius: 9999, overflow: 'hidden', backgroundColor: hapticEnabled ? '#4f46e5' : '#64748b', backgroundImage: 'none', isolation: 'isolate' }}
                     >
                       <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                          hapticEnabled ? 'translate-x-5' : 'translate-x-0'
-                        }`}
+                        className="pointer-events-none"
+                        style={{ position: 'absolute', left: 2, top: 2, display: 'block', width: 16, height: 16, borderRadius: 9999, background: '#fff', zIndex: 10, pointerEvents: 'none', transform: `translateX(${hapticEnabled ? '16px' : '0px'})`, transition: 'transform 200ms ease-in-out', boxShadow: '0 1px 3px rgba(0,0,0,.35)' }}
                       />
                     </button>
                   </div>
+                  )}
                 </div>
 
-                {/* Volume Level Slider */}
-                <div className="space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    <span>Sound Volume:</span>
-                    <span className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">{soundVolume}%</span>
-                  </div>
+                <div className="flex items-center gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">Volume</span>
                   <input
                     type="range"
                     min="0"
@@ -722,51 +627,96 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       soundEngine.setVolume(val / 100);
                     }}
                     onPointerUp={() => soundEngine.play('tap')}
-                    className="w-full accent-indigo-600 cursor-pointer disabled:opacity-40"
+                    className="flex-1 accent-indigo-600 cursor-pointer disabled:opacity-40"
                   />
+                  <span className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold shrink-0 w-7 text-right">{soundVolume}%</span>
                 </div>
-
-                {/* Interactive Sound Previews */}
-                <div className="rounded-xl border-2 border-dashed border-slate-200 p-2 dark:border-slate-800 space-y-1">
-                  <div className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
-                    Sound Previews
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => soundEngine.play('taskComplete')}
-                      className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
-                    >
-                      <span className="inline-flex items-center gap-1"><ThemeIcon name="check" className="h-3.5 w-3.5" /> Task Tick</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => soundEngine.play('habitComplete')}
-                      className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
-                    >
-                      <span className="inline-flex items-center gap-1"><ThemeIcon name="repeat" className="h-3.5 w-3.5" /> Habit Ring</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => soundEngine.play('calcKey')}
-                      className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
-                    >
-                      <span className="inline-flex items-center gap-1"><ThemeIcon name="calculator" className="h-3.5 w-3.5" /> Key Tap</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => soundEngine.play('successChime')}
-                      className="whitespace-nowrap px-1 py-1.5 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors text-center"
-                    >
-                      <span className="inline-flex items-center gap-1"><ThemeIcon name="celebrate" className="h-3.5 w-3.5" /> Success</span>
-                    </button>
+                <div className="flex items-center justify-between gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider shrink-0">Preview</span>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => soundEngine.play('taskComplete')} className="px-2 py-1 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors">Task</button>
+                    <button type="button" onClick={() => soundEngine.play('habitComplete')} className="px-2 py-1 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors">Habit</button>
+                    <button type="button" onClick={() => soundEngine.play('calcKey')} className="px-2 py-1 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors">Key</button>
+                    <button type="button" onClick={() => soundEngine.play('successChime')} className="px-2 py-1 text-[10px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors">Success</button>
                   </div>
                 </div>
               </div>
+        </section>
+
+        <section className="settings-card rounded-2xl border border-slate-200/80 bg-white p-4 text-slate-900 shadow-card dark:border-slate-800/80 dark:bg-slate-900 sm:p-5">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <Bell className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Notifications</h2>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-label="Enable Notifications"
+              aria-checked={settings?.notificationsEnabled ?? true}
+              onClick={() => void updateAppSetting({ notificationsEnabled: !(settings?.notificationsEnabled ?? true) })}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-start overflow-hidden rounded-full border-0 p-0 transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
+                (settings?.notificationsEnabled ?? true) ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+              style={{ position: 'relative', display: 'inline-flex', width: 36, height: 20, padding: 0, border: 0, borderRadius: 9999, overflow: 'hidden', backgroundColor: (settings?.notificationsEnabled ?? true) ? '#4f46e5' : '#64748b', backgroundImage: 'none', isolation: 'isolate' }}
+            >
+              <span
+                className="pointer-events-none"
+                style={{ position: 'absolute', left: 2, top: 2, display: 'block', width: 16, height: 16, borderRadius: 9999, background: '#fff', zIndex: 10, pointerEvents: 'none', transform: `translateX(${(settings?.notificationsEnabled ?? true) ? '16px' : '0px'})`, transition: 'transform 200ms ease-in-out', boxShadow: '0 1px 3px rgba(0,0,0,.35)' }}
+              />
+            </button>
+          </div>
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">Quiet Hours</span>
+              <div className="flex flex-1 items-center gap-2 min-w-0">
+                <ThemedDateTimeInput
+                  type="time"
+                  aria-label="Quiet hours start"
+                  value={settings?.quietHoursStart || '22:00'}
+                  onChange={e => void updateAppSetting({ quietHoursStart: e.target.value })}
+                  className="h-8 flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                />
+                <span className="text-[10px] text-slate-400 shrink-0">–</span>
+                <ThemedDateTimeInput
+                  type="time"
+                  aria-label="Quiet hours end"
+                  value={settings?.quietHoursEnd || '07:00'}
+                  onChange={e => void updateAppSetting({ quietHoursEnd: e.target.value })}
+                  className="h-8 flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                />
+              </div>
+            </div>
+            <div className="border-t border-slate-100 pt-2 dark:border-slate-800">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-300" />
+                  <span className="text-[11px] font-bold text-slate-900 dark:text-white">File Encryption</span>
+                </div>
+                {settings?.attachmentEncryption?.enabled && (
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${storage.isAttachmentEncryptionUnlocked() ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'}`}>
+                    {storage.isAttachmentEncryptionUnlocked() ? 'Unlocked' : 'Locked'}
+                  </span>
+                )}
+              </div>
+              <form onSubmit={updateAttachmentEncryption}>
+                <div className="flex items-center gap-2">
+                  {settings?.attachmentEncryption?.enabled && isAttachmentEncryptionUnlocked ? (
+                    <button type="button" onClick={lockAttachmentEncryption} disabled={isUpdatingAttachmentEncryption} className="h-8 rounded-lg border border-amber-300 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/30">Lock</button>
+                  ) : (
+                    <>
+                      <input type="password" autoComplete="current-password" minLength={settings?.attachmentEncryption?.enabled ? undefined : 10} required value={attachmentPassphrase} onChange={e => setAttachmentPassphrase(e.target.value)} placeholder={settings?.attachmentEncryption?.enabled ? 'Passphrase' : 'Create passphrase (10+ chars)'} aria-label="Attachment encryption passphrase" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white" style={{height: 36}} />
+                      <button type="submit" disabled={isUpdatingAttachmentEncryption} className="shrink-0 rounded-lg px-3 text-xs font-semibold text-white disabled:opacity-50" style={{height: 36, minHeight: 'unset', background: '#4f46e5', border: 'none', borderRadius: 8, padding: '0 12px', fontSize: 12, fontWeight: 600, color: '#fff'}}>{isUpdatingAttachmentEncryption ? '…' : settings?.attachmentEncryption?.enabled ? 'Unlock' : 'Enable'}</button>
+                    </>
+                  )}
+                </div>
+              </form>
             </div>
           </div>
+        </section>
+          </div>
 
-          {/* Recycle Bin & Deletion Guard (Positioned at the end of System & Appearance) */}
           <div id="system-recycle-bin-section" className={activeTab === 'system' ? 'md:col-span-2' : 'hidden'}>
             <RecycleBinView
               profileId={settings?.profileId || settings?.profiles?.[0]?.id || 'om-master-profile'}
@@ -779,10 +729,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* Tab: Universal Data Manager, Backups & System Maintenance */}
       {activeTab === 'exports' && (
         <div className="space-y-4 min-w-0">
-          {/* Section 1: Universal Data Manager (Export & Import) */}
           <UniversalDataManagerCard
             profileId={settings?.profileId || 'om-master-profile'}
             profileName="Om-LifeOS"
@@ -791,7 +739,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             onRefreshData={onRefresh}
           />
 
-          {/* Section 2: Danger Zone & System Maintenance (Compact) */}
           <div className="rounded-2xl border border-rose-200/90 bg-rose-50/30 p-4 sm:p-4.5 dark:border-rose-950/70 dark:bg-rose-950/15 shadow-card min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -808,7 +755,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 disabled={isCleaningCache}
                 onClick={handleCleanCache}
                 className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 cursor-pointer transition-colors disabled:opacity-50"
-                title="Safely remove browser cache and orphaned temporary files without deleting active data or recycle bin items"
+                title="Clear cache"
               >
                 <RefreshCw className={`h-3 w-3 text-amber-600 dark:text-amber-400 ${isCleaningCache ? 'animate-spin' : ''}`} />
                 <span>{isCleaningCache ? 'Cleaning…' : 'Clear Cache & Temp Files'}</span>
@@ -818,7 +765,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="button"
                 onClick={handlePurgeDefaultData}
                 className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-rose-700 hover:text-rose-900 dark:text-rose-300 dark:hover:text-rose-200 cursor-pointer transition-colors"
-                title="Permanently delete all default/seed records and sources"
+                title="Purge defaults"
               >
                 <Trash2 className="h-3 w-3 text-rose-600 dark:text-rose-400" />
                 <span>Purge Default Data</span>
@@ -828,7 +775,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="button"
                 onClick={handleResetData}
                 className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-rose-700 hover:text-rose-900 dark:text-rose-300 dark:hover:text-rose-200 cursor-pointer transition-colors"
-                title="Permanently clear all local profiles, deleted items, custom backgrounds, and app settings"
+                title="Reset everything"
               >
                 <Trash2 className="h-3 w-3" />
                 <span>Factory Reset App</span>
@@ -838,11 +785,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* CLEAR CACHE CONFIRMATION MODAL */}
       <ConfirmModal
         isOpen={isCleanCacheOpen}
-        title="Clear Cache & Temporary Files?"
-        message="This will wipe browser Cache Storage, Service Worker offline caches, and orphaned media files. Your stored data and Recycle Bin items will remain 100% safe and intact."
+        title="Clear Cache?"
+        message="Removes cached files and orphaned media. Your data and Recycle Bin stay intact."
         confirmText="Yes, Clear Cache"
         cancelText="Cancel"
         isDanger={false}
@@ -850,11 +796,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         onCancel={() => setIsCleanCacheOpen(false)}
       />
 
-      {/* DANGER RESET CONFIRMATION MODAL */}
       <ConfirmModal
         isOpen={isResetConfirmOpen}
-        title="Factory Reset This App?"
-        message="This permanently deletes every local profile and record, including the Recycle Bin, uploaded background images/videos, appearance settings, and offline caches. The app will reload with fresh defaults. This cannot be undone; export a backup first if you may need this data. Cloud backups are not deleted."
+        title="Factory Reset?"
+        message="Permanently deletes all local data and reloads with fresh defaults. Export a backup first. Cloud backups are not affected."
         confirmText="Yes, Factory Reset"
         cancelText="Cancel"
         isDanger={true}
@@ -862,12 +807,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         onCancel={() => setIsResetConfirmOpen(false)}
       />
 
-      {/* PURGE DEFAULT CONFIRMATION MODAL */}
       <ConfirmModal
         isOpen={isPurgeDefaultOpen}
-        title="Permanently Delete All Default Data?"
-        message="This will scan all database tables and permanently remove any default/seed tasks, routines, habits, goals, notes, and alarms. Any records you personally created will be safely preserved."
-        confirmText="Permanently Delete Default Data"
+        title="Delete Default Data?"
+        message="Removes all seed/default records. Your personally created data stays safe."
+        confirmText="Delete Defaults"
         cancelText="Cancel"
         isDanger={true}
         onConfirm={handleConfirmPurgeDefault}

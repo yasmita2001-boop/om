@@ -94,14 +94,13 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
 
   useEffect(() => {
     if (isOnline || !user) return;
-    clearGoogleSession();
-    setUser(null);
-    setAccessToken(null);
+    // When offline, disable sync but keep the user signed in to their workspace.
+    // Clearing the session & switching to guest on transient network loss causes data
+    // to be written to the wrong profile — only sign out on explicit user action.
     setBackupInfo(null);
-    pendingAutoSyncRef.current = hasPendingSync(workspaceProfileId);
-    onToast?.('Offline mode opened the separate guest workspace.');
-    void onAccountChanged?.(null);
-  }, [isOnline, user, onAccountChanged, onToast]);
+    pendingAutoSyncRef.current = false;
+    onToast?.('You are offline — sync is paused until connection is restored.');
+  }, [isOnline, user, onToast]);
 
   const clearExpiredSession = async (message: string) => {
     if (message.includes('Google Drive session expired')) {
@@ -419,7 +418,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
             <span className="truncate">Google Drive Sync</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+            {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </div>
         </button>
       ) : (
@@ -460,7 +459,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
                 title="Google Drive Connected"
               />
             )}
-            {isOpen ? <ChevronDown className="h-3 w-3 text-slate-400" /> : <ChevronUp className="h-3 w-3 text-slate-400" />}
+            {isOpen ? <ChevronUp className="h-3 w-3 text-slate-400" /> : <ChevronDown className="h-3 w-3 text-slate-400" />}
           </div>
         </button>
       )}
@@ -697,7 +696,7 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
                 aria-label="Restore backup from Google Drive"
                 className="drive-confirm-action flex min-h-10 w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-indigo-500 sm:flex-1 cursor-pointer"
               >
-                <span>Backup</span>
+                <span>Restore</span>
               </button>
             </div>
           </div>

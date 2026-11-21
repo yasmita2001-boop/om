@@ -1,24 +1,32 @@
 import { getCurrencySymbol } from '../lib/currencyDisplay';
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Folder, FileCheck, Shield, Trash2, Receipt, Award, FileText,
   Upload, Edit3, Download, Paperclip, Search,
-  X, Landmark, ExternalLink, Plus, Eye
+  X, Landmark, ExternalLink, Plus, Eye, Undo2, Link,
+  ArrowDownToLine, ArrowUpFromLine, Bell
 } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import {
   ThingItem, DocumentItem, WarrantyItem, ReceiptItem, CertificateItem, ImportantRecordItem,
-  FinanceAccount, FinanceTransaction, NavModule, Goal
+  FinanceAccount, FinanceTransaction, NavModule, Goal, ReminderItem
 } from '../types';
 import { storage, generateUUID } from '../lib/storage';
+import { computeRecordSignature } from '../lib/db';
 import { getLocalDateString } from '../lib/dateUtils';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ThemeIcon } from '../components/ThemeIcon';
 import { ProgressiveActions } from '../components/ProgressiveActions';
+import { ShowMoreBar } from '../components/ShowMoreBar';
 import { HeaderDropdown } from '../components/HeaderDropdown';
 import { GoalBadge } from '../components/GoalLinkSelector';
 import { CardCloseButton } from '../components/CardCloseButton';
+import { GoalPicker } from '../components/GoalPicker';
+import { LinkModeSelector } from '../components/LinkModeSelector';
+import { t } from '../lib/i18n';
+
+const DEFAULT_THING_CATEGORIES = ['Hardware', 'Electronics', 'Tools', 'Vehicle', 'Valuables', 'Appliances', 'Furniture', 'Clothing', 'Jewelry', 'Books', 'Sports', 'Kitchen', 'Office'] as const;
 
 interface ThingsViewProps {
   things: ThingItem[];
@@ -78,13 +86,29 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<SubMenuTab>('things');
   const [vaultGoalId, setVaultGoalId] = useState('');
+  const [vaultGoalMode, setVaultGoalMode] = useState<'manual' | 'link'>('manual');
   const [editGoalId, setEditGoalId] = useState('');
+  const [editGoalMode, setEditGoalMode] = useState<'manual' | 'link'>('manual');
   const [openThingsForm, setOpenThingsForm] = useState<SubMenuTab | null>('things');
   const [searchQuery, setSearchQuery] = useState('');
+  const [vaultSort, setVaultSort] = useState<'newest' | 'oldest' | 'name' | 'expiry'>('newest');
+  const [vaultVisibleCount, setVaultVisibleCount] = useState(40);
   const today = getLocalDateString();
+
+  // Undo toast
+  const [undoStack, setUndoStack] = useState<Array<{ item: any; store: string; label: string; timer: ReturnType<typeof setTimeout> }>>([]);
+
+  // Warranty link to thing
+  const [warLinkedThingId, setWarLinkedThingId] = useState('');
+
+  // Bulk import ref
+  const bulkImportRef = useRef<HTMLInputElement>(null);
 
   // File import input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Edit modal ref for focus trap
+  const editDialogRef = useRef<HTMLDivElement>(null);
 
   // Delete & Edit Modal States
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -92,12 +116,16 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   const [previewFile, setPreviewFile] = useState<{ name: string; data: string; type?: string } | null>(null);
 
   // Manual Add Form states
-  const [attachedFile, setAttachedFile] = useState<{ name: string; size: string; data: string; type: string } | null>(null);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; size: string; data?: string; blobId?: string; type: string } | null>(null);
 
   // Form states for each category
   const [thingName, setThingName] = useState('');
   const [thingCategory, setThingCategory] = useState('Hardware');
+  const [customThingCategory, setCustomThingCategory] = useState('');
+  const [thingCategoryFilter, setThingCategoryFilter] = useState('all');
   const [thingValue, setThingValue] = useState('');
+  const [thingPurchaseDate, setThingPurchaseDate] = useState('');
+  const [thingTags, setThingTags] = useState('');
   const [thingNote, setThingNote] = useState('');
 
   const [docTitle, setDocTitle] = useState('');
@@ -129,14 +157,38 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
   const [recrdDate, setRecrdDate] = useState(today);
   const [recrdNote, setRecrdNote] = useState('');
 
+  // Focus trap for edit modal
+  useEffect(() => {
+    if (!editTarget) return;
+    const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    editDialogRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setEditTarget(null); return; }
+      if (e.key === 'Tab') {
+        const focusable = editDialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => { document.removeEventListener('keydown', handleKeyDown); prev?.focus(); };
+  }, [editTarget]);
+
   // Edit Modal internal form state
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editValue, setEditValue] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editNote, setEditNote] = useState('');
-  const [editAttachedFile, setEditAttachedFile] = useState<{ name: string; size: string; data: string; type: string } | null>(null);
+  const [editTags, setEditTags] = useState('');
+  const [editAttachedFile, setEditAttachedFile] = useState<{ name: string; size: string; data?: string; blobId?: string; type: string } | null>(null);
   const [editRemoveAttachment, setEditRemoveAttachment] = useState(false);
+  const [editWarLinkedThingId, setEditWarLinkedThingId] = useState('');
 
   const MAX_RECEIPT_FILE_BYTES = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_FILE_BYTES = 20 * 1024 * 1024;
@@ -158,15 +210,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     return `${(bytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`;
   };
 
-  const readFileAsDataUrl = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
   // Generic "Import File" handler for all sub-menus
   const handleImportFileToCurrentTab = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -174,13 +217,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
     const validationError = validateAttachmentFile(file, activeTab === 'receipts');
     if (validationError) {
-      onSuccess(validationError);
+      onError(validationError);
       e.target.value = '';
       return;
     }
 
     try {
-      const dataUrl = await readFileAsDataUrl(file);
+      const blobId = await storage.saveBlob(file);
       const cleanName = file.name.replace(/\.[^/.]+$/, '');
       const formattedSize = formatFileSize(file.size);
       const now = Date.now();
@@ -196,7 +239,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type || 'application/octet-stream',
-          fileData: dataUrl,
+          blobId,
           createdAt: now
         };
         await storage.put('things', item);
@@ -211,7 +254,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type || 'application/pdf',
-          fileData: dataUrl,
+          blobId,
           createdAt: now
         };
         await storage.put('documents', doc);
@@ -229,7 +272,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type,
-          fileData: dataUrl,
+          blobId,
           createdAt: now
         };
         await storage.put('warranties', war);
@@ -245,7 +288,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type,
-          fileData: dataUrl,
+          blobId,
           createdAt: now
         };
         await storage.put('receipts', rec);
@@ -260,7 +303,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type,
-          fileData: dataUrl,
+          blobId,
           createdAt: now
         };
         await storage.put('certificates', cert);
@@ -275,7 +318,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
           fileName: file.name,
           fileSize: formattedSize,
           fileType: file.type,
-          fileData: dataUrl,
+          blobId,
           createdAt: now
         };
         await storage.put('importantRecords', recrd);
@@ -285,6 +328,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       onRefresh();
     } catch (err: any) {
       console.error('File import error', err);
+      onError('File import failed: ' + (err?.message || 'Unknown error'));
     } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -299,14 +343,14 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     try {
       const validationError = validateAttachmentFile(file, activeTab === 'receipts');
       if (validationError) {
-        onSuccess(validationError);
+        onError(validationError);
         return;
       }
-      const dataUrl = await readFileAsDataUrl(file);
+      const blobId = await storage.saveBlob(file);
       setAttachedFile({
         name: file.name,
         size: formatFileSize(file.size),
-        data: dataUrl,
+        blobId,
         type: file.type
       });
       // Auto fill title if empty
@@ -319,9 +363,23 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       if (activeTab === 'records' && !recrdTitle) setRecrdTitle(cleanName);
     } catch (err) {
       console.error('File read error', err);
-      onSuccess('Unable to read the selected file.');
+      onError(err instanceof Error ? err.message : 'Unable to read the selected file.');
     } finally {
       e.target.value = '';
+    }
+  };
+
+  const previewAttachment = async (file: { name: string; data?: string; blobId?: string; type?: string }) => {
+    try {
+      const data = file.data || (file.blobId ? await storage.getBlobAsDataUrl(file.blobId) : undefined);
+      if (!data) {
+        onError('Attachment could not be opened.');
+        return;
+      }
+      setPreviewFile({ name: file.name, data, type: file.type });
+    } catch (err) {
+      console.error('Attachment preview error', err);
+      onError(err instanceof Error ? err.message : 'Attachment could not be opened.');
     }
   };
 
@@ -331,29 +389,35 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     if (!thingName.trim()) return;
     const numericValue = Number(thingValue);
     if (thingValue && (!Number.isFinite(numericValue) || numericValue < 0)) {
-      onSuccess('Item value cannot be negative.');
+      onError('Item value cannot be negative.');
       return;
     }
 
     const t: ThingItem = {
       id: generateUUID(),
       name: thingName.trim(),
-      category: thingCategory,
+      category: thingCategory === 'custom' ? (customThingCategory.trim() || 'Other') : thingCategory,
       value: numericValue || 0,
+      purchaseDate: thingPurchaseDate || undefined,
+      tags: thingTags.split(',').map(tag => tag.trim()).filter(Boolean),
       note: thingNote.trim() || undefined,
       goalId: vaultGoalId || undefined,
       fileName: attachedFile?.name,
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
       fileData: attachedFile?.data,
+      blobId: attachedFile?.blobId,
       createdAt: Date.now()
     };
     await storage.put('things', t);
     onSuccess('✓ Physical item added to inventory');
     setThingName('');
+    setCustomThingCategory('');
     setThingValue('');
+    setThingPurchaseDate('');
+    setThingTags('');
     setThingNote('');
-    setVaultGoalId('');
+    resetVaultGoalLink();
     setAttachedFile(null);
     onRefresh();
   };
@@ -374,6 +438,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
       fileData: attachedFile?.data,
+      blobId: attachedFile?.blobId,
       createdAt: Date.now()
     };
     await storage.put('documents', d);
@@ -381,7 +446,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     setDocTitle('');
     setDocRef('');
     setDocNote('');
-    setVaultGoalId('');
+    resetVaultGoalLink();
     setAttachedFile(null);
     onRefresh();
   };
@@ -396,10 +461,12 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       expiry: warExpiry || undefined,
       note: warNote.trim() || undefined,
       goalId: vaultGoalId || undefined,
+      linkedThingId: warLinkedThingId || undefined,
       fileName: attachedFile?.name,
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
       fileData: attachedFile?.data,
+      blobId: attachedFile?.blobId,
       createdAt: Date.now()
     };
     await storage.put('warranties', w);
@@ -407,7 +474,8 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     setWarTitle('');
     setWarExpiry('');
     setWarNote('');
-    setVaultGoalId('');
+    setWarLinkedThingId('');
+    resetVaultGoalLink();
     setAttachedFile(null);
     onRefresh();
   };
@@ -421,7 +489,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     const now = Date.now();
     const amt = Number(recAmount);
     if (!Number.isFinite(amt) || amt < 0) {
-      onSuccess('Receipt amount cannot be negative.');
+      onError('Receipt amount cannot be negative.');
       return;
     }
     const operations: Array<{ storeName: string; item: any }> = [];
@@ -430,14 +498,14 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       if (recFinanceMode === 'link_existing' && recSelectedTxId) {
         const existingTx = financeTransactions.find(t => t.id === recSelectedTxId);
         if (!existingTx) {
-          onSuccess('Selected Finance transaction could not be found.');
+          onError('Selected Finance transaction could not be found.');
           return;
         }
         linkedTxId = existingTx.id;
         // Linking is relationship-only. Do not copy receipt amount/date/etc. into Finance.
         // A manually selected new attachment is an explicit user action, so that file may
         // be applied to both linked records; otherwise preserve the Finance attachment.
-        if (attachedFile?.data) {
+        if (attachedFile?.data || attachedFile?.blobId) {
           operations.push({
             storeName: 'finance',
             item: {
@@ -445,6 +513,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               linkedReceiptId: receiptId,
               fileName: attachedFile.name,
               fileData: attachedFile.data,
+              blobId: attachedFile.blobId,
               fileSize: attachedFile.size,
               fileType: attachedFile.type,
               updatedAt: now
@@ -483,6 +552,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
       fileData: attachedFile?.data,
+      blobId: attachedFile?.blobId,
       linkedTransactionId: linkedTxId,
       createdAt: now
     };
@@ -494,14 +564,14 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       setRecTitle('');
       setRecAmount('');
       setRecNote('');
-      setVaultGoalId('');
+      resetVaultGoalLink();
       setAttachedFile(null);
       setRecLinkToFinance(false);
       setRecFinanceMode('link_existing');
       setRecSelectedTxId('');
       onRefresh();
     } catch (err: any) {
-      onSuccess(`Receipt could not be committed: ${err?.message || 'database error'}`);
+      onError(`Receipt could not be committed: ${err?.message || 'database error'}`);
     }
   };
 
@@ -520,6 +590,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
       fileData: attachedFile?.data,
+      blobId: attachedFile?.blobId,
       createdAt: Date.now()
     };
     await storage.put('certificates', c);
@@ -528,7 +599,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     setCertIssuer('');
     setCertExpiry('');
     setCertNote('');
-    setVaultGoalId('');
+    resetVaultGoalLink();
     setAttachedFile(null);
     onRefresh();
   };
@@ -547,13 +618,14 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       fileSize: attachedFile?.size,
       fileType: attachedFile?.type,
       fileData: attachedFile?.data,
+      blobId: attachedFile?.blobId,
       createdAt: Date.now()
     };
     await storage.put('importantRecords', ir);
     onSuccess('✓ Important record saved');
     setRecrdTitle('');
     setRecrdNote('');
-    setVaultGoalId('');
+    resetVaultGoalLink();
     setAttachedFile(null);
     onRefresh();
   };
@@ -564,15 +636,19 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     setEditTitle(item.title || item.name || '');
     setEditCategory(item.category || item.type || item.issuer || '');
     setEditValue(item.value !== undefined ? String(item.value) : item.amount !== undefined ? String(item.amount) : item.reference || '');
-    setEditDate(item.date || item.expiry || '');
+    setEditDate(item.date || item.expiry || item.purchaseDate || '');
     setEditNote(item.note || '');
+    setEditTags((item.tags || []).join(', '));
     setEditGoalId(item.goalId || '');
+    setEditGoalMode(item.goalId ? 'link' : 'manual');
     setEditRemoveAttachment(false);
-    if (item.fileName && item.fileData) {
+    setEditWarLinkedThingId(item.linkedThingId || '');
+    if (item.fileName && (item.fileData || item.blobId)) {
       setEditAttachedFile({
         name: item.fileName,
         size: item.fileSize || 'Attached File',
         data: item.fileData,
+        blobId: item.blobId,
         type: item.fileType || ''
       });
     } else {
@@ -595,13 +671,14 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       fileName: editRemoveAttachment ? undefined : (editAttachedFile?.name || item.fileName),
       fileSize: editRemoveAttachment ? undefined : (editAttachedFile?.size || item.fileSize),
       fileType: editRemoveAttachment ? undefined : (editAttachedFile?.type || item.fileType),
-      fileData: editRemoveAttachment ? undefined : (editAttachedFile?.data || item.fileData)
+      fileData: editRemoveAttachment ? undefined : (editAttachedFile?.blobId ? undefined : (editAttachedFile?.data || item.fileData)),
+      blobId: editRemoveAttachment ? undefined : (editAttachedFile?.blobId || item.blobId)
     };
 
     if (store === 'things') {
       const numericValue = Number(editValue);
       if (editValue && (!Number.isFinite(numericValue) || numericValue < 0)) {
-        onSuccess('Item value cannot be negative.');
+        onError('Item value cannot be negative.');
         return;
       }
       updated = {
@@ -609,6 +686,8 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
         name: editTitle.trim(),
         category: editCategory || 'Hardware',
         value: numericValue || 0,
+        purchaseDate: editDate || undefined,
+        tags: editTags.split(',').map(tag => tag.trim()).filter(Boolean),
         note: editNote.trim() || undefined
       };
     } else if (store === 'documents') {
@@ -625,12 +704,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
         ...updated,
         title: editTitle.trim(),
         expiry: editDate || undefined,
+        linkedThingId: editWarLinkedThingId || undefined,
         note: editNote.trim() || undefined
       };
     } else if (store === 'receipts') {
       const nextAmount = Number(editValue);
       if (!Number.isFinite(nextAmount) || nextAmount < 0) {
-        onSuccess('Receipt amount cannot be negative.');
+        onError('Receipt amount cannot be negative.');
         return;
       }
       // A Finance link is relationship-only. Editing a Receipt must not mutate Finance.
@@ -666,21 +746,97 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     onRefresh();
   };
 
-  // Safe delete handler with ConfirmModal
+  // Safe delete handler with ConfirmModal + undo toast
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+    const storeName = deleteTarget.store;
+    const itemId = deleteTarget.id;
+    const typeLabel = deleteTarget.typeLabel;
     try {
-      if (deleteTarget.store === 'receipts') {
-        await storage.deleteReceiptWithLink(deleteTarget.id);
+      const allItems: any[] = await storage.getAll(storeName);
+      const deletedItem = allItems.find((i: any) => i.id === itemId);
+
+      if (storeName === 'receipts') {
+        await storage.deleteReceiptWithLink(itemId);
       } else {
-        await storage.delete(deleteTarget.store, deleteTarget.id);
+        await storage.delete(storeName, itemId);
       }
-      onSuccess(`✓ ${deleteTarget.typeLabel} deleted`);
       setDeleteTarget(null);
       onRefresh();
+
+      if (deletedItem) {
+        const timer = setTimeout(() => {
+          setUndoStack(prev => prev.filter(e => e.item.id !== itemId));
+        }, 8000);
+        setUndoStack(prev => [...prev, { item: deletedItem, store: storeName, label: `${typeLabel} "${deletedItem.title || deletedItem.name}" deleted`, timer }]);
+      } else {
+        onSuccess(`✓ ${typeLabel} deleted`);
+      }
     } catch (err) {
       console.error('Delete error', err);
       onError('The record could not be deleted. Please try again.');
+    }
+  };
+
+  const handleUndoDelete = async (index: number) => {
+    const entry = undoStack[index];
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    await storage.put(entry.store, entry.item);
+    setUndoStack(prev => prev.filter((_, i) => i !== index));
+    onSuccess(`Restored "${entry.item.title || entry.item.name}"`);
+    onRefresh();
+  };
+
+  // Bulk Export handler
+  const handleBulkExport = useCallback(() => {
+    const storeMap: Record<SubMenuTab, any[]> = {
+      things, documents, warranties, receipts, certificates, records: importantRecords
+    };
+    const items = storeMap[activeTab] || [];
+    const exportData = items.map(({ fileData, ...rest }: any) => rest);
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vault-${activeTab}-export.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    onSuccess(`Exported ${exportData.length} ${activeTab} record(s)`);
+  }, [activeTab, things, documents, warranties, receipts, certificates, importantRecords, onSuccess]);
+
+  // Bulk Import handler
+  const handleBulkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const items = JSON.parse(text);
+      if (!Array.isArray(items)) { onError('Import file must contain a JSON array.'); return; }
+      const storeNameMap: Record<SubMenuTab, string> = {
+        things: 'things', documents: 'documents', warranties: 'warranties',
+        receipts: 'receipts', certificates: 'certificates', records: 'importantRecords'
+      };
+      const storeName = storeNameMap[activeTab];
+      const existingItems = await storage.getAll<any>(storeName);
+      const existingSignatures = new Set(existingItems.map(item => computeRecordSignature(storeName, item)).filter(Boolean));
+      let count = 0;
+      let skipped = 0;
+      for (const item of items) {
+        const signature = computeRecordSignature(storeName, item);
+        if (signature && existingSignatures.has(signature)) { skipped++; continue; }
+        const imported = { ...item, id: generateUUID(), createdAt: Date.now() };
+        delete imported.fileData;
+        await storage.put(storeName, imported);
+        if (signature) existingSignatures.add(signature);
+        count++;
+      }
+      onSuccess(`Imported ${count}; skipped ${skipped} duplicate(s)`);
+      onRefresh();
+    } catch (err) {
+      onError('Invalid JSON file. Please check the format and try again.');
+    } finally {
+      if (bulkImportRef.current) bulkImportRef.current.value = '';
     }
   };
 
@@ -702,6 +858,32 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
     };
     await storage.put('tasks', t);
     onSuccess(`✓ Maintenance task added to planner for ${thing.name}`);
+    onRefresh();
+  };
+
+  const handleCreateWarrantyReminder = async (warranty: WarrantyItem) => {
+    if (!warranty.expiry) return;
+    const reminders = await storage.getAll<ReminderItem>('reminders');
+    const existing = reminders.find(reminder => reminder.linkedType === 'warranty' && reminder.linkedId === warranty.id && reminder.status === 'open');
+    const reminderDate = new Date(`${warranty.expiry}T00:00:00`);
+    reminderDate.setDate(reminderDate.getDate() - 30);
+    if (reminderDate.getTime() < new Date(`${today}T00:00:00`).getTime()) reminderDate.setTime(new Date(`${today}T00:00:00`).getTime());
+    const now = Date.now();
+    const reminder: ReminderItem = {
+      id: existing?.id || generateUUID(),
+      title: `Warranty expires: ${warranty.title}`,
+      dueAt: getLocalDateString(reminderDate),
+      repeatRule: 'none',
+      status: 'open',
+      linkedType: 'warranty',
+      linkedId: warranty.id,
+      alarmEnabled: true,
+      ringtone: 'gentle_bell',
+      createdAt: existing?.createdAt || now,
+      updatedAt: now
+    };
+    await storage.put('reminders', reminder);
+    onSuccess(`Expiry reminder set for ${warranty.title}`);
     onRefresh();
   };
 
@@ -734,19 +916,52 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       <span>Import File</span>
     </button>
   );
-  const goalReferenceSelector = (
-    <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-2 dark:border-indigo-900/50 dark:bg-indigo-950/20">
-      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Goal reference (optional)
-        <select value={vaultGoalId} onChange={event => setVaultGoalId(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white">
-          <option value="">None</option>{goals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
-        </select>
-      </label>
-      <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Reference only; Vault records do not affect Goal progress.</p>
-    </div>
+  const changeVaultGoalMode = (mode: string) => {
+    const nextMode = mode as 'manual' | 'link';
+    setVaultGoalMode(nextMode);
+    if (nextMode === 'manual') setVaultGoalId('');
+  };
+  const resetVaultGoalLink = () => {
+    setVaultGoalMode('manual');
+    setVaultGoalId('');
+  };
+  const changeEditGoalMode = (mode: string) => {
+    const nextMode = mode as 'manual' | 'link';
+    setEditGoalMode(nextMode);
+    if (nextMode === 'manual') setEditGoalId('');
+  };
+
+  const goalReferenceToggle = (
+    <LinkModeSelector
+      value={vaultGoalMode}
+      ariaLabel="Vault goal reference mode"
+      options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
+      onChange={changeVaultGoalMode}
+      className="goal-link-mode-toggle"
+    />
   );
+  const goalReferencePicker = vaultGoalMode === 'link' ? (
+    <GoalPicker
+      goals={goals || []}
+      value={vaultGoalId}
+      onChange={setVaultGoalId}
+      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+    />
+  ) : null;
+  const editGoalReferencePicker = editGoalMode === 'link' ? (
+    <GoalPicker
+      goals={goals || []}
+      value={editGoalId}
+      onChange={setEditGoalId}
+      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+    />
+  ) : null;
 
   const renderVaultTools = () => (
     <div className="flex flex-wrap items-center gap-2">
+      <select aria-label="Sort Vault records" value={vaultSort} onChange={e => setVaultSort(e.target.value as typeof vaultSort)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+        <option value="newest">Newest</option><option value="oldest">Oldest</option><option value="name">Name</option><option value="expiry">Expiry</option>
+      </select>
       <div className="relative w-full sm:w-44">
         <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
         <input
@@ -758,8 +973,49 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
         />
       </div>
       {renderVaultImportAction()}
+      <button
+        type="button"
+        onClick={handleBulkExport}
+        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 dark:hover:text-indigo-200"
+        title="Export as JSON"
+      >
+        <ArrowDownToLine className="h-3 w-3" />
+        <span>Export</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => bulkImportRef.current?.click()}
+        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:text-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-300 dark:hover:text-emerald-200"
+        title="Import from JSON"
+      >
+        <ArrowUpFromLine className="h-3 w-3" />
+        <span>Import</span>
+      </button>
     </div>
   );
+
+  const sortVaultItems = <T extends { title?: string; name?: string; date?: string; expiry?: string; createdAt?: number }>(items: T[]): T[] => [...items].sort((a, b) => {
+    if (vaultSort === 'name') return (a.title || a.name || '').localeCompare(b.title || b.name || '');
+    if (vaultSort === 'expiry') return (a.expiry || '9999').localeCompare(b.expiry || '9999');
+    const dateA = a.date ? Date.parse(a.date) || 0 : a.createdAt || 0;
+    const dateB = b.date ? Date.parse(b.date) || 0 : b.createdAt || 0;
+    return vaultSort === 'newest' ? dateB - dateA : dateA - dateB;
+  });
+
+  useEffect(() => { setVaultVisibleCount(40); }, [activeTab, searchQuery, vaultSort, thingCategoryFilter]);
+  const sq = searchQuery.toLowerCase();
+  const matchesSearch = (fields: (string | undefined | null)[]) => !sq || fields.some(f => f && f.toLowerCase().includes(sq));
+  const activeVaultMatchCount = activeTab === 'things'
+    ? things.filter(item => (thingCategoryFilter === 'all' || item.category === thingCategoryFilter) && matchesSearch([item.name, item.category, item.note, (item.tags || []).join(' ')])).length
+    : activeTab === 'documents' ? documents.filter(item => matchesSearch([item.title, item.type, item.reference, item.note])).length
+      : activeTab === 'warranties' ? warranties.filter(item => matchesSearch([item.title, item.note, item.expiry])).length
+        : activeTab === 'receipts' ? receipts.filter(item => matchesSearch([item.title, item.note, item.date, String(item.amount || '')])).length
+          : activeTab === 'certificates' ? certificates.filter(item => matchesSearch([item.title, item.issuer, item.note, item.expiry])).length
+            : importantRecords.filter(item => matchesSearch([item.title, item.note, item.date])).length;
+  const thingCategories = [...new Set([...DEFAULT_THING_CATEGORIES, ...things.map(item => item.category).filter(Boolean)])];
+  const renderVaultShowMore = () => activeVaultMatchCount > vaultVisibleCount ? (
+    <ShowMoreBar remaining={activeVaultMatchCount - vaultVisibleCount} step={40} onReveal={() => setVaultVisibleCount(count => count + 40)} />
+  ) : null;
 
   return (
     <div className="vault-view space-y-4">
@@ -770,6 +1026,14 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
         accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt,.json"
         className="hidden"
         onChange={handleImportFileToCurrentTab}
+      />
+      {/* Hidden bulk import JSON input */}
+      <input
+        ref={bulkImportRef}
+        type="file"
+        accept=".json"
+        className="hidden"
+        onChange={handleBulkImport}
       />
 
       <div>
@@ -793,7 +1057,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   data-vault-tab={tab.id}
                   onClick={() => {
                     setActiveTab(tab.id);
-                    setVaultGoalId('');
+                    resetVaultGoalLink();
                     setOpenThingsForm(tab.id);
                     setSearchQuery('');
                     setAttachedFile(null);
@@ -831,7 +1095,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
             </div>
             <form onSubmit={handleAddThing} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Item Name</label>
+                <div className="flex items-center justify-between gap-2"><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Item Name</label>{goalReferenceToggle}</div>{goalReferencePicker}
                 <input
                   type="text"
                   required
@@ -850,13 +1114,11 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     onChange={e => setThingCategory(e.target.value)}
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   >
-                    <option value="Hardware">Hardware</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Tools">Tools</option>
-                    <option value="Vehicle">Vehicle</option>
-                    <option value="Valuables">Valuables</option>
-                    <option value="Appliances">Appliances</option>
+                    {DEFAULT_THING_CATEGORIES.map(category => <option key={category} value={category}>{t(`vault.category${category}`)}</option>)}
+                    {thingCategory === 'custom' && customThingCategory && <option value="custom">{customThingCategory}</option>}
+                    <option value="custom">Custom…</option>
                   </select>
+                  {thingCategory === 'custom' && <input value={customThingCategory} onChange={e => setCustomThingCategory(e.target.value)} placeholder="Category name" aria-label="Custom category" className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />}
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Estimated Value ({getCurrencySymbol()})</label>
@@ -868,6 +1130,17 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
                     className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Purchase date</label>
+                  <ThemedDateTimeInput type="date" value={thingPurchaseDate} onChange={e => setThingPurchaseDate(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Tags</label>
+                  <input value={thingTags} onChange={e => setThingTags(e.target.value)} placeholder="Home, insured" className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
                 </div>
               </div>
 
@@ -913,8 +1186,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   </div>
                 </div>
               </div>
-
-              {goalReferenceSelector}
               <button type="submit" className="sanctuary-flat-primary w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 cursor-pointer">
                 + Register Thing
               </button>
@@ -930,6 +1201,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 </h2>
                 <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
                   {renderVaultTools()}
+                  <select aria-label="Filter by category" value={thingCategoryFilter} onChange={e => setThingCategoryFilter(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <option value="all">All categories</option>
+                    {thingCategories.map(category => <option key={category} value={category}>{category}</option>)}
+                  </select>
                   <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
                     Total: {getCurrencySymbol()} {totalPhysicalValue.toLocaleString('en-IN')}
                   </span>
@@ -939,13 +1214,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
             <div className="adaptive-card-grid mt-4 gap-2.5">
               {things
-                .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.category.toLowerCase().includes(searchQuery.toLowerCase()))
+                .filter(t => (thingCategoryFilter === 'all' || t.category === thingCategoryFilter) && matchesSearch([t.name, t.category, t.note, (t.tags || []).join(' ')]))
                 .length === 0 ? (
                 <div className="col-span-full"><EmptyState icon={Folder} compact title="No items found" hint="Search matches item names and categories." /></div>
               ) : (
-                [...things]
-                  .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.category.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+                sortVaultItems(things)
+                  .filter(t => (thingCategoryFilter === 'all' || t.category === thingCategoryFilter) && matchesSearch([t.name, t.category, t.note, (t.tags || []).join(' ')]))
+                  .slice(0, vaultVisibleCount)
                   .map(t => (
                     <div key={t.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
@@ -954,20 +1229,39 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           <GoalBadge goalId={t.goalId} goals={goals} />
                           <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
                             <span className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-medium">{t.category}</span>
+                            {t.purchaseDate && <span>Bought {t.purchaseDate}</span>}
+                            {(t.tags || []).map(tag => <span key={tag} className="rounded-full bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">{tag}</span>)}
                             {t.note && <span className="truncate max-w-[200px]">{t.note}</span>}
                           </div>
+
+                          {/* Linked Warranties */}
+                          {(() => {
+                            const linkedWars = warranties.filter(w => w.linkedThingId === t.id);
+                            return linkedWars.length > 0 ? (
+                              <div className="mt-1 flex flex-wrap items-center gap-1">
+                                {linkedWars.map(w => (
+                                  <span key={w.id} className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                                    <Shield className="h-2.5 w-2.5" />
+                                    {w.title}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
 
                           {/* Attached File Badge */}
                           {t.fileName && (
                             <div className="mt-2 flex items-center gap-2">
-                              <span
-                                onClick={() => t.fileData && setPreviewFile({ name: t.fileName!, data: t.fileData, type: t.fileType })}
+                              <button
+                                type="button"
+                                onClick={() => previewAttachment({ name: t.fileName!, data: t.fileData, blobId: t.blobId, type: t.fileType })}
+                                aria-label={`Preview attachment ${t.fileName}`}
                                 className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600 hover:underline dark:bg-indigo-950/50 dark:text-indigo-400 cursor-pointer"
                               >
                                 <Paperclip className="h-3 w-3" />
                                 <span className="truncate max-w-[150px]">{t.fileName}</span>
                                 {t.fileSize && <span>({t.fileSize})</span>}
-                              </span>
+                              </button>
                             </div>
                           )}
                         </div>
@@ -1010,9 +1304,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                         </div>
                       </div>
                     </div>
-                  ))
+                ))
               )}
             </div>
+            {renderVaultShowMore()}
           </div>
         </section>
       )}
@@ -1036,7 +1331,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
             </div>
             <form onSubmit={handleAddDocument} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Document Title</label>
+                <div className="flex items-center justify-between gap-2"><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Document Title</label>{goalReferenceToggle}</div>{goalReferencePicker}
                 <input
                   type="text"
                   required
@@ -1091,7 +1386,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     />
                     <label
                       htmlFor="doc-form-file"
-                      className="sanctuary-upload-control flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+                      className="sanctuary-upload-control flex h-12 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
                     >
                       <Paperclip className="h-3.5 w-3.5" />
                       <span className="truncate">{attachedFile ? attachedFile.name : 'Choose File'}</span>
@@ -1110,8 +1405,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
-
-              {goalReferenceSelector}
               <button type="submit" className="w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-500 cursor-pointer">
                 + Register Document
               </button>
@@ -1129,13 +1422,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
             <div className="adaptive-card-grid mt-4 gap-2.5">
               {documents
-                .filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()) || (d.type && d.type.toLowerCase().includes(searchQuery.toLowerCase())))
+                .filter(d => matchesSearch([d.title, d.type, d.reference, d.note]))
                 .length === 0 ? (
                 <div className="col-span-full"><EmptyState icon={FileCheck} compact title="No documents yet" hint="Register documents to keep everything discoverable." /></div>
               ) : (
-                [...documents]
-                  .filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()) || (d.type && d.type.toLowerCase().includes(searchQuery.toLowerCase())))
-                  .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
+                sortVaultItems(documents)
+                  .filter(d => matchesSearch([d.title, d.type, d.reference, d.note]))
+                  .slice(0, vaultVisibleCount)
                   .map(d => (
                     <div key={d.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
@@ -1153,7 +1446,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           {d.fileName && (
                             <div className="mt-2 flex items-center gap-2">
                               <span
-                                onClick={() => d.fileData && setPreviewFile({ name: d.fileName!, data: d.fileData, type: d.fileType })}
+                                onClick={() => previewAttachment({ name: d.fileName!, data: d.fileData, blobId: d.blobId, type: d.fileType })}
                                 className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 hover:underline dark:bg-emerald-950/50 dark:text-emerald-300 cursor-pointer"
                               >
                                 <Paperclip className="h-3 w-3" />
@@ -1188,6 +1481,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   ))
               )}
             </div>
+            {renderVaultShowMore()}
           </div>
         </section>
       )}
@@ -1211,7 +1505,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
             </div>
             <form onSubmit={handleAddWarranty} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Item / Equipment</label>
+                <div className="flex items-center justify-between gap-2"><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Item / Equipment</label>{goalReferenceToggle}</div>{goalReferencePicker}
                 <input
                   type="text"
                   required
@@ -1244,6 +1538,18 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </div>
 
               <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Link to Physical Item</label>
+                <select
+                  value={warLinkedThingId}
+                  onChange={e => setWarLinkedThingId(e.target.value)}
+                  className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="">None</option>
+                  {things.map(t => <option key={t.id} value={t.id}>{t.name} ({t.category})</option>)}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Attach Warranty Card / Bill</label>
                 <div className="mt-1">
                   <input
@@ -1261,8 +1567,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   </label>
                 </div>
               </div>
-
-              {goalReferenceSelector}
               <button type="submit" className="w-full rounded-xl bg-amber-500 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-amber-400 cursor-pointer">
                 + Register Warranty
               </button>
@@ -1277,13 +1581,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
             </div>
             <div className="adaptive-card-grid mt-4 gap-2.5">
               {warranties
-                .filter(w => w.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                .filter(w => matchesSearch([w.title, w.note, w.expiry]))
                 .length === 0 ? (
                 <div className="col-span-full"><EmptyState icon={Shield} compact title="No warranties yet" hint="Track coverage windows and expiry dates here." /></div>
               ) : (
-                [...warranties]
-                  .filter(w => w.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .sort((a, b) => (b.expiry || '').localeCompare(a.expiry || '') || (b.createdAt || 0) - (a.createdAt || 0))
+                sortVaultItems(warranties)
+                  .filter(w => matchesSearch([w.title, w.note, w.expiry]))
+                  .slice(0, vaultVisibleCount)
                   .map(w => (
                     <div key={w.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
@@ -1293,19 +1597,39 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
                             {(() => {
                               const expiryStatus = getExpiryStatus(w.expiry);
-                              return <span className={expiryStatus.className}>{expiryStatus.label}</span>;
+                              const isExpired = w.expiry && w.expiry < getLocalDateString(new Date());
+                              return (
+                                <>
+                                  <span className={expiryStatus.className}>{expiryStatus.label}</span>
+                                  {w.expiry && (
+                                    <span className={`rounded px-1.5 py-0.5 font-bold text-[9px] ${
+                                      isExpired
+                                        ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                                        : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                                    }`}>
+                                      {isExpired ? 'Expired' : 'Active'}
+                                    </span>
+                                  )}
+                                </>
+                              );
                             })()}
-                            <span className="rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 font-bold text-[9px]">
-                              Active
-                            </span>
                           </div>
+                          {w.linkedThingId && (() => {
+                            const linkedThing = things.find(t => t.id === w.linkedThingId);
+                            return linkedThing ? (
+                              <div className="mt-1 flex items-center gap-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
+                                <Link className="h-3 w-3" />
+                                <span>Linked: {linkedThing.name}</span>
+                              </div>
+                            ) : null;
+                          })()}
                           {w.note && <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{w.note}</div>}
 
                           {/* Attached File */}
                           {w.fileName && (
                             <div className="mt-2 flex items-center gap-2">
                               <span
-                                onClick={() => w.fileData && setPreviewFile({ name: w.fileName!, data: w.fileData, type: w.fileType })}
+                                onClick={() => previewAttachment({ name: w.fileName!, data: w.fileData, blobId: w.blobId, type: w.fileType })}
                                 className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:underline dark:bg-amber-950/50 dark:text-amber-300 cursor-pointer"
                               >
                                 <Paperclip className="h-3 w-3" />
@@ -1318,6 +1642,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
                         {/* EDIT KEY & DELETE KEY */}
                         <ProgressiveActions label={`More actions for ${w.title}`} className="shrink-0">
+                          {w.expiry && <button type="button" onClick={() => void handleCreateWarrantyReminder(w)} className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/50 transition-colors cursor-pointer" title="Set reminder 30 days before expiry"><Bell className="h-3.5 w-3.5" /></button>}
                           <button
                             type="button"
                             onClick={() => handleOpenEdit('warranties', w)}
@@ -1340,6 +1665,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   ))
               )}
             </div>
+            {renderVaultShowMore()}
           </div>
         </section>
       )}
@@ -1364,9 +1690,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
             <form onSubmit={handleAddReceipt} className={`mt-4 space-y-4 ${vaultFormControlClasses}`}>
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Item / Store / Asset Title <span className="text-rose-500">*</span>
-                </label>
+                <div className="flex items-center justify-between gap-2"><label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Item / Store / Asset Title <span className="text-rose-500">*</span></label>{goalReferenceToggle}</div>{goalReferencePicker}
                 <input
                   type="text"
                   required
@@ -1434,7 +1758,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
-                          onClick={() => setPreviewFile({ name: attachedFile.name, data: attachedFile.data, type: attachedFile.type })}
+                          onClick={() => previewAttachment(attachedFile)}
                           className="flex h-9 items-center gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 px-2.5 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                           title="Preview attached file"
                         >
@@ -1520,7 +1844,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </div>
 
               {/* Submit Button */}
-              {goalReferenceSelector}
               <button
                 type="submit"
                 className="flex h-11 sm:h-12 w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 active:scale-[0.99] transition-all cursor-pointer"
@@ -1547,15 +1870,15 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
             <div className="adaptive-card-grid mt-4 gap-3">
               {receipts
-                .filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                .filter(r => matchesSearch([r.title, r.note, r.date, String(r.amount || '')]))
                 .length === 0 ? (
                 <div className="col-span-full">
                   <EmptyState icon={Receipt} compact title="No receipts found" hint="Search matches receipt titles only." />
                 </div>
               ) : (
-                [...receipts]
-                  .filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
+                sortVaultItems(receipts)
+                  .filter(r => matchesSearch([r.title, r.note, r.date, String(r.amount || '')]))
+                  .slice(0, vaultVisibleCount)
                   .map(r => {
                     const linkedTx = r.linkedTransactionId ? financeTransactions.find(t => t.id === r.linkedTransactionId) : undefined;
                     const fileName = r.fileName;
@@ -1592,10 +1915,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
                           {/* Action Badges / Links */}
                           <div className="pt-1 flex flex-wrap items-center gap-2">
-                            {fileName && fileData && (
+                            {fileName && (fileData || r.blobId) && (
                               <button
                                 type="button"
-                                onClick={() => setPreviewFile({ name: fileName, data: fileData, type: fileType })}
+                                onClick={() => previewAttachment({ name: fileName, data: fileData, blobId: r.blobId, type: fileType })}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors cursor-pointer"
                                 title="Click to view attached invoice"
                               >
@@ -1651,6 +1974,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   })
               )}
             </div>
+            {renderVaultShowMore()}
           </div>
         </section>
       )}
@@ -1674,7 +1998,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
             </div>
             <form onSubmit={handleAddCertificate} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Certificate Name</label>
+                <div className="flex items-center justify-between gap-2"><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Certificate Name</label>{goalReferenceToggle}</div>{goalReferencePicker}
                 <input
                   type="text"
                   required
@@ -1736,8 +2060,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
-
-              {goalReferenceSelector}
               <button type="submit" className="w-full rounded-xl bg-purple-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-purple-500 cursor-pointer">
                 + Register Certificate
               </button>
@@ -1753,13 +2075,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
             <div className="adaptive-card-grid mt-4 gap-2.5">
               {certificates
-                .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                .filter(c => matchesSearch([c.title, c.issuer, c.note, c.expiry]))
                 .length === 0 ? (
                 <div className="col-span-full"><EmptyState icon={Award} compact title="No certificates yet" hint="Store credentials with expiry tracking." /></div>
               ) : (
-                [...certificates]
-                  .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .sort((a, b) => (b.expiry || '').localeCompare(a.expiry || '') || (b.createdAt || 0) - (a.createdAt || 0))
+                sortVaultItems(certificates)
+                  .filter(c => matchesSearch([c.title, c.issuer, c.note, c.expiry]))
+                  .slice(0, vaultVisibleCount)
                   .map(c => (
                     <div key={c.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
@@ -1781,7 +2103,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           {c.fileName && (
                             <div className="mt-2 flex items-center gap-2">
                               <span
-                                onClick={() => c.fileData && setPreviewFile({ name: c.fileName!, data: c.fileData, type: c.fileType })}
+                                onClick={() => previewAttachment({ name: c.fileName!, data: c.fileData, blobId: c.blobId, type: c.fileType })}
                                 className="inline-flex items-center gap-1 rounded-lg bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 hover:underline dark:bg-purple-950/50 dark:text-purple-300 cursor-pointer"
                               >
                                 <Paperclip className="h-3 w-3" />
@@ -1816,6 +2138,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   ))
               )}
             </div>
+            {renderVaultShowMore()}
           </div>
         </section>
       )}
@@ -1839,7 +2162,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
             </div>
             <form onSubmit={handleAddRecord} className={`mt-4 space-y-3 ${vaultFormControlClasses}`}>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Record Title</label>
+                <div className="flex items-center justify-between gap-2"><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Record Title</label>{goalReferenceToggle}</div>{goalReferencePicker}
                 <input
                   type="text"
                   required
@@ -1889,8 +2212,6 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
-
-              {goalReferenceSelector}
               <button type="submit" className="w-full rounded-xl bg-slate-900 py-2.5 text-xs font-semibold text-white dark:bg-slate-700 hover:bg-slate-800 cursor-pointer">
                 Save Record
               </button>
@@ -1906,13 +2227,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
             <div className="adaptive-card-grid mt-4 gap-2.5">
               {importantRecords
-                .filter(ir => ir.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                .filter(ir => matchesSearch([ir.title, ir.note, ir.date]))
                 .length === 0 ? (
                 <div className="col-span-full"><EmptyState icon={FileText} compact title="No records found" hint="Search matches record titles only." /></div>
               ) : (
-                [...importantRecords]
-                  .filter(ir => ir.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0))
+                sortVaultItems(importantRecords)
+                  .filter(ir => matchesSearch([ir.title, ir.note, ir.date]))
+                  .slice(0, vaultVisibleCount)
                   .map(ir => (
                     <div key={ir.id} className="dashboard-item-row rounded-xl border border-slate-100 p-3 text-xs dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex flex-wrap justify-between items-start gap-2">
@@ -1926,7 +2247,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                           {ir.fileName && (
                             <div className="mt-2 flex items-center gap-2">
                               <span
-                                onClick={() => ir.fileData && setPreviewFile({ name: ir.fileName!, data: ir.fileData, type: ir.fileType })}
+                                onClick={() => previewAttachment({ name: ir.fileName!, data: ir.fileData, blobId: ir.blobId, type: ir.fileType })}
                                 className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:underline dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
                               >
                                 <Paperclip className="h-3 w-3" />
@@ -1961,6 +2282,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   ))
               )}
             </div>
+            {renderVaultShowMore()}
           </div>
         </section>
       )}
@@ -1968,7 +2290,13 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
       {/* DEDICATED EDIT MODAL FOR ALL SUB-MENUS */}
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 max-h-[90vh] overflow-y-auto">
+          <div
+            ref={editDialogRef}
+            role="dialog"
+            aria-modal="true"
+            tabIndex={-1}
+            className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 max-h-[90vh] overflow-y-auto"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -1982,6 +2310,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </div>
               <button
                 type="button"
+                aria-label="Close"
                 onClick={() => setEditTarget(null)}
                 className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               >
@@ -1991,9 +2320,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
 
             <form onSubmit={handleSaveEdit} className="mt-4 space-y-3.5">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  {editTarget.store === 'things' ? 'Item Name' : 'Title'}
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">{editTarget.store === 'things' ? 'Item Name' : 'Title'}</label>
+                  <LinkModeSelector value={editGoalMode} ariaLabel="Vault edit goal reference mode" options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]} onChange={changeEditGoalMode} className="goal-link-mode-toggle" />
+                </div>
                 <input
                   type="text"
                   required
@@ -2001,14 +2331,10 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                   onChange={e => setEditTitle(e.target.value)}
                   className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
+                {editGoalReferencePicker}
               </div>
 
-              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Goal reference (optional)
-                <select value={editGoalId} onChange={event => setEditGoalId(event.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-                  <option value="">None</option>{goals.map(goal => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
-                </select>
-                <span className="mt-1 block text-[10px] font-normal text-slate-500 dark:text-slate-400">Reference only; this record does not affect Goal progress.</span>
-              </label>
+
 
               {(editTarget.store === 'things' || editTarget.store === 'documents' || editTarget.store === 'certificates') && (
                 <div>
@@ -2052,6 +2378,25 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                 </div>
               )}
 
+              {editTarget.store === 'warranties' && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Link to Physical Item</label>
+                  <select
+                    value={editWarLinkedThingId}
+                    onChange={e => setEditWarLinkedThingId(e.target.value)}
+                    className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="">None</option>
+                    {things.map(t => <option key={t.id} value={t.id}>{t.name} ({t.category})</option>)}
+                  </select>
+                </div>
+              )}
+
+              {editTarget.store === 'things' && <>
+                <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Purchase date</label><ThemedDateTimeInput type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+                <div><label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Tags</label><input value={editTags} onChange={e => setEditTags(e.target.value)} className="mt-1 h-9 w-full rounded-xl border border-slate-200 px-3 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+              </>}
+
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Notes / Details</label>
                 <textarea
@@ -2073,21 +2418,26 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (!f) return;
-                      const validationError = validateAttachmentFile(f, editTarget.store === 'receipts');
-                      if (validationError) {
-                        onSuccess(validationError);
+                      try {
+                        const validationError = validateAttachmentFile(f, editTarget.store === 'receipts');
+                        if (validationError) {
+                          onError(validationError);
+                          return;
+                        }
+                        const blobId = await storage.saveBlob(f);
+                        setEditAttachedFile({
+                          name: f.name,
+                          size: formatFileSize(f.size),
+                          blobId,
+                          type: f.type
+                        });
+                        setEditRemoveAttachment(false);
+                      } catch (err) {
+                        console.error('File attachment error', err);
+                        onError(err instanceof Error ? err.message : 'Unable to attach the selected file.');
+                      } finally {
                         e.target.value = '';
-                        return;
                       }
-                      const d = await readFileAsDataUrl(f);
-                      setEditAttachedFile({
-                        name: f.name,
-                        size: formatFileSize(f.size),
-                        data: d,
-                        type: f.type
-                      });
-                      setEditRemoveAttachment(false);
-                      e.target.value = '';
                     }}
                   />
                   <label
@@ -2145,6 +2495,7 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </div>
               <button
                 type="button"
+                aria-label="Close"
                 onClick={() => setPreviewFile(null)}
                 className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               >
@@ -2193,6 +2544,27 @@ export const ThingsView: React.FC<ThingsViewProps> = ({
               </a>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Undo Delete Toast Stack */}
+      {undoStack.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2" role="status" aria-live="polite">
+          {undoStack.map((entry, idx) => (
+            <div key={entry.item.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                {entry.label}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleUndoDelete(idx)}
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-950/70 cursor-pointer"
+              >
+                <Undo2 className="h-3 w-3" />
+                Undo
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

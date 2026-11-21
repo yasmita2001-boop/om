@@ -1,5 +1,5 @@
 import { ThemedDateTimeInput } from '../components/ThemedDateTimeInput';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Play, Pause, RotateCcw, Check, Sparkles, Volume2,
   VolumeX, Clock, Trash2,
@@ -16,6 +16,7 @@ import { ProgressiveActions } from '../components/ProgressiveActions';
 import { LinkModeSelector } from '../components/LinkModeSelector';
 import { TaskRoutineFocusSwitcher, type WorkAreaSection } from '../components/TaskRoutineFocusSwitcher';
 import { CardCloseButton } from '../components/CardCloseButton';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 interface FocusViewProps {
   sessions: FocusSession[];
@@ -41,6 +42,7 @@ interface FocusTimerState {
   selectedGoal: string;
   sessionLabel: string;
   soundEnabled: boolean;
+  sprintCount?: number;
 }
 
 const DEFAULT_FOCUS_TIMER: FocusTimerState = {
@@ -55,37 +57,38 @@ const DEFAULT_FOCUS_TIMER: FocusTimerState = {
   soundEnabled: true
 };
 
-function getFocusTimerStorageKey(profileId: string): string {
-  return `om_focus_timer_v1_${profileId}`;
+function parseFocusTimerState(saved: Partial<FocusTimerState> | null | undefined): FocusTimerState {
+  if (!saved) return DEFAULT_FOCUS_TIMER;
+  const totalSeconds = Number.isFinite(saved.totalSeconds) && saved.totalSeconds! > 0
+    ? saved.totalSeconds!
+    : DEFAULT_FOCUS_TIMER.totalSeconds;
+  const endsAt = Number.isFinite(saved.endsAt) ? saved.endsAt! : null;
+  const isRunning = saved.isRunning === true && endsAt !== null;
+  const remainingSeconds = isRunning
+    ? Math.max(0, Math.ceil((endsAt! - Date.now()) / 1000))
+    : Number.isFinite(saved.remainingSeconds)
+      ? Math.max(0, Math.min(totalSeconds, saved.remainingSeconds!))
+      : totalSeconds;
+
+  return {
+    totalSeconds,
+    remainingSeconds,
+    isRunning,
+    endsAt: isRunning ? endsAt : null,
+    customMin: Number.isFinite(saved.customMin) ? saved.customMin! : 25,
+    selectedTask: typeof saved.selectedTask === 'string' ? saved.selectedTask : '',
+    selectedGoal: typeof saved.selectedGoal === 'string' ? saved.selectedGoal : '',
+    sessionLabel: typeof saved.sessionLabel === 'string' ? saved.sessionLabel : DEFAULT_FOCUS_TIMER.sessionLabel,
+    soundEnabled: typeof saved.soundEnabled === 'boolean' ? saved.soundEnabled : true,
+    sprintCount: Number.isFinite(saved.sprintCount) ? saved.sprintCount! : 0
+  };
 }
 
-function readFocusTimer(profileId: string): FocusTimerState {
+function readFocusTimerFromLS(profileId: string): FocusTimerState {
   try {
-    const raw = localStorage.getItem(getFocusTimerStorageKey(profileId));
+    const raw = localStorage.getItem(`om_focus_timer_v1_${profileId}`);
     if (!raw) return DEFAULT_FOCUS_TIMER;
-    const saved = JSON.parse(raw) as Partial<FocusTimerState>;
-    const totalSeconds = Number.isFinite(saved.totalSeconds) && saved.totalSeconds! > 0
-      ? saved.totalSeconds!
-      : DEFAULT_FOCUS_TIMER.totalSeconds;
-    const endsAt = Number.isFinite(saved.endsAt) ? saved.endsAt! : null;
-    const isRunning = saved.isRunning === true && endsAt !== null;
-    const remainingSeconds = isRunning
-      ? Math.max(0, Math.ceil((endsAt! - Date.now()) / 1000))
-      : Number.isFinite(saved.remainingSeconds)
-        ? Math.max(0, Math.min(totalSeconds, saved.remainingSeconds!))
-        : totalSeconds;
-
-    return {
-      totalSeconds,
-      remainingSeconds,
-      isRunning,
-      endsAt: isRunning ? endsAt : null,
-      customMin: Number.isFinite(saved.customMin) ? saved.customMin! : 25,
-      selectedTask: typeof saved.selectedTask === 'string' ? saved.selectedTask : '',
-      selectedGoal: typeof saved.selectedGoal === 'string' ? saved.selectedGoal : '',
-      sessionLabel: typeof saved.sessionLabel === 'string' ? saved.sessionLabel : DEFAULT_FOCUS_TIMER.sessionLabel,
-      soundEnabled: typeof saved.soundEnabled === 'boolean' ? saved.soundEnabled : true
-    };
+    return parseFocusTimerState(JSON.parse(raw));
   } catch {
     return DEFAULT_FOCUS_TIMER;
   }
@@ -119,9 +122,9 @@ export const FocusView: React.FC<FocusViewProps> = ({
     else if (activeWorkAreaSection === 'focus-ringtones') setActiveMenuTab('ringtones');
   }, [activeWorkAreaSection]);
 
-  // Focus Timer States
+  // Focus Timer States — initial load from localStorage (sync), then migrate to IndexedDB
   const initialTimerRef = useRef<FocusTimerState | null>(null);
-  if (!initialTimerRef.current) initialTimerRef.current = readFocusTimer(profileId);
+  if (!initialTimerRef.current) initialTimerRef.current = readFocusTimerFromLS(profileId);
   const initialTimer = initialTimerRef.current;
   const [totalSeconds, setTotalSeconds] = useState(initialTimer.totalSeconds);
   const [remainingSeconds, setRemainingSeconds] = useState(initialTimer.remainingSeconds);
@@ -133,6 +136,33 @@ export const FocusView: React.FC<FocusViewProps> = ({
   const [sessionLabel, setSessionLabel] = useState(initialTimer.sessionLabel);
   const [soundEnabled, setSoundEnabled] = useState(initialTimer.soundEnabled);
   const [timerProfileId, setTimerProfileId] = useState(profileId);
+
+  // Pomodoro sprint counter (4 sprints → long break)
+  const [sprintCount, setSprintCount] = useState(0);
+
+  // Alarm delete confirmation
+  const [alarmToDelete, setAlarmToDelete] = useState<string | null>(null);
+
+  // Session delete confirmation
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+
+  // Load timer state from IndexedDB on mount (overrides localStorage)
+  useEffect(() => {
+    storage.getSingleton<FocusTimerState>('focusTimerState').then(saved => {
+      if (!saved) return;
+      const state = parseFocusTimerState(saved);
+      setTotalSeconds(state.totalSeconds);
+      setRemainingSeconds(state.remainingSeconds);
+      setIsRunning(state.isRunning);
+      setEndsAt(state.endsAt);
+      setCustomMin(state.customMin);
+      setSelectedTask(state.selectedTask);
+      setSelectedGoal(state.selectedGoal);
+      setSessionLabel(state.sessionLabel);
+      setSoundEnabled(state.soundEnabled);
+      if (state.sprintCount !== undefined) setSprintCount(state.sprintCount);
+    }).catch(() => {});
+  }, []);
 
   // Alarm Clock States
   const [alarmsList, setAlarmsList] = useState<FocusAlarm[]>(() => alarmService.getFocusAlarms());
@@ -152,47 +182,63 @@ export const FocusView: React.FC<FocusViewProps> = ({
   const [customRingtone, setCustomRingtone] = useState(() => alarmAudio.getCustomRingtone());
   const [previewingRingtone, setPreviewingRingtone] = useState<string | null>(null);
 
+  const [breakMode, setBreakMode] = useState(false);
+
   const completedTimerRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const alarmFormRef = useRef<HTMLFormElement | null>(null);
+  const previewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up ringtone preview timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (previewTimeoutRef.current !== null) {
+        clearTimeout(previewTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (timerProfileId === profileId) return;
-    const saved = readFocusTimer(profileId);
-    setTotalSeconds(saved.totalSeconds);
-    setRemainingSeconds(saved.remainingSeconds);
-    setIsRunning(saved.isRunning);
-    setEndsAt(saved.endsAt);
-    setCustomMin(saved.customMin);
-    setSelectedTask(saved.selectedTask);
-    setSelectedGoal(saved.selectedGoal);
-    setSessionLabel(saved.sessionLabel);
-    setSoundEnabled(saved.soundEnabled);
-    setTimerProfileId(profileId);
-    completedTimerRef.current = false;
+    storage.getSingleton<FocusTimerState>('focusTimerState').then(saved => {
+      const state = parseFocusTimerState(saved);
+      setTotalSeconds(state.totalSeconds);
+      setRemainingSeconds(state.remainingSeconds);
+      setIsRunning(state.isRunning);
+      setEndsAt(state.endsAt);
+      setCustomMin(state.customMin);
+      setSelectedTask(state.selectedTask);
+      setSelectedGoal(state.selectedGoal);
+      setSessionLabel(state.sessionLabel);
+      setSoundEnabled(state.soundEnabled);
+      setTimerProfileId(profileId);
+      completedTimerRef.current = false;
+    }).catch(() => {
+      setTimerProfileId(profileId);
+      completedTimerRef.current = false;
+    });
   }, [profileId, timerProfileId]);
 
   useEffect(() => {
     if (timerProfileId !== profileId) return;
-    try {
-      const timerState: FocusTimerState = {
-        totalSeconds,
-        remainingSeconds,
-        isRunning,
-        endsAt,
-        customMin,
-        selectedTask,
-        selectedGoal,
-        sessionLabel,
-        soundEnabled
-      };
-      localStorage.setItem(getFocusTimerStorageKey(profileId), JSON.stringify(timerState));
-    } catch (err) {
+    const timerState: FocusTimerState = {
+      totalSeconds,
+      remainingSeconds,
+      isRunning,
+      endsAt,
+      customMin,
+      selectedTask,
+      selectedGoal,
+      sessionLabel,
+      soundEnabled,
+      sprintCount
+    };
+    storage.setSingleton('focusTimerState', timerState).catch(err => {
       console.warn('Could not save focus timer state:', err);
-    }
+    });
   }, [
     profileId, timerProfileId, totalSeconds, remainingSeconds, isRunning, endsAt,
-    customMin, selectedTask, selectedGoal, sessionLabel, soundEnabled
+    customMin, selectedTask, selectedGoal, sessionLabel, soundEnabled, sprintCount
   ]);
 
   // Sync alarms when updated
@@ -221,6 +267,16 @@ export const FocusView: React.FC<FocusViewProps> = ({
           });
         }
         void handleFinishSession(totalSeconds);
+        // Pomodoro sprint tracking
+        const isBreakSession = sessionLabel === 'Short Break' || sessionLabel === 'Long Break';
+        if (!isBreakSession) {
+          setSprintCount(prev => {
+            const next = prev + 1;
+            return next >= 4 ? 0 : next;
+          });
+        }
+        // After completing a sprint, offer a break timer
+        setBreakMode(!isBreakSession);
       }
     };
     tick();
@@ -231,8 +287,20 @@ export const FocusView: React.FC<FocusViewProps> = ({
     sessionLabel, selectedTask, selectedGoal, selectedDefaultRingtone
   ]);
 
+  const handleStartBreak = (minutes: number) => {
+    const secs = minutes * 60;
+    setTotalSeconds(secs);
+    setRemainingSeconds(secs);
+    setSessionLabel(minutes <= 5 ? 'Short Break' : 'Long Break');
+    setBreakMode(false);
+    completedTimerRef.current = false;
+    setEndsAt(Date.now() + secs * 1000);
+    setIsRunning(true);
+  };
+
   const handleStart = () => {
     if (!isRunning) {
+      setBreakMode(false);
       completedTimerRef.current = false;
       setEndsAt(Date.now() + remainingSeconds * 1000);
       setIsRunning(true);
@@ -305,6 +373,10 @@ export const FocusView: React.FC<FocusViewProps> = ({
 
   // Ringtone preview handler
   const handlePreview = (ringtoneId: string) => {
+    if (previewTimeoutRef.current !== null) {
+      clearTimeout(previewTimeoutRef.current);
+      previewTimeoutRef.current = null;
+    }
     if (previewingRingtone === ringtoneId) {
       alarmAudio.stop();
       setPreviewingRingtone(null);
@@ -312,18 +384,20 @@ export const FocusView: React.FC<FocusViewProps> = ({
     }
     setPreviewingRingtone(ringtoneId);
     alarmAudio.previewRingtone(ringtoneId);
-    setTimeout(() => {
+    previewTimeoutRef.current = setTimeout(() => {
+      previewTimeoutRef.current = null;
       setPreviewingRingtone(null);
     }, 4500);
   };
 
-  // Custom ringtone upload handler
+  // Custom ringtone upload handler — saves to IndexedDB to avoid localStorage quota issues
   const handleCustomAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      alert('Audio file size exceeds 8MB limit. Please choose a smaller ringtone file.');
+    if (file.size > 2 * 1024 * 1024) {
+      onSuccess('Ringtone must be under 2 MB. Choose a smaller file.');
+      e.target.value = '';
       return;
     }
 
@@ -332,12 +406,15 @@ export const FocusView: React.FC<FocusViewProps> = ({
       const dataUrl = String(reader.result || '');
       const saved = alarmAudio.setCustomRingtone(file.name, dataUrl);
       if (saved) {
+        // Also persist to IndexedDB for cross-device sync
+        storage.setSingleton('customRingtone', { name: file.name, dataUrl }).catch(() => {});
         setCustomRingtone({ name: file.name, dataUrl });
         setSelectedDefaultRingtone('custom');
-        onSuccess(`Custom ringtone "${file.name}" saved!`);
+        onSuccess(`Custom ringtone "${file.name}" saved`);
         handlePreview('custom');
       }
     };
+    reader.onerror = () => onSuccess('⚠ Could not read audio file.');
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -458,9 +535,15 @@ export const FocusView: React.FC<FocusViewProps> = ({
   };
 
   const deleteAlarm = (id: string) => {
-    alarmService.deleteFocusAlarm(id);
-    refreshAlarms();
-    onSuccess('Alarm removed');
+    setAlarmToDelete(id);
+  };
+  const confirmDeleteAlarm = () => {
+    if (alarmToDelete) {
+      alarmService.deleteFocusAlarm(alarmToDelete);
+      refreshAlarms();
+      onSuccess('Alarm removed');
+      setAlarmToDelete(null);
+    }
   };
 
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -473,11 +556,52 @@ export const FocusView: React.FC<FocusViewProps> = ({
     }
   };
 
+  // Keyboard shortcuts for the timer (Space = start/pause, R = reset, Escape = stop preview)
+  useEffect(() => {
+    if (activeMenuTab !== 'timer') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't capture when typing in an input/textarea/select
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (isRunning) handlePause();
+        else handleStart();
+      } else if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        handleReset();
+      } else if (e.code === 'Escape' && previewingRingtone) {
+        alarmAudio.stop();
+        if (previewTimeoutRef.current !== null) {
+          clearTimeout(previewTimeoutRef.current);
+          previewTimeoutRef.current = null;
+        }
+        setPreviewingRingtone(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeMenuTab, isRunning, previewingRingtone]);
+
   const totalFocusSeconds = sessions.reduce((sum, s) => sum + (Number(s.durationSeconds) || 0), 0);
   const totalFocusHours = (totalFocusSeconds / 3600).toFixed(1);
   const today = getLocalDateString();
   const todaySessions = sessions.filter(s => s.date === today);
   const todayMinutes = Math.round(todaySessions.reduce((sum, s) => sum + (Number(s.durationSeconds) || 0), 0) / 60);
+
+  // Weekly stats (Mon-Sun)
+  const weekSessions = useMemo(() => {
+    const now = new Date();
+    const daysSinceMonday = (now.getDay() + 6) % 7;
+    const monday = new Date(now);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - daysSinceMonday);
+    const mondayStr = getLocalDateString(monday);
+    return sessions.filter(s => s.date && s.date >= mondayStr);
+  }, [sessions]);
+  const weekMinutes = Math.round(weekSessions.reduce((sum, s) => sum + (Number(s.durationSeconds) || 0), 0) / 60);
+  const weekHours = (weekMinutes / 60).toFixed(1);
 
   const progressPercent = totalSeconds > 0 ? ((totalSeconds - remainingSeconds) / totalSeconds) * 100 : 0;
   const strokeDashoffset = 565.48 - (565.48 * (100 - progressPercent)) / 100;
@@ -500,7 +624,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
               if (next) handlePreview(selectedDefaultRingtone);
               onSuccess(next ? 'Chime enabled' : 'Muted');
             }}
-            className={`flex items-center justify-center p-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+            className={`flex items-center justify-center rounded-lg p-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800 ${
               soundEnabled
                 ? 'text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200'
                 : 'text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200'
@@ -619,6 +743,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                 onClick={handleReset}
                 className="focus-timer-reset-action flex h-12 w-12 items-center justify-center rounded-lg cursor-pointer"
                 title="Reset Timer"
+                aria-label="Reset timer"
               >
                 <RotateCcw className="h-4 w-4" />
               </button>
@@ -635,6 +760,43 @@ export const FocusView: React.FC<FocusViewProps> = ({
                 </button>
               )}
             </div>
+
+            {/* Pomodoro Sprint Counter */}
+            {!breakMode && (
+              <div className="mt-3 flex items-center justify-center gap-1.5">
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} className={`h-2 w-2 rounded-full transition-colors ${i < sprintCount ? 'bg-amber-500' : 'bg-slate-200 dark:bg-slate-700'}`} />
+                ))}
+                <span className="ml-1.5 text-xs text-slate-400 tabular-nums">Sprint {sprintCount + 1}/4</span>
+              </div>
+            )}
+
+            {/* End time projection */}
+            {isRunning && remainingSeconds > 0 && (
+              <div className="mt-1 text-xs text-slate-400">
+                Ends at {new Date(Date.now() + remainingSeconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            )}
+
+            {/* Break Timer Prompt */}
+            {breakMode && !isRunning && (
+              <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-800/60 dark:bg-emerald-950/30">
+                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                  {sprintCount === 0 ? '4 sprints done! Take a long break.' : 'Sprint complete! Take a break?'}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => handleStartBreak(5)} className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 cursor-pointer">
+                    5m Short
+                  </button>
+                  <button type="button" onClick={() => handleStartBreak(15)} className={`rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 cursor-pointer ${sprintCount === 0 ? 'ring-2 ring-emerald-400' : ''}`}>
+                    15m Long
+                  </button>
+                  <button type="button" onClick={() => setBreakMode(false)} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer">
+                    Skip
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Task Linkage & Focus Telemetry (5 cols) */}
@@ -676,7 +838,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
 
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                    Link to Strategic Goal
+                    Goal for Focus Session
                   </label>
                   <select
                     value={selectedGoal}
@@ -716,28 +878,67 @@ export const FocusView: React.FC<FocusViewProps> = ({
               </div>
 
               <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="mt-4 grid grid-cols-3 gap-3">
                   <div className="focus-telemetry-stat py-2">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                      Today's Deep Work
+                      Today
                     </div>
                     <div className="mt-1 font-mono text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums">
                       {todayMinutes}m
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{todaySessions.length} sprints today</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">{todaySessions.length} sprints</div>
+                  </div>
+
+                  <div className="focus-telemetry-stat py-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      This Week
+                    </div>
+                    <div className="mt-1 font-mono text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums">
+                      {weekHours}h
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">{weekSessions.length} sprints</div>
                   </div>
 
                   <div className="focus-telemetry-stat py-2">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      All-Time Hours
+                      All-Time
                     </div>
                     <div className="mt-1 font-mono text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums">
                       {totalFocusHours}h
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{sessions.length} total blocks</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">{sessions.length} blocks</div>
                   </div>
                 </div>
               </div>
+
+              {/* Session History */}
+              {todaySessions.length > 0 && (
+                <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
+                  <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Today's Sessions</h3>
+                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                    {[...todaySessions].sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0)).map(s => (
+                      <div key={s.id} className="group flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <div className="min-w-0 truncate">
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">{s.label}</span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2 text-slate-400">
+                          <span className="font-mono tabular-nums">{Math.round((s.durationSeconds || 0) / 60)}m</span>
+                          <span>{s.startedAt ? new Date(s.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSessionToDelete(s.id)}
+                            className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-300 hover:text-rose-500 transition-opacity cursor-pointer"
+                            title="Delete session"
+                            aria-label={`Delete session ${s.label || ''}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -761,7 +962,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                   {editingAlarm ? 'Edit Alarm' : 'New alarm'}
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Set a time and schedule</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Set time and repeat days</p>
               </div>
               </div>
               {alarmsList.length > 0 && isAddingAlarm && (
@@ -978,7 +1179,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                     Scheduled Alarms
                   </h2>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Alarms play your selected ringtone and trigger full-screen alerts even in the background.
+                    Plays ringtone and triggers full-screen alerts.
                   </p>
                 </div>
                 {!isAddingAlarm && (
@@ -1073,6 +1274,9 @@ export const FocusView: React.FC<FocusViewProps> = ({
                         {/* ON/OFF Switch */}
                         <button
                           type="button"
+                          role="switch"
+                          aria-checked={alarm.enabled}
+                          aria-label={`${alarm.label || 'Alarm'} ${alarm.enabled ? 'on' : 'off'}`}
                           onClick={() => toggleAlarmStatus(alarm)}
                           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
                             alarm.enabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
@@ -1101,7 +1305,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
       {activeMenuTab === 'ringtones' && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
           {/* Preset Ringtones Catalog (7 cols) */}
-          <div data-ringtone-catalog className="lg:col-span-7 border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
+          <div data-ringtone-catalog className="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
             <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
               <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Music className="h-4 w-4 text-indigo-600" />
@@ -1248,7 +1452,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
                     No custom audio uploaded yet
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Supports MP3, WAV, OGG, AAC up to 8MB
+                    Supports MP3, WAV, OGG, AAC up to 2 MB
                   </p>
                   <label className="ringtone-upload-trigger mt-3 flex h-[3.75rem] w-full items-center justify-center gap-1.5 text-xs font-bold cursor-pointer transition-colors">
                     <Upload className="h-3.5 w-3.5" />
@@ -1309,6 +1513,36 @@ export const FocusView: React.FC<FocusViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Alarm delete confirmation */}
+      <ConfirmModal
+        isOpen={alarmToDelete !== null}
+        title="Delete alarm?"
+        message="This alarm will be permanently removed."
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={confirmDeleteAlarm}
+        onCancel={() => setAlarmToDelete(null)}
+      />
+
+      {/* Session delete confirmation */}
+      <ConfirmModal
+        isOpen={sessionToDelete !== null}
+        title="Delete session?"
+        message="This focus session record will be permanently removed."
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDanger={true}
+        onConfirm={async () => {
+          if (sessionToDelete) {
+            await storage.delete('focus', sessionToDelete);
+            onRefresh();
+            onSuccess('Session removed');
+            setSessionToDelete(null);
+          }
+        }}
+        onCancel={() => setSessionToDelete(null)}
+      />
     </div>
   );
 };

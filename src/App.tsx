@@ -16,6 +16,7 @@ import type { GoogleUser } from './lib/googleDriveSync';
 import { getLocalDateString } from './lib/dateUtils';
 import { LockKeyhole, ShieldCheck } from 'lucide-react';
 import { ViewSkeleton } from './components/Skeleton';
+import { useAutoLock } from './hooks/useAutoLock';
 import { resolveSavedAccent } from './lib/accentTheme';
 import {
   applyAppearance,
@@ -28,6 +29,7 @@ import {
   restoreBackgroundAsset,
   saveLocalAppearance
 } from './lib/appearance';
+import { initOfflineSyncListener, processPendingSync } from './lib/offlineSyncQueue';
 
 const IS_GUEST_MODE = import.meta.env.DEV
   || import.meta.env.MODE === 'local-test'
@@ -54,6 +56,8 @@ import {
 import { applyTaskCompletionEffects } from './lib/recurrenceEngine';
 import { soundEngine } from './lib/soundEngine';
 import { setActiveCurrencySymbol } from './lib/currencyDisplay';
+import { setLocale } from './lib/i18n';
+import { setActiveDateFormat } from './lib/formatDate';
 
 // Views
 const DashboardView = lazyWithRetry(() => import('./views/DashboardView').then(m => ({ default: m.default })));
@@ -68,6 +72,7 @@ const FinanceView = lazyWithRetry(() => import('./views/FinanceView').then(m => 
 const HealthView = lazyWithRetry(() => import('./views/HealthView').then(m => ({ default: m.HealthView })));
 const ThingsView = lazyWithRetry(() => import('./views/ThingsView').then(m => ({ default: m.ThingsView })));
 const SettingsView = lazyWithRetry(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
+const RecycleBinView = lazyWithRetry(() => import('./views/RecycleBinView').then(m => ({ default: m.RecycleBinView })));
 
 const ViewFallback: React.FC = () => <ViewSkeleton />;
 
@@ -75,11 +80,27 @@ export default function App() {
   return <LifeOSApp />;
 }
 
+const MODULE_TO_HASH: Record<NavModule, string> = {
+  dashboard: '#/', tasks: '#/tasks', routine: '#/routine', goals: '#/goals',
+  focus: '#/focus', notes: '#/notes', journal: '#/journal', calculator: '#/calculator',
+  finance: '#/finance', health: '#/health', work: '#/work', people: '#/people',
+  spiritual: '#/spiritual', things: '#/things', settings: '#/settings', recycleBin: '#/recycle-bin',
+};
+const HASH_TO_MODULE: Record<string, NavModule> = Object.fromEntries(
+  Object.entries(MODULE_TO_HASH).map(([mod, hash]) => [hash, mod as NavModule])
+) as Record<string, NavModule>;
+
+function resolveModuleFromHash(): NavModule {
+  const hash = window.location.hash || '#/';
+  const base = hash.split('?')[0];
+  return HASH_TO_MODULE[base] || 'dashboard';
+}
+
 function LifeOSApp() {
-  const [activeModule, setActiveModule] = useState<NavModule>('dashboard');
+  const [activeModule, setActiveModule] = useState<NavModule>(resolveModuleFromHash);
   const [activeWorkAreaSection, setActiveWorkAreaSection] = useState<WorkAreaSection>('tasks-roster');
   const [healthInitialTab, setHealthInitialTab] = useState<
-    'movement' | 'wellness' | 'appointments' | 'profile' | 'people' | 'foundation-practices' | 'work-learning' | 'work-skills'
+    'movement' | 'wellness' | 'appointments' | 'profile' | 'people' | 'foundation-practices' | 'work'
   >('movement');
   const [pendingRecordId, setPendingRecordId] = useState<string | null>(null);
   const [pendingNotesJournalAction, setPendingNotesJournalAction] = useState<'note' | 'reflection' | 'note-filters' | 'journal-timeline' | null>(null);
@@ -111,13 +132,14 @@ function LifeOSApp() {
   const [appSettings, setAppSettings] = useState<AppState | undefined>();
 
   // Module switches get a soft cross-fade/slide via the View Transitions API.
+  const isHashNav = useRef(false);
   const changeModule = useCallback((module: NavModule, recordId?: string) => {
     const healthTabTarget = module === 'people'
       ? 'people'
       : module === 'spiritual'
         ? 'foundation-practices'
         : module === 'work'
-          ? 'work-learning'
+          ? 'work'
           : module === 'health'
             ? 'movement'
             : null;
@@ -128,6 +150,11 @@ function LifeOSApp() {
       setActiveModule(destination);
       window.scrollTo(0, 0);
     };
+    if (!isHashNav.current) {
+      const hash = MODULE_TO_HASH[module] || '#/';
+      const suffix = recordId ? `?id=${encodeURIComponent(recordId)}` : '';
+      window.history.pushState(null, '', hash + suffix);
+    }
     const doc = document as Document & { startViewTransition?: (updateCallback: () => void) => unknown };
     const reduceMotion = typeof window.matchMedia === 'function'
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -137,6 +164,19 @@ function LifeOSApp() {
     }
     updateModule();
   }, []);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const mod = resolveModuleFromHash();
+      const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      const id = params.get('id') || undefined;
+      isHashNav.current = true;
+      changeModule(mod, id);
+      isHashNav.current = false;
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [changeModule]);
 
   // After navigating from a search result, scroll to the record and flash a highlight.
   useEffect(() => {
@@ -183,6 +223,15 @@ function LifeOSApp() {
     setPendingNotesJournalAction(null);
   }, []);
 
+  useEffect(() => {
+    initOfflineSyncListener();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data?.type === 'TRIGGER_DRIVE_SYNC') void processPendingSync();
+      });
+    }
+  }, []);
+
   // Restore appearance immediately so local preferences remain available offline.
   useEffect(() => {
     const handleWallpaperChange = (event: Event) => {
@@ -221,6 +270,7 @@ function LifeOSApp() {
   const [isGoogleLocked, setIsGoogleLocked] = useState(!IS_GUEST_MODE);
   const [isUnlockingGoogle, setIsUnlockingGoogle] = useState(false);
   const [googleUnlockError, setGoogleUnlockError] = useState<string | null>(null);
+  useAutoLock(() => setIsGoogleLocked(true), !isGoogleLocked);
   const activeProfileIdRef = useRef<string | null>(activeProfileId);
   const loadGenerationRef = useRef(0);
   useEffect(() => {
@@ -304,6 +354,20 @@ function LifeOSApp() {
       console.error('Could not play the wallpaper video with sound.', error);
       showToast('Browser could not play the video sound. Try clicking Sound on again.');
     });
+  }, [showToast]);
+
+  // Listen for storage quota warnings and show them to the user
+  useEffect(() => {
+    const handleStorageWarning = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.level === 'critical') {
+        showToast(`⚠️ Storage is ${Math.round(detail.percent)}% full! Data writes may fail. Please export a backup and clean up data in Settings.`);
+      } else if (detail?.level === 'warning') {
+        showToast(`Storage is ${Math.round(detail.percent)}% full. Consider cleaning up data in Settings.`);
+      }
+    };
+    window.addEventListener('om-storage-warning', handleStorageWarning);
+    return () => window.removeEventListener('om-storage-warning', handleStorageWarning);
   }, [showToast]);
 
   const handleApplyAppearance = useCallback(async (value: AppearancePreferences) => {
@@ -460,6 +524,7 @@ function LifeOSApp() {
         appearanceRef.current = savedAppearance;
         setAppearance(savedAppearance);
         setAppSettings(settingsData);
+        await setLocale(settingsData.locale || 'en');
         setTheme(getEffectiveColorMode(savedAppearance.colorMode));
       }
 
@@ -531,6 +596,121 @@ function LifeOSApp() {
       }
     }
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Targeted store refresh helpers
+  // ---------------------------------------------------------------------------
+  // Instead of reloading ALL 41 stores on every micro-mutation, these helpers
+  // reload only the stores that a given view can actually modify.
+  // ---------------------------------------------------------------------------
+
+  const refreshStores = useCallback(async (...storeConfigs: Array<{ store: string; setter: (data: any[]) => void }>) => {
+    const activeId = activeProfileIdRef.current || storage.getActiveProfileId();
+    const results = await Promise.all(
+      storeConfigs.map(({ store }) => storage.getAll(store, activeId))
+    );
+    for (let i = 0; i < storeConfigs.length; i++) {
+      storeConfigs[i].setter([...results[i]]);
+    }
+  }, []);
+
+  const refreshTasksData = useCallback(async () => {
+    await refreshStores(
+      { store: 'tasks', setter: setTasks },
+      { store: 'goals', setter: setGoals },
+      { store: 'reminders', setter: setReminders }
+    );
+  }, [refreshStores]);
+
+  const refreshRoutineData = useCallback(async () => {
+    await refreshStores(
+      { store: 'routines', setter: setRoutines },
+      { store: 'habits', setter: setHabits },
+      { store: 'habitLogs', setter: setHabitLogs },
+      { store: 'goals', setter: setGoals },
+      { store: 'tasks', setter: setTasks },
+      { store: 'reminders', setter: setReminders }
+    );
+  }, [refreshStores]);
+
+  const refreshFinanceData = useCallback(async () => {
+    await refreshStores(
+      { store: 'financeAccounts', setter: setFinanceAccounts },
+      { store: 'finance', setter: setFinanceTransactions },
+      { store: 'loans', setter: setLoans },
+      { store: 'loanPayments', setter: setLoanPayments },
+      { store: 'investments', setter: setInvestments },
+      { store: 'investmentActivities', setter: setInvestmentActivities },
+      { store: 'cashFlowSchedules', setter: setCashFlowSchedules },
+      { store: 'savingsPlans', setter: setSavingsPlans },
+      { store: 'assets', setter: setAssets },
+      { store: 'liabilities', setter: setLiabilities },
+      { store: 'receipts', setter: setReceipts },
+      { store: 'goals', setter: setGoals }
+    );
+  }, [refreshStores]);
+
+  const refreshNotesData = useCallback(async () => {
+    await refreshStores(
+      { store: 'notes', setter: setNotes }
+    );
+  }, [refreshStores]);
+
+  const refreshJournalData = useCallback(async () => {
+    await refreshStores(
+      { store: 'journal', setter: setJournal }
+    );
+  }, [refreshStores]);
+
+  const refreshFocusData = useCallback(async () => {
+    await refreshStores(
+      { store: 'focus', setter: setFocusSessions },
+      { store: 'tasks', setter: setTasks },
+      { store: 'goals', setter: setGoals }
+    );
+  }, [refreshStores]);
+
+  const refreshHealthData = useCallback(async () => {
+    const activeId = activeProfileIdRef.current || storage.getActiveProfileId();
+    const healthProfileData = await storage.getSingleton<HealthProfile>('healthProfile', activeId) || undefined;
+    setHealthProfile(healthProfileData);
+    await refreshStores(
+      { store: 'healthMeasurements', setter: setHealthMeasurements },
+      { store: 'sleepRecords', setter: setSleepRecords },
+      { store: 'waterRecords', setter: setWaterRecords },
+      { store: 'nutritionRecords', setter: setNutritionRecords },
+      { store: 'healthAppointments', setter: setAppointments },
+      { store: 'healthNotes', setter: setHealthNotes },
+      { store: 'goals', setter: setGoals },
+      { store: 'people', setter: setPeople },
+      { store: 'interactions', setter: setInteractions },
+      { store: 'reminders', setter: setReminders },
+      { store: 'spiritualPractices', setter: setPractices },
+      { store: 'tasks', setter: setTasks },
+      { store: 'learningItems', setter: setLearningItems },
+      { store: 'skills', setter: setSkills }
+    );
+  }, [refreshStores]);
+
+  const refreshThingsData = useCallback(async () => {
+    await refreshStores(
+      { store: 'things', setter: setThings },
+      { store: 'documents', setter: setDocuments },
+      { store: 'warranties', setter: setWarranties },
+      { store: 'receipts', setter: setReceipts },
+      { store: 'certificates', setter: setCertificates },
+      { store: 'importantRecords', setter: setImportantRecords },
+      { store: 'financeAccounts', setter: setFinanceAccounts },
+      { store: 'finance', setter: setFinanceTransactions },
+      { store: 'goals', setter: setGoals }
+    );
+  }, [refreshStores]);
+
+  const refreshCalcData = useCallback(async () => {
+    await refreshStores(
+      { store: 'calcHistory', setter: setCalcHistory }
+    );
+  }, [refreshStores]);
 
   // Keep global alarm notifications available independently of the login screen.
   useEffect(() => {
@@ -678,12 +858,18 @@ function LifeOSApp() {
     }
   }, [theme]);
 
-  // Keyboard Shortcuts (⌘K for search)
+  // Global keyboard shortcuts (⌘K for search, Ctrl+/ for quick capture).
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setIsSearchOpen(prev => !prev);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault();
+        setQuickCaptureType('task');
+        setIsQuickCaptureOpen(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -734,13 +920,6 @@ function LifeOSApp() {
 
 
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    void handleApplyAppearance({ ...appearanceRef.current, colorMode: newTheme }).catch(error => {
-      showToast(error instanceof Error ? error.message : 'Could not save color mode.');
-    });
-  };
-
   const handleToggleTask = async (id: string) => {
     const t = tasks.find(x => x.id === id);
     if (!t) return;
@@ -762,7 +941,7 @@ function LifeOSApp() {
     if (linkedGoalId) {
       await syncGoalProgressFromTasks(linkedGoalId, t.id, nextDone);
     }
-    loadAllData();
+    refreshTasksData();
   };
 
   const handleLogHabit = async (habitId: string, occurrence: number | 'all' = 0) => {
@@ -790,8 +969,21 @@ function LifeOSApp() {
     if (targetHabit && goalId) {
       await syncGoalProgressFromHabits(goalId);
     }
-    loadAllData();
+    refreshRoutineData();
   };
+
+  // Sync module-level currency symbol whenever appSettings changes
+  // (must be called before early returns to satisfy React rules of hooks)
+  useEffect(() => {
+    if (appSettings?.currencySymbol) {
+      setActiveCurrencySymbol(appSettings.currencySymbol);
+    }
+  }, [appSettings?.currencySymbol]);
+
+  // Date inputs use a shared formatter; keep it in sync with the active profile.
+  useEffect(() => {
+    setActiveDateFormat(appSettings?.dateFormat ?? 'DD/MM/YYYY');
+  }, [appSettings?.dateFormat]);
 
   const openTasksCount = tasks.filter(t => !t.done).length;
   const categoriesList = (appSettings?.noteCategories || ['General', 'Strategy', 'Finance', 'Ideas'])
@@ -810,8 +1002,8 @@ function LifeOSApp() {
             <span className="lock-screen__portal-core" />
             <LockKeyhole className="h-14 w-14" />
           </div>
-          <p className="lock-screen__eyebrow">OM LIFEOS <span /> PRIVATE WORKSPACE</p>
-          <h1 id="lock-screen-title" className="lock-screen__title">Your space, safely yours.</h1>
+          <p className="lock-screen__eyebrow">OM LIFEOS</p>
+          <h1 id="lock-screen-title" className="lock-screen__title">Welcome back.</h1>
           <p className="lock-screen__description">
             Sign in with your Google account to unlock your workspace.
           </p>
@@ -841,7 +1033,7 @@ function LifeOSApp() {
           )}
           <div className="lock-screen__privacy">
             <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-            <p>Guest data stays on this device. Sign in to open your Google workspace.</p>
+            <p>Guest data stays on this device.</p>
           </div>
         </section>
       </div>
@@ -883,8 +1075,6 @@ function LifeOSApp() {
       </div>
     );
   }
-
-  setActiveCurrencySymbol(appSettings.currencySymbol);
 
   return (
     <div
@@ -930,8 +1120,6 @@ function LifeOSApp() {
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenBsModal={() => setIsBsModalOpen(true)}
         onOpenVoiceStudio={() => setIsVoiceStudioOpen(true)}
-        theme={theme}
-        onToggleTheme={toggleTheme}
         environmentEnabled={environmentEnabled}
         onToggleEnvironment={() => {
           setEnvironmentEnabled(enabled => {
@@ -949,11 +1137,12 @@ function LifeOSApp() {
         googleUser={googleUser}
         onGoogleAccountChange={handleGoogleAccountChange}
         onDataRestored={loadAllData}
+        timeFormat={appSettings?.timeFormat}
       />
       <MobileBottomNav activeModule={activeModule} onNavigate={changeModule} />
 
       <div className="flex flex-1">
-        <main className={`sanctuary-main relative isolate mx-auto w-full max-w-7xl flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-12 ${activeModule === 'dashboard' ? 'dashboard-canvas' : ''}`}>
+        <main className={`sanctuary-main relative isolate mx-auto w-full max-w-7xl flex-1 min-w-0 px-3 sm:px-5 lg:px-6 py-4 sm:py-6 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-12 ${activeModule === 'dashboard' ? 'dashboard-canvas' : ''}`}>
           <div className="w-full space-y-6">
             <Suspense fallback={<ViewFallback />}>
             {activeModule === 'dashboard' && (
@@ -991,12 +1180,10 @@ function LifeOSApp() {
                 learningItems={learningItems}
                 skills={skills}
                 routines={routines}
-                habits={habits}
-                habitLogs={habitLogs}
                 reminders={reminders}
                 activeWorkAreaSection={activeWorkAreaSection}
                 onSelectWorkAreaSection={selectWorkAreaSection}
-                onRefresh={loadAllData}
+                onRefresh={refreshTasksData}
                 onSuccess={showToast}
               />
             )}
@@ -1011,7 +1198,7 @@ function LifeOSApp() {
                 reminders={reminders}
                 activeWorkAreaSection={activeWorkAreaSection}
                 onSelectWorkAreaSection={selectWorkAreaSection}
-                onRefresh={loadAllData}
+                onRefresh={refreshRoutineData}
                 onSuccess={showToast}
               />
             )}
@@ -1068,7 +1255,7 @@ function LifeOSApp() {
                 profileId={activeProfileId || 'om-master-profile'}
                 activeWorkAreaSection={activeWorkAreaSection}
                 onSelectWorkAreaSection={selectWorkAreaSection}
-                onRefresh={loadAllData}
+                onRefresh={refreshFocusData}
                 onSuccess={showToast}
               />
             )}
@@ -1082,7 +1269,7 @@ function LifeOSApp() {
                 pendingAction={pendingNotesJournalAction}
                 onActionConsumed={consumeNotesJournalAction}
                 onRequestAction={requestNotesJournalAction}
-                onRefresh={loadAllData}
+                onRefresh={refreshNotesData}
                 onSuccess={showToast}
               />
             )}
@@ -1095,7 +1282,7 @@ function LifeOSApp() {
                 onActionConsumed={consumeNotesJournalAction}
                 onRequestAction={requestNotesJournalAction}
                 goals={goals}
-                onRefresh={loadAllData}
+                onRefresh={refreshJournalData}
                 onSuccess={showToast}
               />
             )}
@@ -1107,7 +1294,7 @@ function LifeOSApp() {
                 noteCount={notes.length}
                 journalCount={journal.length}
                 onSelectNotesJournalAction={requestNotesJournalAction}
-                onRefresh={loadAllData}
+                onRefresh={refreshCalcData}
                 onSuccess={showToast}
               />
             )}
@@ -1128,7 +1315,7 @@ function LifeOSApp() {
                 goals={goals}
                 mentor={appSettings?.mentor}
                 onNavigate={changeModule}
-                onRefresh={loadAllData}
+                onRefresh={refreshFinanceData}
                 onSuccess={showToast}
                 onError={msg => showToast(`⚠️ ${msg}`)}
               />
@@ -1153,7 +1340,7 @@ function LifeOSApp() {
                 skills={skills}
                 tasks={tasks}
                 onNavigate={changeModule}
-                onRefresh={loadAllData}
+                onRefresh={refreshHealthData}
                 onSuccess={showToast}
               />
             )}
@@ -1170,20 +1357,26 @@ function LifeOSApp() {
                 onNavigate={changeModule}
                 certificates={certificates}
                 importantRecords={importantRecords}
-                onRefresh={loadAllData}
+                onRefresh={refreshThingsData}
                 onSuccess={showToast}
                 onError={msg => showToast(`⚠️ ${msg}`)}
               />
             )}
 
+            {activeModule === 'recycleBin' && (
+              <RecycleBinView
+                profileId={activeProfileId}
+                onRefresh={() => loadAllData(activeProfileId)}
+                onSuccess={showToast}
+                onError={msg => showToast(`⚠️ ${msg}`)}
+              />
+            )}
             {activeModule === 'settings' && (
               <SettingsView
                 settings={appSettings}
                 onRefresh={loadAllData}
                 onSuccess={showToast}
                 onError={msg => showToast(`⚠️ ${msg}`)}
-                theme={theme}
-                onToggleTheme={toggleTheme}
                 appearance={appearance}
                 onApplyAppearance={handleApplyAppearance}
                 wallpaperVideoMuted={isWallpaperVideoMuted}
@@ -1238,9 +1431,9 @@ function LifeOSApp() {
         isOpen={isVoiceStudioOpen}
         onClose={() => setIsVoiceStudioOpen(false)}
         onSuccess={showToast}
-        onRefreshNotes={loadAllData}
-        onRefreshJournal={loadAllData}
-        onRefreshTasks={loadAllData}
+        onRefreshNotes={refreshNotesData}
+        onRefreshJournal={refreshJournalData}
+        onRefreshTasks={refreshTasksData}
       />
 
       {/* Toast Notification */}

@@ -1,12 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  LayoutDashboard, CheckSquare, Target,
-  MoreHorizontal, FileText,
-  DollarSign, Heart, Folder, Settings,
-  X, BookOpen, Calculator, Repeat, Timer
-} from 'lucide-react';
+import { MoreHorizontal, X } from 'lucide-react';
 import { NavModule } from '../types';
 import { OmLogoMark } from './OmLogoMark';
+import { PRIMARY_NAV, resolveSelectedNav } from '../lib/navConfig';
 
 interface MobileBottomNavProps {
   activeModule: NavModule;
@@ -56,34 +52,21 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     };
   }, [isMoreOpen]);
 
-  const primaryTabs: { id: NavModule; label: string; icon: React.ReactNode }[] = [
-    { id: 'dashboard', label: 'Home', icon: <LayoutDashboard className="h-4 w-4" /> },
-    { id: 'goals', label: 'Goals', icon: <Target className="h-4 w-4" /> },
-    { id: 'tasks', label: 'Tasks', icon: <CheckSquare className="h-4 w-4" /> },
-  ];
+  const primaryTabs = PRIMARY_NAV.slice(0, 3).map(item => ({
+    ...item,
+    label: item.id === 'dashboard' ? 'Home' : item.label,
+    icon: <item.Icon className="h-4 w-4" />
+  }));
 
-  const secondaryModules: { id: NavModule; label: string; icon: React.ReactNode }[] = [
-    { id: 'notes', label: 'Memo', icon: <FileText className="h-4 w-4 text-indigo-500" /> },
-    { id: 'journal', label: 'Journal', icon: <BookOpen className="h-4 w-4 text-indigo-500" /> },
-    { id: 'calculator', label: 'Calculator', icon: <Calculator className="h-4 w-4 text-indigo-500" /> },
-    { id: 'routine', label: 'Routines', icon: <Repeat className="h-4 w-4 text-indigo-500" /> },
-    { id: 'focus', label: 'Focus', icon: <Timer className="h-4 w-4 text-indigo-500" /> },
-    { id: 'finance', label: 'Finance', icon: <DollarSign className="h-4 w-4 text-indigo-500" /> },
-    { id: 'health', label: 'Life', icon: <Heart className="h-4 w-4 text-indigo-500" /> },
-    { id: 'things', label: 'Vault', icon: <Folder className="h-4 w-4 text-indigo-500" /> },
-    { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4 text-indigo-500" /> },
-  ];
+  // This launcher lists parent modules only. Child sections are selected inside
+  // their parent screen: Tasks (Routines/Focus), Memo (Journal/Calculator).
+  const secondaryModules = PRIMARY_NAV.slice(3).map(item => ({
+    ...item,
+    icon: <item.Icon className="h-4 w-4 text-indigo-500" />
+  }));
 
-  const selectedNavModule: NavModule = activeModule === 'journal' || activeModule === 'calculator'
-    ? 'notes'
-    : activeModule === 'routine' || activeModule === 'focus'
-      ? 'tasks'
-      : activeModule === 'people' || activeModule === 'spiritual' || activeModule === 'work'
-        ? 'health'
-        : activeModule;
-  const isMoreActive = ['notes', 'finance', 'health', 'things', 'settings'].includes(selectedNavModule)
-    || activeModule === 'routine'
-    || activeModule === 'focus';
+  const selectedNavModule = resolveSelectedNav(activeModule);
+  const isMoreActive = PRIMARY_NAV.slice(3).some(item => item.id === selectedNavModule);
 
   const handleSelect = (id: NavModule) => {
     onNavigate(id);
@@ -94,7 +77,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     <>
       {/* Mobile Drawer / Quick Launcher Sheet */}
       {isMoreOpen && (
-        <div className="fixed inset-0 z-[70] flex flex-col justify-end bg-slate-950/70 backdrop-blur-sm md:hidden animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex flex-col justify-end bg-slate-950/70 backdrop-blur-sm lg:hidden animate-in fade-in duration-200">
           <div
             className="flex-1"
             onClick={() => setIsMoreOpen(false)}
@@ -103,14 +86,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
-            aria-label="All modules and tools"
-            className="sanctuary-mobile-module-sheet relative isolate w-full overflow-hidden rounded-t-3xl border-t border-slate-200 bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl dark:border-white/10 dark:bg-[#111827] animate-in slide-in-from-bottom duration-250 max-h-[80dvh] overflow-y-auto"
+            aria-label="Modules"
+            className="sanctuary-mobile-module-sheet relative isolate w-full rounded-t-3xl border-t border-slate-200 bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl dark:border-white/10 dark:bg-[#111827] animate-in slide-in-from-bottom duration-250 max-h-[80dvh] overflow-y-auto"
           >
             <div className="sanctuary-mobile-module-sheet-header flex w-full items-center justify-between border-b border-slate-100 pb-3 dark:border-white/[0.08]">
               <div className="flex items-center gap-2">
                 <OmLogoMark className="h-8 w-7" />
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">All Modules & Tools</h3>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Modules</h3>
                 </div>
               </div>
               <button
@@ -126,7 +109,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
             <div className="grid grid-cols-2 gap-2.5 pt-4">
               {secondaryModules.map(mod => {
-                const isActive = activeModule === mod.id;
+                const isActive = selectedNavModule === mod.id;
                 return (
                   <button
                     key={mod.id}
@@ -154,7 +137,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       )}
 
       {/* Persistent Bottom Bar */}
-      <nav className="sanctuary-mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-slate-200/80 bg-white px-1 dark:border-white/[0.08] dark:bg-[#0B0F19] md:hidden transition-colors">
+      <nav className="sanctuary-mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-slate-200/80 bg-white px-1 dark:border-white/[0.08] dark:bg-[#0B0F19] lg:hidden transition-colors">
         {primaryTabs.map(tab => {
           const isActive = selectedNavModule === tab.id;
           return (

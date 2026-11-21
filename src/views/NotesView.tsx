@@ -3,8 +3,8 @@ import {
   Search, Trash2, Edit3,
   Copy, Check, Download, X,
   BookOpen, Volume2, Plus,
-  ChevronDown, Hash, CheckCircle2,
-  Target
+  Hash, CheckCircle2,
+  Target, Pin, PinOff
 } from 'lucide-react';
 import { Note, Goal } from '../types';
 import { storage, generateUUID } from '../lib/storage';
@@ -21,6 +21,7 @@ import { LinkModeSelector } from '../components/LinkModeSelector';
 import { GoalPicker } from '../components/GoalPicker';
 import { ThemeIcon } from '../components/ThemeIcon';
 import { NotesJournalSwitcher } from '../components/NotesJournalSwitcher';
+import { buildThemePalettes, resolveTheme, THEME_SWATCH_KEYS } from '../lib/noteThemePalettes';
 
 const NOTE_DRAFT_KEY = 'om-note-draft-v1';
 
@@ -52,7 +53,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [colorFilter] = useState<string>('all');
   const [noteFiltersOpen, setNoteFiltersOpen] = useState(false);
   const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(() => notes.length === 0);
 
@@ -83,6 +83,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
   // Modal states
   const [editingModalNote, setEditingModalNote] = useState<Note | null>(null);
   const [viewingNote, setViewingNote] = useState<Note | null>(null);
+  const editModalRef = useRef<HTMLDivElement>(null);
+  const viewModalRef = useRef<HTMLDivElement>(null);
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -113,6 +115,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       noteInputMode?: 'manual' | 'link';
       noteGoalId?: string;
       editingNoteId?: string | null;
+      attachments?: StoredAttachmentMeta[];
     }>(noteDraftKey());
     if (!draft) return;
     if (draft.title) setTitle(draft.title);
@@ -124,6 +127,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     if (draft.noteInputMode) setNoteInputMode(draft.noteInputMode);
     if (draft.noteGoalId) setNoteGoalId(draft.noteGoalId);
     if (draft.editingNoteId) setEditingNoteId(draft.editingNoteId);
+    if (draft.attachments?.length) setAttachments(draft.attachments);
     setIsNoteEditorOpen(true);
   }, []);
 
@@ -149,11 +153,12 @@ export const NotesView: React.FC<NotesViewProps> = ({
         colorTheme,
         noteInputMode,
         noteGoalId,
-        editingNoteId
+        editingNoteId,
+        attachments
       });
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [title, editorText, editorHtml, category, tags, colorTheme, noteInputMode, noteGoalId, editingNoteId]);
+  }, [title, editorText, editorHtml, category, tags, colorTheme, noteInputMode, noteGoalId, editingNoteId, attachments]);
 
   // Warn before leaving with unsaved editor content.
   useEffect(() => {
@@ -172,7 +177,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     const matched = goals.find(g => g.id === gId);
     if (matched) {
       if (!title.trim() || goals.some(g => title.includes(g.title))) {
-        setTitle(`Knowledge Note: ${matched.title}`);
+        setTitle(`Knowledge Memo: ${matched.title}`);
       }
       if (matched.category && allCategories.includes(matched.category)) {
         setCategory(matched.category);
@@ -186,7 +191,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     const matched = goals.find(g => g.id === gId);
     if (matched) {
       if (!modalTitle.trim() || goals.some(g => modalTitle.includes(g.title))) {
-        setModalTitle(`Knowledge Note: ${matched.title}`);
+        setModalTitle(`Knowledge Memo: ${matched.title}`);
       }
     }
   };
@@ -222,69 +227,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
     setAllCategories(combined);
   }, [categories, notes]);
 
-  const themePalettes: Record<string, { label: string; swatch: string; cardClass: string; dotClass: string; spineClass: string }> = {
-    slate: {
-      label: 'Default',
-      swatch: '#94a3b8',
-      cardClass: 'bg-white border-slate-200/90 dark:bg-slate-900/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
-      dotClass: 'bg-slate-400',
-      spineClass: 'bg-slate-400 dark:bg-slate-600'
-    },
-    red: {
-      label: 'Ruby Red',
-      swatch: '#ef4444',
-      cardClass: 'bg-red-50/40 border-red-200/70 dark:bg-red-950/20 dark:border-red-800/40 hover:border-red-300 dark:hover:border-red-700/60',
-      dotClass: 'bg-red-500',
-      spineClass: 'bg-red-500'
-    },
-    amber: {
-      label: 'Warm Amber',
-      swatch: '#f59e0b',
-      cardClass: 'bg-amber-50/40 border-amber-200/70 dark:bg-amber-950/20 dark:border-amber-800/40 hover:border-amber-300 dark:hover:border-amber-700/60',
-      dotClass: 'bg-amber-500',
-      spineClass: 'bg-amber-500'
-    },
-    emerald: {
-      label: 'Sage Emerald',
-      swatch: '#10b981',
-      cardClass: 'bg-emerald-50/40 border-emerald-200/70 dark:bg-emerald-950/20 dark:border-emerald-800/40 hover:border-emerald-300 dark:hover:border-emerald-700/60',
-      dotClass: 'bg-emerald-500',
-      spineClass: 'bg-emerald-500'
-    },
-    indigo: {
-      label: 'Midnight Indigo',
-      swatch: '#6366f1',
-      cardClass: 'bg-indigo-50/40 border-indigo-200/70 dark:bg-indigo-950/20 dark:border-indigo-800/40 hover:border-indigo-300 dark:hover:border-indigo-700/60',
-      dotClass: 'bg-indigo-500',
-      spineClass: 'bg-indigo-500'
-    },
-    violet: {
-      label: 'Royal Violet',
-      swatch: '#8b5cf6',
-      cardClass: 'bg-purple-50/40 border-purple-200/70 dark:bg-purple-950/20 dark:border-purple-800/40 hover:border-purple-300 dark:hover:border-purple-700/60',
-      dotClass: 'bg-purple-500',
-      spineClass: 'bg-purple-500'
-    },
-    custom: {
-      label: 'Custom Color',
-      swatch: customColor,
-      cardClass: 'bg-white border-slate-200/90 dark:bg-slate-900/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
-      dotClass: 'bg-slate-400',
-      spineClass: 'bg-slate-400 dark:bg-slate-600'
-    }
-  };
-
-  const getTheme = (colorVal?: string) => {
-    if (!colorVal) return themePalettes.slate;
-    if (colorVal.startsWith('#')) return { ...themePalettes.custom, swatch: colorVal, label: 'Custom Color' };
-    if (themePalettes[colorVal]) return themePalettes[colorVal];
-    if (colorVal.includes('amber')) return themePalettes.amber;
-    if (colorVal.includes('emerald')) return themePalettes.emerald;
-    if (colorVal.includes('sky') || colorVal.includes('blue')) return themePalettes.indigo;
-    if (colorVal.includes('violet') || colorVal.includes('purple')) return themePalettes.violet;
-    if (colorVal.includes('rose') || colorVal.includes('pink')) return themePalettes.red;
-    return themePalettes.slate;
-  };
+  const themePalettes = buildThemePalettes(customColor);
+  const getTheme = (colorVal?: string) => resolveTheme(themePalettes, colorVal);
 
   // Open Edit Modal with full content preservation
   const handleOpenEditModal = (note: Note) => {
@@ -318,7 +262,42 @@ export const NotesView: React.FC<NotesViewProps> = ({
     titleInputRef.current?.focus();
   }, [isNoteEditorOpen, editingNoteId]);
 
-  const selectedThemeOptions = ['slate', 'red', 'amber', 'emerald', 'indigo', 'violet'];
+  useEffect(() => {
+    const ref = editingModalNote ? editModalRef : viewingNote ? viewModalRef : null;
+    if (!ref) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    ref.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (editingModalNote) setEditingModalNote(null);
+        else if (viewingNote) setViewingNote(null);
+        return;
+      }
+      if (event.key === 'Tab') {
+        const focusable = ref.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [editingModalNote, viewingNote]);
+
+  const selectedThemeOptions = [...THEME_SWATCH_KEYS];
 
   // Inline Form Save
   const handleSaveNote = async (e: React.FormEvent) => {
@@ -345,7 +324,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
           category: finalCategory,
           tags: tags.trim() || undefined,
           color: colorTheme === 'custom' ? customColor : colorTheme,
-          pinned: undefined,
+          pinned: existing.pinned ?? false,
           goalId: effectiveGoalId,
           attachments: serializedAttachments.length > 0 ? serializedAttachments : undefined,
           updatedAt: now
@@ -411,7 +390,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       category: finalCategory,
       tags: modalTags.trim() || undefined,
       color: modalColor === 'custom' ? modalCustomColor : modalColor,
-      pinned: undefined,
+      pinned: editingModalNote.pinned ?? false,
       goalId: effectiveGoalId,
       attachments: serializedModalAttachments.length > 0 ? serializedModalAttachments : undefined,
       updatedAt: now
@@ -431,14 +410,15 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
   const handleCopyNote = async (note: Note, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    const fullText = `${note.title}\n\n${note.body || ''}`;
+    const bodyText = note.body || (note.html ? note.html.replace(/<[^>]+>/g, '') : '');
+    const fullText = `${note.title}\n\n${bodyText}`;
     try {
       await navigator.clipboard.writeText(fullText);
       setCopiedId(note.id);
       setTimeout(() => setCopiedId(null), 2000);
-      onSuccess('Note copied to clipboard');
+      onSuccess('Memo copied to clipboard');
     } catch {
-      onSuccess('Copy failed');
+      onSuccess('⚠ Copy failed — clipboard unavailable');
     }
   };
 
@@ -452,7 +432,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     a.download = `${note.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    onSuccess('Note exported as Markdown file');
+    onSuccess('Memo exported as Markdown file');
   };
 
   const handleDeleteClick = (note: Note, e?: React.MouseEvent) => {
@@ -464,11 +444,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
     if (!noteToDelete) return;
     try {
       const deletedGoalId = noteToDelete.goalId;
-      await storage.delete('notes', noteToDelete.id);
+      await storage.moveToRecycleBin('notes', noteToDelete.id);
       if (deletedGoalId) {
         await syncGoalProgressFromNotes(deletedGoalId);
       }
-      onSuccess('✓ Note deleted');
+      onSuccess('✓ Memo moved to Recycle Bin. You can restore it from Settings > System.');
       setNoteToDelete(null);
       if (editingModalNote?.id === noteToDelete.id) {
         setEditingModalNote(null);
@@ -482,6 +462,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       onRefresh();
     } catch (err) {
       console.error('Failed to delete note', err);
+      onSuccess('Memo could not be deleted. Please try again.');
     }
   };
 
@@ -506,7 +487,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
     } else if (selectedCategory !== 'all' && n.category !== selectedCategory) {
       return false;
     }
-    if (colorFilter !== 'all' && n.color !== colorFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const linkedGoalTitle = n.goalId ? (goals.find(g => g.id === n.goalId)?.title || '') : '';
@@ -515,6 +495,9 @@ export const NotesView: React.FC<NotesViewProps> = ({
     }
     return true;
   }).sort((a, b) => {
+    const aPinned = a.pinned ? 1 : 0;
+    const bPinned = b.pinned ? 1 : 0;
+    if (aPinned !== bPinned) return bPinned - aPinned;
     if (a.date && b.date && a.date !== b.date) {
       return b.date.localeCompare(a.date);
     }
@@ -531,7 +514,15 @@ export const NotesView: React.FC<NotesViewProps> = ({
       <div
         key={n.id}
         data-record-id={n.id}
-        onClick={() => setViewingNote(n)}
+        onClick={event => {
+          const selection = window.getSelection();
+          if (
+            selection && !selection.isCollapsed && selection.toString() &&
+            event.currentTarget.contains(selection.anchorNode) &&
+            event.currentTarget.contains(selection.focusNode)
+          ) return;
+          setViewingNote(n);
+        }}
         className="dashboard-item-row progressive-row flex min-w-0 cursor-pointer flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 text-sm transition-all hover:border-slate-200 hover:bg-slate-50/80 dark:border-slate-800/60 dark:hover:bg-slate-800/40"
       >
         <div className="grid min-w-0 flex-1 grid-cols-1 gap-1 sm:grid-cols-2 sm:items-center sm:gap-4">
@@ -577,6 +568,15 @@ export const NotesView: React.FC<NotesViewProps> = ({
         <ProgressiveActions label={`More actions for ${n.title}`} className="shrink-0">
               <button
                 type="button"
+                onClick={e => { e.stopPropagation(); void storage.put('notes', { ...n, pinned: !n.pinned }).then(() => onRefresh()); }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 transition-colors"
+                title={n.pinned ? 'Unpin note' : 'Pin to top'}
+                aria-label={n.pinned ? 'Unpin note' : 'Pin note to top'}
+              >
+                {n.pinned ? <PinOff className="h-3.5 w-3.5 text-amber-500" /> : <Pin className="h-3.5 w-3.5" />}
+              </button>
+              <button
+                type="button"
                 onClick={e => handleCopyNote(n, e)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30 transition-colors"
                 title="Copy note text"
@@ -599,8 +599,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     ? 'bg-indigo-600 text-white animate-pulse shadow-xs'
                     : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:hover:text-indigo-400'
                 }`}
-                title={speakingNoteCardId === n.id ? "Stop reading" : "Read note aloud (Hindi & English)"}
-                aria-label="Read note aloud"
+                title={speakingNoteCardId === n.id ? "Stop reading" : "Read memo aloud (Hindi & English)"}
+                aria-label="Read memo aloud"
               >
                 <Volume2 className={`h-3.5 w-3.5 ${speakingNoteCardId === n.id ? 'animate-bounce' : ''}`} />
               </button>
@@ -620,8 +620,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 type="button"
                 onClick={e => handleDeleteClick(n, e)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                title="Delete note"
-                aria-label="Delete note"
+                title="Delete memo"
+                aria-label="Delete memo"
               >
                 <Trash2 className="h-3.5 w-3.5 text-rose-500" />
               </button>
@@ -683,7 +683,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               </span>
               <div>
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                  {editingNoteId ? 'Edit Note' : 'New Note'}
+                  {editingNoteId ? 'Edit Memo' : 'New Memo'}
                 </h2>
               </div>
             </div>
@@ -701,7 +701,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 type="button"
                 onClick={() => setIsNoteEditorOpen(false)}
                 className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                aria-label="Close note editor"
+                aria-label="Close memo editor"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -713,12 +713,12 @@ export const NotesView: React.FC<NotesViewProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                  Note Title / Purpose
+                  Memo Title / Purpose
                 </label>
                 {/* Mode Selector: Link Goal vs Manual */}
                 <LinkModeSelector
                   value={noteInputMode}
-                  ariaLabel="Note goal link mode"
+                  ariaLabel="Memo goal link mode"
                   options={[{ value: 'link', label: 'Link Goal' }, { value: 'manual', label: 'Manual' }]}
                   onChange={mode => {
                     if (mode === 'link') {
@@ -735,11 +735,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
               {noteInputMode === 'link' && (
                 <div className="mb-2.5 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
                   <div className="flex items-center justify-between">
-                    <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                    <label className="block text-xs font-bold text-indigo-700 dark:text-indigo-300">
                       Select Target Goal to Link *
                     </label>
                     {noteGoalId && (
-                      <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
+                      <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                         {goals.find(g => g.id === noteGoalId)?.progress}% Done
                       </span>
                     )}
@@ -752,7 +752,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     className="h-8.5 w-full rounded-lg border border-indigo-300 bg-white px-2.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-indigo-700 dark:bg-slate-900 dark:text-white cursor-pointer font-medium"
                   />
                   {noteGoalId && (
-                    <span className="block text-[10px] text-indigo-800 dark:text-indigo-300">
+                    <span className="block text-xs text-indigo-800 dark:text-indigo-300">
                       <ThemeIcon name="zap" className="mr-1 inline h-3 w-3" />Saving this note links your knowledge vault directly to the selected goal's hierarchy!
                     </span>
                   )}
@@ -787,7 +787,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     ))}
                     <option value="__custom">+ Custom Notebook...</option>
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-2.5 top-3 h-3 w-3 text-slate-400" />
                 </div>
                 {category === '__custom' && (
                   <input
@@ -878,8 +877,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
             {/* Note Writing Canvas */}
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                Note Content & Body
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+                Memo Content & Body
               </label>
               <NoteRichEditor
                 initialHtml={editorHtml}
@@ -910,12 +909,12 @@ export const NotesView: React.FC<NotesViewProps> = ({
               {editingNoteId ? (
                 <>
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>Update Note</span>
+                  <span>Update Memo</span>
                 </>
               ) : (
                 <>
                   <Plus className="h-3.5 w-3.5" />
-                  <span>Save Note to Vault</span>
+                  <span>Save Memo to Vault</span>
                 </>
               )}
             </button>
@@ -932,16 +931,30 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 Memo archive
                 <span className="ml-2 text-xs font-medium text-slate-400">{filteredNotes.length}</span>
               </h2>
-              {!isNoteEditorOpen && !editingNoteId && (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsNoteEditorOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-500/15 dark:text-emerald-300"
+                  onClick={() => setNoteFiltersOpen(prev => !prev)}
+                  className={`inline-flex shrink-0 items-center justify-center rounded-xl border p-2 transition-colors ${
+                    noteFiltersOpen
+                      ? 'border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                      : 'border-slate-200/80 bg-slate-50/60 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400 dark:hover:bg-slate-700'
+                  }`}
+                  aria-label="Toggle search & filters"
                 >
-                  <Plus className="h-4 w-4" />
-                  New Memo
+                  <Search className="h-4 w-4" />
                 </button>
-              )}
+                {!isNoteEditorOpen && !editingNoteId && (
+                  <button
+                    type="button"
+                    onClick={() => setIsNoteEditorOpen(true)}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-500/15 dark:text-emerald-300"
+                  >
+                    <Plus className="h-4 w-4" />
+                    New Memo
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div
@@ -1022,7 +1035,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                 {notes.length === 0 ? 'No memos saved yet' : 'No notes found matching your criteria'}
               </div>
-              <div className="text-[11px] text-slate-400">
+              <div className="text-xs text-slate-400">
                 {notes.length === 0
                   ? 'Create your first memo to start your archive.'
                   : 'Try another notebook or adjust your search and filters.'}
@@ -1040,9 +1053,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
       {editingModalNote && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div
+            ref={editModalRef}
             className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
             role="dialog"
             aria-modal="true"
+            tabIndex={-1}
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
@@ -1068,7 +1083,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Note Title / Purpose
+                    Memo Title / Purpose
                   </label>
                   {/* Mode Selector: Link Goal vs Manual */}
                   <LinkModeSelector
@@ -1090,11 +1105,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 {modalInputMode === 'link' && (
                   <div className="mb-2.5 space-y-1.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-2.5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
                     <div className="flex items-center justify-between">
-                      <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                      <label className="block text-xs font-bold text-indigo-700 dark:text-indigo-300">
                         Select Target Goal to Link *
                       </label>
                       {modalGoalId && (
-                        <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
+                        <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                           {goals.find(g => g.id === modalGoalId)?.progress}% Done
                         </span>
                       )}
@@ -1128,14 +1143,13 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     <select
                       value={modalCategory}
                       onChange={e => setModalCategory(e.target.value)}
-                      className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-3 pr-7 text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white appearance-none cursor-pointer"
+                      className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-3 pr-7 text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
                     >
                       {allCategories.map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
                       <option value="__custom">+ Custom Notebook...</option>
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-3 h-3 w-3 text-slate-400" />
                   </div>
                   {modalCategory === '__custom' && (
                     <input
@@ -1218,8 +1232,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
               {/* Note Content Writing Canvas */}
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  Note Content & Body
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+                  Memo Content & Body
                 </label>
                 <NoteRichEditor
                   initialHtml={modalHtml}
@@ -1283,9 +1297,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
       {viewingNote && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div
+            ref={viewModalRef}
             className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
             role="dialog"
             aria-modal="true"
+            tabIndex={-1}
           >
             <div className="flex items-start justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="min-w-0 pr-4">
@@ -1305,7 +1321,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     return lg ? (
                       <>
                         <span>·</span>
-                        <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
                           <Target className="h-3 w-3 shrink-0" />
                           <span>{lg.title} ({lg.progress}%)</span>
                         </span>
@@ -1320,7 +1336,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   type="button"
                   onClick={() => handleOpenEditModal(viewingNote)}
                   className="rounded-xl p-1.5 text-slate-500 hover:bg-slate-100 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer"
-                  title="Edit Note"
+                  title="Edit Memo"
                 >
                   <Edit3 className="h-4 w-4" />
                 </button>
@@ -1332,7 +1348,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     setNoteToDelete(toDelete);
                   }}
                   className="rounded-xl p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-400 dark:hover:bg-rose-950/50 dark:hover:text-rose-400 cursor-pointer"
-                  title="Delete Note"
+                  title="Delete Memo"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -1355,7 +1371,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                       ? 'bg-indigo-600 text-white animate-pulse'
                       : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-slate-800'
                   }`}
-                  title={isSpeakingNote ? 'Stop Reading' : 'Read Note Aloud (Hindi & English)'}
+                  title={isSpeakingNote ? 'Stop Reading' : 'Read Memo Aloud (Hindi & English)'}
                 >
                   <Volume2 className={`h-4 w-4 ${isSpeakingNote ? 'animate-bounce' : ''}`} />
                 </button>
@@ -1388,7 +1404,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   {viewingNote.tags.split(',').map(tag => (
                     <span
                       key={tag}
-                      className="rounded-lg bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400"
+                      className="rounded-lg bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400"
                     >
                       #{tag.trim()}
                     </span>
@@ -1439,13 +1455,13 @@ export const NotesView: React.FC<NotesViewProps> = ({
       {/* CONFIRM DELETE MODAL */}
       <ConfirmModal
         isOpen={Boolean(noteToDelete)}
-        title="Delete Note?"
+        title="Delete Memo?"
         message={
           noteToDelete
             ? `Are you sure you want to delete "${noteToDelete.title}"?`
             : ''
         }
-        confirmText="Delete Note"
+        confirmText="Delete Memo"
         cancelText="Cancel"
         isDanger={true}
         onConfirm={handleConfirmDelete}

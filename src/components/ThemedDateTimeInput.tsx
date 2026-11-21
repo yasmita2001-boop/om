@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
+import { adToBs, type BsDateResult } from '../lib/nepaliDate';
 
 type DateTimeInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> & {
   type: 'date' | 'time';
@@ -114,7 +115,7 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
   }, [isDate, visibleMonth]);
 
   const yearOptions = useMemo(
-    () => Array.from({ length: 26 }, (_, index) => 2020 + index),
+    () => Array.from({ length: 201 }, (_, index) => 1900 + index),
     []
   );
 
@@ -122,6 +123,18 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
     () => Array.from({ length: 12 }, (_, index) => new Date(2000, index, 1).toLocaleDateString(undefined, { month: 'long' })),
     []
   );
+
+  // BS of the selected date (only when actually selected)
+  const bsDate = useMemo<BsDateResult | null>(() => {
+    if (!isDate || !currentValue) return null;
+    try { return adToBs(currentValue); } catch { return null; }
+  }, [isDate, currentValue]);
+
+  // BS of today — shown when no date is selected
+  const bsToday = useMemo<BsDateResult | null>(() => {
+    if (!isDate) return null;
+    try { return adToBs(formatDate(new Date())); } catch { return null; }
+  }, [isDate]);
 
   const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -316,7 +329,10 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
                       aria-expanded={openMenu === 'month'}
                       onClick={() => setOpenMenu(menu => (menu === 'month' ? null : 'month'))}
                     >
-                      <span>{monthOptions[visibleMonth.getMonth()]}</span>
+                      <span>
+                        {monthOptions[visibleMonth.getMonth()]}
+                        {bsToday && <span style={{ fontSize: '10px', opacity: 0.65, marginLeft: '4px', fontWeight: 500 }}>· {bsToday.monthNameNe}</span>}
+                      </span>
                       <ChevronDown size={14} aria-hidden="true" />
                     </button>
                     {openMenu === 'month' && (
@@ -363,6 +379,7 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
                 {calendarDays.map(date => {
                   const dateValue = formatDate(date);
                   const isSelected = dateValue === currentValue;
+                  const isToday = dateValue === formatDate(new Date());
                   const isCurrentMonth = date.getMonth() === visibleMonth.getMonth();
                   const disabled = !isWithinBounds(date);
                   return (
@@ -370,11 +387,12 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
                       key={dateValue}
                       type="button"
                       role="gridcell"
-                      aria-label={date.toLocaleDateString()}
+                      aria-label={`${date.toLocaleDateString()}${isToday ? ' (today)' : ''}`}
                       data-date={dateValue}
                       aria-pressed={isSelected}
+                      aria-current={isToday ? 'date' : undefined}
                       disabled={disabled}
-                      className={`om-datetime-day${isSelected ? ' is-selected' : ''}${!isCurrentMonth ? ' is-outside' : ''}`}
+                      className={`om-datetime-day${isSelected ? ' is-selected' : ''}${isToday && !isSelected ? ' is-today' : ''}${!isCurrentMonth ? ' is-outside' : ''}`}
                       onClick={() => {
                         emitValue(dateValue);
                         setIsOpen(false);
@@ -385,6 +403,23 @@ export const ThemedDateTimeInput: React.FC<DateTimeInputProps> = ({
                   );
                 })}
               </div>
+              {(bsDate || bsToday) && (
+                <div className="om-datetime-bs-badge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '5px 8px', fontSize: '11px', color: 'var(--ink-muted, #6b7280)', borderTop: '1px solid var(--line, #e5e7eb)', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: '9px', padding: '1px 5px', borderRadius: '4px', background: 'var(--accent-subtle, rgba(99,102,241,0.1))', color: 'var(--accent, #6366f1)', letterSpacing: '0.04em' }}>BS</span>
+                  {bsDate ? (
+                    <>
+                      <span style={{ fontWeight: 600 }}>{bsDate.formattedNe}</span>
+                      <span style={{ opacity: 0.6 }}>({bsDate.formattedEn})</span>
+                    </>
+                  ) : bsToday ? (
+                    <>
+                      <span style={{ fontSize: '9px', opacity: 0.7 }}>आज</span>
+                      <span style={{ fontWeight: 600 }}>{bsToday.formattedNe}</span>
+                      <span style={{ opacity: 0.6 }}>({bsToday.formattedEn})</span>
+                    </>
+                  ) : null}
+                </div>
+              )}
               <div className="om-datetime-footer">
                 <button
                   type="button"

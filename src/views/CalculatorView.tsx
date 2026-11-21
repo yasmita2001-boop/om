@@ -9,8 +9,7 @@ import {
   Trash2,
   Sparkles,
   Info,
-  Sliders,
-  ChevronDown
+  Sliders
 } from 'lucide-react';
 import {
   CALCULATOR_CATALOG,
@@ -55,6 +54,8 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
   const [unitTo, setUnitTo] = useState<string>('');
   const [result, setResult] = useState<string>('—');
   const [copied, setCopied] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false);
 
   const currentConfig = useMemo(() => getToolConfig(selectedTool), [selectedTool]);
   const formatResultForDisplay = (value: string, tool = selectedTool) =>
@@ -109,7 +110,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
       await storage.put('calcHistory', historyItem);
       onRefresh();
     } catch (err: any) {
-      setResult(`Error: ${err.message || 'Calculation failed'}`);
+      setResult('Could not calculate — check your inputs');
     }
   };
 
@@ -154,19 +155,26 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
   };
 
   const handleClearHistory = async () => {
-    const all = await storage.getAll<CalcHistoryItem>('calcHistory');
-    for (const h of all) {
-      await storage.delete('calcHistory', h.id);
+    if (!confirmClearHistory) {
+      setConfirmClearHistory(true);
+      return;
     }
+    const all = await storage.getAll<CalcHistoryItem>('calcHistory');
+    await Promise.all(all.map(h => storage.delete('calcHistory', h.id)));
+    setConfirmClearHistory(false);
+    setShowAllHistory(false);
     onSuccess('Calculation history cleared');
     onRefresh();
   };
 
   const handleCopyResult = () => {
-    navigator.clipboard.writeText(formatResultForDisplay(result));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-    onSuccess('Result copied to clipboard');
+    navigator.clipboard.writeText(formatResultForDisplay(result)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+      onSuccess('Result copied to clipboard');
+    }).catch(() => {
+      onSuccess('Copy failed — clipboard unavailable');
+    });
   };
 
   const handleSwapUnits = () => {
@@ -278,7 +286,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                   <span className="pointer-events-none truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
                     {selectedCategory} ({categoryTools.length})
                   </span>
-                  <ChevronDown className="pointer-events-none h-4 w-4 shrink-0 text-slate-500" />
+                  <span aria-hidden="true" className="app-dropdown-triangle pointer-events-none shrink-0" />
                   <select
                     aria-label="Calculator category"
                     value={selectedCategory}
@@ -300,7 +308,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                   <span className="pointer-events-none truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
                     {selectedTool}
                   </span>
-                  <ChevronDown className="pointer-events-none h-4 w-4 shrink-0 text-slate-500" />
+                  <span aria-hidden="true" className="app-dropdown-triangle pointer-events-none shrink-0" />
                   <select
                     aria-label="Calculator tool"
                     value={selectedTool}
@@ -344,7 +352,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
             )}
 
             {currentConfig.formula && (
-              <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+              <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
                 <Info className="h-3 w-3" />
                 <span>{currentConfig.formula}</span>
               </div>
@@ -360,7 +368,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                 />
               ) : (
                 /* Dynamic Input Forms for All Tools */
-                <div className="space-y-4">
+                <div className="space-y-4" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCalculate(); } }}>
                   <div className={`grid gap-3 ${currentConfig.fields.length >= 3 ? 'grid-cols-1 sm:grid-cols-3' : currentConfig.fields.length === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                     {currentConfig.fields.map((field, idx) => {
                       const fieldKey = `f${idx + 1}`;
@@ -368,7 +376,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
 
                       return (
                         <div key={fieldKey}>
-                          <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                             {currentConfig.unitType === 'currency'
                               ? field.label
                               : field.label.replace(/NPR/g, getCurrencySymbol())}
@@ -407,7 +415,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                   {currentConfig.isConverter && (
                     <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center rounded-xl bg-slate-50 p-3 border border-slate-200 dark:bg-slate-800/40 dark:border-slate-800">
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                           Convert From
                         </label>
                         <select
@@ -431,7 +439,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                       </div>
 
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                           Convert To
                         </label>
                         <select
@@ -461,14 +469,14 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
               {(!useKeypad || (selectedTool !== 'Basic' && selectedTool !== 'Scientific')) && (
                 <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
+                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
                       Computed Output
                     </span>
                     <button
                       type="button"
                       onClick={handleCopyResult}
                       disabled={result === '—'}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-indigo-600 disabled:opacity-30 dark:text-slate-300 dark:hover:text-indigo-400 cursor-pointer"
+                      className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-indigo-600 disabled:opacity-30 dark:text-slate-300 dark:hover:text-indigo-400 cursor-pointer"
                     >
                       {copied ? (
                         <>
@@ -493,7 +501,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
         </div>
 
         {/* Calculation History & Favorites (4 cols) */}
-        {history.length > 0 && <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-4 space-y-6">
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
@@ -502,55 +510,105 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
                   Calculation History
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={handleClearHistory}
-                className="flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-400"
-                title="Clear history"
-              >
-                <Trash2 className="h-3 w-3" />
-                <span>Clear</span>
-              </button>
+              {history.length > 0 && (
+                confirmClearHistory ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Clear all?</span>
+                    <button
+                      type="button"
+                      onClick={handleClearHistory}
+                      className="text-xs font-semibold text-red-600 hover:text-red-700 dark:text-red-400 cursor-pointer"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearHistory(false)}
+                      className="text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 cursor-pointer"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleClearHistory}
+                    className="flex items-center gap-1 text-xs font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-400 cursor-pointer"
+                    title="Clear history"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>Clear</span>
+                  </button>
+                )
+              )}
             </div>
 
-            <div className="mt-3 space-y-2.5 max-h-96 overflow-y-auto">
-              {history
-                .slice()
-                .reverse()
-                .slice(0, 15)
-                .map(h => (
-                    <div
-                      key={h.id}
-                      className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-indigo-800"
-                    >
-                      <div className="flex items-center justify-between font-semibold text-slate-800 dark:text-slate-200">
-                        <span>{h.tool}</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-slate-400">
-                            {new Date(h.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          <button
-                            type="button"
+            {history.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-400 dark:text-slate-500">
+                No calculations yet
+              </div>
+            ) : (
+              <>
+                <div className="mt-3 space-y-2.5 max-h-96 overflow-y-auto">
+                  {history
+                    .slice()
+                    .reverse()
+                    .slice(0, showAllHistory ? undefined : 15)
+                    .map(h => {
+                      const date = new Date(h.createdAt);
+                      const now = new Date();
+                      const isToday = date.toDateString() === now.toDateString();
+                      const yesterday = new Date(now);
+                      yesterday.setDate(yesterday.getDate() - 1);
+                      const isYesterday = date.toDateString() === yesterday.toDateString();
+                      const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      const dateLabel = isToday ? time : isYesterday ? `Yesterday ${time}` : `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+
+                      return (
+                        <div
+                          key={h.id}
+                          className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-indigo-800"
+                        >
+                          <div className="flex items-center justify-between font-semibold text-slate-800 dark:text-slate-200">
+                            <span>{h.tool}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-slate-400">
+                                {dateLabel}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRecallToKeypad(h.result, h.tool)}
+                                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded"
+                                title="Recall into Calculator"
+                              >
+                                Recall ↩
+                              </button>
+                            </div>
+                          </div>
+                          <div
                             onClick={() => handleRecallToKeypad(h.result, h.tool)}
-                            className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded"
-                            title="Recall into Calculator"
+                            className="mt-1 font-mono text-xs text-indigo-600 dark:text-indigo-400 break-words font-medium cursor-pointer hover:underline"
+                            title="Click to recall into Calculator"
                           >
-                            Recall ↩
-                          </button>
+                            {formatResultForDisplay(h.result, h.tool)}
+                          </div>
                         </div>
-                      </div>
-                      <div
-                        onClick={() => handleRecallToKeypad(h.result, h.tool)}
-                        className="mt-1 font-mono text-[11px] text-indigo-600 dark:text-indigo-400 break-words font-medium cursor-pointer hover:underline"
-                        title="Click to recall into Calculator"
-                      >
-                        {formatResultForDisplay(h.result, h.tool)}
-                      </div>
-                    </div>
-                ))}
-            </div>
+                      );
+                    })}
+                </div>
+                {history.length > 15 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllHistory(prev => !prev)}
+                    className="mt-2 w-full text-center text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer py-1"
+                  >
+                    {showAllHistory ? 'Show Less' : `Show All (${history.length})`}
+                  </button>
+                )}
+              </>
+            )}
           </div>
-        </div>}
+        </div>
       </div>
     </div>
   );

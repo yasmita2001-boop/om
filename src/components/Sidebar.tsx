@@ -1,12 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { OmLogoMark } from './OmLogoMark';
-import {
-  LayoutDashboard, CheckSquare, Target, FileText,
-  DollarSign, Heart,
-  Folder, Settings, X,
-  BookOpen, Calculator, Repeat, Timer
-} from 'lucide-react';
+import { X } from 'lucide-react';
 import { NavModule } from '../types';
+import { PRIMARY_NAV, resolveSelectedNav } from '../lib/navConfig';
 
 interface SidebarProps {
   activeModule: NavModule;
@@ -80,25 +76,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [isMobileViewport, isOpenMobile]);
 
-  const navItems: { id: NavModule; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
-    { id: 'goals', label: 'Goals', icon: <Target className="h-4 w-4" /> },
-    { id: 'tasks', label: 'Tasks', icon: <CheckSquare className="h-4 w-4" />, badge: openTasksCount },
-    { id: 'notes', label: 'Memo', icon: <FileText className="h-4 w-4" /> },
-    { id: 'finance', label: 'Finance', icon: <DollarSign className="h-4 w-4" /> },
-    { id: 'health', label: 'Life', icon: <Heart className="h-4 w-4" /> },
-    { id: 'things', label: 'Vault', icon: <Folder className="h-4 w-4" /> },
-    { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" />, badge: remindersCount }
-  ];
-
-  // Tools that previously had no global entry point and were buried inside
-  // other modules (Journal in Memo, Routines/Focus in Tasks, Calculator in Memo).
-  const toolNavItems: { id: NavModule; label: string; icon: React.ReactNode }[] = [
-    { id: 'journal', label: 'Journal', icon: <BookOpen className="h-4 w-4" /> },
-    { id: 'routine', label: 'Routines', icon: <Repeat className="h-4 w-4" /> },
-    { id: 'focus', label: 'Focus', icon: <Timer className="h-4 w-4" /> },
-    { id: 'calculator', label: 'Calculator', icon: <Calculator className="h-4 w-4" /> }
-  ];
+  const navItems = PRIMARY_NAV.map(item => ({
+    ...item,
+    icon: <item.Icon className="h-4 w-4" />,
+    badge: item.badgeKey === 'tasks'
+      ? openTasksCount
+      : item.badgeKey === 'reminders'
+        ? remindersCount
+        : undefined
+  }));
+  const selectedNavModule = resolveSelectedNav(activeModule);
 
   const handleSelect = (id: NavModule) => {
     onNavigate(id);
@@ -154,7 +141,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex-1 overflow-y-auto px-3 py-3">
           <nav aria-label="Main navigation" className="space-y-0.5">
             {navItems.map(item => {
-                    const isActive = activeModule === item.id;
+                    const isActive = selectedNavModule === item.id;
                     return (
                       <button
                         key={item.id}
@@ -195,36 +182,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     );
                   })}
 
-            <div className="pt-3">
-              <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Tools
-              </p>
-              {toolNavItems.map(item => {
-                const isActive = activeModule === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleSelect(item.id)}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`group flex w-full items-center px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                      isActive
-                        ? 'text-indigo-700 dark:text-indigo-300 [&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300'
-                        : 'text-indigo-800 hover:text-indigo-950 dark:text-indigo-300 dark:hover:text-indigo-200'
-                    }`}
-                  >
-                    <span className={`shrink-0 transition-colors ${
-                      isActive
-                        ? 'text-indigo-700 dark:text-indigo-300'
-                        : 'text-indigo-800 group-hover:text-indigo-950 dark:text-indigo-300 dark:group-hover:text-indigo-200'
-                    }`}>
-                      {item.icon}
-                    </span>
-                    <span className="ml-2.5 truncate">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
           </nav>
         </div>
       </aside>

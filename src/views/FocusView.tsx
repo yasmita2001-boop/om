@@ -1380,7 +1380,7 @@ export const FocusView: React.FC<FocusViewProps> = ({
             {/* Custom Ringtone Upload Card ("khud se ringtone rakhne ka feature") */}
             <div className="focus-flat-card rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-card dark:border-slate-800/80 dark:bg-slate-900 space-y-4">
               <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-950 dark:text-purple-400">
+                <div className="theme-icon-chip flex h-9 w-9 items-center justify-center rounded-xl">
                   <Upload className="h-4 w-4" />
                 </div>
                 <div>

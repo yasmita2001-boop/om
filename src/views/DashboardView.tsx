@@ -330,18 +330,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     );
   };
 
-  const moduleShortcuts: { module: NavModule; icon: React.FC<{ className?: string }>; label: string; bg: string; fg: string }[] = [
-    { module: 'notes', icon: BookOpen, label: 'Notes', bg: 'bg-sky-50 dark:bg-sky-950/60', fg: 'text-sky-600 dark:text-sky-400' },
-    { module: 'journal', icon: BookHeart, label: 'Journal', bg: 'bg-pink-50 dark:bg-pink-950/60', fg: 'text-pink-600 dark:text-pink-400' },
-    { module: 'focus', icon: Timer, label: 'Capture', bg: 'bg-orange-50 dark:bg-orange-950/60', fg: 'text-orange-600 dark:text-orange-400' },
-    { module: 'health', icon: Heart, label: 'Life', bg: 'bg-rose-50 dark:bg-rose-950/60', fg: 'text-rose-600 dark:text-rose-400' },
-    { module: 'things', icon: Archive, label: 'Vault', bg: 'bg-stone-50 dark:bg-stone-950/60', fg: 'text-stone-600 dark:text-stone-400' },
+  const moduleShortcuts: { module: NavModule; icon: React.FC<{ className?: string }>; label: string }[] = [
+    { module: 'notes', icon: BookOpen, label: 'Notes' },
+    { module: 'journal', icon: BookHeart, label: 'Journal' },
+    { module: 'focus', icon: Timer, label: 'Capture' },
+    { module: 'health', icon: Heart, label: 'Life' },
+    { module: 'things', icon: Archive, label: 'Vault' },
   ];
 
   const quickActionShortcuts = [
-    { label: 'Set a goal', type: 'goal' as const, icon: Target, bg: 'bg-emerald-50 dark:bg-emerald-950/60', fg: 'text-emerald-600 dark:text-emerald-400' },
-    { label: 'Add a task', type: 'task' as const, icon: CheckSquare, bg: 'bg-amber-50 dark:bg-amber-950/60', fg: 'text-amber-600 dark:text-amber-400' },
-    { label: 'Track finances', type: 'finance' as const, icon: DollarSign, bg: 'bg-teal-50 dark:bg-teal-950/60', fg: 'text-teal-600 dark:text-teal-400' },
+    { label: 'Set a goal', type: 'goal' as const, icon: Target },
+    { label: 'Add a task', type: 'task' as const, icon: CheckSquare },
+    { label: 'Track finances', type: 'finance' as const, icon: DollarSign },
   ];
 
   const renderModuleShortcut = (s: typeof moduleShortcuts[number]) => (
@@ -351,8 +351,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       onClick={() => s.module === 'focus' ? onOpenQuickCapture('focus') : onNavigate(s.module)}
       className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200/60 bg-white p-3 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 dark:border-slate-800/60 dark:bg-slate-900 cursor-pointer"
     >
-      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${s.bg}`}>
-        <s.icon className={`h-4 w-4 ${s.fg}`} />
+      <div className="theme-icon-chip flex h-8 w-8 items-center justify-center rounded-lg">
+        <s.icon className="h-4 w-4" />
       </div>
       <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{s.label}</span>
     </button>
@@ -392,8 +392,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             }}
             className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200/60 bg-white p-3 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 dark:border-slate-800/60 dark:bg-slate-900 cursor-pointer"
           >
-            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${item.bg}`}>
-              <item.icon className={`h-4 w-4 ${item.fg}`} />
+            <div className="theme-icon-chip flex h-8 w-8 items-center justify-center rounded-lg">
+              <item.icon className="h-4 w-4" />
             </div>
             <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{item.label}</span>
           </button>

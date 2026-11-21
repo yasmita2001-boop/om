@@ -1239,7 +1239,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     onSuccess('+250ml Water logged');
                     onRefresh();
                   }}
-                  className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-sky-200/70 bg-sky-50/70 px-3 py-2 text-xs font-semibold text-sky-800 transition-colors hover:bg-sky-100 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-200 dark:hover:bg-sky-950/60"
+                  className="theme-tint-button flex min-h-10 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
                 >
                   <><ThemeIcon name="water" className="h-4 w-4" /> +250ml Glass</>
                 </button>
@@ -1256,7 +1256,7 @@ export const HealthView: React.FC<HealthViewProps> = ({
                     onSuccess('+500ml Bottle logged');
                     onRefresh();
                   }}
-                  className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-sky-200/70 bg-sky-50/70 px-3 py-2 text-xs font-semibold text-sky-800 transition-colors hover:bg-sky-100 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-200 dark:hover:bg-sky-950/60"
+                  className="theme-tint-button flex min-h-10 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
                 >
                   <><ThemeIcon name="bottle" className="h-4 w-4" /> +500ml Bottle</>
                 </button>

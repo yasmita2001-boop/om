@@ -6919,3 +6919,35 @@ html .sanctuary-shell[data-environment="off"]::after {
 html .sanctuary-shell[data-environment="on"]::before {
   transition: opacity 0.5s ease, filter 0.5s ease;
 }
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) .theme-icon-chip {
+  color: var(--color-brand, #b88648);
+  background: color-mix(in srgb, var(--color-brand, #b88648) 14%, var(--om-card, #fff));
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) .theme-tint-panel {
+  color: var(--om-ink, #1e293b);
+  border: 1px solid color-mix(in srgb, var(--color-brand, #b88648) 26%, var(--om-line, #d1d5db));
+  background: color-mix(in srgb, var(--color-brand, #b88648) 9%, var(--om-card, #fff));
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) .theme-tint-panel .theme-tint-label {
+  color: var(--color-brand, #b88648);
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) .theme-tint-button {
+  color: var(--om-ink, #1e293b);
+  border-color: color-mix(in srgb, var(--color-brand, #b88648) 30%, var(--om-line, #d1d5db));
+  background: color-mix(in srgb, var(--color-brand, #b88648) 10%, var(--om-card, #fff));
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) .theme-tint-button:hover {
+  background: color-mix(in srgb, var(--color-brand, #b88648) 18%, var(--om-card, #fff));
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) .recurrence-selector input[type="checkbox"] {
+  accent-color: var(--color-brand, #b88648);
+}
+
+.sanctuary-shell:not([data-appearance-preset="private-cosmos"]) .recurrence-selector button[class*="bg-blue-600"] {
+  background-color: var(--color-brand, #b88648);
+}

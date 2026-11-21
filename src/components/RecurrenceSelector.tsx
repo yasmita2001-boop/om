@@ -40,7 +40,7 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
   const isValid = isValidRecurrenceConfig(config);
 
   return (
-    <div className="space-y-3">
+    <div className="recurrence-selector space-y-3">
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
           <input type="checkbox" checked={isEnabled} onChange={e => handleToggle(e.target.checked)} className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-slate-600" />
@@ -151,17 +151,17 @@ export function RecurrenceSelector({ value, onChange, startDate }: RecurrenceSel
             </div>
           )}
 
-          <div className="rounded-lg bg-blue-50 p-2.5 dark:bg-blue-900/20">
-            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+          <div className="theme-tint-panel rounded-lg p-2.5">
+            <div className="theme-tint-label mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold">
               <Calendar className="h-3 w-3" />
               Schedule Preview
             </div>
-            <p className="text-[11px] font-medium text-blue-900 dark:text-blue-200">{getRecurrenceDescription(config)}</p>
+            <p className="text-[11px] font-medium">{getRecurrenceDescription(config)}</p>
             {upcomingDates.length > 0 && (
               <div className="mt-2 space-y-0.5">
-                <p className="text-[10px] font-medium text-blue-600 dark:text-blue-400">Next occurrences:</p>
+                <p className="theme-tint-label text-[10px] font-medium">Next occurrences:</p>
                 {upcomingDates.map((date, i) => (
-                  <p key={i} className="text-[10px] text-blue-700 dark:text-blue-300">
+                  <p key={i} className="text-[10px]">
                     {new Date(date + 'T00:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
                   </p>
                 ))}

@@ -1,7 +1,7 @@
 import sanctuaryEnvironmentUrl from '../assets/sanctuary-environment.svg';
 import { applyAccent } from './accentTheme';
 
-export type AppearanceColorMode = 'light' | 'dark' | 'system';
+export type AppearanceColorMode = 'light' | 'dark' | 'system' | 'schedule';
 
 export interface AppearancePreferences {
   presetId: string;
@@ -26,6 +26,8 @@ export interface AppearancePreferences {
   zoom: number;
   overlay: number;
   blur: number;
+  scheduleLightTime: string;
+  scheduleNightTime: string;
 }
 
 export const APPEARANCE_PRESETS = [
@@ -57,23 +59,33 @@ export const APPEARANCE_PRESETS = [
   {
     id: 'comfort-light',
     name: 'Eye Comfort Light',
-    description: 'Soft, low-distraction light',
-    accentColor: '#8b7557',
+    description: 'Cool, muted light with softer surfaces',
+    accentColor: '#667f98',
     colorMode: 'light' as const,
-    backgroundColor: '#eeeae1',
-    backgroundImage: 'linear-gradient(135deg, #f1eee6 0%, #ece9e0 55%, #e8e5dc 100%)',
-    preview: 'linear-gradient(135deg, #f1eee6, #e8e5dc)'
+    backgroundColor: '#dce4ec',
+    backgroundImage: 'linear-gradient(135deg, #e2e8ee 0%, #dce4ec 55%, #d5dfe8 100%)',
+    preview: 'linear-gradient(135deg, #e2e8ee, #d5dfe8)'
   },
   {
     id: 'comfort-dark',
     name: 'Eye Comfort Dark',
-    description: 'Soft, low-glare dark',
-    accentColor: '#a99a78',
+    description: 'Soft peacock blue, low-glare dark',
+    accentColor: '#8fcac7',
     colorMode: 'dark' as const,
-    backgroundColor: '#191b20',
-    backgroundImage: 'linear-gradient(135deg, #22252b 0%, #1b1e23 55%, #17191e 100%)',
-    preview: 'linear-gradient(135deg, #22252b, #17191e)'
-  }
+    backgroundColor: '#111a35',
+    backgroundImage: 'linear-gradient(135deg, #1a2a4d 0%, #111a35 56%, #0b132b 100%)',
+    preview: 'linear-gradient(135deg, #1a2a4d, #0b132b)'
+  },
+  {
+    id: 'minimal',
+    name: 'Minimal',
+    description: 'Flat neutral gray, distraction-free',
+    accentColor: '#718398',
+    colorMode: 'light' as const,
+    backgroundColor: '#eff0f1',
+    backgroundImage: 'linear-gradient(180deg, #f3f4f5 0%, #eceeef 100%)',
+    preview: 'linear-gradient(180deg, #f3f4f5, #eceeef)'
+  },
 ] as const;
 
 export const DEFAULT_APPEARANCE: AppearancePreferences = {
@@ -98,8 +110,12 @@ export const DEFAULT_APPEARANCE: AppearancePreferences = {
   positionY: 50,
   zoom: 100,
   overlay: 8,
-  blur: 0
+  blur: 0,
+  scheduleLightTime: '07:00',
+  scheduleNightTime: '19:00'
 };
+
+const REMOVED_PRESET_IDS = new Set(['ocean', 'forest', 'midnight', 'sunrise', 'high-contrast']);
 
 const HEX_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 const IMAGE_DATA_PATTERN = /^data:image\/(?:jpeg|webp|png);base64,[a-z0-9+/]+=*$/i;
@@ -152,13 +168,21 @@ const clamp = (value: unknown, min: number, max: number, fallback: number): numb
 };
 
 export function normalizeAppearance(value?: Partial<AppearancePreferences> | null): AppearancePreferences {
+  if (value?.presetId && REMOVED_PRESET_IDS.has(value.presetId)) {
+    value = { ...value, presetId: DEFAULT_APPEARANCE.presetId, accentColor: DEFAULT_APPEARANCE.accentColor };
+  }
+  if (value?.presetId === 'comfort-light' && ['#8b7557', '#526b85'].includes(value.accentColor?.toLowerCase() || '')) {
+    value = { ...value, accentColor: '#667f98' };
+  } else if (value?.presetId === 'comfort-dark' && ['#a99a78', '#9db4cc', '#a9bdcf', '#a7b8c9'].includes(value.accentColor?.toLowerCase() || '')) {
+    value = { ...value, accentColor: '#8fcac7' };
+  }
   if (value && isLegacyDefaultAppearance(value)) value = DEFAULT_APPEARANCE;
   const selectedPreset = APPEARANCE_PRESETS.find(item => item.id === value?.presetId);
   const presetId = value?.presetId === 'custom'
     ? 'custom'
     : selectedPreset?.id || DEFAULT_APPEARANCE.presetId;
   const preset = selectedPreset || APPEARANCE_PRESETS.find(item => item.id === DEFAULT_APPEARANCE.presetId)!;
-  const colorMode = value?.colorMode === 'light' || value?.colorMode === 'dark' || value?.colorMode === 'system'
+  const colorMode = value?.colorMode === 'light' || value?.colorMode === 'dark' || value?.colorMode === 'system' || value?.colorMode === 'schedule'
     ? value.colorMode
     : DEFAULT_APPEARANCE.colorMode;
   const rawAccent = typeof value?.accentColor === 'string' ? value.accentColor.trim() : '';
@@ -229,13 +253,33 @@ export function normalizeAppearance(value?: Partial<AppearancePreferences> | nul
     positionY: clamp(value?.positionY, 0, 100, DEFAULT_APPEARANCE.positionY),
     zoom: clamp(value?.zoom, 100, 150, DEFAULT_APPEARANCE.zoom),
     overlay: clamp(value?.overlay, 0, 70, DEFAULT_APPEARANCE.overlay),
-    blur: clamp(value?.blur, 0, 12, DEFAULT_APPEARANCE.blur)
+    blur: clamp(value?.blur, 0, 12, DEFAULT_APPEARANCE.blur),
+    scheduleLightTime: /^\d{2}:\d{2}$/.test(value?.scheduleLightTime || '') ? value!.scheduleLightTime! : DEFAULT_APPEARANCE.scheduleLightTime,
+    scheduleNightTime: /^\d{2}:\d{2}$/.test(value?.scheduleNightTime || '') ? value!.scheduleNightTime! : DEFAULT_APPEARANCE.scheduleNightTime
   };
 }
 
-export function getEffectiveColorMode(mode: AppearanceColorMode): 'light' | 'dark' {
-  if (mode !== 'system') return mode;
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+export function getEffectiveColorMode(
+  mode: AppearanceColorMode,
+  scheduleLightTime = '07:00',
+  scheduleNightTime = '19:00'
+): 'light' | 'dark' {
+  if (mode === 'system') {
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  if (mode === 'schedule') {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const [lH, lM] = scheduleLightTime.split(':').map(Number);
+    const [nH, nM] = scheduleNightTime.split(':').map(Number);
+    const lightMinutes = (lH || 0) * 60 + (lM || 0);
+    const nightMinutes = (nH || 0) * 60 + (nM || 0);
+    if (lightMinutes < nightMinutes) {
+      return currentMinutes >= lightMinutes && currentMinutes < nightMinutes ? 'light' : 'dark';
+    }
+    return currentMinutes >= lightMinutes || currentMinutes < nightMinutes ? 'light' : 'dark';
+  }
+  return mode;
 }
 
 export function applyAppearance(value: Partial<AppearancePreferences>): AppearancePreferences {
@@ -246,7 +290,7 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
     : appearance.backgroundId;
   const preset = APPEARANCE_PRESETS.find(item => item.id === wallpaperPresetId) || APPEARANCE_PRESETS[0];
   const coordinatedPreset = APPEARANCE_PRESETS.find(item => item.id === appearance.presetId) || APPEARANCE_PRESETS[0];
-  const effectiveColorMode = getEffectiveColorMode(appearance.colorMode);
+  const effectiveColorMode = getEffectiveColorMode(appearance.colorMode, appearance.scheduleLightTime, appearance.scheduleNightTime);
   const isEyeComfort = appearance.presetId === 'comfort-light' || appearance.presetId === 'comfort-dark';
   const isTransparentBackground = appearance.transparentBackground && appearance.backgroundId === 'custom';
 
@@ -254,7 +298,11 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
   root.classList.toggle('dark', effectiveColorMode === 'dark');
   root.setAttribute('data-lifeos-mode', effectiveColorMode);
   root.dataset.wallpaperTransparent = String(isTransparentBackground);
-  root.style.backgroundColor = isTransparentBackground ? 'transparent' : effectiveColorMode === 'dark' ? '#0B0F19' : '#F8FAFC';
+  root.style.backgroundColor = isTransparentBackground
+    ? 'transparent'
+    : isEyeComfort
+      ? effectiveColorMode === 'dark' ? '#111a35' : '#dce4ec'
+      : effectiveColorMode === 'dark' ? '#0B0F19' : '#F8FAFC';
   const customImageUrl = appearance.backgroundId === 'custom'
     && !appearance.backgroundIsVideo
     ? backgroundObjectUrls.get(appearance.backgroundImage)
@@ -322,6 +370,33 @@ export function applyAppearance(value: Partial<AppearancePreferences>): Appearan
     root.style.removeProperty('--om-line');
     root.style.removeProperty('--om-ink-soft');
     root.style.removeProperty('--om-ink-muted');
+  }
+  if (isEyeComfort) {
+    const comfortTokens = effectiveColorMode === 'dark'
+      ? {
+          '--om-card-base': '#1b2845',
+          '--om-card-soft-base': '#22304d',
+          '--om-shell-surface': '#111a35',
+          '--om-shell-surface-soft': '#1b2845',
+          '--om-ink': '#e0e8f3',
+          '--om-ink-soft': '#c1cee0',
+          '--om-ink-muted': '#aabbd2',
+          '--om-line': 'rgb(143 202 199 / 22%)'
+        }
+      : {
+          '--om-card-base': '#e3e9ef',
+          '--om-card-soft-base': '#dce4ec',
+          '--om-shell-surface': '#dce4ec',
+          '--om-shell-surface-soft': '#d5dfe8',
+          '--om-ink': '#26394b',
+          '--om-ink-soft': '#52667a',
+          '--om-ink-muted': '#6a7d90',
+          '--om-line': 'rgb(102 127 152 / 22%)'
+        };
+    Object.entries(comfortTokens).forEach(([name, token]) => root.style.setProperty(name, token));
+  } else if (appearance.presetId !== 'custom') {
+    ['--om-card-base', '--om-card-soft-base', '--om-shell-surface', '--om-shell-surface-soft', '--om-ink', '--om-ink-soft', '--om-ink-muted', '--om-line']
+      .forEach(name => root.style.removeProperty(name));
   }
   root.style.setProperty('--om-wallpaper-position', `${appearance.positionX}% ${appearance.positionY}%`);
   root.style.setProperty('--om-wallpaper-zoom', String(appearance.zoom / 100));
@@ -506,4 +581,31 @@ export async function restoreBackgroundAsset(assetId: string): Promise<void> {
 
   if (!image) throw new Error('The saved background media is no longer available on this device.');
   backgroundObjectUrls.set(assetId, URL.createObjectURL(image));
+}
+
+let scheduleTimerId: ReturnType<typeof setInterval> | null = null;
+let lastScheduleMode: 'light' | 'dark' | null = null;
+
+export function startScheduleWatcher(): () => void {
+  stopScheduleWatcher();
+  const tick = () => {
+    const prefs = readSavedAppearance();
+    if (prefs.colorMode !== 'schedule') return;
+    const effective = getEffectiveColorMode('schedule', prefs.scheduleLightTime, prefs.scheduleNightTime);
+    if (lastScheduleMode !== null && effective !== lastScheduleMode) {
+      applyAppearance(prefs);
+    }
+    lastScheduleMode = effective;
+  };
+  tick();
+  scheduleTimerId = setInterval(tick, 60_000);
+  return stopScheduleWatcher;
+}
+
+export function stopScheduleWatcher(): void {
+  if (scheduleTimerId !== null) {
+    clearInterval(scheduleTimerId);
+    scheduleTimerId = null;
+  }
+  lastScheduleMode = null;
 }

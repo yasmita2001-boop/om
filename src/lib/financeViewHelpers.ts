@@ -199,8 +199,9 @@ export const getFixedDepositValue = (plan: SavingsPlan, asOfDate = getLocalDateS
   const termDays = Math.max(1, (maturity - start) / 86_400_000);
   const elapsedDays = Math.min(termDays, Math.max(0, (asOf - start) / 86_400_000));
   const elapsedTermFraction = elapsedDays / termDays;
-  const termYears = termDays / 365.25;
-  const elapsedYears = termYears * elapsedTermFraction;
+  // ACT/365 day-count convention (financial standard for fixed deposits)
+  const termYears = termDays / 365;
+  const elapsedYears = elapsedDays / 365;
   if (plan.interestMethod === 'simple') {
     return {
       currentValue: principal * (1 + annualRate / 100 * elapsedYears),

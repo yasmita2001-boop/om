@@ -78,6 +78,43 @@ export interface GoogleDriveBackupInfo {
   recordCount?: number;
 }
 
+async function createDatedBackupCopy(accessToken: string, fileId: string): Promise<void> {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/copy`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: `om-lifeos-backup-${stamp}.omlifeos` })
+  });
+  if (!response.ok) throw new Error(`Drive backup version could not be created (${response.status}).`);
+}
+
+async function mergeRestoreData(entities: Record<string, any[]>, profileId: string) {
+  let addedCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+  const storesAffected = new Set<string>();
+  for (const storeName of ENTITY_STORES) {
+    const incoming = entities?.[storeName];
+    if (!Array.isArray(incoming) || incoming.length === 0) continue;
+    const local = await storage.getAll<any>(storeName, profileId);
+    const localById = new Map(local.map(item => [item.id, item]));
+    for (const item of incoming) {
+      if (!item?.id) { skippedCount++; continue; }
+      const existing = localById.get(item.id);
+      if (!existing) {
+        await storage.put(storeName, item);
+        addedCount++;
+        storesAffected.add(storeName);
+      } else if ((item.updatedAt || item.createdAt || 0) > (existing.updatedAt || existing.createdAt || 0)) {
+        await storage.put(storeName, { ...existing, ...item, profileId });
+        updatedCount++;
+        storesAffected.add(storeName);
+      } else skippedCount++;
+    }
+  }
+  return { addedCount, updatedCount, skippedCount, storesAffected: storesAffected.size };
+}
+
 const LOCAL_STORAGE_LAST_SYNC_KEY = 'om_gdrive_last_synced_at';
 const LOCAL_STORAGE_AUTO_SYNC_KEY = 'om_gdrive_auto_sync_enabled';
 const getProfileStorageKey = (key: string, profileId = storage.getActiveProfileId()) => `${key}:${profileId}`;
@@ -96,6 +133,71 @@ function setPendingBackupPurge(profileId: string, pending: boolean): void {
 // In-memory token cache (strictly memory-only as per security guidelines)
 let inMemoryAccessToken: string | null = null;
 let currentGoogleUser: GoogleUser | null = null;
+let tokenObtainedAt: number = 0;
+
+/** Max token age in ms before we consider it expired (50 min of 60 min lifetime). */
+const TOKEN_MAX_AGE_MS = 50 * 60 * 1000;
+
+/**
+ * Returns true if the in-memory access token is likely expired.
+ * Google OAuth access tokens last ~60 min; we use a 50-min safety window.
+ */
+export function isAccessTokenExpired(): boolean {
+  if (!inMemoryAccessToken || !tokenObtainedAt) return true;
+  return Date.now() - tokenObtainedAt > TOKEN_MAX_AGE_MS;
+}
+
+/**
+ * Attempt to refresh the access token by re-authenticating with the existing
+ * Firebase Auth session. If the user is still signed in, this uses
+ * reauthenticateWithPopup to get a fresh Google OAuth access token.
+ * Returns the new token or null if re-auth is required.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
+  try {
+    const { auth, GoogleAuthProvider, signInWithPopup } = await getFirebaseServices();
+    const user = auth.currentUser;
+    if (!user) return null;
+
+    const provider = new GoogleAuthProvider();
+    for (const scope of DRIVE_SCOPES) provider.addScope(scope);
+    // Use signInWithPopup with existing user's account hint for smoother re-auth
+    provider.setCustomParameters({ login_hint: user.email || '' });
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+
+    if (!credential?.accessToken) return null;
+
+    inMemoryAccessToken = credential.accessToken;
+    tokenObtainedAt = Date.now();
+    currentGoogleUser = {
+      email: result.user.email,
+      displayName: result.user.displayName,
+      photoURL: result.user.photoURL,
+      uid: result.user.uid
+    };
+    return inMemoryAccessToken;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get a valid access token, refreshing if expired.
+ * Returns the token or throws if re-authentication is required.
+ */
+export async function ensureFreshAccessToken(): Promise<string> {
+  if (inMemoryAccessToken && !isAccessTokenExpired()) {
+    return inMemoryAccessToken;
+  }
+  // Token is expired or missing — try to refresh
+  const fresh = await refreshAccessToken();
+  if (fresh) return fresh;
+  // Refresh failed — clear state and require full sign-in
+  inMemoryAccessToken = null;
+  tokenObtainedAt = 0;
+  throw new Error('Google Drive session expired. Please sign in again to continue syncing.');
+}
 
 /**
  * Sign in with Google Popup.
@@ -115,6 +217,7 @@ export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToke
 
     const accessToken: string = credential.accessToken;
     inMemoryAccessToken = accessToken;
+    tokenObtainedAt = Date.now();
     currentGoogleUser = {
       email: result.user.email,
       displayName: result.user.displayName,
@@ -145,6 +248,7 @@ export async function signOutGoogle(): Promise<void> {
   const { auth, signOut } = await getFirebaseServices();
   await signOut(auth);
   inMemoryAccessToken = null;
+  tokenObtainedAt = 0;
   currentGoogleUser = null;
 }
 
@@ -157,6 +261,7 @@ export function getGoogleAccessToken(): string | null {
 
 export function clearGoogleSession(): void {
   inMemoryAccessToken = null;
+  tokenObtainedAt = 0;
   currentGoogleUser = null;
 }
 
@@ -359,7 +464,7 @@ export async function buildCleanWorkspaceSnapshot(userEmail?: string | null, acc
   const payload = {
     app: 'Om-LifeOS',
     format: 'om-lifeos-universal-v1',
-    version: '4.8.4',
+    version: '5.0.0',
     schemaVersion: DB_VERSION,
     syncedAt: timestampIso,
     syncedBy: userEmail || 'google-user',
@@ -389,7 +494,11 @@ export async function buildCleanWorkspaceSnapshot(userEmail?: string | null, acc
 /**
  * Upload or Update backup snapshot to Google Drive.
  */
-export async function syncToGoogleDrive(accessToken: string, user?: GoogleUser | null): Promise<{
+export async function syncToGoogleDrive(
+  accessToken: string,
+  user?: GoogleUser | null,
+  onProgress?: (percent: number, stage: string) => void
+): Promise<{
   success: boolean;
   activeRecordsCount: number;
   purgedRecordsCount: number;
@@ -403,12 +512,14 @@ export async function syncToGoogleDrive(accessToken: string, user?: GoogleUser |
     if (storage.getActiveProfileId() !== expectedProfileId) {
       throw new Error('The active workspace does not belong to this Google account.');
     }
+    onProgress?.(10, 'preparing data');
     let deletedDriveBackupFiles = 0;
     if (getPendingBackupPurge(expectedProfileId)) {
       deletedDriveBackupFiles = await deleteAllDriveBackupFiles(accessToken);
     }
     const { payloadJson, totalActiveCount, purgedCount } = await buildCleanWorkspaceSnapshot(user.email, user.uid);
 
+    onProgress?.(30, 'uploading');
     const existingFile = await findDriveBackupFile(accessToken);
 
     const metadata = {
@@ -429,6 +540,18 @@ export async function syncToGoogleDrive(accessToken: string, user?: GoogleUser |
       'Content-Type: application/json\r\n\r\n' +
       payloadJson +
       closeDelimiter;
+
+    // --- Fix #8: Versioned backups — copy old backup with date suffix before overwriting ---
+    if (existingFile) {
+      try {
+        await createDatedBackupCopy(accessToken, existingFile.fileId);
+      } catch (err) {
+        console.warn('[GoogleDriveSync] Failed to create dated backup copy:', err);
+        // Non-fatal: proceed with overwrite even if copy fails
+      }
+    }
+
+    onProgress?.(50, 'uploading');
 
     let response: Response;
 
@@ -467,6 +590,7 @@ export async function syncToGoogleDrive(accessToken: string, user?: GoogleUser |
       throw new Error(`Google Drive API error (${response.status}): ${errText}`);
     }
 
+    onProgress?.(90, 'finalizing');
     const savedFile = await response.json();
     if (!savedFile.id || !savedFile.name) {
       throw new Error('Google Drive did not confirm creation of the clean backup.');
@@ -484,6 +608,8 @@ export async function syncToGoogleDrive(accessToken: string, user?: GoogleUser |
       recordCount: totalActiveCount
     };
 
+    onProgress?.(100, 'complete');
+
     return {
       success: true,
       activeRecordsCount: totalActiveCount,
@@ -493,6 +619,9 @@ export async function syncToGoogleDrive(accessToken: string, user?: GoogleUser |
     };
   } catch (err: any) {
     console.error('Error syncing to Google Drive:', err);
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      import('./offlineSyncQueue').then(m => m.queueSync()).catch(() => {});
+    }
     return {
       success: false,
       activeRecordsCount: 0,
@@ -530,22 +659,33 @@ export async function restoreFromGoogleDrive(
   accessToken: string,
   targetProfileId: string,
   targetProfileName: string,
-  user: GoogleUser
+  user: GoogleUser,
+  options?: {
+    merge?: boolean;
+    onProgress?: (percent: number, stage: string) => void;
+  }
 ): Promise<{
   success: boolean;
   restoredRecordCount: number;
   storesRestored: number;
+  mergedCount?: number;
+  skippedCount?: number;
   error?: string;
 }> {
+  const onProgress = options?.onProgress;
+  const merge = options?.merge ?? false;
+
   try {
     if (targetProfileId !== getGoogleWorkspaceProfileId(user)) {
       throw new Error('The active workspace does not belong to this Google account.');
     }
+    onProgress?.(10, 'preparing data');
     const backupFile = await findDriveBackupFile(accessToken);
     if (!backupFile) {
       throw new Error('No Om-LifeOS backup file found in your Google Drive.');
     }
 
+    onProgress?.(30, 'downloading');
     const backupContent = await fetchDriveBackupData(accessToken, backupFile.fileId);
     if (backupContent.accountUid) {
       if (backupContent.accountUid !== user.uid) {
@@ -555,11 +695,27 @@ export async function restoreFromGoogleDrive(
       throw new Error('This legacy Google Drive backup cannot be verified for the signed-in account.');
     }
 
+    onProgress?.(50, 'validating');
     const dataManager = UniversalDataManager.getInstance();
     const validation = await dataManager.validateImport(backupContent, targetProfileId);
 
     if (!validation.valid) {
       throw new Error(validation.error || 'The backup file in Google Drive could not be validated.');
+    }
+
+    onProgress?.(70, 'restoring');
+
+    // --- Fix #6: Merge restore — when merge=true, compare records instead of full replace ---
+    if (merge && validation.bundle?.entities) {
+      const mergeResult = await mergeRestoreData(validation.bundle.entities, targetProfileId);
+      onProgress?.(100, 'complete');
+      return {
+        success: true,
+        restoredRecordCount: mergeResult.addedCount + mergeResult.updatedCount,
+        storesRestored: mergeResult.storesAffected,
+        mergedCount: mergeResult.updatedCount,
+        skippedCount: mergeResult.skippedCount
+      };
     }
 
     const restoreResult = await dataManager.restoreValidatedData(validation, {
@@ -571,6 +727,8 @@ export async function restoreFromGoogleDrive(
     if (!restoreResult.success) {
       throw new Error(restoreResult.error || 'Failed to apply Google Drive backup data.');
     }
+
+    onProgress?.(100, 'complete');
 
     return {
       success: true,

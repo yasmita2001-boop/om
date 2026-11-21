@@ -12,8 +12,12 @@ const DROP_CONTENT_TAGS = new Set([
 const ALLOWED_STYLE_PROPERTIES = new Set([
   'background-color', 'border', 'border-collapse', 'border-color', 'border-style',
   'border-width', 'color', 'font-family', 'font-size', 'font-style', 'font-weight',
-  'height', 'list-style-type', 'margin-left', 'margin-right', 'padding', 'text-align',
-  'text-decoration', 'vertical-align', 'width'
+  'height', 'list-style-type', 'margin', 'margin-left', 'margin-right', 'margin-top', 'margin-bottom', 'padding', 'padding-left', 'text-align',
+  'display', 'align-items', 'gap', 'flex-shrink', 'user-select', 'white-space',
+  'text-decoration', 'vertical-align', 'width',
+  // Spreadsheet cells style their own grid lines, so each side has to survive a save.
+  'border-bottom', 'border-right', 'border-top', 'border-left', 'border-radius',
+  'border-spacing', 'min-width', 'max-width', 'font-variant-numeric', 'line-height'
 ]);
 
 function sanitizeStyle(styleText: string): string {
@@ -83,7 +87,11 @@ export function sanitizeHtml(html: string): string {
         const isListType = (el.tagName === 'OL' || el.tagName === 'UL') &&
           (name === 'type' || name === 'start') && /^[1-9a-zA-Z]{1,3}$/.test(attr.value);
 
-        if (!(isLink || isLinkTarget || isImageSource || isAlt || isDimension || isListType)) {
+        // Formulas ("=SUM(B2:B9)*1.18") need far more than the old 60 char cap.
+        const isOmData = /^data-om-[a-z-]{1,24}$/.test(name) && attr.value.length <= 200;
+        const isEditableLock = name === 'contenteditable' && attr.value.toLowerCase() === 'false';
+
+        if (!(isLink || isLinkTarget || isImageSource || isAlt || isDimension || isListType || isOmData || isEditableLock)) {
           el.removeAttribute(attr.name);
         }
       }

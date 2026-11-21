@@ -297,7 +297,7 @@ export function mapFrequencyToVoiceMatch(frequencyHz: number): {
 /**
  * Preprocess Hindi, Hinglish and English text to sound like a native human narrator.
  */
-export function prepareNativePhonetics(rawText: string, lang: 'hi-IN' | 'en-IN' | 'en-US' | 'auto'): { cleanText: string; isHindi: boolean } {
+export function prepareNativePhonetics(rawText: string, lang: 'hi-IN' | 'en-IN' | 'en-US' | 'ne-NP' | 'auto'): { cleanText: string; isHindi: boolean } {
   if (!rawText) return { cleanText: '', isHindi: false };
 
   let text = rawText
@@ -525,7 +525,7 @@ export function getCategorizedVoices(voices: SpeechSynthesisVoice[]): SpeechVoic
  */
 export function pickOptimalVoice(
   voices: SpeechSynthesisVoice[],
-  targetLang: 'hi-IN' | 'en-IN' | 'en-US' | 'auto',
+  targetLang: 'hi-IN' | 'en-IN' | 'en-US' | 'ne-NP' | 'auto',
   preferGender: 'female' | 'male' | 'any' = 'any',
   exactVoiceName?: string
 ): SpeechSynthesisVoice | null {

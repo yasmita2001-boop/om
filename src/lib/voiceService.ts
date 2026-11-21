@@ -4,7 +4,7 @@
  * verbal punctuation commands, live fast real-time typing, and long-text chunked audio playback.
  */
 
-export type VoiceLanguage = 'hi-IN' | 'en-IN' | 'en-US' | 'auto';
+export type VoiceLanguage = 'hi-IN' | 'en-IN' | 'en-US' | 'ne-NP' | 'auto';
 
 export interface SpeechRecognitionResultPayload {
   transcript: string;
@@ -44,6 +44,23 @@ export const isSpeechSynthesisSupported = (): boolean => {
   if (typeof window === 'undefined') return false;
   return 'speechSynthesis' in window;
 };
+
+export function getSpeechRecognitionBrowserWarning(): string | null {
+  if (typeof window === 'undefined') return null;
+  if (!isSpeechRecognitionSupported()) {
+    return 'Speech recognition is not supported in this browser. Use Chrome or Edge for voice input.';
+  }
+  if (typeof navigator !== 'undefined') {
+    const ua = navigator.userAgent;
+    const isFirefox = /Firefox\//i.test(ua) && !/Seamonkey\//i.test(ua);
+    const isSafari = /Safari\//i.test(ua) && !/Chrome\//i.test(ua) && !/Chromium\//i.test(ua);
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(ua);
+    if ((isFirefox || isSafari) && !isMobile) {
+      return 'Speech recognition works best in Chrome or Edge. Your browser has limited support.';
+    }
+  }
+  return null;
+}
 
 /**
  * Diagnostic & Permission verification helpers
@@ -296,6 +313,8 @@ export class VoiceDictationController {
       this.recognition.lang = 'en-IN';
     } else if (lang === 'en-US') {
       this.recognition.lang = 'en-US';
+    } else if (lang === 'ne-NP') {
+      this.recognition.lang = 'ne-NP';
     } else {
       this.recognition.lang = 'en-IN';
     }

@@ -77,6 +77,7 @@ export interface GoalProgressBreakdown {
   totalItems: number;
   completedItems: number;
   progressItemCount: number;
+  actionableCount: number;
   progressPoints: number;
   totalPercent: number;
   hasLinkedItems: boolean;
@@ -154,13 +155,15 @@ export interface GoalRelatedData {
   reminders?: ReminderItem[];
 }
 
-export type GoalResolutionSources = Pick<GoalRelatedData, 'learningItems' | 'skills' | 'routines'>;
+export type GoalResolutionSources = Pick<GoalRelatedData, 'learningItems' | 'skills' | 'routines'> & { workProjects?: import('../types').WorkProject[] };
 
 export function createTaskGoalResolver(sources: GoalResolutionSources): (task: Task) => string | undefined {
   const routines = new Map((sources.routines || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
   const skills = new Map((sources.skills || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
   const learning = new Map((sources.learningItems || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
+  const projects = new Map((sources.workProjects || []).filter(item => item.goalId).map(item => [item.id, item.goalId!]));
   return task => task.goalId ||
+      (task.projectId ? projects.get(task.projectId) : undefined) ||
       (task.routineId ? routines.get(task.routineId) : undefined) ||
       (task.skillId ? skills.get(task.skillId) : undefined) ||
       (task.learningId ? learning.get(task.learningId) : undefined);
@@ -593,41 +596,45 @@ function computeGoalAggregateBreakdownInternal(
     });
   });
 
-  // 4. Habits (Evaluated based on 30-day consistency window)
+  // 4. Habits (Evaluated based on consistency window capped at 30 days or age)
   linkedHabits.forEach(h => {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysAgoIso = getLocalDateString(thirtyDaysAgo);
-    const recentLogs = habitLogs.filter(l => l.habitId === h.id && l.date >= thirtyDaysAgoIso && l.date <= today);
+    const daysSinceCreation = h.createdAt ? Math.max(1, Math.ceil((Date.now() - h.createdAt) / 86400000)) : 30;
+    const windowDays = Math.min(30, daysSinceCreation);
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - windowDays);
+    const windowStartIso = getLocalDateString(windowStart);
+    const recentLogs = habitLogs.filter(l => l.habitId === h.id && l.date >= windowStartIso && l.date <= today);
     const uniqueDays = new Set(recentLogs.map(l => l.date)).size;
     const isDoneToday = h.doneDate === today || habitLogs.some(l => l.habitId === h.id && l.date === today);
     const effectiveDays = isDoneToday && uniqueDays === 0 ? 1 : uniqueDays;
-    const prog = Math.min(100, Math.round((effectiveDays / 30) * 100));
+    const prog = Math.min(100, Math.round((effectiveDays / windowDays) * 100));
     rawItems.push({
       id: h.id,
       type: 'habit',
       typeLabel: 'Habit Ritual',
-      title: `${h.name} (${effectiveDays}/30d consistency${isDoneToday ? ' · ✓ Done Today' : ''})`,
+      title: `${h.name} (${effectiveDays}/${windowDays}d consistency${isDoneToday ? ' · ✓ Done Today' : ''})`,
       progress: prog,
       isCompleted: prog >= 90
     });
   });
 
-  // 5. Routines (Evaluated based on 30-day consistency window)
+  // 5. Routines (Evaluated based on consistency window capped at 30 days or age)
   linkedRoutines.forEach(r => {
+    const daysSinceCreation = r.createdAt ? Math.max(1, Math.ceil((Date.now() - r.createdAt) / 86400000)) : 30;
+    const windowDays = Math.min(30, daysSinceCreation);
     const isDoneToday = Boolean(r.completedDate === today || (r.completedDates && r.completedDates.includes(today)));
     const dates = Array.from(new Set([...(r.completedDates || []), ...(r.completedDate ? [r.completedDate] : [])]));
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysAgoIso = getLocalDateString(thirtyDaysAgo);
-    const recentDays = dates.filter(d => d >= thirtyDaysAgoIso && d <= today).length;
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - windowDays);
+    const windowStartIso = getLocalDateString(windowStart);
+    const recentDays = dates.filter(d => d >= windowStartIso && d <= today).length;
     const effectiveDays = isDoneToday && recentDays === 0 ? 1 : recentDays;
-    const prog = Math.min(100, Math.round((effectiveDays / 30) * 100));
+    const prog = Math.min(100, Math.round((effectiveDays / windowDays) * 100));
     rawItems.push({
       id: r.id,
       type: 'routine',
       typeLabel: 'Routine Block',
-      title: `${r.name} (${effectiveDays}/30d consistency${isDoneToday ? ' · ✓ Done Today' : ''})`,
+      title: `${r.name} (${effectiveDays}/${windowDays}d consistency${isDoneToday ? ' · ✓ Done Today' : ''})`,
       progress: prog,
       isCompleted: prog >= 90
     });
@@ -751,10 +758,10 @@ function computeGoalAggregateBreakdownInternal(
     });
   });
 
-  // 15. Liabilities
+  // 15. Liabilities — 100% when paid off, 0% when outstanding
   linkedLiabilities.forEach(l => {
     const amt = Number(l.amount) || 0;
-    const prog = amt <= 0 ? 100 : 50;
+    const prog = amt <= 0 ? 100 : 0;
     rawItems.push({
       id: l.id,
       type: 'liability',
@@ -951,6 +958,7 @@ function computeGoalAggregateBreakdownInternal(
     totalItems,
     completedItems,
     progressItemCount: actionableWeight,
+    actionableCount: actionableItems.length,
     progressPoints,
     totalPercent,
     hasLinkedItems: totalItems > 0,

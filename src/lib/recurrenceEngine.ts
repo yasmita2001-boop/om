@@ -4,6 +4,7 @@
 
 import { Task, RecurrenceConfig, ReminderItem } from '../types';
 import { generateUUID, storage } from './storage';
+import { getLocalDateString } from './dateUtils';
 
 const recurrenceGenerationsInProgress = new Set<string>();
 
@@ -17,7 +18,17 @@ export function calculateNextOccurrence(currentDate: string, config: RecurrenceC
   let nextDate = new Date(date);
   switch (config.frequency) {
     case 'daily':
-      nextDate.setUTCDate(nextDate.getUTCDate() + config.interval);
+      if (config.weekdaysOnly) {
+        // Advance by `interval` weekdays (skip Sat=6, Sun=0)
+        let remaining = config.interval;
+        while (remaining > 0) {
+          nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+          const dow = nextDate.getUTCDay();
+          if (dow !== 0 && dow !== 6) remaining--;
+        }
+      } else {
+        nextDate.setUTCDate(nextDate.getUTCDate() + config.interval);
+      }
       break;
     case 'weekly':
       nextDate = config.weekDays?.length
@@ -25,7 +36,16 @@ export function calculateNextOccurrence(currentDate: string, config: RecurrenceC
         : new Date(nextDate.getTime() + config.interval * 7 * 86400000);
       break;
     case 'monthly':
-      nextDate = addCalendarMonths(nextDate, config.interval, config.monthDay || nextDate.getUTCDate());
+      if (config.lastDayOfMonth) {
+        // Jump to the last calendar day of the target month
+        const monthIndex = nextDate.getUTCMonth() + config.interval;
+        const targetYear = nextDate.getUTCFullYear() + Math.floor(monthIndex / 12);
+        const targetMonth = monthIndex % 12;
+        const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+        nextDate = new Date(Date.UTC(targetYear, targetMonth, lastDay));
+      } else {
+        nextDate = addCalendarMonths(nextDate, config.interval, config.monthDay || nextDate.getUTCDate());
+      }
       break;
     case 'yearly':
       nextDate = addCalendarYears(nextDate, config.interval);
@@ -58,7 +78,7 @@ function shouldEndRecurrence(config: RecurrenceConfig, currentDate: string): boo
   if (config.endType === 'after' && config.endAfterOccurrences) {
     return (config.occurrenceCount || 0) >= config.endAfterOccurrences;
   }
-  return config.endType === 'by_date' && Boolean(config.endByDate) && currentDate >= config.endByDate!;
+  return config.endType === 'by_date' && Boolean(config.endByDate) && currentDate > config.endByDate!;
 }
 
 function getNextWeekDay(fromDate: Date, weekDays: number[], intervalWeeks: number): Date {
@@ -91,7 +111,7 @@ function addCalendarYears(date: Date, years: number): Date {
 export function generateNextRecurringTask(parentTask: Task): Task | null {
   if (!parentTask.recurringConfig) return null;
   const config = parentTask.recurringConfig;
-  const baseDate = config.lastGeneratedDate || parentTask.date || parentTask.dueAt || new Date().toISOString().split('T')[0];
+  const baseDate = config.lastGeneratedDate || parentTask.date || parentTask.dueAt || getLocalDateString();
   const nextDate = calculateNextOccurrence(baseDate, config);
   if (!nextDate) return null;
   return {
@@ -189,7 +209,11 @@ export function updateRecurrenceTracking(parentTask: Task, generatedDate: string
 export function getRecurrenceDescription(config: RecurrenceConfig): string {
   const { frequency, interval, endType, endAfterOccurrences, endByDate, weekDays } = config;
   let desc = '';
-  if (interval === 1) {
+  if (frequency === 'daily' && config.weekdaysOnly) {
+    desc = interval === 1 ? 'Every weekday' : `Every ${interval} weekdays`;
+  } else if (frequency === 'monthly' && config.lastDayOfMonth) {
+    desc = interval === 1 ? 'Last day of every month' : `Last day, every ${interval} months`;
+  } else if (interval === 1) {
     desc = frequency.charAt(0).toUpperCase() + frequency.slice(1);
   } else {
     const unit = frequency === 'daily' ? 'days' : frequency === 'weekly' ? 'weeks' : frequency === 'monthly' ? 'months' : 'years';

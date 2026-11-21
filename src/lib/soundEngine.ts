@@ -32,9 +32,30 @@ class TactileSoundEngine {
   private soundEnabled: boolean = true;
   private hapticEnabled: boolean = true;
   private masterVolume: number = 0.55;
+  private warmedUp: boolean = false;
 
   constructor() {
     this.initSettings();
+    if (typeof document !== 'undefined') {
+      const onGesture = () => {
+        this.warmUp();
+        document.removeEventListener('click', onGesture, true);
+        document.removeEventListener('touchstart', onGesture, true);
+        document.removeEventListener('keydown', onGesture, true);
+      };
+      document.addEventListener('click', onGesture, true);
+      document.addEventListener('touchstart', onGesture, true);
+      document.addEventListener('keydown', onGesture, true);
+    }
+  }
+
+  public warmUp(): void {
+    if (this.warmedUp) return;
+    this.warmedUp = true;
+    const ctx = this.getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {});
+    }
   }
 
   private initSettings() {

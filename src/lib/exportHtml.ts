@@ -1156,7 +1156,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
                   <div class="note-title">${escapeHtml(n.title)}</div>
                   <span class="badge badge-low">${escapeHtml(n.category || 'Note')}</span>
                 </div>
-                <div class="note-content">${escapeHtml(n.content || n.body || '(Empty note)')}</div>
+                <div class="note-content">${escapeHtml(n.body || '(Empty note)')}</div>
                 ${n.date || n.updatedAt ? `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:auto;">Updated: ${new Date(n.date || n.updatedAt).toLocaleDateString()}</div>` : ''}
               </div>
             `).join('') || '<p style="color:var(--text-muted); font-size:0.8rem;">No notes recorded.</p>'}
@@ -1177,7 +1177,7 @@ export async function generateCompleteStandaloneHtml(fullData: Record<string, an
                   <strong>${escapeHtml(j.title || 'Reflection')}</strong>
                   <span style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(j.date || (j.createdAt ? new Date(j.createdAt).toLocaleDateString() : ''))}</span>
                 </div>
-                <div style="font-size:0.8rem; color:var(--text-muted); white-space:pre-wrap;">${escapeHtml(j.content || j.reflection || j.body || '')}</div>
+                <div style="font-size:0.8rem; color:var(--text-muted); white-space:pre-wrap;">${escapeHtml(j.text || '')}</div>
               </div>
             `).join('') || '<p style="color:var(--text-muted); font-size:0.8rem;">No journal entries found.</p>'}
           </div>
@@ -1401,7 +1401,7 @@ ${safeDataJson}
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'Om-LifeOS-Backup-' + getLocalDateString() + '.omlifeos';
+      a.download = 'Om-LifeOS-Backup-' + new Date().toISOString().slice(0, 10) + '.omlifeos';
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     }

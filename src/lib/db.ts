@@ -9,7 +9,7 @@ import { getCurrencySymbol } from './currencyDisplay';
 export const DB_NAME = import.meta.env.MODE === 'review-copy'
   ? 'om-lifeos-review-copy-v1'
   : 'om-lifeos-canonical-v4';
-export const DB_VERSION = 9;
+export const DB_VERSION = 12;
 
 export const ENTITY_STORES = [
   'tasks', 'routines', 'habits', 'habitLogs', 'goals', 'milestones', 'strategies',
@@ -18,16 +18,16 @@ export const ENTITY_STORES = [
   'loans', 'loanPayments', 'investments', 'investmentActivities', 'cashFlowSchedules',
   'savingsPlans', 'assets', 'liabilities',
   'financialGoals', 'healthMeasurements', 'healthActivities', 'sleepRecords', 'waterRecords',
-  'nutritionRecords', 'healthAppointments', 'healthNotes',
+  'nutritionRecords', 'healthAppointments', 'healthNotes', 'medications', 'cycleRecords',
   'learningItems', 'skills', 'courses', 'learningProgress',
   'meetings', 'people', 'relationships', 'interactions', 'importantDates',
   'relationshipReminders', 'spiritualPractices',
   'things', 'documents', 'documentCollections', 'warranties',
   'receipts', 'certificates', 'importantRecords', 'reminders', 'notifications',
-  'achievements', 'calcHistory', 'attachments', 'customFonts'
+  'achievements', 'calcHistory', 'attachments', 'customFonts', 'focusAlarms'
 ];
 
-export const SINGLETON_STORES = ['appSettings', 'healthProfile'];
+export const SINGLETON_STORES = ['appSettings', 'healthProfile', 'savedCommandTargets'];
 export const SYSTEM_STORES = ['tombstones', 'appliedBundles', 'recycleBin'];
 
 export const TRANSIENT_RECYCLE_SKIP_STORES = new Set(['habitLogs', 'notifications']);
@@ -75,6 +75,8 @@ export const STORE_LABELS: Record<string, { label: string; module: string }> = {
   nutritionRecords: { label: 'Nutrition Log', module: 'Health & Wellness' },
   healthAppointments: { label: 'Medical Appointment', module: 'Health & Wellness' },
   healthNotes: { label: 'Health Note', module: 'Health & Wellness' },
+  medications: { label: 'Medication Record', module: 'Health & Wellness' },
+  cycleRecords: { label: 'Cycle Tracking Record', module: 'Health & Wellness' },
   learningItems: { label: 'Learning Item', module: 'Work & Skill Trees' },
   skills: { label: 'Skill Tree', module: 'Work & Skill Trees' },
   courses: { label: 'Course', module: 'Work & Skill Trees' },
@@ -95,6 +97,7 @@ export const STORE_LABELS: Record<string, { label: string; module: string }> = {
   importantRecords: { label: 'Important Record', module: 'Things & Documents' },
   reminders: { label: 'Reminder', module: 'Tasks & Planner' },
   notifications: { label: 'Notification', module: 'Tasks & Planner' },
+  focusAlarms: { label: 'Focus Alarm', module: 'Focus (Deep Work)' },
   achievements: { label: 'Achievement', module: 'Goals & Strategy' },
   calcHistory: { label: 'Calculation', module: 'Calculator & Tools' },
   attachments: { label: 'Attachment', module: 'Things & Documents' },
@@ -115,7 +118,7 @@ export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     try {
       return crypto.randomUUID();
-    } catch {}
+    } catch (err) { console.warn('[StorageEngine] crypto.randomUUID failed:', err); }
   }
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -198,13 +201,18 @@ export function describeDeletedRecord(storeName: string, item: any): {
  */
 export function createDatabaseSchema(db: IDBDatabase, upgradeTransaction?: IDBTransaction | null): void {
   for (const storeName of ENTITY_STORES) {
+    let store: IDBObjectStore | null = null;
     if (!db.objectStoreNames.contains(storeName)) {
-      const store = db.createObjectStore(storeName, { keyPath: 'id' });
+      store = db.createObjectStore(storeName, { keyPath: 'id' });
+    } else if (upgradeTransaction) {
+      store = upgradeTransaction.objectStore(storeName);
+    }
+    if (store) {
       try {
-        store.createIndex('createdAt', 'createdAt', { unique: false });
-        store.createIndex('updatedAt', 'updatedAt', { unique: false });
-        store.createIndex('profileId', 'profileId', { unique: false });
-      } catch {}
+        if (!store.indexNames.contains('createdAt')) store.createIndex('createdAt', 'createdAt', { unique: false });
+        if (!store.indexNames.contains('updatedAt')) store.createIndex('updatedAt', 'updatedAt', { unique: false });
+        if (!store.indexNames.contains('profileId')) store.createIndex('profileId', 'profileId', { unique: false });
+      } catch (err) { console.warn('[StorageEngine] index creation failed for', storeName, err); }
     }
   }
 
@@ -229,13 +237,52 @@ export function createDatabaseSchema(db: IDBDatabase, upgradeTransaction?: IDBTr
         store.createIndex('storeName', 'storeName', { unique: false });
         store.createIndex('profileId', 'profileId', { unique: false });
         store.createIndex('deletedAt', 'deletedAt', { unique: false });
-      } catch {}
+      } catch (err) { console.warn('[StorageEngine] system store index creation failed for', storeName, err); }
     }
+  }
+
+  if (!db.objectStoreNames.contains('attachmentBlobs')) {
+    db.createObjectStore('attachmentBlobs', { keyPath: 'id' });
   }
 
   try {
     if (db.objectStoreNames.contains('profileSecurity')) {
       db.deleteObjectStore('profileSecurity');
     }
-  } catch {}
+  } catch (err) { console.warn('[StorageEngine] failed to remove legacy profileSecurity store:', err); }
+}
+
+/**
+ * Run data migrations between schema versions.
+ * Called during onupgradeneeded after store/index creation.
+ * Each case falls through to run all migrations from oldVersion to newVersion.
+ */
+export function runMigrations(_db: IDBDatabase, oldVersion: number, newVersion: number): void {
+  if (oldVersion >= newVersion) return;
+  console.info(`[StorageEngine] Running migrations from v${oldVersion} to v${newVersion}`);
+
+  // eslint-disable-next-line default-case
+  switch (true) {
+    // case oldVersion < 2:
+    //   // v1 -> v2: Example migration
+    //   break;
+
+    // case oldVersion < 10:
+    //   // v9 -> v10: Example migration
+    //   break;
+
+    case oldVersion < 11:
+      // v10 -> v11: Added focusAlarms store, custom fonts store.
+      // Store creation is handled by createDatabaseSchema; no data transforms needed yet.
+      break;
+
+    case oldVersion < 12:
+      // v11 -> v12: common query indexes are ensured for existing stores by createDatabaseSchema.
+      break;
+
+    // Future migrations go here:
+    // case oldVersion < 12:
+    //   // v11 -> v12: Description of what changed
+    //   break;
+  }
 }

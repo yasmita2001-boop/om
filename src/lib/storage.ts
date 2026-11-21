@@ -12,7 +12,7 @@ import {
   DB_NAME, DB_VERSION, ENTITY_STORES, SINGLETON_STORES, SYSTEM_STORES,
   TRANSIENT_RECYCLE_SKIP_STORES, SYSTEM_METADATA_STORES, STORE_LABELS,
   DeletionTombstone, generateUUID, parseTimestampMs, computeRecordSignature,
-  describeDeletedRecord, createDatabaseSchema
+  describeDeletedRecord, createDatabaseSchema, runMigrations
 } from './db';
 
 import {
@@ -35,13 +35,26 @@ import {
 import {
   AppState, UserProfile, RecycleBinItem, ManualUpdateBundle,
   BundleDiffInspection, ApplyBundleResult,
-  CashFlowSchedule, InvestmentActivity, Investment
+  CashFlowSchedule, InvestmentActivity, Investment,
+  FinanceTransaction, FinanceAccount, Loan, Liability,
+  SavingsPlan, Asset, ReceiptItem
 } from '../types';
 
 import { calculatePayloadBreakdown } from './thumbnailService';
 import { advanceSchedule, getInvestmentMetrics, restoreScheduleOccurrence } from './financeCalculations';
 import { clearStoredBackgroundAssets } from './appearance';
 
+/** Minimal shape shared by all entity records stored in IndexedDB. */
+interface BaseRecord {
+  id: string;
+  profileId?: string;
+}
+
+/**
+ * KNOWN ISSUE: Focus alarms are stored in localStorage, which is NOT included
+ * in the standard IndexedDB export/backup pipeline. Use exportFocusAlarms() and
+ * importFocusAlarms() on StorageEngine to include them in custom export flows.
+ */
 const FOCUS_ALARMS_STORAGE_KEY = 'om_focus_alarms_list';
 
 function getProfileStorageKeys(profileId: string): string[] {
@@ -117,6 +130,10 @@ class StorageEngine {
   private profileOwnershipEnsured = new Set<string>();
   public deviceId: string = generateUUID();
   private activeProfileId: string = 'om-master-profile';
+  private attachmentCryptoKey: CryptoKey | null = null;
+  private attachmentCryptoProfileId: string | null = null;
+  private attachmentAutoLockTimer: ReturnType<typeof setTimeout> | null = null;
+  private attachmentActivityHandler: (() => void) | null = null;
 
   constructor() {
     universalDataManager.registerStorageEngine(this);
@@ -127,17 +144,17 @@ class StorageEngine {
           for (const listener of this.changeListeners) {
             try {
               listener(event.data.store, event.data.action, event.data.id);
-            } catch {}
+            } catch (err) { console.warn('[StorageEngine] cross-tab listener error:', err); }
           }
         }
       };
-    } catch {}
+    } catch (err) { console.warn('[StorageEngine] BroadcastChannel setup failed:', err); }
 
     try {
       if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
-        navigator.storage.persist().catch(() => {});
+        navigator.storage.persist().catch((err) => console.warn('[StorageEngine] persistent storage request was not granted:', err));
       }
-    } catch {}
+    } catch (err) { console.warn('[StorageEngine] storage persistence request failed:', err); }
   }
 
   public getChannel(): BroadcastChannel | null {
@@ -148,7 +165,7 @@ class StorageEngine {
     if (this.db) {
       try {
         this.db.close();
-      } catch {}
+      } catch (err) { console.warn('[StorageEngine] error closing database:', err); }
       this.db = null;
       this.dbPromise = null;
     }
@@ -174,14 +191,18 @@ class StorageEngine {
   }
 
   public setActiveProfile(profileId: string | null): void {
-    this.activeProfileId = profileId || 'om-master-profile';
+    const nextProfileId = profileId || 'om-master-profile';
+    if (nextProfileId !== this.activeProfileId) {
+      this.lockAttachmentEncryption();
+    }
+    this.activeProfileId = nextProfileId;
   }
 
   public getActiveProfileId(): string {
     return this.activeProfileId || 'om-master-profile';
   }
 
-  private belongsToProfile(item: any, profileId: string): boolean {
+  private belongsToProfile(item: { profileId?: string } | null | undefined, profileId: string): boolean {
     if (!item?.profileId) {
       return profileId === 'om-master-profile' || profileId === 'default';
     }
@@ -207,11 +228,12 @@ class StorageEngine {
   private withActiveProfile<T extends { id: string }>(storeName: string, item: T): T {
     if (SINGLETON_STORES.includes(storeName) || SYSTEM_STORES.includes(storeName)) return item;
     const activeProfileId = this.getActiveProfileId();
-    if ((item as any).profileId && !this.belongsToProfile(item, activeProfileId)) {
+    const rec = item as T & { profileId?: string };
+    if (rec.profileId && !this.belongsToProfile(rec, activeProfileId)) {
       throw new Error(`Cannot write a record owned by another workspace into "${storeName}".`);
     }
-    const targetProfileId = (item as any).profileId || activeProfileId;
-    return { ...(item as any), profileId: targetProfileId } as T;
+    const targetProfileId = rec.profileId || activeProfileId;
+    return { ...item, profileId: targetProfileId } as T;
   }
 
   public open(): Promise<IDBDatabase> {
@@ -228,7 +250,7 @@ class StorageEngine {
       if (hasAll) {
         return Promise.resolve(this.db);
       }
-      try { this.db.close(); } catch {}
+      try { this.db.close(); } catch (err) { console.warn('[StorageEngine] error closing stale db:', err); }
       this.db = null;
       this.dbPromise = null;
     }
@@ -269,12 +291,15 @@ class StorageEngine {
         }
         const allRequired = [...ENTITY_STORES, ...SINGLETON_STORES, ...SYSTEM_STORES];
         const missing = allRequired.filter(s => !db.objectStoreNames.contains(s));
-        if (missing.length > 0) {
-          const nextVersion = (db.version || DB_VERSION) + 1;
-          try { db.close(); } catch {}
+        if (missing.length > 0 || db.version < DB_VERSION) {
+          const nextVersion = missing.length > 0
+            ? Math.max(DB_VERSION, (db.version || 0) + 1)
+            : DB_VERSION;
+          try { db.close(); } catch (err) { console.warn('[StorageEngine] failed to close database before schema upgrade:', err); }
           const upReq = indexedDB.open(DB_NAME, nextVersion);
-          upReq.onupgradeneeded = () => {
+          upReq.onupgradeneeded = (event) => {
             createDatabaseSchema(upReq.result, upReq.transaction);
+            runMigrations(upReq.result, (event as IDBVersionChangeEvent).oldVersion, nextVersion);
           };
           upReq.onsuccess = () => {
             finishOpen(upReq.result);
@@ -291,15 +316,19 @@ class StorageEngine {
         finishOpen(db);
       };
 
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      // Open existing databases without a requested version first. Asking for
+      // the compiled version directly can fail with VersionError when another
+      // tab or newer app build has already upgraded this profile's database.
+      const req = indexedDB.open(DB_NAME);
 
       req.onblocked = () => {
         console.warn('[IndexedDB] Database upgrade blocked by open connection.');
         fail(new Error('Database access is blocked by another Om LifeOS tab. Close other tabs and retry.'));
       };
 
-      req.onupgradeneeded = () => {
+      req.onupgradeneeded = (event) => {
         createDatabaseSchema(req.result, req.transaction);
+        runMigrations(req.result, (event as IDBVersionChangeEvent).oldVersion, DB_VERSION);
       };
 
       req.onsuccess = () => {
@@ -318,7 +347,7 @@ class StorageEngine {
     for (const listener of this.changeListeners) {
       try {
         listener(store, action, id);
-      } catch {}
+      } catch (err) { console.warn('[StorageEngine] broadcastChange listener error:', err); }
     }
     try {
       this.channel?.postMessage({
@@ -328,7 +357,7 @@ class StorageEngine {
         id,
         timestamp: Date.now()
       });
-    } catch {}
+    } catch (err) { console.warn('[StorageEngine] cross-tab postMessage failed:', err); }
   }
 
   // --------------------------------------------------------------------------
@@ -365,15 +394,22 @@ class StorageEngine {
 
   public async getAll<T>(storeName: string, profileId?: string): Promise<T[]> {
     const db = await this.open();
+    const target = profileId || this.activeProfileId || 'om-master-profile';
+    if (!SINGLETON_STORES.includes(storeName) && storeName !== 'appliedBundles' &&
+        (ENTITY_STORES.includes(storeName) || storeName === 'recycleBin' || storeName === 'tombstones')) {
+      await this.ensureProfileOwnership(target);
+    }
     return new Promise((resolve, reject) => {
       try {
         const tx = db.transaction(storeName, 'readonly');
         const store = tx.objectStore(storeName);
-        const req = store.getAll();
+        const profileIndex = store.indexNames.contains('profileId') ? store.index('profileId') : null;
+        const req = profileIndex && !SINGLETON_STORES.includes(storeName) && storeName !== 'appliedBundles'
+          ? profileIndex.getAll(target)
+          : store.getAll();
         req.onsuccess = () => {
           const results: T[] = req.result || [];
           if (SINGLETON_STORES.includes(storeName)) {
-            const target = profileId || this.activeProfileId || 'om-master-profile';
             const scopedId = `root:${target}`;
             const scoped = results.find((item: any) => item?.id === scopedId);
             const canUseLegacy = !target.startsWith('google-');
@@ -382,7 +418,6 @@ class StorageEngine {
           if (storeName === 'appliedBundles') {
             return resolve(results);
           }
-          const target = profileId || this.activeProfileId || 'om-master-profile';
           const filtered = results.filter((item: any) => {
             if (!item) return false;
             if (storeName !== 'recycleBin' && storeName !== 'tombstones' && !isRecordActive(item)) return false;
@@ -391,6 +426,67 @@ class StorageEngine {
           resolve(filtered);
         };
         req.onerror = () => reject(req.error);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  /**
+   * Paginated getAll using IDB cursors. Avoids loading entire stores into memory.
+   * Keeps getAll() unchanged for backward compatibility.
+   */
+  public async getAllPaginated<T>(
+    storeName: string,
+    options?: { limit?: number; offset?: number; profileId?: string }
+  ): Promise<T[]> {
+    const db = await this.open();
+    const limit = Math.max(1, Math.min(500, Math.floor(options?.limit ?? 100)));
+    const offset = Math.max(0, Math.floor(options?.offset ?? 0));
+    const target = options?.profileId || this.activeProfileId || 'om-master-profile';
+
+    if (SINGLETON_STORES.includes(storeName) || storeName === 'appliedBundles') {
+      const rows = await this.getAll<T>(storeName, target);
+      return rows.slice(offset, offset + limit);
+    }
+
+    if (ENTITY_STORES.includes(storeName) || storeName === 'recycleBin' || storeName === 'tombstones') {
+      await this.ensureProfileOwnership(target);
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const profileIndex = store.indexNames.contains('profileId') ? store.index('profileId') : null;
+        const request = profileIndex
+          ? profileIndex.openCursor(IDBKeyRange.only(target))
+          : store.openCursor();
+        const results: T[] = [];
+        let skipped = 0;
+
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) return resolve(results);
+          const item = cursor.value;
+          const isSystemHistory = storeName === 'recycleBin' || storeName === 'tombstones';
+          if (item && (isSystemHistory || isRecordActive(item)) && (profileIndex || this.belongsToProfile(item, target))) {
+            if (skipped < offset) {
+              skipped++;
+            } else {
+              results.push(item);
+            }
+          }
+
+          if (results.length >= limit) {
+            resolve(results);
+            return;
+          }
+
+          cursor.continue();
+        };
+        request.onerror = () => reject(request.error);
+        tx.onerror = () => reject(tx.error);
       } catch (err) {
         reject(err);
       }
@@ -488,6 +584,37 @@ class StorageEngine {
     });
   }
 
+  /**
+   * Periodically checks storage quota after writes and dispatches warnings.
+   * Throttled to at most once every 60 seconds to avoid performance overhead.
+   */
+  private _lastQuotaCheck = 0;
+  private _quotaCheckInterval = 60_000; // 60 seconds
+  private async _checkStorageQuota(): Promise<void> {
+    const now = Date.now();
+    if (now - this._lastQuotaCheck < this._quotaCheckInterval) return;
+    this._lastQuotaCheck = now;
+    try {
+      const estimate = await this.getStorageEstimate();
+      if (!estimate.available) return;
+      if (estimate.percent > 95) {
+        console.error(`[Om-LifeOS Storage] CRITICAL: Storage is ${estimate.percent.toFixed(1)}% full. Data writes may fail.`);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('om-storage-warning', {
+            detail: { level: 'critical', percent: estimate.percent, usage: estimate.usage, quota: estimate.quota }
+          }));
+        }
+      } else if (estimate.percent > 80) {
+        console.warn(`[Om-LifeOS Storage] WARNING: Storage is ${estimate.percent.toFixed(1)}% full. Consider cleaning up data or exporting a backup.`);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('om-storage-warning', {
+            detail: { level: 'warning', percent: estimate.percent, usage: estimate.usage, quota: estimate.quota }
+          }));
+        }
+      }
+    } catch (err) { console.warn('[StorageEngine] storage quota check failed:', err); }
+  }
+
   public async put<T extends { id: string }>(storeName: string, item: T): Promise<T> {
     const db = await this.open();
     const prepared = this.withActiveProfile(storeName, item);
@@ -499,6 +626,7 @@ class StorageEngine {
         req.onerror = () => reject(req.error);
         tx.oncomplete = () => {
           this.broadcastChange(storeName, 'put', prepared.id);
+          this._checkStorageQuota(); // async, non-blocking
           resolve(prepared);
         };
         tx.onerror = () => reject(tx.error);
@@ -589,7 +717,7 @@ class StorageEngine {
     });
   }
 
-  public async atomicPutMany(items: { storeName: string; item: any }[]): Promise<void> {
+  public async atomicPutMany(items: { storeName: string; item: { id: string; [key: string]: any } }[]): Promise<void> {
     if (!items.length) return;
     const preparedItems = items.map(({ storeName, item }) => ({
       storeName,
@@ -616,23 +744,75 @@ class StorageEngine {
     });
   }
 
+  /**
+   * Atomically execute a batch of puts and hard-deletes in a single IDB transaction.
+   * Use this to ensure all-or-nothing writes when multiple stores must stay consistent
+   * (e.g., account balance adjustments + transaction deletion).
+   */
+  public async atomicWriteBatch(
+    puts: { storeName: string; item: { id: string; [key: string]: any } }[],
+    deletes: { storeName: string; id: string }[]
+  ): Promise<void> {
+    if (!puts.length && !deletes.length) return;
+    const preparedPuts = puts.map(({ storeName, item }) => ({
+      storeName,
+      item: this.withActiveProfile(storeName, item)
+    }));
+    const db = await this.open();
+    const storeNames = Array.from(new Set([
+      ...preparedPuts.map(i => i.storeName),
+      ...deletes.map(d => d.storeName)
+    ]));
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(storeNames, 'readwrite');
+        for (const { storeName, item } of preparedPuts) {
+          tx.objectStore(storeName).put(item);
+        }
+        for (const { storeName, id } of deletes) {
+          tx.objectStore(storeName).delete(id);
+        }
+        tx.oncomplete = () => {
+          for (const s of storeNames) {
+            this.broadcastChange(s, 'atomicWriteBatch');
+          }
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error('Atomic write batch was aborted.'));
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   public async ensureProfileOwnership(profileId: string): Promise<void> {
     if (!profileId || this.profileOwnershipEnsured.has(profileId)) return;
     const db = await this.open();
-    for (const storeName of [...ENTITY_STORES, 'recycleBin', 'tombstones']) {
-      if (!db.objectStoreNames.contains(storeName)) continue;
-      const rows = await this.getAllRaw<any>(storeName);
-      const unowned = rows.filter(r => r && !r.profileId);
-      if (unowned.length > 0) {
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(storeName, 'readwrite');
-          const store = tx.objectStore(storeName);
-          for (const item of unowned) {
-            store.put({ ...item, profileId });
-          }
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        });
+    const allStores = [...ENTITY_STORES, 'recycleBin', 'tombstones'];
+    const BATCH_SIZE = 3;
+
+    for (let i = 0; i < allStores.length; i += BATCH_SIZE) {
+      const batch = allStores.slice(i, i + BATCH_SIZE);
+      for (const storeName of batch) {
+        if (!db.objectStoreNames.contains(storeName)) continue;
+        const rows = await this.getAllRaw<BaseRecord>(storeName);
+        const unowned = rows.filter(r => r && !r.profileId);
+        if (unowned.length > 0) {
+          await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            for (const item of unowned) {
+              store.put({ ...item, profileId });
+            }
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        }
+      }
+      // Yield to the UI thread between batches to avoid blocking
+      if (i + BATCH_SIZE < allStores.length) {
+        await new Promise<void>(r => setTimeout(r, 0));
       }
     }
     this.profileOwnershipEnsured.add(profileId);
@@ -662,218 +842,113 @@ class StorageEngine {
   }
 
   public async deleteFinanceTransactionWithLink(id: string): Promise<void> {
-    const tx = await this.get<any>('finance', id);
+    const tx = await this.get<FinanceTransaction>('finance', id);
     if (tx) {
       const amt = Number(tx.amount) || 0;
+      const puts: { storeName: string; item: { id: string; [key: string]: any } }[] = [];
+      const deletes: { storeName: string; id: string }[] = [];
 
-      // 1. Account Transfer deletion: Reverse both accounts
+      // Phase 1: Read all related entities
+      const [acct, fromAcct, toAcct, loan, liability, plan, asset, activity, schedule, receipt] = await Promise.all([
+        tx.accountId ? this.get<FinanceAccount>('financeAccounts', tx.accountId) : null,
+        tx.fromAccountId ? this.get<FinanceAccount>('financeAccounts', tx.fromAccountId) : null,
+        tx.toAccountId ? this.get<FinanceAccount>('financeAccounts', tx.toAccountId) : null,
+        tx.linkedLoanId ? this.get<Loan>('loans', tx.linkedLoanId) : null,
+        tx.linkedLiabilityId ? this.get<Liability>('liabilities', tx.linkedLiabilityId) : null,
+        tx.linkedSavingsPlanId ? this.get<SavingsPlan>('savingsPlans', tx.linkedSavingsPlanId) : null,
+        tx.linkedAssetId ? this.get<Asset>('assets', tx.linkedAssetId) : null,
+        tx.linkedInvestmentActivityId ? this.get<InvestmentActivity>('investmentActivities', tx.linkedInvestmentActivityId) : null,
+        tx.linkedCashFlowScheduleId ? this.get<CashFlowSchedule>('cashFlowSchedules', tx.linkedCashFlowScheduleId) : null,
+        tx.linkedReceiptId ? this.get<ReceiptItem>('receipts', tx.linkedReceiptId) : null,
+      ]);
+
+      // Phase 2: Compute all mutations
       if (tx.type === 'transfer') {
-        if (tx.fromAccountId) {
-          const fromAcct = await this.get<any>('financeAccounts', tx.fromAccountId);
-          if (fromAcct) {
-            await this.put('financeAccounts', {
-              ...fromAcct,
-              balance: (Number(fromAcct.balance) || 0) + amt
-            });
-          }
-        }
-        if (tx.toAccountId) {
-          const toAcct = await this.get<any>('financeAccounts', tx.toAccountId);
-          if (toAcct) {
-            await this.put('financeAccounts', {
-              ...toAcct,
-              balance: (Number(toAcct.balance) || 0) - amt
-            });
-          }
-        }
+        if (fromAcct) puts.push({ storeName: 'financeAccounts', item: { ...fromAcct, balance: (Number(fromAcct.balance) || 0) + amt } });
+        if (toAcct) puts.push({ storeName: 'financeAccounts', item: { ...toAcct, balance: (Number(toAcct.balance) || 0) - amt } });
       }
       else if (tx.type === 'adjustment' && tx.accountId) {
-        const acct = await this.get<any>('financeAccounts', tx.accountId);
         if (acct) {
           const delta = (Number(tx.amount) || 0) * (tx.adjustmentDirection === 'credit' ? -1 : 1);
-          await this.put('financeAccounts', {
-            ...acct,
-            balance: (Number(acct.balance) || 0) + delta
-          });
+          puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) + delta } });
         }
-        if (tx.category === 'Asset Sale Proceeds' && tx.linkedAssetId) {
-          const asset = await this.get<any>('assets', tx.linkedAssetId);
-          if (asset) {
-            await this.put('assets', {
-              ...asset,
-              status: 'active',
-              salePrice: undefined,
-              saleDate: undefined,
-              updatedAt: Date.now()
-            });
-          }
+        if (tx.category === 'Asset Sale Proceeds' && asset) {
+          puts.push({ storeName: 'assets', item: { ...asset, status: 'active', salePrice: undefined, saleDate: undefined, updatedAt: Date.now() } });
         }
       }
-      // 2. Loan Repayment deletion: Refund account, restore loan outstanding principal, clean payment
       else if (tx.type === 'repayment') {
-        if (tx.accountId && amt > 0) {
-          const acct = await this.get<any>('financeAccounts', tx.accountId);
-          if (acct) {
-            await this.put('financeAccounts', {
-              ...acct,
-              balance: (Number(acct.balance) || 0) + amt
-            });
-          }
+        if (acct && amt > 0) puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) + amt } });
+        if (loan) {
+          const principal = Number(tx.principal ?? amt);
+          puts.push({ storeName: 'loans', item: { ...loan, outstanding: (Number(loan.outstanding) || 0) + principal, status: 'active', closedDate: undefined, updatedAt: Date.now() } });
         }
-
-        // Restore loan outstanding
-        if (tx.linkedLoanId) {
-          const loan = await this.get<any>('loans', tx.linkedLoanId);
-          if (loan) {
-            const principal = Number(tx.principal ?? amt);
-            await this.put('loans', {
-              ...loan,
-              outstanding: (Number(loan.outstanding) || 0) + principal,
-              status: 'active',
-              closedDate: undefined,
-              updatedAt: Date.now()
-            });
-          }
+        if (liability) {
+          const principal = Number(tx.principal ?? amt);
+          puts.push({ storeName: 'liabilities', item: { ...liability, amount: (Number(liability.amount) || 0) + principal } });
         }
-        if (tx.linkedLiabilityId) {
-          const liability = await this.get<any>('liabilities', tx.linkedLiabilityId);
-          if (liability) {
-            const principal = Number(tx.principal ?? amt);
-            await this.put('liabilities', {
-              ...liability,
-              amount: (Number(liability.amount) || 0) + principal
-            });
-          }
-        }
-
-        // Clean up linked loan payment record
-        if (tx.linkedLoanPaymentId) await this.delete('loanPayments', tx.linkedLoanPaymentId);
+        if (tx.linkedLoanPaymentId) deletes.push({ storeName: 'loanPayments', id: tx.linkedLoanPaymentId });
       }
       else if (tx.type === 'loanReceipt') {
-        if (tx.accountId && amt > 0) {
-          const account = await this.get<any>('financeAccounts', tx.accountId);
-          if (account) await this.put('financeAccounts', { ...account, balance: (Number(account.balance) || 0) - amt });
+        if (acct && amt > 0) puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) - amt } });
+        if (loan) {
+          const principal = Number(tx.principal) || 0;
+          puts.push({ storeName: 'loans', item: { ...loan, outstanding: (Number(loan.outstanding) || 0) + principal, status: 'active', closedDate: undefined, updatedAt: Date.now() } });
         }
-        if (tx.linkedLoanId) {
-          const loan = await this.get<any>('loans', tx.linkedLoanId);
-          if (loan) {
-            const principal = Number(tx.principal) || 0;
-            await this.put('loans', {
-              ...loan,
-              outstanding: (Number(loan.outstanding) || 0) + principal,
-              status: 'active',
-              closedDate: undefined,
-              updatedAt: Date.now()
-            });
-          }
-        }
-        if (tx.linkedLoanPaymentId) await this.delete('loanPayments', tx.linkedLoanPaymentId);
+        if (tx.linkedLoanPaymentId) deletes.push({ storeName: 'loanPayments', id: tx.linkedLoanPaymentId });
       }
       else if (tx.type === 'loanGiven') {
-        if (tx.accountId && amt > 0) {
-          const account = await this.get<any>('financeAccounts', tx.accountId);
-          if (account) await this.put('financeAccounts', { ...account, balance: (Number(account.balance) || 0) + amt });
-        }
-        if (tx.linkedLoanId) await this.delete('loans', tx.linkedLoanId);
+        if (acct && amt > 0) puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) + amt } });
+        if (tx.linkedLoanId) deletes.push({ storeName: 'loans', id: tx.linkedLoanId });
       }
-      // Reverse a savings withdrawal: debit its destination account and restore principal.
       else if (tx.type === 'savingsWithdrawal') {
-        if (tx.accountId && amt > 0) {
-          const acct = await this.get<any>('financeAccounts', tx.accountId);
-          if (acct) {
-            await this.put('financeAccounts', {
-              ...acct,
-              balance: (Number(acct.balance) || 0) - amt
-            });
-          }
-        }
-        if (tx.linkedSavingsPlanId) {
-          const plan = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
-          if (plan) {
-            const principal = Number(tx.principal ?? amt);
-            await this.put('savingsPlans', {
-              ...plan,
-              currentAmount: (Number(plan.currentAmount) || 0) + principal,
-              ...(tx.category === 'Savings Final Settlement' ? { status: 'active' } : {}),
-              updatedAt: Date.now()
-            });
-          }
+        if (acct && amt > 0) puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) - amt } });
+        if (plan) {
+          const principal = Number(tx.principal ?? amt);
+          puts.push({ storeName: 'savingsPlans', item: { ...plan, currentAmount: (Number(plan.currentAmount) || 0) + principal, ...(tx.category === 'Savings Final Settlement' ? { status: 'active' } : {}), updatedAt: Date.now() } });
         }
       }
-      // 3. Regular Expense, Investment, Savings, Income, or Loan Receipt
       else {
-        if (tx.accountId && amt > 0) {
-          const acct = await this.get<any>('financeAccounts', tx.accountId);
-          if (acct) {
-            let newBal = Number(acct.balance || 0);
-            if (tx.type === 'expense' || tx.type === 'investment' || tx.type === 'savings') {
-              newBal += amt;
-            } else if (tx.type === 'income' || tx.type === 'loan') {
-              newBal -= amt;
-            }
-            await this.put('financeAccounts', { ...acct, balance: newBal });
-          }
+        if (acct && amt > 0) {
+          let newBal = Number(acct.balance || 0);
+          if (tx.type === 'expense' || tx.type === 'investment' || tx.type === 'savings') newBal += amt;
+          else if (tx.type === 'income' || tx.type === 'loan') newBal -= amt;
+          puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: newBal } });
         }
-        if (tx.type === 'loan' && tx.linkedLiabilityId) {
-          await this.delete('liabilities', tx.linkedLiabilityId);
-        }
-        if (tx.type === 'loan' && tx.linkedLoanId) {
-          await this.delete('loans', tx.linkedLoanId);
-        }
-
-        // Clean up linked investment asset if this was an investment transaction
-        if (tx.linkedInvestmentId && !tx.linkedInvestmentActivityId) {
-          try {
-            await this.delete('investments', tx.linkedInvestmentId);
-          } catch {}
-        }
-
-        // Adjust linked savings plan current amount if this was a savings contribution
-        if (tx.linkedSavingsPlanId) {
-          const sp = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
-          if (sp) {
-            await this.put('savingsPlans', {
-              ...sp,
-              currentAmount: Math.max(0, (Number(sp.currentAmount) || 0) - amt),
-              updatedAt: Date.now()
-            });
-          }
+        if (tx.type === 'loan' && tx.linkedLiabilityId) deletes.push({ storeName: 'liabilities', id: tx.linkedLiabilityId });
+        if (tx.type === 'loan' && tx.linkedLoanId) deletes.push({ storeName: 'loans', id: tx.linkedLoanId });
+        if (tx.linkedInvestmentId && !tx.linkedInvestmentActivityId) deletes.push({ storeName: 'investments', id: tx.linkedInvestmentId });
+        if (plan) {
+          puts.push({ storeName: 'savingsPlans', item: { ...plan, currentAmount: Math.max(0, (Number(plan.currentAmount) || 0) - amt), updatedAt: Date.now() } });
         }
       }
 
-      if (tx.linkedInvestmentActivityId) {
-        const activity = await this.get<InvestmentActivity>('investmentActivities', tx.linkedInvestmentActivityId);
-        if (activity) {
-          await this.put('investmentActivities', { ...activity, reversedAt: Date.now(), updatedAt: Date.now() });
-          await this.refreshInvestmentCostBasis(activity.investmentId);
-        }
+      if (activity) {
+        puts.push({ storeName: 'investmentActivities', item: { ...activity, reversedAt: Date.now(), updatedAt: Date.now() } });
       }
-      if (tx.linkedCashFlowScheduleId && tx.scheduleOccurrenceDate) {
-        const schedule = await this.get<CashFlowSchedule>('cashFlowSchedules', tx.linkedCashFlowScheduleId);
-        if (schedule) await this.put('cashFlowSchedules', restoreScheduleOccurrence(schedule, tx.scheduleOccurrenceDate));
+      if (schedule && tx.scheduleOccurrenceDate) {
+        puts.push({ storeName: 'cashFlowSchedules', item: restoreScheduleOccurrence(schedule, tx.scheduleOccurrenceDate) });
+      }
+      if (receipt) {
+        puts.push({ storeName: 'receipts', item: { ...receipt, linkedTransactionId: null, linkedExpenseId: null } });
       }
 
-      // 4. Unlink receipt if linked
-      if (tx.linkedReceiptId) {
-        try {
-          const receipt = await this.get<any>('receipts', tx.linkedReceiptId);
-          if (receipt) {
-            await this.put('receipts', {
-              ...receipt,
-              linkedTransactionId: null,
-              linkedExpenseId: null
-            });
-          }
-        } catch {}
+      // Phase 3: Apply all mutations atomically
+      if (puts.length || deletes.length) {
+        await this.atomicWriteBatch(puts, deletes);
+      }
+
+      // Phase 4: Post-atomic side effects (investment cost basis refresh reads many records)
+      if (activity) {
+        await this.refreshInvestmentCostBasis(activity.investmentId);
       }
     }
     await this.delete('finance', id);
   }
 
   public async deleteReceiptWithLink(id: string): Promise<void> {
-    const receipt = await this.get<any>('receipts', id);
+    const receipt = await this.get<ReceiptItem>('receipts', id);
     if (receipt?.linkedTransactionId) {
-      const transaction = await this.get<any>('finance', receipt.linkedTransactionId);
+      const transaction = await this.get<FinanceTransaction>('finance', receipt.linkedTransactionId);
       if (transaction?.linkedReceiptId === id) {
         await this.put('finance', {
           ...transaction,
@@ -881,208 +956,125 @@ class StorageEngine {
           updatedAt: Date.now()
         });
       }
-    } else if (receipt?.linkedExpenseId) {
-      await this.deleteFinanceTransactionWithLink(receipt.linkedExpenseId);
+    } else if ((receipt as any)?.linkedExpenseId) {
+      await this.deleteFinanceTransactionWithLink((receipt as any).linkedExpenseId);
     }
     await this.delete('receipts', id);
   }
 
-  private async reapplyFinanceTransactionEffect(tx: any): Promise<void> {
+  private async reapplyFinanceTransactionEffect(tx: FinanceTransaction): Promise<void> {
     if (!tx) return;
     const amt = Number(tx.amount) || 0;
     if (amt <= 0) return;
 
+    const puts: { storeName: string; item: { id: string; [key: string]: any } }[] = [];
+
+    // Phase 1: Read all related entities in parallel
+    const [acct, fromAcct, toAcct, loan, liability, plan, asset, activity, schedule] = await Promise.all([
+      tx.accountId ? this.get<FinanceAccount>('financeAccounts', tx.accountId) : null,
+      tx.fromAccountId ? this.get<FinanceAccount>('financeAccounts', tx.fromAccountId) : null,
+      tx.toAccountId ? this.get<FinanceAccount>('financeAccounts', tx.toAccountId) : null,
+      tx.linkedLoanId ? this.get<Loan>('loans', tx.linkedLoanId) : null,
+      tx.linkedLiabilityId ? this.get<Liability>('liabilities', tx.linkedLiabilityId) : null,
+      tx.linkedSavingsPlanId ? this.get<SavingsPlan>('savingsPlans', tx.linkedSavingsPlanId) : null,
+      tx.linkedAssetId ? this.get<Asset>('assets', tx.linkedAssetId) : null,
+      tx.linkedInvestmentActivityId ? this.get<InvestmentActivity>('investmentActivities', tx.linkedInvestmentActivityId) : null,
+      tx.linkedCashFlowScheduleId ? this.get<CashFlowSchedule>('cashFlowSchedules', tx.linkedCashFlowScheduleId) : null,
+    ]);
+
+    // Phase 2: Compute all mutations
     if (tx.type === 'transfer') {
-      if (tx.fromAccountId) {
-        const fromAcct = await this.get<any>('financeAccounts', tx.fromAccountId);
-        if (fromAcct) {
-          await this.put('financeAccounts', { ...fromAcct, balance: (Number(fromAcct.balance) || 0) - amt });
-        }
-      }
-      if (tx.toAccountId) {
-        const toAcct = await this.get<any>('financeAccounts', tx.toAccountId);
-        if (toAcct) {
-          await this.put('financeAccounts', { ...toAcct, balance: (Number(toAcct.balance) || 0) + amt });
-        }
-      }
+      if (fromAcct) puts.push({ storeName: 'financeAccounts', item: { ...fromAcct, balance: (Number(fromAcct.balance) || 0) - amt } });
+      if (toAcct) puts.push({ storeName: 'financeAccounts', item: { ...toAcct, balance: (Number(toAcct.balance) || 0) + amt } });
     } else if (tx.type === 'adjustment' && tx.accountId) {
-      const acct = await this.get<any>('financeAccounts', tx.accountId);
       if (acct) {
         const delta = (Number(tx.amount) || 0) * (tx.adjustmentDirection === 'credit' ? 1 : -1);
-        await this.put('financeAccounts', {
-          ...acct,
-          balance: (Number(acct.balance) || 0) + delta
-        });
+        puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) + delta } });
       }
-      if (tx.category === 'Asset Sale Proceeds' && tx.linkedAssetId) {
-        const asset = await this.get<any>('assets', tx.linkedAssetId);
-        if (asset) {
-          await this.put('assets', {
-            ...asset,
-            status: 'sold',
-            salePrice: amt,
-            saleDate: tx.date,
-            updatedAt: Date.now()
-          });
-        }
+      if (tx.category === 'Asset Sale Proceeds' && asset) {
+        puts.push({ storeName: 'assets', item: { ...asset, status: 'sold', salePrice: amt, saleDate: tx.date, updatedAt: Date.now() } });
       }
     } else if (tx.type === 'repayment') {
-      if (tx.accountId) {
-        const acct = await this.get<any>('financeAccounts', tx.accountId);
-        if (acct) {
-          await this.put('financeAccounts', { ...acct, balance: (Number(acct.balance) || 0) - amt });
+      if (acct) puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) - amt } });
+      if (loan) {
+        const principal = Number(tx.principal ?? amt);
+        const outstanding = Math.max(0, (Number(loan.outstanding) || 0) - principal);
+        puts.push({ storeName: 'loans', item: { ...loan, outstanding, status: outstanding <= 0.01 ? 'closed' : 'active', closedDate: outstanding <= 0.01 ? tx.date : loan.closedDate, updatedAt: Date.now() } });
+        if (tx.linkedLoanPaymentId) {
+          puts.push({ storeName: 'loanPayments', item: {
+            id: tx.linkedLoanPaymentId, loanId: tx.linkedLoanId!, loanName: loan.name, amount: amt, principal,
+            interest: Number(tx.interest) || 0, extraPrincipal: Number(tx.extraPrincipal) || 0,
+            lateFee: Number(tx.lateFee) || 0, penalInterest: Number(tx.penalInterest) || 0,
+            processingFee: Number(tx.processingFee) || 0, administrativeFee: Number(tx.administrativeFee) || 0,
+            applicableTax: Number(tx.applicableTax) || Number(tx.tds) || 0, insuranceCharge: Number(tx.insuranceCharge) || 0,
+            otherFees: Number(tx.otherFees) || 0, isClosure: tx.category === 'Loan Closure Settlement',
+            date: tx.date, accountId: tx.accountId || null, createdAt: tx.createdAt || Date.now()
+          }});
         }
       }
-      if (tx.linkedLoanId) {
-        const loan = await this.get<any>('loans', tx.linkedLoanId);
-        if (loan) {
-          const principal = Number(tx.principal ?? amt);
-          const outstanding = Math.max(0, (Number(loan.outstanding) || 0) - principal);
-          await this.put('loans', {
-            ...loan,
-            outstanding,
-            status: outstanding <= 0.01 ? 'closed' : 'active',
-            closedDate: outstanding <= 0.01 ? tx.date : loan.closedDate,
-            updatedAt: Date.now()
-          });
-          if (tx.linkedLoanPaymentId) {
-            await this.put('loanPayments', {
-              id: tx.linkedLoanPaymentId,
-              loanId: tx.linkedLoanId,
-              loanName: loan.name,
-              amount: amt,
-              principal,
-              interest: Number(tx.interest) || 0,
-              extraPrincipal: Number(tx.extraPrincipal) || 0,
-              lateFee: Number(tx.lateFee) || 0,
-              penalInterest: Number(tx.penalInterest) || 0,
-              processingFee: Number(tx.processingFee) || 0,
-              administrativeFee: Number(tx.administrativeFee) || 0,
-              applicableTax: Number(tx.applicableTax) || Number(tx.tds) || 0,
-              insuranceCharge: Number(tx.insuranceCharge) || 0,
-              otherFees: Number(tx.otherFees) || 0,
-              isClosure: tx.category === 'Loan Closure Settlement',
-              date: tx.date,
-              accountId: tx.accountId || null,
-              createdAt: tx.createdAt || Date.now()
-            });
-          }
-        }
+      if (liability) {
+        const principal = Number(tx.principal ?? amt);
+        puts.push({ storeName: 'liabilities', item: { ...liability, amount: Math.max(0, (Number(liability.amount) || 0) - principal) } });
       }
-      if (tx.linkedLiabilityId) {
-        const liability = await this.get<any>('liabilities', tx.linkedLiabilityId);
-        if (liability) {
-          const principal = Number(tx.principal ?? amt);
-          await this.put('liabilities', {
-            ...liability,
-            amount: Math.max(0, (Number(liability.amount) || 0) - principal)
-          });
-        }
-    } else if (tx.type === 'loanReceipt') {
-        if (tx.accountId) {
-          const account = await this.get<any>('financeAccounts', tx.accountId);
-          if (account) await this.put('financeAccounts', { ...account, balance: (Number(account.balance) || 0) + amt });
-        }
-        if (tx.linkedLoanId) {
-          const loan = await this.get<any>('loans', tx.linkedLoanId);
-          if (loan) {
-            const principal = Number(tx.principal) || 0;
-            const outstanding = Math.max(0, (Number(loan.outstanding) || 0) - principal);
-            await this.put('loans', { ...loan, outstanding, status: outstanding <= 0.01 ? 'closed' : 'active', updatedAt: Date.now() });
-          }
-        }
-        if (tx.linkedLoanPaymentId && tx.linkedLoanId) {
-          const loan = await this.get<any>('loans', tx.linkedLoanId);
-          await this.put('loanPayments', {
-            id: tx.linkedLoanPaymentId,
-            loanId: tx.linkedLoanId,
-            loanName: loan?.name || tx.note || 'Loan receivable',
-            amount: amt,
-            principal: Number(tx.principal) || 0,
-            interest: Number(tx.interest) || 0,
-            extraPrincipal: Number(tx.extraPrincipal) || 0,
-            lateFee: Number(tx.lateFee) || 0,
-            penalInterest: Number(tx.penalInterest) || 0,
-            processingFee: Number(tx.processingFee) || 0,
-            administrativeFee: Number(tx.administrativeFee) || 0,
-            applicableTax: Number(tx.applicableTax) || 0,
-            insuranceCharge: Number(tx.insuranceCharge) || 0,
-            otherFees: Number(tx.otherFees) || 0,
-            isClosure: tx.category === 'Loan Receivable Closed',
-            date: tx.date,
-            accountId: tx.accountId || null,
-            createdAt: tx.createdAt || Date.now()
-          });
-        }
-    } else if (tx.type === 'loanGiven') {
-        if (tx.accountId) {
-          const account = await this.get<any>('financeAccounts', tx.accountId);
-          if (account) await this.put('financeAccounts', { ...account, balance: (Number(account.balance) || 0) - amt });
-        }
+    } else if ((tx.type as string) === 'loanReceipt') {
+      if (acct) puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) + amt } });
+      if (loan) {
+        const principal = Number(tx.principal) || 0;
+        const outstanding = Math.max(0, (Number(loan.outstanding) || 0) - principal);
+        puts.push({ storeName: 'loans', item: { ...loan, outstanding, status: outstanding <= 0.01 ? 'closed' : 'active', updatedAt: Date.now() } });
       }
+      if (tx.linkedLoanPaymentId && tx.linkedLoanId) {
+        puts.push({ storeName: 'loanPayments', item: {
+          id: tx.linkedLoanPaymentId, loanId: tx.linkedLoanId,
+          loanName: loan?.name || tx.note || 'Loan receivable', amount: amt,
+          principal: Number(tx.principal) || 0, interest: Number(tx.interest) || 0,
+          extraPrincipal: Number(tx.extraPrincipal) || 0, lateFee: Number(tx.lateFee) || 0,
+          penalInterest: Number(tx.penalInterest) || 0, processingFee: Number(tx.processingFee) || 0,
+          administrativeFee: Number(tx.administrativeFee) || 0, applicableTax: Number(tx.applicableTax) || 0,
+          insuranceCharge: Number(tx.insuranceCharge) || 0, otherFees: Number(tx.otherFees) || 0,
+          isClosure: tx.category === 'Loan Receivable Closed',
+          date: tx.date, accountId: tx.accountId || null, createdAt: tx.createdAt || Date.now()
+        }});
+      }
+    } else if ((tx.type as string) === 'loanGiven') {
+      if (acct) puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) - amt } });
     } else if (tx.type === 'savingsWithdrawal') {
-      if (tx.accountId) {
-        const acct = await this.get<any>('financeAccounts', tx.accountId);
-        if (acct) {
-          await this.put('financeAccounts', { ...acct, balance: (Number(acct.balance) || 0) + amt });
-        }
-      }
-      if (tx.linkedSavingsPlanId) {
-        const plan = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
-        if (plan) {
-          const principal = Number(tx.principal ?? amt);
-          await this.put('savingsPlans', {
-            ...plan,
-            currentAmount: Math.max(0, (Number(plan.currentAmount) || 0) - principal),
-            ...(tx.category === 'Savings Final Settlement' ? { status: 'closed' } : {}),
-            updatedAt: Date.now()
-          });
-        }
+      if (acct) puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: (Number(acct.balance) || 0) + amt } });
+      if (plan) {
+        const principal = Number(tx.principal ?? amt);
+        puts.push({ storeName: 'savingsPlans', item: { ...plan, currentAmount: Math.max(0, (Number(plan.currentAmount) || 0) - principal), ...(tx.category === 'Savings Final Settlement' ? { status: 'closed' } : {}), updatedAt: Date.now() } });
       }
     } else {
-      if (tx.accountId) {
-        const acct = await this.get<any>('financeAccounts', tx.accountId);
-        if (acct) {
-          let newBal = Number(acct.balance || 0);
-          if (tx.type === 'expense' || tx.type === 'investment' || tx.type === 'savings') {
-            newBal -= amt;
-          } else if (tx.type === 'income' || tx.type === 'loan') {
-            newBal += amt;
-          }
-          await this.put('financeAccounts', { ...acct, balance: newBal });
-        }
+      if (acct) {
+        let newBal = Number(acct.balance || 0);
+        if (tx.type === 'expense' || tx.type === 'investment' || tx.type === 'savings') newBal -= amt;
+        else if (tx.type === 'income' || tx.type === 'loan') newBal += amt;
+        puts.push({ storeName: 'financeAccounts', item: { ...acct, balance: newBal } });
       }
-      if (tx.type === 'loan' && tx.linkedLiabilityId) {
-        const liability = await this.get<any>('liabilities', tx.linkedLiabilityId);
-        if (liability) {
-          await this.put('liabilities', {
-            ...liability,
-            amount: (Number(liability.amount) || 0) + amt
-          });
-        }
+      if (tx.type === 'loan' && liability) {
+        puts.push({ storeName: 'liabilities', item: { ...liability, amount: (Number(liability.amount) || 0) + amt } });
       }
-      if (tx.type === 'savings' && tx.linkedSavingsPlanId) {
-        const plan = await this.get<any>('savingsPlans', tx.linkedSavingsPlanId);
-        if (plan) {
-          await this.put('savingsPlans', {
-            ...plan,
-            currentAmount: (Number(plan.currentAmount) || 0) + amt,
-            updatedAt: Date.now()
-          });
-        }
+      if (tx.type === 'savings' && plan) {
+        puts.push({ storeName: 'savingsPlans', item: { ...plan, currentAmount: (Number(plan.currentAmount) || 0) + amt, updatedAt: Date.now() } });
       }
     }
-    if (tx.linkedInvestmentActivityId) {
-      const activity = await this.get<InvestmentActivity>('investmentActivities', tx.linkedInvestmentActivityId);
-      if (activity) {
-        const { reversedAt: _reversedAt, ...activeActivity } = activity;
-        await this.put('investmentActivities', { ...activeActivity, updatedAt: Date.now() });
-        await this.refreshInvestmentCostBasis(activity.investmentId);
-      }
+
+    if (activity) {
+      const { reversedAt: _reversedAt, ...activeActivity } = activity;
+      puts.push({ storeName: 'investmentActivities', item: { ...activeActivity, updatedAt: Date.now() } });
     }
-    if (tx.linkedCashFlowScheduleId && tx.scheduleOccurrenceDate) {
-      const schedule = await this.get<CashFlowSchedule>('cashFlowSchedules', tx.linkedCashFlowScheduleId);
-      if (schedule) await this.put('cashFlowSchedules', advanceSchedule(schedule, tx.scheduleOccurrenceDate));
+    if (schedule && tx.scheduleOccurrenceDate) {
+      puts.push({ storeName: 'cashFlowSchedules', item: advanceSchedule(schedule, tx.scheduleOccurrenceDate) });
+    }
+
+    // Phase 3: Apply all mutations atomically
+    if (puts.length) {
+      await this.atomicWriteBatch(puts, []);
+    }
+
+    // Phase 4: Post-atomic side effects
+    if (activity) {
+      await this.refreshInvestmentCostBasis(activity.investmentId);
     }
   }
 
@@ -1092,7 +1084,7 @@ class StorageEngine {
 
   public async moveToRecycleBin(storeName: string, id: string): Promise<void> {
     const db = await this.open();
-    const item = await this.get<any>(storeName, id);
+    const item = await this.get<BaseRecord>(storeName, id);
     if (!item) return;
 
     const profileId = item.profileId || this.activeProfileId || 'om-master-profile';
@@ -1113,7 +1105,7 @@ class StorageEngine {
     }
 
     const linkedInteractions = storeName === 'people'
-      ? (await this.getAll<any>('interactions', profileId)).filter(interaction => interaction.personId === id)
+      ? (await this.getAll<any>('interactions', profileId)).filter((interaction: any) => interaction.personId === id)
       : [];
     const directReminderTypes: Record<string, string[]> = {
       learningItems: ['learning', 'learningItem', 'learningItems'],
@@ -1122,7 +1114,7 @@ class StorageEngine {
       habits: ['habit', 'habits']
     };
     const linkedReminders = (storeName === 'tasks' || storeName === 'people' || taskField)
-      ? (await this.getAll<any>('reminders', profileId)).filter(reminder => {
+      ? (await this.getAll<any>('reminders', profileId)).filter((reminder: any) => {
           if (storeName === 'tasks') {
             return reminder.linkedId === id && (
               reminder.linkedType === 'task' || !reminder.linkedType
@@ -1292,15 +1284,41 @@ class StorageEngine {
     delete restoredData.isDeleted;
     delete restoredData.deletedAt;
 
+    const restoredChildren = storeName === 'people'
+      ? (await this.getRecycleBinItems(recycleItem.profileId)).filter(entry =>
+          (entry.storeName === 'interactions' && entry.data?.personId === recordId) ||
+          (entry.storeName === 'reminders' && entry.data?.linkedId === recordId && entry.data?.linkedType === 'contact')
+        )
+      : [];
+    const transactionStores = Array.from(new Set([
+      storeName,
+      ...restoredChildren.map(entry => entry.storeName),
+      'recycleBin',
+      'tombstones'
+    ]));
+
     return new Promise((resolve) => {
       try {
-        const tx = db.transaction([storeName, 'recycleBin', 'tombstones'], 'readwrite');
+        const tx = db.transaction(transactionStores, 'readwrite');
         tx.objectStore(storeName).put(restoredData);
         tx.objectStore('recycleBin').delete(binKey);
         tx.objectStore('tombstones').delete(binKey);
+        for (const child of restoredChildren) {
+          const childData = { ...child.data };
+          delete childData.inRecycleBin;
+          delete childData.isDeleted;
+          delete childData.deletedAt;
+          tx.objectStore(child.storeName).put(childData);
+          tx.objectStore('recycleBin').delete(child.id);
+          tx.objectStore('tombstones').delete(child.id);
+        }
         tx.oncomplete = () => {
           this.broadcastChange(storeName, 'restore', recordId);
           this.broadcastChange('recycleBin', 'delete', binKey);
+          for (const child of restoredChildren) {
+            this.broadcastChange(child.storeName, 'restore', child.recordId);
+            this.broadcastChange('recycleBin', 'delete', child.id);
+          }
           if (storeName === 'finance') {
             this.reapplyFinanceTransactionEffect(restoredData).catch(console.error);
           }
@@ -1347,7 +1365,7 @@ class StorageEngine {
           if (stores.includes('attachments')) {
             const attachmentIds = new Set(
               (Array.isArray(recycleItem.data?.attachments) ? recycleItem.data.attachments : [])
-                .map((attachment: any) => {
+                .map((attachment: string | { id?: string }) => {
                   if (typeof attachment !== 'string') return attachment?.id;
                   try {
                     return JSON.parse(attachment)?.id;
@@ -1416,19 +1434,19 @@ class StorageEngine {
       this.getAll<any>('routines', profileId),
       this.getAll<any>('habits', profileId)
     ]);
-    const taskIds = new Set(tasks.map(task => task.id));
-    const tasksById = new Map(tasks.map(task => [task.id, task]));
-    const peopleIds = new Set(people.map(person => person.id));
+    const taskIds = new Set(tasks.map((task: any) => task.id));
+    const tasksById = new Map(tasks.map((task: any) => [task.id, task]));
+    const peopleIds = new Set(people.map((person: any) => person.id));
     const directLinkedSourceIds: Record<string, Set<string>> = {
-      learning: new Set(learningItems.map(item => item.id)),
-      learningItem: new Set(learningItems.map(item => item.id)),
-      learningItems: new Set(learningItems.map(item => item.id)),
-      skill: new Set(skills.map(item => item.id)),
-      skills: new Set(skills.map(item => item.id)),
-      routine: new Set(routines.map(item => item.id)),
-      routines: new Set(routines.map(item => item.id)),
-      habit: new Set(habits.map(item => item.id)),
-      habits: new Set(habits.map(item => item.id))
+      learning: new Set(learningItems.map((item: any) => item.id)),
+      learningItem: new Set(learningItems.map((item: any) => item.id)),
+      learningItems: new Set(learningItems.map((item: any) => item.id)),
+      skill: new Set(skills.map((item: any) => item.id)),
+      skills: new Set(skills.map((item: any) => item.id)),
+      routine: new Set(routines.map((item: any) => item.id)),
+      routines: new Set(routines.map((item: any) => item.id)),
+      habit: new Set(habits.map((item: any) => item.id)),
+      habits: new Set(habits.map((item: any) => item.id))
     };
     const activeContactReminders = new Map<string, any>();
     const reminderIdsToRecycle = new Set<string>();
@@ -1532,7 +1550,7 @@ class StorageEngine {
     profileId: string;
     profileName: string;
     includeFullMedia: boolean;
-  }): Promise<{ blob: Blob; filename: string; metadata: any }> {
+  }): Promise<{ blob: Blob; filename: string; metadata: Record<string, unknown> }> {
     const res = await universalDataManager.exportCanonicalBackup({
       profileId: options.profileId,
       profileName: options.profileName,
@@ -1560,7 +1578,7 @@ class StorageEngine {
       return {
         valid: false,
         error: validation.error || 'Invalid file format. File is not an Om-LifeOS update bundle or backup.',
-        bundle: {} as any,
+        bundle: {} as ManualUpdateBundle,
         targetProfileId,
         totalIncoming: 0,
         addedCount: 0,
@@ -1699,7 +1717,7 @@ class StorageEngine {
   public setLastExportCheckpoint(profileId: string, timestamp: number): void {
     try {
       localStorage.setItem(`om_export_checkpoint_${profileId}`, String(timestamp));
-    } catch {}
+    } catch (err) { console.warn('[StorageEngine] failed to save export checkpoint:', err); }
   }
 
   public getLastImportTimestamp(profileId: string): number {
@@ -1714,7 +1732,7 @@ class StorageEngine {
   public setLastImportTimestamp(profileId: string, timestamp: number): void {
     try {
       localStorage.setItem(`om_last_import_at_${profileId}`, String(timestamp));
-    } catch {}
+    } catch (err) { console.warn('[StorageEngine] failed to save import timestamp:', err); }
   }
 
   public async calculateProfileStorageStats(profileId: string): Promise<{
@@ -1732,7 +1750,7 @@ class StorageEngine {
 
     for (const storeName of ENTITY_STORES) {
       const allRows = await this.getAllRaw<any>(storeName);
-      const profileRows = allRows.filter(r => r && this.belongsToProfile(r, profileId));
+      const profileRows = allRows.filter((r: any) => r && this.belongsToProfile(r, profileId));
       entities[storeName] = profileRows;
 
       for (const row of profileRows) {
@@ -1772,7 +1790,7 @@ class StorageEngine {
         const level = percent > 90 ? 'critical' : percent > 75 ? 'warning' : 'healthy';
         return { usage, quota, percent, level, available: true };
       }
-    } catch {}
+    } catch (err) { console.warn('[StorageEngine] storage estimate failed:', err); }
     return { usage: 0, quota: 0, percent: 0, level: 'healthy', available: false };
   }
 
@@ -1855,7 +1873,7 @@ class StorageEngine {
     const db = await this.open();
     for (const storeName of ENTITY_STORES) {
       if (!db.objectStoreNames.contains(storeName)) continue;
-      const rows = await this.getAllRaw<any>(storeName);
+      const rows = await this.getAllRaw<BaseRecord>(storeName);
       const toDelete = rows.filter(r => r && r.profileId === profileId);
       if (toDelete.length > 0) {
         await new Promise<void>((resolve, reject) => {
@@ -1870,6 +1888,340 @@ class StorageEngine {
       }
     }
     await this.setSingleton('appSettings', settings);
+  }
+
+  private bytesToBase64(bytes: Uint8Array): string {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+
+  private base64ToBytes(value: string): Uint8Array {
+    const binary = atob(value);
+    return Uint8Array.from(binary, character => character.charCodeAt(0));
+  }
+
+  private toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+    return Uint8Array.from(bytes).buffer as ArrayBuffer;
+  }
+
+  private async deriveAttachmentKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
+    const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: this.toArrayBuffer(salt), iterations: 310_000, hash: 'SHA-256' },
+      material,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  public async enableAttachmentEncryption(passphrase: string): Promise<void> {
+    if (typeof crypto === 'undefined' || !crypto.subtle) throw new Error('This browser does not support secure attachment encryption.');
+    if (passphrase.trim().length < 10) throw new Error('Use an encryption passphrase with at least 10 characters.');
+    const settings = await this.getSingleton<AppState>('appSettings') || ({} as AppState);
+    if (settings.attachmentEncryption?.enabled) {
+      await this.unlockAttachmentEncryption(passphrase);
+      return;
+    }
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const key = await this.deriveAttachmentKey(passphrase, salt);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const verifier = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: this.toArrayBuffer(iv) }, key, new TextEncoder().encode('om-lifeos-attachment-key-check-v1'));
+    const encryption = {
+      enabled: true as const,
+      salt: this.bytesToBase64(salt),
+      verifier: `${this.bytesToBase64(iv)}.${this.bytesToBase64(new Uint8Array(verifier))}`
+    };
+    await this.setSingleton('appSettings', { ...settings, attachmentEncryption: encryption });
+    this.attachmentCryptoKey = key;
+    this.attachmentCryptoProfileId = this.getActiveProfileId();
+    try {
+      await this.migrateInlineVaultAttachments();
+      await this.encryptExistingBlobs();
+      this.startAttachmentAutoLock();
+      this.emitAttachmentEncryptionState(true);
+    } catch (error) {
+      this.lockAttachmentEncryption();
+      throw error;
+    }
+  }
+
+  public async unlockAttachmentEncryption(passphrase: string): Promise<void> {
+    const settings = await this.getSingleton<AppState>('appSettings');
+    const config = settings?.attachmentEncryption;
+    if (!config?.enabled) throw new Error('Attachment encryption is not configured for this workspace.');
+    const key = await this.deriveAttachmentKey(passphrase, this.base64ToBytes(config.salt));
+    const [iv, encryptedVerifier] = config.verifier.split('.');
+    try {
+      const clear = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: this.toArrayBuffer(this.base64ToBytes(iv)) },
+        key,
+        this.toArrayBuffer(this.base64ToBytes(encryptedVerifier))
+      );
+      if (new TextDecoder().decode(clear) !== 'om-lifeos-attachment-key-check-v1') throw new Error('Passphrase is incorrect.');
+    } catch {
+      throw new Error('Incorrect encryption passphrase.');
+    }
+    this.attachmentCryptoKey = key;
+    this.attachmentCryptoProfileId = this.getActiveProfileId();
+    try {
+      await this.migrateInlineVaultAttachments();
+      await this.encryptExistingBlobs();
+      this.startAttachmentAutoLock();
+      this.emitAttachmentEncryptionState(true);
+    } catch (error) {
+      this.lockAttachmentEncryption();
+      throw error;
+    }
+  }
+
+  public isAttachmentEncryptionEnabled(settings?: AppState): boolean {
+    return Boolean(settings?.attachmentEncryption?.enabled);
+  }
+
+  public isAttachmentEncryptionUnlocked(): boolean {
+    return Boolean(this.attachmentCryptoKey && this.attachmentCryptoProfileId === this.getActiveProfileId());
+  }
+
+  public lockAttachmentEncryption(): void {
+    if (this.attachmentAutoLockTimer) clearTimeout(this.attachmentAutoLockTimer);
+    this.attachmentAutoLockTimer = null;
+    if (this.attachmentActivityHandler && typeof window !== 'undefined') {
+      window.removeEventListener('pointerdown', this.attachmentActivityHandler, true);
+      window.removeEventListener('keydown', this.attachmentActivityHandler, true);
+      window.removeEventListener('touchstart', this.attachmentActivityHandler, true);
+    }
+    this.attachmentActivityHandler = null;
+    this.attachmentCryptoKey = null;
+    this.attachmentCryptoProfileId = null;
+    this.emitAttachmentEncryptionState(false);
+  }
+
+  private emitAttachmentEncryptionState(unlocked: boolean): void {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('om-attachment-encryption-state', { detail: { unlocked } }));
+  }
+
+  private startAttachmentAutoLock(): void {
+    if (typeof window === 'undefined') return;
+    const resetTimer = () => {
+      if (this.attachmentAutoLockTimer) clearTimeout(this.attachmentAutoLockTimer);
+      this.attachmentAutoLockTimer = setTimeout(() => this.lockAttachmentEncryption(), 5 * 60 * 1000);
+    };
+    if (!this.attachmentActivityHandler) {
+      this.attachmentActivityHandler = resetTimer;
+      window.addEventListener('pointerdown', resetTimer, true);
+      window.addEventListener('keydown', resetTimer, true);
+      window.addEventListener('touchstart', resetTimer, true);
+    }
+    resetTimer();
+  }
+
+  public async encryptExistingBlobs(): Promise<void> {
+    const key = this.attachmentCryptoProfileId === this.getActiveProfileId() ? this.attachmentCryptoKey : null;
+    if (!key) throw new Error('Unlock attachment encryption before migrating existing files.');
+    const db = await this.open();
+    const referencedBlobIds = new Set<string>();
+    const activeProfileId = this.getActiveProfileId();
+    const collectBlobRefs = (value: unknown, key = ''): void => {
+      if (!value || typeof value !== 'object') {
+        if (typeof value === 'string' && /(?:blobid|dataurl|attachments)$/i.test(key) && /^[0-9a-f-]{36}$/i.test(value)) referencedBlobIds.add(value);
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.forEach(item => collectBlobRefs(item, key));
+        return;
+      }
+      Object.entries(value as Record<string, unknown>).forEach(([childKey, child]) => collectBlobRefs(child, childKey));
+    };
+    const scanStores = [...ENTITY_STORES, 'recycleBin'];
+    for (const storeName of scanStores) {
+      if (!db.objectStoreNames.contains(storeName)) continue;
+      const rows = storeName === 'recycleBin' ? await this.getAllRaw<any>(storeName) : await this.getAll<any>(storeName);
+      for (const item of rows) {
+        if (item?.profileId && item.profileId !== activeProfileId) continue;
+        collectBlobRefs(item);
+      }
+    }
+    const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+      const tx = db.transaction('attachmentBlobs', 'readonly');
+      const req = tx.objectStore('attachmentBlobs').getAllKeys();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    for (const id of keys) {
+      const record = await new Promise<any>((resolve, reject) => {
+        const tx = db.transaction('attachmentBlobs', 'readonly');
+        const req = tx.objectStore('attachmentBlobs').get(id);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+      if (!record || record.encrypted || (record.profileId && record.profileId !== activeProfileId) || (!record.profileId && !referencedBlobIds.has(String(id)))) continue;
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const encryptedData = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: this.toArrayBuffer(iv) }, key, await record.data.arrayBuffer());
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('attachmentBlobs', 'readwrite');
+        tx.objectStore('attachmentBlobs').put({
+          ...record,
+          profileId: activeProfileId,
+          data: new Blob([encryptedData], { type: 'application/octet-stream' }),
+          encrypted: true,
+          iv: this.bytesToBase64(iv)
+        });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error('Attachment encryption was interrupted.'));
+      });
+    }
+  }
+
+  private async migrateInlineVaultAttachments(): Promise<void> {
+    if (!this.isAttachmentEncryptionUnlocked()) throw new Error('Unlock attachment encryption before migrating existing files.');
+    const vaultStores = ['things', 'documents', 'warranties', 'receipts', 'certificates', 'importantRecords', 'attachments'];
+    for (const storeName of vaultStores) {
+      if (!(await this.open()).objectStoreNames.contains(storeName)) continue;
+      for (const row of await this.getAll<any>(storeName)) {
+        let updated = false;
+        const next = { ...row };
+        if (typeof next.fileData === 'string' && next.fileData.startsWith('data:')) {
+          if (!next.blobId) {
+            const response = await fetch(next.fileData);
+            const blob = await response.blob();
+            const file = new File([blob], next.fileName || 'attachment', { type: next.fileType || blob.type });
+            next.blobId = await this.saveBlob(file);
+          }
+          next.fileData = undefined;
+          updated = true;
+        }
+        if (typeof next.dataUrl === 'string' && next.dataUrl.startsWith('data:')) {
+          const response = await fetch(next.dataUrl);
+          const blob = await response.blob();
+          const file = new File([blob], next.name || next.fileName || 'attachment', { type: next.type || next.fileType || blob.type });
+          next.dataUrl = await this.saveBlob(file);
+          updated = true;
+        }
+        if (Array.isArray(next.attachments)) {
+          const migrated = await Promise.all(next.attachments.map(async (attachment: any) => {
+            if (!attachment || typeof attachment !== 'object' || typeof attachment.dataUrl !== 'string' || !attachment.dataUrl.startsWith('data:')) return attachment;
+            const response = await fetch(attachment.dataUrl);
+            const blob = await response.blob();
+            const file = new File([blob], attachment.name || 'attachment', { type: attachment.type || blob.type });
+            const dataUrl = await this.saveBlob(file);
+            updated = true;
+            return { ...attachment, dataUrl };
+          }));
+          if (updated) next.attachments = migrated;
+        }
+        if (updated) await this.put(storeName, next);
+      }
+    }
+  }
+
+  public async saveBlob(file: File): Promise<string> {
+    const db = await this.open();
+    const id = generateUUID();
+    const settings = await this.getSingleton<AppState>('appSettings');
+    const encryptionEnabled = this.isAttachmentEncryptionEnabled(settings || undefined);
+    const key = this.attachmentCryptoProfileId === this.getActiveProfileId() ? this.attachmentCryptoKey : null;
+    if (encryptionEnabled && !key) throw new Error('Unlock attachment encryption in Settings before adding files.');
+    let data = await file.arrayBuffer();
+    let iv: Uint8Array | undefined;
+    if (key) {
+      iv = crypto.getRandomValues(new Uint8Array(12));
+      data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: this.toArrayBuffer(iv) }, key, data);
+    }
+    const record = {
+      id,
+      data: new Blob([data], { type: key ? 'application/octet-stream' : file.type }),
+      mimeType: file.type,
+      fileName: file.name,
+      size: file.size,
+      profileId: this.getActiveProfileId(),
+      encrypted: Boolean(key),
+      iv: iv ? this.bytesToBase64(iv) : undefined,
+      createdAt: Date.now()
+    };
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('attachmentBlobs', 'readwrite');
+      tx.objectStore('attachmentBlobs').put(record);
+      tx.oncomplete = () => resolve(id);
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  public async getBlob(blobId: string): Promise<{ data: Blob; mimeType: string; fileName: string } | null> {
+    const db = await this.open();
+    const record = await new Promise<any>((resolve, reject) => {
+      const tx = db.transaction('attachmentBlobs', 'readonly');
+      const req = tx.objectStore('attachmentBlobs').get(blobId);
+      req.onsuccess = () => {
+        resolve(req.result || null);
+      };
+      req.onerror = () => reject(req.error);
+    });
+    if (!record) return null;
+    if (record.profileId && record.profileId !== this.getActiveProfileId()) return null;
+    if (!record.encrypted) return { data: record.data, mimeType: record.mimeType, fileName: record.fileName };
+    const key = this.attachmentCryptoProfileId === this.getActiveProfileId() ? this.attachmentCryptoKey : null;
+    if (!key) throw new Error('Unlock attachment encryption in Settings to open this file.');
+    try {
+      const clear = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: this.toArrayBuffer(this.base64ToBytes(record.iv)) }, key, await record.data.arrayBuffer());
+      return { data: new Blob([clear], { type: record.mimeType }), mimeType: record.mimeType, fileName: record.fileName };
+    } catch {
+      throw new Error('The encrypted attachment could not be decrypted. Check the passphrase.');
+    }
+  }
+
+  public async deleteBlob(blobId: string): Promise<void> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('attachmentBlobs', 'readwrite');
+      tx.objectStore('attachmentBlobs').delete(blobId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  /**
+   * Export localStorage-based focus alarm data so the export pipeline can optionally include it.
+   */
+  public exportFocusAlarms(profileId: string): any[] | null {
+    if (typeof localStorage === 'undefined') return null;
+    for (const key of getProfileStorageKeys(profileId)) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (err) {
+        console.warn('[StorageEngine] failed to parse focus alarms for export:', err);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Import focus alarm data into localStorage from a backup payload.
+   */
+  public importFocusAlarms(profileId: string, data: any): void {
+    if (typeof localStorage === 'undefined' || !Array.isArray(data)) return;
+    try {
+      const key = `${FOCUS_ALARMS_STORAGE_KEY}:${profileId}`;
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (err) {
+      console.warn('[StorageEngine] failed to import focus alarms:', err);
+    }
+  }
+
+  public async getBlobAsDataUrl(blobId: string): Promise<string> {
+    const blob = await this.getBlob(blobId);
+    if (!blob) return '';
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob.data);
+    });
   }
 }
 
@@ -1919,7 +2271,7 @@ export async function purgeAllDefaultDataPermanently(): Promise<{ success: boole
   const affectedStores: string[] = [];
   const profileId = storage.getActiveProfileId();
   const isGuestProfile = profileId === 'om-master-profile' || profileId === 'default';
-  const belongsToProfile = (item: any) => item?.profileId === profileId ||
+  const belongsToProfile = (item: { profileId?: string } | null | undefined) => item?.profileId === profileId ||
     (isGuestProfile && (!item?.profileId || item.profileId === 'om-master-profile' || item.profileId === 'default'));
 
   const KNOWN_SEED_TITLES = new Set([
@@ -1936,7 +2288,7 @@ export async function purgeAllDefaultDataPermanently(): Promise<{ success: boole
     'evening reflection & shutdown'
   ]);
 
-  const isSeedRecord = (item: any): boolean => {
+  const isSeedRecord = (item: Record<string, unknown> | null | undefined): boolean => {
     if (!item || typeof item !== 'object') return false;
     const id = String(item.id || item.originalId || '');
     if (id.startsWith('seed-') || id.startsWith('default-')) return true;
@@ -1946,9 +2298,10 @@ export async function purgeAllDefaultDataPermanently(): Promise<{ success: boole
 
     // Check embedded record in recycle bin or tombstones
     if (item.record && typeof item.record === 'object') {
-      const recId = String(item.record.id || '');
+      const rec = item.record as Record<string, unknown>;
+      const recId = String(rec.id || '');
       if (recId.startsWith('seed-') || recId.startsWith('default-')) return true;
-      const recTitle = String(item.record.title || item.record.name || item.record.label || '').toLowerCase().trim();
+      const recTitle = String(rec.title || rec.name || rec.label || '').toLowerCase().trim();
       if (recTitle && KNOWN_SEED_TITLES.has(recTitle)) return true;
     }
 
@@ -1965,8 +2318,8 @@ export async function purgeAllDefaultDataPermanently(): Promise<{ success: boole
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(storeName, 'readonly');
       const req = tx.objectStore(storeName).openCursor();
-      req.onsuccess = (e: any) => {
-        const cursor = e.target.result;
+      req.onsuccess = () => {
+        const cursor = req.result;
         if (cursor) {
           const val = cursor.value;
           const isProfileScoped = ENTITY_STORES.includes(storeName) || storeName === 'recycleBin' || storeName === 'tombstones';
@@ -1998,26 +2351,27 @@ export async function purgeAllDefaultDataPermanently(): Promise<{ success: boole
     }
   }
 
-  // Also clean focus alarms in localStorage
-  if (typeof localStorage !== 'undefined') {
-    const profileId = storage.getActiveProfileId();
-    const key = `om_focus_alarms_list:${profileId}`;
-    const rawAlarms = localStorage.getItem(key) ||
-      (profileId === 'om-master-profile' ? localStorage.getItem('om_focus_alarms_list') : null);
-    if (rawAlarms) {
-      const parsed = JSON.parse(rawAlarms);
-      if (Array.isArray(parsed)) {
-        const cleaned = parsed.filter((a: any) => !isSeedRecord(a));
-        if (cleaned.length !== parsed.length) {
-          totalPurged += (parsed.length - cleaned.length);
-          if (!affectedStores.includes('localStorage:focusAlarms')) {
-            affectedStores.push('localStorage:focusAlarms');
-          }
-        }
-        localStorage.setItem(key, JSON.stringify(cleaned));
+  // Also clean focus alarms in IDB (migrated from localStorage)
+  try {
+    const allAlarms = await storage.getAll<Record<string, unknown>>('focusAlarms');
+    const cleaned = allAlarms.filter(a => !isSeedRecord(a));
+    if (cleaned.length !== allAlarms.length) {
+      const removedIds = allAlarms.filter(a => isSeedRecord(a)).map(a => a.id as string);
+      for (const id of removedIds) {
+        await storage.delete('focusAlarms', id);
+      }
+      totalPurged += removedIds.length;
+      if (!affectedStores.includes('focusAlarms')) {
+        affectedStores.push('focusAlarms');
       }
     }
-  }
+  } catch (err) { console.warn('[StorageEngine] focus alarm seed purge failed:', err); }
+  // Clean up any leftover localStorage alarms from pre-migration
+  try {
+    const profileId = storage.getActiveProfileId();
+    localStorage.removeItem(`om_focus_alarms_list:${profileId}`);
+    localStorage.removeItem('om_focus_alarms_list');
+  } catch (err) { console.warn('[StorageEngine] localStorage alarm cleanup failed:', err); }
 
   // Broadcast cross-tab and cross-component update
   storage.broadcastChange('all', 'purgeDefaultData');
@@ -2061,14 +2415,14 @@ export async function cleanOrphanedCacheAndTrash(options?: {
 
   if (db.objectStoreNames.contains('attachments')) {
     const isGuest = profileId === 'om-master-profile' || profileId === 'default';
-    const belongsToProfile = (item: any) =>
+    const belongsToProfile = (item: { profileId?: string } | null | undefined) =>
       item?.profileId === profileId ||
       (isGuest && (!item?.profileId || item.profileId === 'om-master-profile' || item.profileId === 'default'));
     const retainedParentIds = new Set<string>();
 
     for (const storeName of ENTITY_STORES.filter(name => name !== 'attachments')) {
       if (!db.objectStoreNames.contains(storeName)) continue;
-      const records = await storage.getAllRaw<any>(storeName);
+      const records = await storage.getAllRaw<BaseRecord>(storeName);
       for (const record of records) {
         if (record?.id && belongsToProfile(record) && isRecordActive(record)) {
           retainedParentIds.add(record.id);
@@ -2082,7 +2436,7 @@ export async function cleanOrphanedCacheAndTrash(options?: {
     }
 
     const activeRoutineIds = new Set(
-      (await storage.getAllRaw<any>('routines'))
+      (await storage.getAllRaw<BaseRecord>('routines'))
         .filter(item => belongsToProfile(item) && isRecordActive(item))
         .map(item => item.id)
     );
@@ -2096,7 +2450,7 @@ export async function cleanOrphanedCacheAndTrash(options?: {
 
     const attachments = (await storage.getAllRaw<any>('attachments')).filter(belongsToProfile);
     const orphanedIds = attachments
-      .filter(item => item?.id && (!item.parentId || !retainedParentIds.has(item.parentId)))
+      .filter(item => item?.id && (!item.parentId || !retainedParentIds.has(item.parentId as string)))
       .map(item => item.id);
 
     if (orphanedIds.length > 0) {

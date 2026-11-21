@@ -32,14 +32,82 @@ const STORAGE_KEY_FOCUS_ALARMS = 'om_focus_alarms_list';
 const getFocusAlarmStorageKey = (profileId = storage.getActiveProfileId()) =>
   `${STORAGE_KEY_FOCUS_ALARMS}:${profileId}`;
 
+const isSeedAlarm = (a: any) =>
+  a.id?.startsWith('default-') ||
+  a.id?.startsWith('seed-') ||
+  a.label === 'Morning Awakening & Routine' ||
+  a.label === 'Evening Reflection & Shutdown';
+
 class AlarmManagerService {
   private listenerCallback: ((data: TriggeredAlarmData) => void) | null = null;
   private checkInterval: any = null;
   private activeTriggered: TriggeredAlarmData | null = null;
+  private cachedAlarms: FocusAlarm[] = [];
+  private cacheLoaded = false;
 
   constructor() {
-    this.purgeDefaultAlarms();
+    this.initFromIdb();
     this.startBackgroundMonitor();
+  }
+
+  private async initFromIdb() {
+    try {
+      let alarms = await storage.getAll<FocusAlarm>('focusAlarms');
+      if (alarms.length === 0) {
+        alarms = this.migrateFromLocalStorage();
+      }
+      this.cachedAlarms = alarms.filter((a: any) => !isSeedAlarm(a));
+      this.cacheLoaded = true;
+      this.persistToIdb();
+    } catch {
+      this.cachedAlarms = this.readLocalStorageFallback();
+      this.cacheLoaded = true;
+    }
+  }
+
+  private migrateFromLocalStorage(): FocusAlarm[] {
+    try {
+      const profileId = storage.getActiveProfileId();
+      const key = getFocusAlarmStorageKey(profileId);
+      const stored = localStorage.getItem(key) ||
+        (profileId === 'om-master-profile' ? localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS) : null);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          localStorage.removeItem(key);
+          localStorage.removeItem(STORAGE_KEY_FOCUS_ALARMS);
+          return parsed;
+        }
+      }
+    } catch {}
+    return [];
+  }
+
+  private readLocalStorageFallback(): FocusAlarm[] {
+    try {
+      const profileId = storage.getActiveProfileId();
+      const key = getFocusAlarmStorageKey(profileId);
+      const stored = localStorage.getItem(key) ||
+        (profileId === 'om-master-profile' ? localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS) : null);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed.filter((a: any) => !isSeedAlarm(a));
+      }
+    } catch {}
+    return [];
+  }
+
+  private async persistToIdb() {
+    try {
+      const existing = await storage.getAll<FocusAlarm>('focusAlarms');
+      const cacheIds = new Set(this.cachedAlarms.map(a => a.id));
+      for (const old of existing) {
+        if (!cacheIds.has(old.id)) await storage.delete('focusAlarms', old.id);
+      }
+      for (const alarm of this.cachedAlarms) {
+        await storage.put('focusAlarms', alarm);
+      }
+    } catch (e) { console.error('[om] persistToIdb failed', e); }
   }
 
   // Subscribe to alarm triggers
@@ -69,78 +137,48 @@ class AlarmManagerService {
     this.activeTriggered = null;
   }
 
-  // Focus Alarms CRUD
+  // Focus Alarms CRUD (sync reads from cache, async writes to IDB)
   public purgeDefaultAlarms(): void {
-    try {
-      const key = getFocusAlarmStorageKey();
-      const stored = localStorage.getItem(key) ||
-        (storage.getActiveProfileId() === 'om-master-profile' ? localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS) : null);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          const cleaned = parsed.filter((a: any) =>
-            !a.id?.startsWith('default-') &&
-            !a.id?.startsWith('seed-') &&
-            a.label !== 'Morning Awakening & Routine' &&
-            a.label !== 'Evening Reflection & Shutdown'
-          );
-          localStorage.setItem(key, JSON.stringify(cleaned));
-        }
-      }
-    } catch {}
+    this.cachedAlarms = this.cachedAlarms.filter(a => !isSeedAlarm(a));
+    void this.persistToIdb();
   }
 
-  public getFocusAlarms(profileId = storage.getActiveProfileId()): FocusAlarm[] {
-    try {
-      const key = getFocusAlarmStorageKey(profileId);
-      const stored = localStorage.getItem(key) ||
-        (profileId === 'om-master-profile' ? localStorage.getItem(STORAGE_KEY_FOCUS_ALARMS) : null);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          return parsed.filter((a: any) =>
-            !a.id?.startsWith('default-') &&
-            !a.id?.startsWith('seed-') &&
-            a.label !== 'Morning Awakening & Routine' &&
-            a.label !== 'Evening Reflection & Shutdown'
-          );
-        }
-      }
-    } catch {}
-    return [];
+  public getFocusAlarms(_profileId?: string): FocusAlarm[] {
+    if (!this.cacheLoaded) return this.readLocalStorageFallback();
+    return [...this.cachedAlarms];
   }
 
   public saveFocusAlarms(alarms: FocusAlarm[]) {
-    try {
-      localStorage.setItem(getFocusAlarmStorageKey(), JSON.stringify(alarms));
-      window.dispatchEvent(new Event('om_focus_alarms_changed'));
-    } catch {}
+    this.cachedAlarms = alarms;
+    void this.persistToIdb();
+    window.dispatchEvent(new Event('om_focus_alarms_changed'));
   }
 
   public addFocusAlarm(alarm: Omit<FocusAlarm, 'id' | 'createdAt'>): FocusAlarm {
-    const alarms = this.getFocusAlarms();
     const newAlarm: FocusAlarm = {
       ...alarm,
       id: generateUUID(),
       createdAt: Date.now()
     };
-    alarms.push(newAlarm);
-    this.saveFocusAlarms(alarms);
+    this.cachedAlarms.push(newAlarm);
+    void storage.put('focusAlarms', newAlarm).catch(() => {});
+    window.dispatchEvent(new Event('om_focus_alarms_changed'));
     return newAlarm;
   }
 
   public updateFocusAlarm(id: string, updates: Partial<FocusAlarm>) {
-    const alarms = this.getFocusAlarms();
-    const idx = alarms.findIndex(a => a.id === id);
+    const idx = this.cachedAlarms.findIndex(a => a.id === id);
     if (idx !== -1) {
-      alarms[idx] = { ...alarms[idx], ...updates };
-      this.saveFocusAlarms(alarms);
+      this.cachedAlarms[idx] = { ...this.cachedAlarms[idx], ...updates };
+      void storage.put('focusAlarms', this.cachedAlarms[idx]).catch(() => {});
+      window.dispatchEvent(new Event('om_focus_alarms_changed'));
     }
   }
 
   public deleteFocusAlarm(id: string) {
-    const alarms = this.getFocusAlarms().filter(a => a.id !== id);
-    this.saveFocusAlarms(alarms);
+    this.cachedAlarms = this.cachedAlarms.filter(a => a.id !== id);
+    void storage.delete('focusAlarms', id).catch(() => {});
+    window.dispatchEvent(new Event('om_focus_alarms_changed'));
   }
 
   // Trigger an immediate alarm event
@@ -153,11 +191,8 @@ class AlarmManagerService {
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
         new Notification(`Alarm: ${data.title}`, {
           body: data.subtitle || `Time: ${data.timeStr}`,
-          icon: '/favicon.ico'
+          icon: './om-icon.svg'
         });
-      } else if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-        // A trigger is not a user gesture, but this still surfaces the prompt in some browsers.
-        void this.requestNotificationPermission();
       }
     } catch {}
 
@@ -241,13 +276,25 @@ class AlarmManagerService {
     }
   }
 
-  // Background monitor loop: checks every 20 seconds (lighter on battery/IO than 1.5 s)
   private startBackgroundMonitor() {
-    if (this.checkInterval) clearInterval(this.checkInterval);
+    if (this.checkInterval) {
+      clearTimeout(this.checkInterval);
+      this.checkInterval = null;
+    }
 
-    this.checkInterval = setInterval(() => {
-      void this.evaluateAlarms();
-    }, 20000);
+    const scheduleNext = () => {
+      this.checkInterval = setTimeout(() => {
+        void this.evaluateAlarms().finally(scheduleNext);
+      }, 20000);
+    };
+    scheduleNext();
+
+    // Web Locks keepalive: holding a lock prevents the browser from fully throttling this tab
+    if (typeof navigator !== 'undefined' && navigator.locks) {
+      navigator.locks.request('om-alarm-keepalive', { mode: 'shared' }, () =>
+        new Promise<void>(() => {})
+      ).catch(() => {});
+    }
 
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
@@ -256,11 +303,37 @@ class AlarmManagerService {
     }
   }
 
+  private async isQuietHoursNow(): Promise<boolean> {
+    try {
+      const appSettings = await storage.getSingleton<{ notificationsEnabled?: boolean; quietHoursStart?: string; quietHoursEnd?: string }>('appSettings');
+      if (!appSettings) return false;
+      if (appSettings.notificationsEnabled === false) return true; // notifications fully disabled
+      const start = appSettings.quietHoursStart || '22:00';
+      const end = appSettings.quietHoursEnd || '07:00';
+      const now = new Date();
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = end.split(':').map(Number);
+      const startMins = sh * 60 + sm;
+      const endMins = eh * 60 + em;
+      // Handle overnight span (e.g. 22:00 → 07:00)
+      if (startMins > endMins) {
+        return currentMins >= startMins || currentMins < endMins;
+      }
+      return currentMins >= startMins && currentMins < endMins;
+    } catch {
+      return false;
+    }
+  }
+
   private async evaluateAlarms() {
     if (this.activeTriggered) {
       // An alarm is currently ringing, don't trigger another over it
       return;
     }
+
+    // Respect quiet hours and global notifications toggle
+    if (await this.isQuietHoursNow()) return;
 
     const now = new Date();
     const currentDay = now.getDay(); // 0 to 6
@@ -301,7 +374,7 @@ class AlarmManagerService {
       const alarmMinutes = alarmHour * 60 + alarmMinute;
       const isDue = Number.isFinite(alarmMinutes) &&
         nowMinutes >= alarmMinutes &&
-        nowMinutes - alarmMinutes <= 5;
+        nowMinutes - alarmMinutes <= 30;
       const notTriggeredToday = alarm.lastTriggeredDate !== todayStr;
 
       if (matchesDay && isDue && notTriggeredToday) {
@@ -340,10 +413,9 @@ class AlarmManagerService {
 
         if (isNaN(dueDate.getTime())) continue;
 
-        // Check if due within the last 10 minutes and not notified within the last 10 minutes
         const timeDiffMs = nowTimeMs - dueDate.getTime();
-        const justDue = timeDiffMs >= 0 && timeDiffMs < 600000;
-        const recentlyNotified = rem.lastNotifiedAt && (nowTimeMs - rem.lastNotifiedAt < 600000);
+        const justDue = timeDiffMs >= 0 && timeDiffMs < 1800000;
+        const recentlyNotified = rem.lastNotifiedAt && (nowTimeMs - rem.lastNotifiedAt < 1800000);
 
         if (justDue && !recentlyNotified) {
           const remTimeStr = dueStr.includes('T') ? dueStr.split('T')[1].slice(0, 5) : currentTimeStr;
@@ -361,7 +433,7 @@ class AlarmManagerService {
           return;
         }
       }
-    } catch {}
+    } catch (e) { console.error('[om] evaluateAlarms reminder check failed', e); }
   }
 }
 

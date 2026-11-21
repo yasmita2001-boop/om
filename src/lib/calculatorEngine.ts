@@ -156,6 +156,8 @@ export const CALC_UNIT_FACTORS: Record<string, Record<string, number>> = {
     TB: 1024 ** 4,
     PB: 1024 ** 5
   },
+  // Approximate exchange rates vs USD — last updated 2025-01-15.
+  // These are offline reference rates and may differ from live market rates.
   Currency: {
     USD: 1.0,
     INR: 86.85,
@@ -313,43 +315,110 @@ export class CalculatorEngine {
 
     if (!/^[0-9+\-*/%().,\s_a-z^π]+$/.test(s)) throw new Error('Invalid characters in mathematical expression');
 
-    let sanitized = s
-      .replace(/\^/g, '**')
-      .replace(/\bpi\b/gi, 'Math.PI')
-      .replace(/π/g, 'Math.PI')
-      .replace(/\be\b/g, 'Math.E')
-      .replace(/sqrt\(/g, 'Math.sqrt(')
-      .replace(/cbrt\(/g, 'Math.cbrt(')
-      .replace(/abs\(/g, 'Math.abs(')
-      .replace(/log\(/g, 'Math.log10(')
-      .replace(/ln\(/g, 'Math.log(')
-      .replace(/exp\(/g, 'Math.exp(')
-      .replace(/fact\(/g, 'factFn(');
+    const toRad = (x: number) => angleMode === 'deg' ? x * Math.PI / 180 : x;
+    const fromRad = (x: number) => angleMode === 'deg' ? x * 180 / Math.PI : x;
 
-    // Expand scientific notation: 1e3 -> 1000, 2.5e-2 -> 0.025
-    sanitized = sanitized.replace(/(\d+(?:\.\d+)?)[eE]([+-]?\d+)/g, (_match, base: string, exponent: string) =>
-      String(Number(`${base}e${exponent}`))
-    );
+    let pos = 0;
+    const len = s.length;
+    const ch = () => pos < len ? s[pos] : '';
+    const eat = () => s[pos++];
+    const ws = () => { while (pos < len && /\s/.test(s[pos])) pos++; };
 
-    // Trig and inverse-trig in a single pass: replacing `sin(` first would corrupt `asin(`.
-    sanitized = sanitized.replace(/\b(asin|acos|atan|sin|cos|tan)\(/g, (_match, fn: string) => {
-      const isInverse = fn.startsWith('a');
-      if (angleMode === 'rad') return `Math.${fn}(`;
-      return isInverse
-        ? `(180/Math.PI)*Math.${fn}(`
-        : `Math.${fn}((Math.PI/180)*`;
-    });
+    const parseExpr = (): number => {
+      let v = parseTerm();
+      ws();
+      while (ch() === '+' || ch() === '-') {
+        const op = eat();
+        v = op === '+' ? v + parseTerm() : v - parseTerm();
+        ws();
+      }
+      return v;
+    };
 
-    // Validate identifiers allowed
-    const remainingAlpha = sanitized.replace(/Math\.(PI|E|sqrt|cbrt|abs|log10|log|exp|sin|cos|tan|asin|acos|atan)|factFn/g, '');
-    if (/[a-z]/i.test(remainingAlpha)) {
-      throw new Error('Unsupported function or identifier in expression');
-    }
+    const parseTerm = (): number => {
+      let v = parsePower();
+      ws();
+      while (ch() === '*' || ch() === '/' || ch() === '%') {
+        const op = eat();
+        const r = parsePower();
+        v = op === '*' ? v * r : op === '/' ? v / r : v % r;
+        ws();
+      }
+      return v;
+    };
+
+    const parsePower = (): number => {
+      const base = parseUnary();
+      ws();
+      if (ch() === '^') { eat(); return Math.pow(base, parsePower()); }
+      return base;
+    };
+
+    const parseUnary = (): number => {
+      ws();
+      if (ch() === '-') { eat(); return -parseUnary(); }
+      if (ch() === '+') { eat(); return parseUnary(); }
+      return parsePrimary();
+    };
+
+    const parsePrimary = (): number => {
+      ws();
+      if (ch() === '(') {
+        eat();
+        const v = parseExpr();
+        ws();
+        if (ch() === ')') eat();
+        return v;
+      }
+      if (/[0-9.]/.test(ch())) {
+        let ns = '';
+        while (/[0-9.]/.test(ch())) ns += eat();
+        if (/[eE]/.test(ch()) && pos + 1 < len && (/[0-9]/.test(s[pos + 1]) || ((s[pos + 1] === '+' || s[pos + 1] === '-') && pos + 2 < len && /[0-9]/.test(s[pos + 2])))) {
+          ns += eat();
+          if (ch() === '+' || ch() === '-') ns += eat();
+          while (/[0-9]/.test(ch())) ns += eat();
+        }
+        return parseFloat(ns);
+      }
+      if (/[a-zπ]/i.test(ch())) {
+        let name = '';
+        while (/[a-zπ]/i.test(ch())) name += eat();
+        if (name === 'pi' || name === 'π') return Math.PI;
+        if (name === 'e' && ch() !== '(') return Math.E;
+        ws();
+        if (ch() !== '(') throw new Error(`Unknown identifier: ${name}`);
+        eat();
+        const arg = parseExpr();
+        if (name === 'pow') { ws(); if (ch() === ',') eat(); const b = parseExpr(); ws(); if (ch() === ')') eat(); return Math.pow(arg, b); }
+        ws();
+        if (ch() === ')') eat();
+        switch (name) {
+          case 'sqrt': return Math.sqrt(arg);
+          case 'cbrt': return Math.cbrt(arg);
+          case 'abs': return Math.abs(arg);
+          case 'log': return Math.log10(arg);
+          case 'ln': return Math.log(arg);
+          case 'exp': return Math.exp(arg);
+          case 'sin': return Math.sin(toRad(arg));
+          case 'cos': return Math.cos(toRad(arg));
+          case 'tan': return Math.tan(toRad(arg));
+          case 'asin': return fromRad(Math.asin(arg));
+          case 'acos': return fromRad(Math.acos(arg));
+          case 'atan': return fromRad(Math.atan(arg));
+          case 'fact': return factFn(arg);
+          case 'ceil': return Math.ceil(arg);
+          case 'floor': return Math.floor(arg);
+          case 'round': return Math.round(arg);
+          default: throw new Error(`Unknown function: ${name}`);
+        }
+      }
+      throw new Error('Unexpected: ' + (ch() || 'end of expression'));
+    };
 
     try {
-      // eslint-disable-next-line no-new-func
-      const fn = new Function('factFn', `"use strict"; return (${sanitized})`);
-      const result = fn(factFn);
+      const result = parseExpr();
+      ws();
+      if (pos < len) throw new Error('Unexpected character: ' + s[pos]);
       if (typeof result !== 'number' || !Number.isFinite(result)) {
         if (Number.isNaN(result)) return 'Undefined / NaN';
         return 'Infinity';
@@ -943,7 +1012,7 @@ export class CalculatorEngine {
     // Currency factors are relative to USD = 1.0 (so 1 USD = 86.85 INR, etc.)
     const usd = amt / factors[from];
     const converted = usd * factors[to];
-    return `${converted.toFixed(2)} ${to} (1 ${from} = ${(factors[to] / factors[from]).toFixed(4)} ${to})`;
+    return `≈ ${converted.toFixed(2)} ${to} (1 ${from} ≈ ${(factors[to] / factors[from]).toFixed(4)} ${to}) · Offline approximate rate`;
   }
 
   // ===================== HOME & CONSTRUCTION =====================

@@ -24,6 +24,7 @@ import {
   getSavedLastSyncedAt,
   isAutoSyncEnabled,
   setAutoSyncEnabled,
+  prepareGoogleWorkspaceSync,
   GoogleUser,
   GoogleDriveBackupInfo
 } from '../lib/googleDriveSync';
@@ -90,6 +91,15 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
     setAutoSync(isAutoSyncEnabled(workspaceProfileId));
     setBackupInfo(null);
     pendingAutoSyncRef.current = hasPendingSync(workspaceProfileId);
+  }, [workspaceProfileId]);
+
+  useEffect(() => {
+    const handleAutoSyncPreference = (event: Event) => {
+      const detail = (event as CustomEvent<{ enabled: boolean; profileId: string }>).detail;
+      if (detail?.profileId === workspaceProfileId) setAutoSync(detail.enabled);
+    };
+    window.addEventListener('om_gdrive_auto_sync_changed', handleAutoSyncPreference);
+    return () => window.removeEventListener('om_gdrive_auto_sync_changed', handleAutoSyncPreference);
   }, [workspaceProfileId]);
 
   useEffect(() => {
@@ -218,17 +228,25 @@ export const GoogleDriveSyncDropdown: React.FC<GoogleDriveSyncDropdownProps> = (
       setUser(res.user);
       setAccessToken(res.accessToken);
       await onAccountChanged?.(res.user);
-      if (autoSync) {
-        pendingAutoSyncRef.current = true;
-        setPendingSync(storage.getActiveProfileId(), true);
+      let syncSetupMessage = '';
+      try {
+        const syncSetup = await prepareGoogleWorkspaceSync(res.accessToken, res.user);
+        setBackupInfo(syncSetup.backupInfo);
+        setAutoSyncEnabled(true, storage.getActiveProfileId());
+        setAutoSync(true);
+        if (syncSetup.restored) onDataRestored?.();
+        syncSetupMessage = syncSetup.restored
+          ? 'Workspace restored from Google Drive. Future changes will sync automatically.'
+          : 'Google Drive backup is ready; future changes will sync automatically.';
+      } catch (syncError) {
+        const message = syncError instanceof Error ? syncError.message : 'Google Drive backup setup failed.';
+        setStatusMsg({ type: 'error', text: message });
+        onToast?.(message);
       }
       const msg = `Signed in as ${res.user.email || 'Google User'}`;
-      setStatusMsg({ type: 'success', text: msg });
+      if (syncSetupMessage) setStatusMsg({ type: 'success', text: syncSetupMessage });
+      else if (!syncSetupMessage) setStatusMsg(current => current?.type === 'error' ? current : { type: 'success', text: msg });
       onToast?.(msg);
-
-      // Check existing backup
-      const info = await findDriveBackupFile(res.accessToken);
-      setBackupInfo(info);
     } catch (err: any) {
       console.error('Sign-in error:', err);
       const errMsg = err?.message || 'Failed to sign in with Google';

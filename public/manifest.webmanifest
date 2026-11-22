@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Om LifeOS",
-  "short_name": "Om LifeOS",
+  "name": "Om",
+  "short_name": "Om",
   "description": "Your personal operating system for tasks, routines, goals, notes, and more.",
   "start_url": "/",
   "scope": "/",

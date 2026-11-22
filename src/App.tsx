@@ -500,16 +500,24 @@ function LifeOSApp() {
 
       if (!isCurrentLoad()) return;
       if (settingsData) {
-        const savedAppearance = hasSavedAppearance()
-          ? readSavedAppearance()
-          : normalizeAppearance({
+        // Appearance is part of each workspace's settings. The global localStorage
+        // copy is only a device cache and must not override a profile's saved theme.
+        const savedAppearance = settingsData.appearance
+          ? normalizeAppearance({
               ...DEFAULT_APPEARANCE,
               ...settingsData.appearance,
-              colorMode: settingsData.appearance?.colorMode || DEFAULT_APPEARANCE.colorMode,
-              accentColor: settingsData.appearance?.accentColor
+              colorMode: settingsData.appearance.colorMode || DEFAULT_APPEARANCE.colorMode,
+              accentColor: settingsData.appearance.accentColor
                 || (settingsData.accentColor?.toLowerCase() === '#b88648'
                   ? DEFAULT_APPEARANCE.accentColor
                   : resolveSavedAccent(settingsData.accentColor))
+            })
+          : normalizeAppearance({
+              ...DEFAULT_APPEARANCE,
+              colorMode: settingsData.themeMode || DEFAULT_APPEARANCE.colorMode,
+              accentColor: settingsData.accentColor?.toLowerCase() === '#b88648'
+                ? DEFAULT_APPEARANCE.accentColor
+                : resolveSavedAccent(settingsData.accentColor)
             });
         if (!hasSavedAppearance()) {
           try {

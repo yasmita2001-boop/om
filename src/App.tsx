@@ -803,9 +803,19 @@ function LifeOSApp() {
     setIsUnlockingGoogle(true);
     setGoogleUnlockError(null);
     try {
-      const { signInWithGoogle } = await import('./lib/googleDriveSync');
+      const { signInWithGoogle, prepareGoogleWorkspaceSync, getGoogleWorkspaceProfileId } = await import('./lib/googleDriveSync');
       const result = await signInWithGoogle();
       await handleGoogleAccountChange(result.user);
+      try {
+        const syncSetup = await prepareGoogleWorkspaceSync(result.accessToken, result.user);
+        if (syncSetup.restored) await loadAllData(getGoogleWorkspaceProfileId(result.user));
+        showToast(syncSetup.restored
+          ? 'Your Google Drive workspace was restored and future changes will sync.'
+          : 'Google Drive backup is ready; future changes will sync automatically.');
+      } catch (syncError) {
+        console.error('Google Drive workspace restore or setup failed:', syncError);
+        showToast('Workspace opened, but Google Drive backup setup failed. Check your connection and try Sync Now.');
+      }
       setIsGoogleLocked(false);
     } catch (err) {
       console.error('Google unlock failed:', err);

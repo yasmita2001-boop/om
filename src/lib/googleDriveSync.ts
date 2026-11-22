@@ -19,7 +19,7 @@ import {
   UniversalDataManager
 } from './universalDataManager';
 import { AppState, HealthProfile } from '../types';
-import { omitDeviceAppearanceSettings } from './appearance';
+import { sanitizePortableSettings } from './appearance';
 
 export const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file'
@@ -301,6 +301,53 @@ export function setAutoSyncEnabled(enabled: boolean, profileId = storage.getActi
   try {
     localStorage.setItem(getProfileStorageKey(LOCAL_STORAGE_AUTO_SYNC_KEY, profileId), enabled ? 'true' : 'false');
   } catch {}
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('om_gdrive_auto_sync_changed', { detail: { enabled, profileId } }));
+  }
+}
+
+/**
+ * Keep the signed-in Google workspace recoverable: restore its Drive backup
+ * when this device has no records yet, seed a first backup otherwise, and
+ * enable change sync for this Google profile.
+ */
+export async function prepareGoogleWorkspaceSync(
+  accessToken: string,
+  user: GoogleUser
+): Promise<{ restored: boolean; backupInfo: GoogleDriveBackupInfo | null }> {
+  const profileId = getGoogleWorkspaceProfileId(user);
+  if (storage.getActiveProfileId() !== profileId) {
+    throw new Error('The active workspace does not belong to this Google account.');
+  }
+
+  const [backupInfo, storeRows] = await Promise.all([
+    findDriveBackupFile(accessToken),
+    Promise.all(ENTITY_STORES.map(storeName => storage.getAll(storeName, profileId)))
+  ]);
+  const hasLocalRecords = storeRows.some(rows => rows.length > 0);
+
+  if (backupInfo && !hasLocalRecords) {
+    const settings = await storage.getSingleton<AppState>('appSettings', profileId);
+    const result = await restoreFromGoogleDrive(
+      accessToken,
+      profileId,
+      settings?.profiles?.find(profile => profile.id === profileId)?.name || user.displayName || 'Om',
+      user
+    );
+    if (!result.success) throw new Error(result.error || 'Could not restore this Google account backup.');
+    setAutoSyncEnabled(true, profileId);
+    return { restored: true, backupInfo };
+  }
+
+  if (!backupInfo) {
+    const result = await syncToGoogleDrive(accessToken, user);
+    if (!result.success) throw new Error(result.error || 'Could not create the first Google Drive backup.');
+    setAutoSyncEnabled(true, profileId);
+    return { restored: false, backupInfo: result.backupInfo || null };
+  }
+
+  setAutoSyncEnabled(true, profileId);
+  return { restored: false, backupInfo };
 }
 
 /**
@@ -455,7 +502,7 @@ export async function buildCleanWorkspaceSnapshot(userEmail?: string | null, acc
   const purgedCount = canonical.purgedGhostCount + tombstoneExcludedCount;
 
   const settingsData = await storage.getSingleton<AppState>('appSettings', activeProfileId);
-  const safeSettings = settingsData ? omitDeviceAppearanceSettings(settingsData) : null;
+  const safeSettings = settingsData ? sanitizePortableSettings(settingsData) : null;
 
   const workspaceId = activeProfileId || settingsData?.profileId || 'default';
   const activeProfileName = settingsData?.profiles?.find(p => p.id === workspaceId)?.name || 'Om-LifeOS';

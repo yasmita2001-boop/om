@@ -19,7 +19,7 @@ import { isRecordActive } from './recycleBin';
 import { createLightweightEntities } from './thumbnailService';
 import { generateUUID as createUUID, storage } from './storage';
 import { getLocalDateString, getLocalMonthString } from './dateUtils';
-import { omitDeviceAppearanceSettings } from './appearance';
+import { sanitizePortableSettings } from './appearance';
 import {
   ManualUpdateBundle,
   BundleDiffInspection,
@@ -1166,7 +1166,7 @@ export class UniversalDataManager {
           const currentSettings = (await storage.getSingleton<AppState>('appSettings', targetProfileId)) || ({} as AppState);
           await storage.setSingleton('appSettings', {
             ...currentSettings,
-            ...omitDeviceAppearanceSettings(validation.settings),
+            ...sanitizePortableSettings(validation.settings),
             profileId: targetProfileId
           }, targetProfileId);
         } catch (e) {
@@ -1304,7 +1304,7 @@ export class UniversalDataManager {
         const currentSettings = (await storage.getSingleton<AppState>('appSettings', targetProfileId)) || ({} as AppState);
         await storage.setSingleton('appSettings', {
           ...currentSettings,
-          ...omitDeviceAppearanceSettings(validation.settings),
+          ...sanitizePortableSettings(validation.settings),
           profileId: targetProfileId
         }, targetProfileId);
       } catch (err) {

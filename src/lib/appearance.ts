@@ -465,13 +465,33 @@ export function hasSavedAppearance(): boolean {
   }
 }
 
-export function omitDeviceAppearanceSettings<T extends {
+export function sanitizePortableSettings<T extends {
   appearance?: unknown;
   themeMode?: unknown;
   accentColor?: unknown;
-}>(settings: T): Omit<T, 'appearance' | 'themeMode' | 'accentColor'> {
-  const { appearance: _appearance, themeMode: _themeMode, accentColor: _accentColor, ...portableSettings } = settings;
-  return portableSettings;
+}>(settings: T): T {
+  const appearanceValue = settings.appearance;
+  if (!appearanceValue || typeof appearanceValue !== 'object') return settings;
+
+  const appearance = normalizeAppearance(appearanceValue as Partial<AppearancePreferences>);
+  // A custom image/video lives in device IndexedDB and is not part of the Drive
+  // bundle. Keep the user's colors and controls, but use the chosen preset's
+  // built-in background when restoring on a device without that media asset.
+  if (appearance.backgroundId === 'custom') {
+    const fallbackBackgroundId = APPEARANCE_PRESETS.some(item => item.id === appearance.presetId)
+      ? appearance.presetId
+      : DEFAULT_APPEARANCE.backgroundId;
+    appearance.backgroundId = fallbackBackgroundId;
+    appearance.backgroundImage = '';
+    appearance.backgroundIsVideo = false;
+  }
+
+  return {
+    ...settings,
+    appearance,
+    themeMode: appearance.colorMode,
+    accentColor: appearance.accentColor
+  } as T;
 }
 
 export function saveLocalAppearance(value: AppearancePreferences): void {

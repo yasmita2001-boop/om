@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Calculator,
   Star,
@@ -14,13 +14,15 @@ import {
 import {
   CALCULATOR_CATALOG,
   CALC_UNIT_FACTORS,
-  NP_UNITS
+  NP_UNITS,
+  calculatorEngine
 } from '../lib/calculatorEngine';
 import { getToolConfig } from '../lib/calculatorConfig';
 import { InteractiveKeypad } from '../components/InteractiveKeypad';
 import { CalcHistoryItem } from '../types';
 import { storage, generateUUID } from '../lib/storage';
 import { getCurrencySymbol } from '../lib/currencyDisplay';
+import { getCurrencyRates, type CurrencyRateData } from '../lib/currencyRates';
 import { NotesJournalSwitcher } from '../components/NotesJournalSwitcher';
 
 interface CalculatorViewProps {
@@ -32,6 +34,10 @@ interface CalculatorViewProps {
   onRefresh: () => void;
   onSuccess: (msg: string) => void;
 }
+
+const describeCurrencyRate = (rates: CurrencyRateData): string => rates.source === 'offline'
+  ? 'Offline approximate rate'
+  : `${rates.source === 'cached' ? 'Cached' : 'Reference'} rate · updated ${new Date(rates.updatedAt).toLocaleDateString()}`;
 
 export const CalculatorView: React.FC<CalculatorViewProps> = ({
   history,
@@ -53,9 +59,11 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
   const [unitFrom, setUnitFrom] = useState<string>('');
   const [unitTo, setUnitTo] = useState<string>('');
   const [result, setResult] = useState<string>('—');
+  const [currencyRateData, setCurrencyRateData] = useState<CurrencyRateData | null>(null);
   const [copied, setCopied] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
+  const lastCurrencyCalculation = useRef<{ tool: string; amount: string; from: string; to: string } | null>(null);
 
   const currentConfig = useMemo(() => getToolConfig(selectedTool), [selectedTool]);
   const formatResultForDisplay = (value: string, tool = selectedTool) =>
@@ -66,6 +74,7 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
   // Set default units and inputs when tool changes
   useEffect(() => {
     const config = getToolConfig(selectedTool);
+    lastCurrencyCalculation.current = null;
     const newInputs: Record<string, string> = {};
     config.fields.forEach((f, idx) => {
       newInputs[`f${idx + 1}`] = f.default;
@@ -85,6 +94,45 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
     setResult('—');
   }, [selectedTool]);
 
+  useEffect(() => {
+    if (selectedTool !== 'Currency' && selectedTool !== 'Travel Currency') return;
+
+    let cancelled = false;
+    let refreshTimer: number | undefined;
+    const refreshRates = async () => {
+      const rates = await getCurrencyRates();
+      if (cancelled) return;
+
+      setCurrencyRateData(rates);
+      const nextRefreshAt = rates.source === 'reference'
+        ? rates.nextUpdateAt
+        : Date.now() + 60 * 60 * 1000;
+      refreshTimer = window.setTimeout(
+        () => { void refreshRates(); },
+        Math.max(1000, nextRefreshAt - Date.now() + 1000)
+      );
+    };
+
+    void refreshRates();
+    return () => {
+      cancelled = true;
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+    };
+  }, [selectedTool]);
+
+  useEffect(() => {
+    const lastCalculation = lastCurrencyCalculation.current;
+    if (!currencyRateData || !lastCalculation || lastCalculation.tool !== selectedTool) return;
+
+    setResult(calculatorEngine.currency(
+      lastCalculation.amount,
+      lastCalculation.from,
+      lastCalculation.to,
+      currencyRateData.rates,
+      describeCurrencyRate(currencyRateData)
+    ));
+  }, [currencyRateData, selectedTool]);
+
   // Auto-run calculation when inputs change or tool is selected
   const handleCalculate = async () => {
     try {
@@ -95,7 +143,17 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
       const f3 = activeInputs.f3 ?? config.fields[2]?.default ?? '';
       const f4 = activeInputs.f4 ?? config.fields[3]?.default ?? '';
 
-      const output = config.calculate(f1, f2, f3, f4, unitFrom, unitTo);
+      let output: unknown;
+      if (selectedTool === 'Currency' || selectedTool === 'Travel Currency') {
+        const currencyRates = await getCurrencyRates();
+        const from = selectedTool === 'Currency' ? unitFrom : String(f2 || 'INR');
+        const to = selectedTool === 'Currency' ? unitTo : String(f3 || 'USD');
+        output = calculatorEngine.currency(f1, from, to, currencyRates.rates, describeCurrencyRate(currencyRates));
+        lastCurrencyCalculation.current = { tool: selectedTool, amount: f1, from, to };
+        setCurrencyRateData(currencyRates);
+      } else {
+        output = config.calculate(f1, f2, f3, f4, unitFrom, unitTo);
+      }
       const resString = String(output);
       setResult(resString);
 
@@ -348,6 +406,9 @@ export const CalculatorView: React.FC<CalculatorViewProps> = ({
             {currentConfig.description && currentConfig.description !== 'Standard arithmetic calculations' && currentConfig.description !== 'Scientific mathematical calculations' && (
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                 {currentConfig.description}
+                {(selectedTool === 'Currency' || selectedTool === 'Travel Currency') && (
+                  <> Rates by <a href="https://www.exchangerate-api.com" target="_blank" rel="noreferrer" className="underline hover:text-indigo-600 dark:hover:text-indigo-400">Exchange Rate API</a>.</>
+                )}
               </p>
             )}
 

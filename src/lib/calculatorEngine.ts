@@ -156,24 +156,23 @@ export const CALC_UNIT_FACTORS: Record<string, Record<string, number>> = {
     TB: 1024 ** 4,
     PB: 1024 ** 5
   },
-  // Approximate exchange rates vs USD — last updated 2025-01-15.
-  // These are offline reference rates and may differ from live market rates.
+  // Offline fallback exchange rates vs USD — last updated 2026-11-25.
   Currency: {
     USD: 1.0,
-    INR: 86.85,
-    NPR: 138.96,
-    EUR: 0.92,
-    GBP: 0.79,
-    AUD: 1.54,
-    CAD: 1.38,
-    JPY: 154.5,
-    CNY: 7.24,
-    AED: 3.67,
+    INR: 92.925233,
+    NPR: 148.691337,
+    EUR: 0.91245,
+    GBP: 0.763269,
+    AUD: 1.507265,
+    CAD: 1.429121,
+    JPY: 159.238818,
+    CNY: 6.678179,
+    AED: 3.6725,
     SAR: 3.75,
     QAR: 3.64,
-    KWD: 0.31,
-    SGD: 1.34,
-    THB: 35.8
+    KWD: 0.31145,
+    SGD: 1.28993,
+    THB: 33.940118
   },
   FuelEconomy: {
     km_l: 1,
@@ -1005,14 +1004,18 @@ export class CalculatorEngine {
     return `${finalVal.toFixed(2)} °${to}`;
   }
 
-  currency(amount: any, from: string, to: string): string {
-    const factors = CALC_UNIT_FACTORS.Currency;
+  currency(
+    amount: any,
+    from: string,
+    to: string,
+    factors = CALC_UNIT_FACTORS.Currency,
+    rateDescription = 'Offline approximate rate'
+  ): string {
     if (!factors[from] || !factors[to]) throw new Error('Unsupported currency');
     const amt = pos(amount);
-    // Currency factors are relative to USD = 1.0 (so 1 USD = 86.85 INR, etc.)
     const usd = amt / factors[from];
     const converted = usd * factors[to];
-    return `≈ ${converted.toFixed(2)} ${to} (1 ${from} ≈ ${(factors[to] / factors[from]).toFixed(4)} ${to}) · Offline approximate rate`;
+    return `≈ ${converted.toFixed(2)} ${to} (1 ${from} ≈ ${(factors[to] / factors[from]).toFixed(4)} ${to}) · ${rateDescription}`;
   }
 
   // ===================== HOME & CONSTRUCTION =====================

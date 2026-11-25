@@ -899,7 +899,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
   'Currency': {
     name: 'Currency',
     category: 'converter',
-    description: 'Estimate conversions using illustrative fixed rates (not live financial quotes)',
+    description: 'Daily updated reference rates that auto-refresh while open; estimates only, not live financial quotes.',
     isConverter: true,
     unitType: 'currency',
     defaultUnitFrom: 'USD',
@@ -1160,7 +1160,7 @@ export const ALL_TOOL_CONFIGS: Record<string, ToolConfig> = {
   'Travel Currency': {
     name: 'Travel Currency',
     category: 'travel',
-    description: 'Estimate travel conversions using illustrative fixed rates (not live), with card markup or conversion fee',
+    description: 'Estimate travel conversions using daily updated reference rates that auto-refresh while open (not live quotes), with card markup or conversion fee',
     fields: [
       { label: 'Amount to Convert', type: 'number', default: '50000' },
       {

@@ -64,3 +64,16 @@ describe('calculator scientific expressions', () => {
     expect(calculator.ipSubnet('0.0.0.0', 0)).toContain('Usable Hosts: 4294967294');
   });
 });
+
+describe('calculator currency conversion', () => {
+  it('converts with supplied daily rates and labels their source', () => {
+    const result = calculator.currency(
+      1,
+      'USD',
+      'NPR',
+      { USD: 1, NPR: 150 },
+      'Reference rate · updated 11/25/2026'
+    );
+    expect(result).toBe('≈ 150.00 NPR (1 USD ≈ 150.0000 NPR) · Reference rate · updated 11/25/2026');
+  });
+});
